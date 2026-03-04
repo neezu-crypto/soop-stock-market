@@ -71,166 +71,185 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+import { getDatabase, ref, onValue, runTransaction, get, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
-        authDomain: "soop-stock-market.firebaseapp.com",
-        databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
-        projectId: "soop-stock-market",
-        appId: "1:997788925900:web:cb613d438efec019a3a769"
-    };
+const firebaseConfig = {
+    apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
+    authDomain: "soop-stock-market.firebaseapp.com",
+    databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
+    projectId: "soop-stock-market",
+    appId: "1:997788925900:web:cb613d438efec019a3a769"
+};
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
 
-    // --- 지갑 로직 ---
-    let myData = JSON.parse(localStorage.getItem('soop_wallet')) || { cash: 1000000, stocks: {} };
-    
-    function saveWallet() {
-        localStorage.setItem('soop_wallet', JSON.stringify(myData));
-        const cashDisplay = document.getElementById('my-cash');
-        if(cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
-    }
-    saveWallet();
+// --- 상태 관리 ---
+let myData = { cash: 1000000, stocks: {} };
+let userUID = null;
+let allStocks = [];
 
-    // --- 주가 변동 및 거래 로직 (보안 강화) ---
-    window.trade = async function(id, type) {
-        const stockRef = ref(db, `stocks/${id}`);
+// --- [보안 핵심] 로그인 및 데이터 동기화 ---
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        userUID = user.uid;
+        console.log("인증 성공:", userUID);
         
-        const impact = 0.001;   // 0.1% 변동
-        const spread = 0.0005;  // 0.05% 스프레드
-        const fee = 0.003;      // 0.3% 수수료
-
-        try {
-            await runTransaction(stockRef, (currentStock) => {
-                if (!currentStock) return currentStock;
-
-                // [보안] 기존 데이터에 admin_mode가 있다면 제거 (사용자 거래는 일반 모드로 진행)
-                if (currentStock.admin_mode) delete currentStock.admin_mode;
-
-                const currentPrice = currentStock.price;
-                let newPrice = currentPrice;
-
-                if (type === 'buy') {
-                    const buyPrice = Math.round(currentPrice * (1 + spread));
-                    if (myData.cash < buyPrice) {
-                        alert("잔액이 부족합니다!");
-                        return; // 트랜잭션 중단
-                    }
-                    
-                    const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                    const totalCost = (userStock.qty * userStock.avg) + buyPrice;
-                    userStock.qty += 1;
-                    userStock.avg = Math.round(totalCost / userStock.qty);
-                    
-                    myData.cash -= buyPrice;
-                    myData.stocks[id] = userStock;
-                    
-                    newPrice = Math.round(currentPrice * (1 + impact));
-                } else {
-                    const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                    if (userStock.qty < 1) {
-                        alert("보유 주식이 없습니다!");
-                        return; // 트랜잭션 중단
-                    }
-                    
-                    const sellPrice = Math.round(currentPrice * (1 - spread));
-                    const finalAmount = Math.round(sellPrice * (1 - fee));
-                    
-                    myData.cash += finalAmount;
-                    userStock.qty -= 1;
-                    if (userStock.qty === 0) userStock.avg = 0;
-                    
-                    myData.stocks[id] = userStock;
-                    newPrice = Math.round(currentPrice * (1 - impact));
-                }
-
-                // [보안] 클라이언트 사이드 변동폭 강제 제한 검증 (서버 규칙 2차 방어)
-                const ratio = newPrice / currentPrice;
-                if (ratio > 1.002 || ratio < 0.998) {
-                    console.error("비정상적인 가격 변동 감지");
-                    return; 
-                }
-
-                // 히스토리 및 데이터 업데이트
-                let history = currentStock.history || [currentPrice];
-                history.push(newPrice);
-                if (history.length > 20) history.shift();
-                
-                const updatedData = {
-                    ...currentStock,
-                    price: newPrice,
-                    history: history,
-                    change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
-                };
-
-                // [중요] 일반 유저의 거래이므로 admin_mode 필드가 포함되지 않도록 확실히 함
-                delete updatedData.admin_mode;
-
-                saveWallet();
-                return updatedData;
-            });
-        } catch (error) {
-            console.error("거래 실패:", error);
-            alert("거래가 일시적으로 실패했습니다. 다시 시도해주세요.");
-        }
-    };
-
-    // --- 렌더링 및 리스너 로직 (기존과 동일) ---
-    let allStocks = [];
-    function createSparkline(history, isUp) {
-        if (!history || history.length < 2) return '';
-        const min = Math.min(...history);
-        const max = Math.max(...history);
-        const range = max - min || 1;
-        const pts = history.map((v, i) => `${(i/19)*80},${35 - ((v - min) / range * 35)}`).join(' ');
-        return `<svg class="chart-container"><polyline class="sparkline ${isUp?'up':'down'}" points="${pts}" /></svg>`;
+        // 서버에서 해당 유저의 지갑 데이터를 실시간으로 감시
+        const userRef = ref(db, `users/${userUID}`);
+        onValue(userRef, (snapshot) => {
+            if (snapshot.exists()) {
+                myData = snapshot.val();
+            } else {
+                // 신규 유저 초기화
+                set(userRef, { cash: 1000000, stocks: {} });
+            }
+            updateUI();
+        });
+    } else {
+        // 접속 즉시 익명 로그인 수행
+        signInAnonymously(auth).catch(err => console.error("로그인 실패:", err));
     }
+});
 
-    function renderStocks(filter = "") {
-        const listDiv = document.getElementById('stock-list');
-        const filtered = allStocks.filter(s => s.name.includes(filter)).sort((a,b) => b.price - a.price).slice(0, 100);
-        
-        listDiv.innerHTML = "";
-        filtered.forEach((s) => {
-            const id = s.id; 
-            const isUp = s.change >= 0;
-            const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+function updateUI() {
+    const cashDisplay = document.getElementById('my-cash');
+    if (cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
+    renderStocks(document.getElementById('search-input')?.value || "");
+}
+
+// --- 주가 변동 및 거래 로직 (서버 사이드 보안 적용) ---
+window.trade = async function(id, type) {
+    if (!userUID) return alert("로그인 처리 중입니다. 잠시 후 다시 시도해주세요.");
+
+    const stockRef = ref(db, `stocks/${id}`);
+    const userRef = ref(db, `users/${userUID}`);
+
+    const impact = 0.001;   // 0.1% 변동
+    const spread = 0.0005;  // 0.05% 스프레드
+    const fee = 0.003;      // 0.3% 수수료
+
+    try {
+        // 1. 주가 업데이트 (Transaction)
+        await runTransaction(stockRef, (currentStock) => {
+            if (!currentStock) return currentStock;
             
-            let myProfit = 0;
-            let profitClass = 'steady';
-            if (userStock.qty > 0) {
-                myProfit = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
-                profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
+            const currentPrice = currentStock.price;
+            let newPrice = currentPrice;
+
+            // 2. 유저 지갑 계산 (서버 트랜잭션 외부에서 미리 계산된 myData 기반)
+            // 실제 엄격한 보안을 위해선 유저 잔액도 Transaction 내에서 처리해야 하나, 
+            // 여기선 주가 안정성을 우선하여 로직을 구성했습니다.
+            if (type === 'buy') {
+                const buyPrice = Math.round(currentPrice * (1 + spread));
+                if (myData.cash < buyPrice) { alert("잔액이 부족합니다!"); return; }
+                
+                const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+                const totalCost = (userStock.qty * userStock.avg) + buyPrice;
+                userStock.qty += 1;
+                userStock.avg = Math.round(totalCost / userStock.qty);
+                
+                myData.cash -= buyPrice;
+                myData.stocks[id] = userStock;
+                newPrice = Math.round(currentPrice * (1 + impact));
+            } else {
+                const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+                if (userStock.qty < 1) { alert("보유 주식이 없습니다!"); return; }
+                
+                const sellPrice = Math.round(currentPrice * (1 - spread));
+                const finalAmount = Math.round(sellPrice * (1 - fee));
+                
+                myData.cash += finalAmount;
+                userStock.qty -= 1;
+                if (userStock.qty === 0) userStock.avg = 0;
+                
+                myData.stocks[id] = userStock;
+                newPrice = Math.round(currentPrice * (1 - impact));
             }
 
-            const card = document.createElement('div');
-            card.className = 'stock-card';
-            card.innerHTML = `
-                <div class="info-group">
-                    <div class="stock-name">${s.name}</div>
-                    <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
-                </div>
-                <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
-                <div class="price-group">
-                    <div class="current-price ${isUp?'up':'down'}">${s.price.toLocaleString()}원</div>
-                    <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change}%</div>
-                </div>
-                <div class="trade-btns">
-                    <button class="btn btn-buy" onclick="trade('${id}', 'buy')">매수</button>
-                    <button class="btn btn-sell" onclick="trade('${id}', 'sell')">매도</button>
-                </div>
-            `;
-            listDiv.appendChild(card);
+            // 히스토리 업데이트
+            let history = currentStock.history || [currentPrice];
+            history.push(newPrice);
+            if (history.length > 20) history.shift();
+            
+            const updatedStock = {
+                ...currentStock,
+                price: newPrice,
+                history: history,
+                change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
+            };
+            
+            delete updatedStock.admin_mode; // 일반 유저 거래 시 모드 제거
+            return updatedStock;
         });
-    }
 
-    onValue(ref(db, 'stocks/'), (snap) => {
-        const data = snap.val() || {};
-        allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
-        renderStocks(document.getElementById('search-input').value || "");
+        // 3. 서버에 지갑 데이터 최종 업데이트 (보안 규칙이 UID 검증)
+        await set(userRef, myData);
+
+    } catch (error) {
+        console.error("거래 에러:", error);
+        alert("거래 실패: 주가가 급변했거나 권한이 없습니다.");
+    }
+};
+
+// --- 렌더링 로직 ---
+function createSparkline(history, isUp) {
+    if (!history || history.length < 2) return '';
+    const min = Math.min(...history);
+    const max = Math.max(...history);
+    const range = max - min || 1;
+    const pts = history.map((v, i) => `${(i/19)*80},${35 - ((v - min) / range * 35)}`).join(' ');
+    return `<svg class="chart-container"><polyline class="sparkline ${isUp?'up':'down'}" points="${pts}" /></svg>`;
+}
+
+function renderStocks(filter = "") {
+    const listDiv = document.getElementById('stock-list');
+    if (!listDiv) return;
+
+    const filtered = allStocks.filter(s => s.name.includes(filter)).sort((a,b) => b.price - a.price).slice(0, 100);
+    listDiv.innerHTML = "";
+
+    filtered.forEach((s) => {
+        const id = s.id; 
+        const isUp = s.change >= 0;
+        const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+        
+        let myProfit = 0;
+        let profitClass = 'steady';
+        if (userStock.qty > 0) {
+            myProfit = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
+            profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
+        }
+
+        const card = document.createElement('div');
+        card.className = 'stock-card';
+        card.innerHTML = `
+            <div class="info-group">
+                <div class="stock-name">${s.name}</div>
+                <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
+            </div>
+            <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
+            <div class="price-group">
+                <div class="current-price ${isUp?'up':'down'}">${s.price.toLocaleString()}원</div>
+                <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change}%</div>
+            </div>
+            <div class="trade-btns">
+                <button class="btn btn-buy" onclick="trade('${id}', 'buy')">매수</button>
+                <button class="btn btn-sell" onclick="trade('${id}', 'sell')">매도</button>
+            </div>
+        `;
+        listDiv.appendChild(card);
     });
+}
+
+// 주식 목록 실시간 리스너
+onValue(ref(db, 'stocks/'), (snap) => {
+    const data = snap.val() || {};
+    allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
+    updateUI();
+});
 </script>
 </body>
 </html>
