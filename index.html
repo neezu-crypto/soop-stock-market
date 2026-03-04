@@ -113,7 +113,9 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-
+    
+// [캡슐화 시작] 이 함수 안의 변수들은 외부에서 접근할 수 없습니다.
+    (function() {
 const firebaseConfig = {
     apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
     authDomain: "soop-stock-market.firebaseapp.com",
@@ -346,6 +348,7 @@ onValue(ref(db, 'stocks/'), (snap) => {
     allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
     updateUI();
 });
+        })(); // [캡슐화 끝]
 </script>
 </body>
 </html>
