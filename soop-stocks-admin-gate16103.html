@@ -1,1 +1,220 @@
+<textarea id="list" placeholder="<textarea id="list" placeholder="봉준
+김민교.
+이상호
+항상#킴성태
+철구형2↑
+릴파♬
+피넛ㅁ
+염보성!!
+감스트
+제갈금자
+박퍼니
+타요*
+지피티
+김윤환
+김인호
+고세구!
+마이곰이_
+저라뎃
+두치와뿌꾸
+시조새s
+남순
+악어∀
+머독
+클리드1
+기뉴다
+이지상:)
+오아
+한갱
+두부랑_
+우왁굳
+흑운장TV
+비챤
+케이
+김학수
+구슬요
+아이네♪
+나는상윤
+정윤종..
+깐숙
+KIA_타이거즈
+깨박이깨박이
+아뚱.
+스맵임
+징버거☆
+주르르
+오메킴승현2
+그릴래영
+조경훈
+수탉
+강만식
+띵귤_
+천양2
+최군형
+이경민+_+.
+시리안_레인
+뉴스
+러아♡
+뮤즈_MUSE
+Fresh토마토
+단츄♪
+유쾌쌍디풍디
+혁민!
+김된모!
+이주하♥
+이제동
+솜주먹
+김해피2
+김진솔
+박사장$
+말왕
+범프리카
+와이퍼♥
+견자희
+임아니
+마예준
+수피
+심청이_
+안녕수야
+쿠우♪
+민결희
+블랙워크
+서예진♡
+오뀨!
+햇비
+조디악악악
+만만
+과즙세연
+한둬얼
+이라333
+서도일
+너덜트유현규
+문월:-)
+나무늘봉순
+망구랑
+해리
+칸_김동하
+키마
+박진우
+팥순
+프으레이" style="width:100%; height:300px;"></textarea>
+<button onclick="uploadStocks()">🚀 중복 제거 후 일괄 상장하기</button>
 
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
+        authDomain: "soop-stock-market.firebaseapp.com",
+        databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
+        projectId: "soop-stock-market",
+        appId: "1:997788925900:web:cb613d438efec019a3a769"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    window.uploadStocks = async function() {
+        const text = document.getElementById('list').value;
+        
+        // 1. 줄바꿈으로 나누고 이름 양옆 공백 제거
+        const allNames = text.split('\n').map(n => n.trim());
+        
+        // 2. Set을 사용하여 중복 제거 + 빈 줄(공백) 제거
+        const uniqueNames = [...new Set(allNames)].filter(n => n !== "");
+        
+        // 3. 중복된 개수 계산
+        const duplicateCount = allNames.filter(n => n !== "").length - uniqueNames.length;
+        
+        const stocks = {};
+        uniqueNames.forEach((name, i) => {
+            stocks[`id_${i}`] = {
+                name: name,
+                price: 10000, // 시작가 만원
+                change: 0
+            };
+        });
+
+        // 안내 메시지 구성
+        let confirmMsg = `${uniqueNames.length}명을 상장할까요?`;
+        if (duplicateCount > 0) {
+            confirmMsg += `\n(중복된 이름 ${duplicateCount}개가 발견되어 제외되었습니다.)`;
+        }
+
+        if(uniqueNames.length === 0) {
+            alert("상장할 이름이 없습니다.");
+            return;
+        }
+
+        if(confirm(confirmMsg)) {
+            try {
+                await set(ref(db, 'stocks/'), stocks);
+                alert("상장 완료! 중복 없이 깨끗하게 등록되었습니다.");
+            } catch (error) {
+                console.error(error);
+                alert("데이터 저장 중 오류가 발생했습니다. Firebase 규칙을 확인하세요.");
+            }
+        }
+    }
+</script>" style="width:100%; height:300px;"></textarea>
+<button onclick="uploadStocks()">🚀 중복 제거 후 일괄 상장하기</button>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
+        authDomain: "soop-stock-market.firebaseapp.com",
+        databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
+        projectId: "soop-stock-market",
+        appId: "1:997788925900:web:cb613d438efec019a3a769"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    window.uploadStocks = async function() {
+        const text = document.getElementById('list').value;
+        
+        // 1. 줄바꿈으로 나누고 이름 양옆 공백 제거
+        const allNames = text.split('\n').map(n => n.trim());
+        
+        // 2. Set을 사용하여 중복 제거 + 빈 줄(공백) 제거
+        const uniqueNames = [...new Set(allNames)].filter(n => n !== "");
+        
+        // 3. 중복된 개수 계산
+        const duplicateCount = allNames.filter(n => n !== "").length - uniqueNames.length;
+        
+        const stocks = {};
+        uniqueNames.forEach((name, i) => {
+            stocks[`id_${i}`] = {
+                name: name,
+                price: 10000, // 시작가 만원
+                change: 0
+            };
+        });
+
+        // 안내 메시지 구성
+        let confirmMsg = `${uniqueNames.length}명을 상장할까요?`;
+        if (duplicateCount > 0) {
+            confirmMsg += `\n(중복된 이름 ${duplicateCount}개가 발견되어 제외되었습니다.)`;
+        }
+
+        if(uniqueNames.length === 0) {
+            alert("상장할 이름이 없습니다.");
+            return;
+        }
+
+        if(confirm(confirmMsg)) {
+            try {
+                await set(ref(db, 'stocks/'), stocks);
+                alert("상장 완료! 중복 없이 깨끗하게 등록되었습니다.");
+            } catch (error) {
+                console.error(error);
+                alert("데이터 저장 중 오류가 발생했습니다. Firebase 규칙을 확인하세요.");
+            }
+        }
+    }
+</script>
