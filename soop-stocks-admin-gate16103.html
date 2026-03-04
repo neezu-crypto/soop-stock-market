@@ -53,6 +53,12 @@
         </div>
     </div>
 
+    <div class="container" style="display:block; border-color: #ef4444;">
+    <h1>🧹 데이터 무결성 관리</h1>
+    <div class="info-box" style="color: #fca5a5;">이미 상장된 종목 중 중복된 닉네임을 찾아 정리합니다. (최초 상장본 유지)</div>
+    <button class="btn-primary" style="background: #ef4444; color: white;" onclick="cleanupDuplicateStocks()">중복 닉네임 일괄 정리</button>
+</div>
+
     <div class="container" style="display:block">
         <h1>🚀 신규 스트리머 상장</h1>
         <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요.</div>
@@ -166,6 +172,56 @@
 
     // 검색창 입력 이벤트
     document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
+
+    // 기존 데이터 중 중복 닉네임 정리 (나중에 생성된 ID 삭제)
+window.cleanupDuplicateStocks = async function() {
+    try {
+        const snapshot = await get(ref(db, 'stocks/'));
+        const data = snapshot.val();
+        if (!data) return alert("데이터가 없습니다.");
+
+        const nameMap = {}; // { 닉네임: [ID1, ID2, ...] }
+        const deleteUpdates = {};
+        let duplicateFoundCount = 0;
+
+        // 1. 모든 종목을 닉네임별로 그룹화
+        Object.entries(data).forEach(([id, stock]) => {
+            const name = stock.name.trim();
+            if (!nameMap[name]) {
+                nameMap[name] = [];
+            }
+            nameMap[name].push(id);
+        });
+
+        // 2. 중복된 닉네임 검사
+        Object.entries(nameMap).forEach(([name, ids]) => {
+            if (ids.length > 1) {
+                // ID를 정렬 (생성 순서대로 정렬하기 위함)
+                // 보통 Date.now() 기반 ID라면 문자열 정렬로 선후 관계 파악 가능
+                ids.sort(); 
+
+                // 첫 번째 ID(가장 오래된 것)만 남기고 나머지는 삭제 리스트에 추가
+                for (let i = 1; i < ids.length; i++) {
+                    const targetId = ids[i];
+                    deleteUpdates[`stocks/${targetId}`] = null; // null로 설정하면 삭제됨
+                    duplicateFoundCount++;
+                }
+            }
+        });
+
+        if (duplicateFoundCount === 0) {
+            return alert("✅ 중복된 닉네임이 없습니다.");
+        }
+
+        if (confirm(`조회 결과: 중복 종목 ${duplicateFoundCount}개가 발견되었습니다.\n가장 먼저 상장된 종목만 남기고 모두 삭제할까요?`)) {
+            await update(ref(db), deleteUpdates);
+            alert(`🔥 총 ${duplicateFoundCount}개의 중복 종목을 정리했습니다!`);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("오류 발생: " + e.message);
+    }
+};
 
     // 주식 일괄 상장
     window.uploadStocks = async function() {
