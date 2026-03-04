@@ -348,6 +348,10 @@ onValue(ref(db, 'stocks/'), (snap) => {
     allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
     updateUI();
 });
+        // 검색창 이벤트 리스너 (캡슐화 끝 부분에 추가)
+document.getElementById('search-input')?.addEventListener('input', (e) => {
+    renderStocks(e.target.value);
+});
         })(); // [캡슐화 끝]
 </script>
 </body>
