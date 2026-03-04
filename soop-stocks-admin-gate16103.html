@@ -36,6 +36,15 @@
     <div id="admin-info"></div>
 
     <div class="container" style="display:block">
+    <h1>🔍 개별 종목 관리</h1>
+    <div class="info-box">종목 이름을 검색하여 가격을 직접 수정할 수 있습니다.</div>
+    <input type="text" id="admin-search" placeholder="스트리머 검색..." style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box; margin-bottom:15px;">
+    
+    <div id="admin-stock-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;">
+        </div>
+</div>
+
+    <div class="container" style="display:block">
         <h1>📈 주가 일괄 조정 (% 단위)</h1>
         <div class="info-box">입력한 수치만큼 전 종목 주가를 변동시킵니다.</div>
         <div class="batch-control">
@@ -56,7 +65,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -74,6 +83,81 @@
 
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
+    // --- 개별 주식 검색 및 수정 로직 ---
+let allStocksData = {};
+
+    // [수정] 로그인이 되어있든 아니든 데이터는 한 번만 감시하도록 밖으로 뺍니다.
+onValue(ref(db, 'stocks/'), (snap) => {
+    allStocksData = snap.val() || {};
+    // 관리자 세션이 활성화된 상태일 때만 리스트를 갱신합니다.
+    const adminSection = document.getElementById('admin-section');
+    if (adminSection && adminSection.style.display === 'block') {
+        renderAdminStockList();
+    }
+});
+
+// 주식 데이터 실시간 로드 (검색용)
+onAuthStateChanged(auth, (user) => {
+    if (user && user.email === ADMIN_EMAIL) {
+        onValue(ref(db, 'stocks/'), (snap) => {
+            allStocksData = snap.val() || {};
+            renderAdminStockList(); // 데이터 변경 시 리스트 갱신
+        });
+    }
+});
+
+// 관리자용 주식 리스트 렌더링
+function renderAdminStockList() {
+    const searchVal = document.getElementById('admin-search').value.toLowerCase();
+    const listDiv = document.getElementById('admin-stock-list');
+    if (!listDiv) return;
+
+    listDiv.innerHTML = "";
+
+    Object.entries(allStocksData).forEach(([id, s]) => {
+        if (s.name.toLowerCase().includes(searchVal)) {
+            const item = document.createElement('div');
+            item.className = 'batch-control'; // 기존 스타일 재활용
+            item.style.padding = "10px";
+            item.style.background = "#0f172a";
+            item.style.borderRadius = "8px";
+            
+            item.innerHTML = `
+                <div style="flex:1; font-size:14px;">${s.name}</div>
+                <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
+                <button class="btn-success" onclick="updateSinglePrice('${id}')" style="padding:8px 12px; font-size:12px;">수정</button>
+            `;
+            listDiv.appendChild(item);
+        }
+    });
+}
+
+// 개별 가격 수정 실행
+window.updateSinglePrice = async function(id) {
+    const newPrice = parseInt(document.getElementById(`input-${id}`).value);
+    if (isNaN(newPrice)) return alert("정확한 가격을 입력해주세요.");
+
+    const oldStock = allStocksData[id];
+    let history = oldStock.history || [oldStock.price];
+    history.push(newPrice);
+    if (history.length > 20) history.shift();
+
+    const updates = {};
+    updates[`stocks/${id}/price`] = newPrice;
+    updates[`stocks/${id}/history`] = history;
+    updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
+
+    try {
+        await update(ref(db), updates);
+        alert(`✅ ${oldStock.name}의 가격이 ${newPrice.toLocaleString()}원으로 수정되었습니다.`);
+    } catch (e) {
+        alert("수정 실패: 관리자 권한을 확인하세요.");
+    }
+};
+
+// 검색창 입력 이벤트 연결
+document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
+    
     // --- 인증 로직 ---
     window.login = () => {
         signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
@@ -84,11 +168,12 @@
     };
 
     onAuthStateChanged(auth, (user) => {
-        if (user && user.email === ADMIN_EMAIL) {
-            document.getElementById('login-section').style.display = 'none';
-            document.getElementById('admin-section').style.display = 'block';
-            document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
-        } else {
+    if (user && user.email === ADMIN_EMAIL) {
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('admin-section').style.display = 'block';
+        document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
+        renderAdminStockList(); // 로그인 성공 시 목록 초기 렌더링
+    } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
             document.getElementById('admin-section').style.display = 'none';
