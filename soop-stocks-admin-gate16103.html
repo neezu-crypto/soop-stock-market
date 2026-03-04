@@ -2,54 +2,62 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>SOOP STOCK - 상장 및 주가 관리</title>
+    <title>SOOP STOCK - 관리자 센터</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <style>
         body { font-family: 'Pretendard', sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 600px; background: #1e293b; padding: 30px; border-radius: 16px; border: 1px solid #334155; margin-bottom: 20px; }
+        .container { width: 100%; max-width: 600px; background: #1e293b; padding: 30px; border-radius: 16px; border: 1px solid #334155; margin-bottom: 20px; display: none; }
+        .login-box { display: flex; flex-direction: column; align-items: center; gap: 20px; background: #1e293b; padding: 40px; border-radius: 16px; border: 1px solid #334155; }
         h1 { font-size: 20px; color: #38bdf8; margin-bottom: 20px; border-bottom: 2px solid #334155; padding-bottom: 10px; display: flex; align-items: center; gap: 8px; }
         .info-box { background: #334155; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 15px; color: #cbd5e1; line-height: 1.5; }
-        
-        /* 일괄 조정 섹션 */
         .batch-control { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
         input[type="number"] { flex: 1; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 12px; border-radius: 8px; outline: none; font-size: 16px; }
-        
         textarea { width: 100%; height: 200px; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 15px; border-radius: 8px; box-sizing: border-box; font-size: 14px; resize: none; margin-top: 10px; }
-        
         button { cursor: pointer; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; transition: 0.2s; }
         .btn-primary { background: #38bdf8; color: #0f172a; width: 100%; margin-top: 15px; font-size: 15px; }
-        .btn-danger { background: #ef4444; color: white; }
         .btn-success { background: #22c55e; color: white; }
+        .btn-google { background: white; color: #334155; display: flex; align-items: center; gap: 10px; font-size: 16px; }
         button:hover { opacity: 0.8; transform: translateY(-1px); }
+        #admin-info { margin-bottom: 20px; font-size: 14px; color: #94a3b8; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>📈 주가 일괄 조정 (% 단위)</h1>
-    <div class="info-box">
-        입력한 수치만큼 <b>모든 종목</b>의 주가를 변동시킵니다.<br>
-        예: 10 입력 시 전 종목 +10% 상승 / -5 입력 시 -5% 하락
-    </div>
-    <div class="batch-control">
-        <input type="number" id="percent-input" placeholder="변동 퍼센트 입력 (예: 5)">
-        <button class="btn-success" onclick="adjustAllPrices()">일괄 적용</button>
-    </div>
+<div id="login-section" class="login-box">
+    <h2 style="margin:0">Admin Auth</h2>
+    <p style="color:#94a3b8; font-size:14px">관리자 계정으로 로그인하세요.</p>
+    <button class="btn-google" onclick="login()">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20">
+        Google로 로그인
+    </button>
 </div>
 
-<div class="container">
-    <h1>🚀 신규 스트리머 상장</h1>
-    <div class="info-box">
-        닉네임을 한 줄에 하나씩 입력하세요. <br>
-        <b>보안 알림:</b> 현재 관리자 모드로 전송되어 서버 보안 규칙을 통과합니다.
+<div id="admin-section" style="display:none; width:100%; max-width:600px;">
+    <div id="admin-info"></div>
+
+    <div class="container" style="display:block">
+        <h1>📈 주가 일괄 조정 (% 단위)</h1>
+        <div class="info-box">입력한 수치만큼 전 종목 주가를 변동시킵니다.</div>
+        <div class="batch-control">
+            <input type="number" id="percent-input" placeholder="예: 10 또는 -5">
+            <button class="btn-success" onclick="adjustAllPrices()">일괄 적용</button>
+        </div>
     </div>
-    <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
-    <button class="btn-primary" onclick="uploadStocks()">데이터베이스에 일괄 상장</button>
+
+    <div class="container" style="display:block">
+        <h1>🚀 신규 스트리머 상장</h1>
+        <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요.</div>
+        <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
+        <button class="btn-primary" onclick="uploadStocks()">일괄 상장 실행</button>
+    </div>
+    
+    <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
     import { getDatabase, ref, get, update, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
@@ -61,8 +69,33 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
 
-    // --- [보안] 관리자 모드 일괄 상장 ---
+    const ADMIN_EMAIL = "skftodwocks2@gmail.com";
+
+    // --- 인증 로직 ---
+    window.login = () => {
+        signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
+    };
+
+    window.logout = () => {
+        signOut(auth);
+    };
+
+    onAuthStateChanged(auth, (user) => {
+        if (user && user.email === ADMIN_EMAIL) {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('admin-section').style.display = 'block';
+            document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
+        } else {
+            if (user) alert("관리자 권한이 없습니다.");
+            document.getElementById('login-section').style.display = 'flex';
+            document.getElementById('admin-section').style.display = 'none';
+        }
+    });
+
+    // --- 주식 상장 (관리자 전용) ---
     window.uploadStocks = async function() {
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("상장할 이름을 입력해주세요.");
@@ -75,31 +108,28 @@
                 name: name,
                 price: 10000,
                 change: 0,
-                history: [10000, 10000],
-                admin_mode: true // [보안 규칙 통과용]
+                history: [10000, 10000]
             };
         });
 
-        if(confirm(`${uniqueNames.length}명을 상장하시겠습니까? (기존 데이터가 덮어씌워질 수 있습니다)`)) {
+        if(confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
             try {
                 await set(ref(db, 'stocks/'), stocks);
-                alert("🎉 관리자 권한으로 상장이 완료되었습니다!");
+                alert("🎉 상장이 완료되었습니다!");
                 document.getElementById('list').value = "";
-            } catch (e) { alert("보안 거부: 규칙을 확인하세요."); }
+            } catch (e) { alert("권한 거부: 관리자 계정이 아닙니다."); }
         }
     }
 
-    // --- [신규] 모든 주가 % 단위 일괄 변경 ---
+    // --- 주가 조정 (관리자 전용) ---
     window.adjustAllPrices = async function() {
         const percent = parseFloat(document.getElementById('percent-input').value);
-        if (isNaN(percent)) return alert("변동할 퍼센트 숫자를 입력해주세요.");
-
-        if (!confirm(`정말로 모든 종목의 주가를 ${percent}% ${percent > 0 ? '상승' : '하락'}시키겠습니까?`)) return;
+        if (isNaN(percent)) return alert("숫자를 입력해주세요.");
 
         try {
             const snapshot = await get(ref(db, 'stocks/'));
             const data = snapshot.val();
-            if (!data) return alert("종목 데이터가 없습니다.");
+            if (!data) return;
 
             const updates = {};
             const multiplier = 1 + (percent / 100);
@@ -107,25 +137,18 @@
             Object.keys(data).forEach(id => {
                 const oldPrice = data[id].price;
                 const newPrice = Math.round(oldPrice * multiplier);
-                
-                // 히스토리 업데이트
                 let history = data[id].history || [oldPrice];
                 history.push(newPrice);
                 if (history.length > 20) history.shift();
 
                 updates[`stocks/${id}/price`] = newPrice;
                 updates[`stocks/${id}/history`] = history;
-                updates[`stocks/${id}/admin_mode`] = true; // [보안 규칙 통과용]
                 updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
             });
 
             await update(ref(db), updates);
             alert(`🔥 전 종목 주가가 ${percent}% 조정되었습니다!`);
-            document.getElementById('percent-input').value = "";
-        } catch (e) {
-            console.error(e);
-            alert("오류 발생: 보안 규칙에서 거부되었을 수 있습니다.");
-        }
+        } catch (e) { alert("권한 거부 또는 오류 발생"); }
     }
 </script>
 </body>
