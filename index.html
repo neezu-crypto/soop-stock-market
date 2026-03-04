@@ -87,38 +87,44 @@ const db = getDatabase(app);
 const auth = getAuth(app);
 
 // --- 상태 관리 ---
-let myData = { cash: 1000000, stocks: {} };
+let myData = null; // 초기값을 null로 설정하여 로딩 상태 구분
 let userUID = null;
 let allStocks = [];
+
+function updateUI() {
+    const cashDisplay = document.getElementById('my-cash');
+    
+    // 1. 지갑 데이터나 주식 데이터가 아직 없으면 그리기를 중단합니다.
+    if (!myData || allStocks.length === 0) return;
+
+    if (cashDisplay) {
+        cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
+    }
+    
+    // 2. 데이터가 확실히 있을 때만 렌더링 호출
+    renderStocks(document.getElementById('search-input')?.value || "");
+}
 
 // --- [보안 핵심] 로그인 및 데이터 동기화 ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         userUID = user.uid;
-        console.log("인증 성공:", userUID);
-        
-        // 서버에서 해당 유저의 지갑 데이터를 실시간으로 감시
         const userRef = ref(db, `users/${userUID}`);
+        
+        // 지갑 데이터를 실시간 감시
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 myData = snapshot.val();
             } else {
-                // 신규 유저 초기화
-                set(userRef, { cash: 1000000, stocks: {} });
+                myData = { cash: 1000000, stocks: {} };
+                set(userRef, myData);
             }
-            updateUI();
+            updateUI(); // 지갑 데이터 로드 후 UI 갱신
         });
     } else {
-        // 접속 즉시 익명 로그인 수행
-        signInAnonymously(auth).catch(err => console.error("로그인 실패:", err));
+        signInAnonymously(auth);
     }
 });
-
-function updateUI() {
-    const cashDisplay = document.getElementById('my-cash');
-    if (cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
-    renderStocks(document.getElementById('search-input')?.value || "");
-}
 
 // --- 주가 변동 및 거래 로직 (서버 사이드 보안 적용) ---
 window.trade = async function(id, type) {
