@@ -196,7 +196,11 @@ onAuthStateChanged(auth, async (user) => {
 
 // --- 주가 변동 및 거래 로직 (서버 사이드 보안 적용) ---
 window.trade = async function(id, type) {
-    if (!userUID) return alert("로그인 처리 중입니다. 잠시 후 다시 시도해주세요.");
+    // 1. 중복 클릭 방지 및 로그인 체크
+    if (isTrading) return; 
+    if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
+
+    isTrading = true; // [중요] 거래 시작 지점 설정
 
     const stockRef = ref(db, `stocks/${id}`);
     const userRef = ref(db, `users/${userUID}`);
@@ -206,7 +210,7 @@ window.trade = async function(id, type) {
     const fee = 0.003;      // 0.3% 수수료
 
     try {
-        // 주가 트랜잭션 시작
+        // 2. 주가 및 거래 검증 트랜잭션
         await runTransaction(stockRef, (currentStock) => {
             if (!currentStock) return currentStock;
             
@@ -215,7 +219,8 @@ window.trade = async function(id, type) {
 
             if (type === 'buy') {
                 const buyPrice = Math.round(currentPrice * (1 + spread));
-                // 클라이언트 데이터(myData) 기준으로 1차 체크
+                
+                // 잔액 검증
                 if (myData.cash < buyPrice) {
                     throw new Error("잔액부족"); 
                 }
@@ -230,7 +235,11 @@ window.trade = async function(id, type) {
                 newPrice = Math.round(currentPrice * (1 + impact));
             } else {
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                if (userStock.qty < 1) { alert("보유 주식이 없습니다!"); return; }
+                
+                // 보유 수량 검증
+                if (userStock.qty < 1) { 
+                    throw new Error("보유부족"); 
+                }
                 
                 const sellPrice = Math.round(currentPrice * (1 - spread));
                 const finalAmount = Math.round(sellPrice * (1 - fee));
@@ -255,19 +264,22 @@ window.trade = async function(id, type) {
                 change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
             };
             
-            delete updatedStock.admin_mode; // 일반 유저 거래 시 모드 제거
+            delete updatedStock.admin_mode;
             return updatedStock;
         });
 
-        // 3. 서버에 지갑 데이터 최종 업데이트 (보안 규칙이 UID 검증)
+        // 3. 서버에 지갑 데이터 업데이트
         await set(userRef, myData);
 
     } catch (error) {
         console.error("거래 에러:", error);
+        // 에러 메시지에 따른 분기 처리
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
-        else alert("거래 중 오류가 발생했습니다.");
+        else if (error.message === "보유부족") alert("보유 주식이 없습니다!");
+        else alert("거래 중 오류가 발생했습니다. (주가 급변 등)");
     } finally {
-        isTrading = false; // 거래 종료 (성공하든 실패하든 해제)
+        // 4. 어떤 상황에서도 거래 플래그 해제
+        isTrading = false; 
     }
 };
 
