@@ -84,8 +84,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // --- 지갑 로직 (평단가 추적 추가) ---
-    // stocks: { "id": { qty: 수량, avg: 평단가 } } 구조로 변경
+    // --- 지갑 로직 ---
     let myData = JSON.parse(localStorage.getItem('soop_wallet')) || { cash: 1000000, stocks: {} };
     
     function saveWallet() {
@@ -95,64 +94,90 @@
     }
     saveWallet();
 
-    // --- 주가 변동 및 거래 로직 (0.1% 안정화 버전) ---
+    // --- 주가 변동 및 거래 로직 (보안 강화) ---
     window.trade = async function(id, type) {
         const stockRef = ref(db, `stocks/${id}`);
         
-        // 인플레이션 방지 및 안정화 파라미터
-        const impact = 0.001;   // 0.1% 주가 변동
-        const spread = 0.0005;  // 0.05% 호가 차이
-        const fee = 0.003;      // 0.3% 매도 수수료
+        const impact = 0.001;   // 0.1% 변동
+        const spread = 0.0005;  // 0.05% 스프레드
+        const fee = 0.003;      // 0.3% 수수료
 
-        await runTransaction(stockRef, (stock) => {
-            if (!stock) return stock;
+        try {
+            await runTransaction(stockRef, (currentStock) => {
+                if (!currentStock) return currentStock;
 
-            const currentPrice = stock.price;
-            
-            if (type === 'buy') {
-                const buyPrice = Math.round(currentPrice * (1 + spread));
-                if (myData.cash < buyPrice) { alert("잔액이 부족합니다!"); return; }
-                
-                // 평단가 계산: (기존총액 + 신규총액) / 전체수량
-                const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                const totalCost = (userStock.qty * userStock.avg) + buyPrice;
-                userStock.qty += 1;
-                userStock.avg = Math.round(totalCost / userStock.qty);
-                
-                myData.cash -= buyPrice;
-                myData.stocks[id] = userStock;
-                
-                stock.price = Math.round(currentPrice * (1 + impact));
-            } else {
-                const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                if (userStock.qty < 1) { alert("보유 주식이 없습니다!"); return; }
-                
-                const sellPrice = Math.round(currentPrice * (1 - spread));
-                const finalAmount = Math.round(sellPrice * (1 - fee));
-                
-                myData.cash += finalAmount;
-                userStock.qty -= 1;
-                if (userStock.qty === 0) userStock.avg = 0; // 전량 매도 시 초기화
-                
-                myData.stocks[id] = userStock;
-                stock.price = Math.round(currentPrice * (1 - impact));
-            }
+                // [보안] 기존 데이터에 admin_mode가 있다면 제거 (사용자 거래는 일반 모드로 진행)
+                if (currentStock.admin_mode) delete currentStock.admin_mode;
 
-            // 히스토리 업데이트 (최근 20회)
-            let history = stock.history || [currentPrice];
-            history.push(stock.price);
-            if (history.length > 20) history.shift();
-            stock.history = history;
-            
-            stock.change = (((stock.price - history[0]) / history[0]) * 100).toFixed(2);
+                const currentPrice = currentStock.price;
+                let newPrice = currentPrice;
 
-            saveWallet();
-            // 렌더링은 onValue 리스너에서 자동 실행됨
-            return stock;
-        });
+                if (type === 'buy') {
+                    const buyPrice = Math.round(currentPrice * (1 + spread));
+                    if (myData.cash < buyPrice) {
+                        alert("잔액이 부족합니다!");
+                        return; // 트랜잭션 중단
+                    }
+                    
+                    const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+                    const totalCost = (userStock.qty * userStock.avg) + buyPrice;
+                    userStock.qty += 1;
+                    userStock.avg = Math.round(totalCost / userStock.qty);
+                    
+                    myData.cash -= buyPrice;
+                    myData.stocks[id] = userStock;
+                    
+                    newPrice = Math.round(currentPrice * (1 + impact));
+                } else {
+                    const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+                    if (userStock.qty < 1) {
+                        alert("보유 주식이 없습니다!");
+                        return; // 트랜잭션 중단
+                    }
+                    
+                    const sellPrice = Math.round(currentPrice * (1 - spread));
+                    const finalAmount = Math.round(sellPrice * (1 - fee));
+                    
+                    myData.cash += finalAmount;
+                    userStock.qty -= 1;
+                    if (userStock.qty === 0) userStock.avg = 0;
+                    
+                    myData.stocks[id] = userStock;
+                    newPrice = Math.round(currentPrice * (1 - impact));
+                }
+
+                // [보안] 클라이언트 사이드 변동폭 강제 제한 검증 (서버 규칙 2차 방어)
+                const ratio = newPrice / currentPrice;
+                if (ratio > 1.002 || ratio < 0.998) {
+                    console.error("비정상적인 가격 변동 감지");
+                    return; 
+                }
+
+                // 히스토리 및 데이터 업데이트
+                let history = currentStock.history || [currentPrice];
+                history.push(newPrice);
+                if (history.length > 20) history.shift();
+                
+                const updatedData = {
+                    ...currentStock,
+                    price: newPrice,
+                    history: history,
+                    change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
+                };
+
+                // [중요] 일반 유저의 거래이므로 admin_mode 필드가 포함되지 않도록 확실히 함
+                delete updatedData.admin_mode;
+
+                saveWallet();
+                return updatedData;
+            });
+        } catch (error) {
+            console.error("거래 실패:", error);
+            alert("거래가 일시적으로 실패했습니다. 다시 시도해주세요.");
+        }
     };
 
-    // --- 렌더링 로직 ---
+    // --- 렌더링 및 리스너 로직 (기존과 동일) ---
     let allStocks = [];
     function createSparkline(history, isUp) {
         if (!history || history.length < 2) return '';
@@ -169,13 +194,10 @@
         
         listDiv.innerHTML = "";
         filtered.forEach((s) => {
-            // DB 키를 찾기 위해 allStocks에서 해당 객체의 인덱스나 고유 ID 사용
-            // 여기서는 snapshot 구조에 따라 id를 가져와야 함 (관리자 페이지 상장 시 사용한 키)
             const id = s.id; 
             const isUp = s.change >= 0;
             const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
             
-            // 내 수익률 계산
             let myProfit = 0;
             let profitClass = 'steady';
             if (userStock.qty > 0) {
@@ -192,7 +214,7 @@
                 </div>
                 <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
                 <div class="price-group">
-                    <div class="current-price ${isUp?'up':'down'}">${s.price.toLocaleString()}</div>
+                    <div class="current-price ${isUp?'up':'down'}">${s.price.toLocaleString()}원</div>
                     <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change}%</div>
                 </div>
                 <div class="trade-btns">
@@ -206,9 +228,8 @@
 
     onValue(ref(db, 'stocks/'), (snap) => {
         const data = snap.val() || {};
-        // 객체의 키(ID)를 객체 내부에 포함시켜 배열로 변환
         allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
-        renderStocks(document.getElementById('search-input').value);
+        renderStocks(document.getElementById('search-input').value || "");
     });
 </script>
 </body>
