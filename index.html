@@ -76,6 +76,19 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     
     .hidden { opacity: 0; pointer-events: none; }
+
+    .ranking-bar {
+    background: var(--card-bg); width: 100%; max-width: 800px;
+    padding: 12px 20px; border-radius: 12px; margin-bottom: 20px;
+    display: flex; align-items: center; border: 1px dashed #334155;
+    overflow: hidden;
+}
+.ranking-title { font-weight: 800; color: var(--primary); margin-right: 15px; white-space: nowrap; font-size: 14px; }
+.ranking-list { display: flex; gap: 20px; font-size: 13px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.rank-item { display: flex; gap: 6px; }
+.rank-num { color: var(--primary); font-weight: 800; }
+.rank-name { color: var(--text-main); }
+.rank-vol { color: var(--text-sub); font-size: 11px; }
     </style>
 </head>
 <body>
@@ -106,6 +119,13 @@
         <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
 
+    <div class="ranking-bar">
+    <div class="ranking-title">🔥 인기 TOP 5</div>
+    <div id="top-rankers" class="ranking-list">
+        불러오는 중...
+    </div>
+</div>
+
     <main id="stock-list"></main>
 </div>
 
@@ -134,6 +154,30 @@ let userUID = null;
 let allStocks = [];
 let isTrading = false; // [추가] 중복 거래 방지 플래그
 
+function renderRanking() {
+    const rankDiv = document.getElementById('top-rankers');
+    if (!rankDiv) return;
+
+    // 거래량(volume) 순으로 정렬하여 상위 5개 추출
+    const sorted = [...allStocks]
+        .filter(s => s.volume > 0)
+        .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+        .slice(0, 5);
+
+    if (sorted.length === 0) {
+        rankDiv.innerHTML = "거래 데이터가 아직 없습니다.";
+        return;
+    }
+
+    rankDiv.innerHTML = sorted.map((s, i) => `
+        <div class="rank-item">
+            <span class="rank-num">${i + 1}</span>
+            <span class="rank-name">${s.name}</span>
+            <span class="rank-vol">${(s.volume || 0).toLocaleString()}건</span>
+        </div>
+    `).join('');
+}
+
 function updateUI() {
     const cashDisplay = document.getElementById('my-cash');
     const overlay = document.getElementById('intro-overlay');
@@ -155,6 +199,8 @@ function updateUI() {
         }
         
         renderStocks(document.getElementById('search-input')?.value || "");
+
+        renderRanking();
 
         if (overlay && !overlay.classList.contains('hidden')) {
             setTimeout(() => {
@@ -263,6 +309,7 @@ window.trade = async function(id, type) {
                 ...currentStock,
                 price: newPrice,
                 history: history,
+                volume: (currentStock.volume || 0) + 1, // 거래당 1씩 누적
                 change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
             };
             
