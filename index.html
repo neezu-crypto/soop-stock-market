@@ -154,26 +154,54 @@ let userUID = null;
 let allStocks = [];
 let isTrading = false; // [추가] 중복 거래 방지 플래그
 
+// --- 캡슐화 내부 상단 상태 관리 섹션에 추가 ---
+let allUsers = {}; 
+
+// --- 유저 전체 데이터 리스너 (랭킹 산출용) ---
+onValue(ref(db, 'users/'), (snap) => {
+    allUsers = snap.val() || {};
+    renderRanking(); // 유저 데이터가 바뀔 때마다 랭킹 갱신
+});
+
+        
+// 랭킹 집계 함수
 function renderRanking() {
     const rankDiv = document.getElementById('top-rankers');
-    if (!rankDiv) return;
+    if (!rankDiv || !allStocks.length) return;
 
-    // 거래량(volume) 순으로 정렬하여 상위 5개 추출
-    const sorted = [...allStocks]
-        .filter(s => s.volume > 0)
-        .sort((a, b) => (b.volume || 0) - (a.volume || 0))
-        .slice(0, 5);
+    // 1. 모든 유저의 주식 보유량 합산 계산
+    const stockOwnership = {}; // { 종목ID: 총보유량 }
+
+    Object.values(allUsers).forEach(user => {
+        if (user.stocks) {
+            Object.entries(user.stocks).forEach(([stockId, data]) => {
+                if (data.qty > 0) {
+                    stockOwnership[stockId] = (stockOwnership[stockId] || 0) + data.qty;
+                }
+            });
+        }
+    });
+
+    // 2. 보유량 기준으로 주식 데이터 매핑 및 정렬
+    const sorted = allStocks.map(s => ({
+        ...s,
+        totalQty: stockOwnership[s.id] || 0
+    }))
+    .filter(s => s.totalQty > 0)
+    .sort((a, b) => b.totalQty - a.totalQty)
+    .slice(0, 5);
 
     if (sorted.length === 0) {
-        rankDiv.innerHTML = "거래 데이터가 아직 없습니다.";
+        rankDiv.innerHTML = "보유 중인 주식이 아직 없습니다.";
         return;
     }
 
+    // 3. UI 렌더링
     rankDiv.innerHTML = sorted.map((s, i) => `
         <div class="rank-item">
             <span class="rank-num">${i + 1}</span>
             <span class="rank-name">${s.name}</span>
-            <span class="rank-vol">${(s.volume || 0).toLocaleString()}건</span>
+            <span class="rank-vol">총 ${s.totalQty.toLocaleString()}주 보유</span>
         </div>
     `).join('');
 }
