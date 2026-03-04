@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOOP STOCK - 실시간 스트리머 주식 시장</title>
+    <title>SOOP STOCK - 실시간 차트</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <style>
         :root {
             --bg-color: #0f172a;
             --card-bg: #1e293b;
             --primary: #38bdf8;
-            --up-color: #ef4444; /* 상승 빨간색 */
-            --down-color: #3b82f6; /* 하락 파란색 */
+            --up-color: #ef4444;
+            --down-color: #3b82f6;
             --text-main: #f8fafc;
             --text-sub: #94a3b8;
         }
@@ -20,73 +20,73 @@
             font-family: 'Pretendard', sans-serif; 
             background: var(--bg-color); 
             color: var(--text-main); 
-            margin: 0; padding: env(safe-area-inset-top) 20px 40px;
-            -webkit-font-smoothing: antialiased;
+            margin: 0; padding: 20px;
+            display: flex; justify-content: center;
         }
 
-        /* 헤더 디자인 */
+        /* 중앙 정렬 및 최대 너비 설정으로 여백 확보 */
+        .wrapper { width: 100%; max-width: 800px; }
+
         header {
             position: sticky; top: 0; background: var(--bg-color);
             padding: 20px 0; z-index: 10; border-bottom: 1px solid #1e293b;
         }
-        h1 { font-size: 24px; font-weight: 800; margin: 0; color: var(--primary); display: flex; align-items: center; gap: 8px; }
-        h1 span { font-size: 14px; background: #38bdf822; padding: 4px 8px; border-radius: 6px; font-weight: 500; }
 
-        /* 검색창 */
-        .search-container { margin-top: 20px; position: relative; }
+        .search-container { margin-top: 15px; }
         #search-input {
-            width: 100%; padding: 16px 20px; border-radius: 12px;
-            background: var(--card-bg); border: 2px solid transparent;
-            color: white; font-size: 16px; box-sizing: border-box;
-            transition: 0.3s;
+            width: 100%; padding: 14px; border-radius: 12px;
+            background: var(--card-bg); border: 1px solid #334155;
+            color: white; font-size: 15px; box-sizing: border-box;
         }
-        #search-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 15px #38bdf833; }
 
-        /* 주식 리스트 스타일 */
-        #stock-list { margin-top: 25px; display: grid; gap: 12px; }
+        #stock-list { margin-top: 20px; display: grid; gap: 10px; }
         
         .stock-card {
-            background: var(--card-bg); padding: 18px; border-radius: 16px;
-            display: flex; justify-content: space-between; align-items: center;
-            transition: transform 0.2s, background 0.2s;
-            cursor: pointer; border: 1px solid #334155;
+            background: var(--card-bg); padding: 15px 20px; border-radius: 14px;
+            display: grid; grid-template-columns: 1fr 100px 100px; /* 이름 | 차트 | 가격 */
+            align-items: center; gap: 15px;
+            border: 1px solid #334155;
         }
-        .stock-card:hover { transform: scale(1.02); background: #26334d; }
 
-        .info-group { display: flex; flex-direction: column; gap: 4px; }
-        .stock-name { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
-        .stock-rank { font-size: 12px; color: var(--primary); font-weight: 600; }
+        .info-group { display: flex; flex-direction: column; min-width: 120px; }
+        .stock-rank { font-size: 11px; color: var(--primary); font-weight: 600; }
+        .stock-name { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* 미니 차트 영역 */
+        .chart-container { width: 100px; height: 40px; }
+        .sparkline { stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
         .price-group { text-align: right; }
-        .current-price { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .price-change { font-size: 13px; font-weight: 500; margin-top: 2px; }
+        .current-price { font-size: 16px; font-weight: 700; }
+        .price-change { font-size: 12px; }
 
-        /* 색상 클래스 */
-        .up { color: var(--up-color); }
-        .down { color: var(--down-color); }
-        .steady { color: var(--text-sub); }
+        .up { color: var(--up-color); stroke: var(--up-color); }
+        .down { color: var(--down-color); stroke: var(--down-color); }
+        .steady { color: var(--text-sub); stroke: var(--text-sub); }
 
-        /* 로딩 애니메이션 */
-        .loading { text-align: center; padding: 50px; color: var(--text-sub); font-size: 14px; }
+        .loading { text-align: center; padding: 40px; color: var(--text-sub); }
     </style>
 </head>
 <body>
 
-<header>
-    <h1>📈 SOOP STOCK <span>실시간</span></h1>
-    <div class="search-container">
-        <input type="text" id="search-input" placeholder="스트리머 검색 (닉네임)">
-    </div>
-</header>
+<div class="wrapper">
+    <header>
+        <h1>📈 SOOP STOCK <span>LIVE</span></h1>
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="관심 있는 스트리머를 찾아보세요">
+        </div>
+    </header>
 
-<main id="stock-list">
-    <div class="loading">데이터를 실시간으로 동기화 중입니다...</div>
-</main>
+    <main id="stock-list">
+        <div class="loading">차트 데이터를 가져오는 중...</div>
+    </main>
+</div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
+    // Firebase 설정
     const firebaseConfig = {
         apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
         authDomain: "soop-stock-market.firebaseapp.com",
@@ -101,56 +101,89 @@
     const searchInput = document.getElementById('search-input');
 
     let allStocks = [];
+    let displayCount = 100;
 
-    // 데이터 렌더링 함수
-    function renderStocks(filter = "") {
+    // SVG 미니 차트 생성 함수
+    function createSparkline(history, isUp) {
+        if (!history || history.length < 2) return '';
+        
+        const width = 100;
+        const height = 30;
+        const min = Math.min(...history);
+        const max = Math.max(...history);
+        const range = max - min === 0 ? 1 : max - min;
+
+        // 좌표 계산
+        const points = history.map((val, i) => {
+            const x = (i / (history.length - 1)) * width;
+            const y = height - ((val - min) / range) * height;
+            return `${x},${y}`;
+        }).join(' ');
+
+        const colorClass = isUp ? 'up' : 'down';
+        return `
+            <svg class="chart-container" viewBox="0 0 ${width} ${height}">
+                <polyline class="sparkline ${colorClass}" points="${points}" />
+            </svg>
+        `;
+    }
+
+    function renderStocks(filter = "", isMore = false) {
         const filtered = allStocks
             .filter(s => s.name.toLowerCase().includes(filter.toLowerCase()))
-            .sort((a, b) => b.price - a.price); // 비싼 순서(시총순) 정렬
+            .sort((a, b) => b.price - a.price);
 
-        if (filtered.length === 0) {
-            stockListDiv.innerHTML = `<div class="loading">검색 결과가 없습니다.</div>`;
-            return;
+        if (!isMore) {
+            displayCount = 100;
+            stockListDiv.innerHTML = "";
         }
 
-        stockListDiv.innerHTML = "";
-        filtered.forEach((stock, index) => {
-            const isUp = stock.change > 0;
-            const isDown = stock.change < 0;
-            const colorClass = isUp ? 'up' : (isDown ? 'down' : 'steady');
-            const sign = isUp ? '+' : '';
+        const itemsToRender = filtered.slice(stockListDiv.children.length, displayCount);
+
+        itemsToRender.forEach((stock) => {
+            const rank = filtered.indexOf(stock) + 1;
+            const isUp = stock.change >= 0;
+            const colorClass = isUp ? 'up' : 'down';
+            
+            // 데이터베이스에 history가 없다면 임시로 현재가 기준 랜덤 생성 (테스트용)
+            // 실제 데이터 운영 시 관리자 페이지에서 history: [가격1, 가격2...] 배열을 넣어줘야 함
+            const mockHistory = stock.history || Array.from({length: 20}, () => stock.price + (Math.random()*1000 - 500));
 
             const card = document.createElement('div');
             card.className = 'stock-card';
             card.innerHTML = `
                 <div class="info-group">
-                    <span class="stock-rank">${index + 1}위</span>
+                    <span class="stock-rank">${rank}위</span>
                     <span class="stock-name">${stock.name}</span>
                 </div>
+                <div>${createSparkline(mockHistory, isUp)}</div>
                 <div class="price-group">
                     <div class="current-price ${colorClass}">${stock.price.toLocaleString()}원</div>
-                    <div class="price-change ${colorClass}">${sign}${stock.change}%</div>
+                    <div class="price-change ${colorClass}">${isUp?'+':''}${stock.change}%</div>
                 </div>
             `;
             stockListDiv.appendChild(card);
         });
     }
 
-    // 실시간 리스너
+    // 스크롤 이벤트
+    window.addEventListener('scroll', () => {
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+            if (displayCount < allStocks.length) {
+                displayCount += 10;
+                renderStocks(searchInput.value, true);
+            }
+        }
+    });
+
     onValue(ref(db, 'stocks/'), (snapshot) => {
         const data = snapshot.val();
-        if (!data) {
-            stockListDiv.innerHTML = `<div class="loading">현재 시장에 상장된 종목이 없습니다.</div>`;
-            return;
-        }
+        if (!data) return;
         allStocks = Object.values(data);
         renderStocks(searchInput.value);
     });
 
-    // 검색 기능
-    searchInput.addEventListener('input', (e) => {
-        renderStocks(e.target.value);
-    });
+    searchInput.addEventListener('input', (e) => renderStocks(e.target.value));
 </script>
 
 </body>
