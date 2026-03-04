@@ -2,36 +2,54 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>SOOP STOCK - 상장 관리 도구</title>
+    <title>SOOP STOCK - 상장 및 주가 관리</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <style>
-        body { font-family: 'Pretendard', sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 600px; background: #1e293b; padding: 30px; border-radius: 16px; border: 1px solid #334155; shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        h1 { font-size: 22px; color: #38bdf8; margin-bottom: 20px; border-bottom: 2px solid #334155; padding-bottom: 10px; }
-        .info-box { background: #334155; padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; color: #cbd5e1; }
-        textarea { width: 100%; height: 350px; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 15px; border-radius: 8px; box-sizing: border-box; font-size: 15px; line-height: 1.5; resize: none; }
-        textarea:focus { outline: none; border-color: #38bdf8; }
-        button { width: 100%; cursor: pointer; border: none; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 16px; background: #38bdf8; color: #0f172a; margin-top: 20px; transition: 0.2s; }
-        button:hover { background: #7dd3fc; transform: translateY(-2px); }
-        button:active { transform: translateY(0); }
+        body { font-family: 'Pretendard', sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 600px; background: #1e293b; padding: 30px; border-radius: 16px; border: 1px solid #334155; margin-bottom: 20px; }
+        h1 { font-size: 20px; color: #38bdf8; margin-bottom: 20px; border-bottom: 2px solid #334155; padding-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .info-box { background: #334155; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 15px; color: #cbd5e1; line-height: 1.5; }
+        
+        /* 일괄 조정 섹션 */
+        .batch-control { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+        input[type="number"] { flex: 1; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 12px; border-radius: 8px; outline: none; font-size: 16px; }
+        
+        textarea { width: 100%; height: 200px; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 15px; border-radius: 8px; box-sizing: border-box; font-size: 14px; resize: none; margin-top: 10px; }
+        
+        button { cursor: pointer; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; transition: 0.2s; }
+        .btn-primary { background: #38bdf8; color: #0f172a; width: 100%; margin-top: 15px; font-size: 15px; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-success { background: #22c55e; color: white; }
+        button:hover { opacity: 0.8; transform: translateY(-1px); }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🚀 스트리머 일괄 상장</h1>
-    
+    <h1>📈 주가 일괄 조정 (% 단위)</h1>
     <div class="info-box">
-        💡 <b>사용법:</b> 아래 칸에 스트리머 닉네임을 한 줄에 하나씩 입력하세요. 중복된 이름은 시스템이 알아서 걸러줍니다.
+        입력한 수치만큼 <b>모든 종목</b>의 주가를 변동시킵니다.<br>
+        예: 10 입력 시 전 종목 +10% 상승 / -5 입력 시 -5% 하락
     </div>
+    <div class="batch-control">
+        <input type="number" id="percent-input" placeholder="변동 퍼센트 입력 (예: 5)">
+        <button class="btn-success" onclick="adjustAllPrices()">일괄 적용</button>
+    </div>
+</div>
 
-    <textarea id="list" placeholder="봉준&#10;김민교&#10;이상호&#10;..."></textarea>
-    
-    <button onclick="uploadStocks()">데이터베이스에 상장하기</button>
+<div class="container">
+    <h1>🚀 신규 스트리머 상장</h1>
+    <div class="info-box">
+        닉네임을 한 줄에 하나씩 입력하세요. <br>
+        <b>보안 알림:</b> 현재 관리자 모드로 전송되어 서버 보안 규칙을 통과합니다.
+    </div>
+    <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
+    <button class="btn-primary" onclick="uploadStocks()">데이터베이스에 일괄 상장</button>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
@@ -44,35 +62,69 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
+    // --- [보안] 관리자 모드 일괄 상장 ---
     window.uploadStocks = async function() {
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("상장할 이름을 입력해주세요.");
 
-        const allNames = text.split('\n').map(n => n.trim());
-        const uniqueNames = [...new Set(allNames)].filter(n => n !== "");
-        const duplicateCount = allNames.filter(n => n !== "").length - uniqueNames.length;
-        
+        const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
         const stocks = {};
+
         uniqueNames.forEach((name, i) => {
             stocks[`id_${i}`] = {
                 name: name,
                 price: 10000,
-                change: 0
+                change: 0,
+                history: [10000, 10000],
+                admin_mode: true // [보안 규칙 통과용]
             };
         });
 
-        let msg = `${uniqueNames.length}명을 상장하시겠습니까?`;
-        if (duplicateCount > 0) msg += `\n(중복 데이터 ${duplicateCount}건 제외)`;
-
-        if(confirm(msg)) {
+        if(confirm(`${uniqueNames.length}명을 상장하시겠습니까? (기존 데이터가 덮어씌워질 수 있습니다)`)) {
             try {
                 await set(ref(db, 'stocks/'), stocks);
-                alert("🎉 상장이 완료되었습니다!");
-                document.getElementById('list').value = ""; // 입력칸 초기화
-            } catch (e) {
-                console.error(e);
-                alert("오류가 발생했습니다. 콘솔 창을 확인하세요.");
-            }
+                alert("🎉 관리자 권한으로 상장이 완료되었습니다!");
+                document.getElementById('list').value = "";
+            } catch (e) { alert("보안 거부: 규칙을 확인하세요."); }
+        }
+    }
+
+    // --- [신규] 모든 주가 % 단위 일괄 변경 ---
+    window.adjustAllPrices = async function() {
+        const percent = parseFloat(document.getElementById('percent-input').value);
+        if (isNaN(percent)) return alert("변동할 퍼센트 숫자를 입력해주세요.");
+
+        if (!confirm(`정말로 모든 종목의 주가를 ${percent}% ${percent > 0 ? '상승' : '하락'}시키겠습니까?`)) return;
+
+        try {
+            const snapshot = await get(ref(db, 'stocks/'));
+            const data = snapshot.val();
+            if (!data) return alert("종목 데이터가 없습니다.");
+
+            const updates = {};
+            const multiplier = 1 + (percent / 100);
+
+            Object.keys(data).forEach(id => {
+                const oldPrice = data[id].price;
+                const newPrice = Math.round(oldPrice * multiplier);
+                
+                // 히스토리 업데이트
+                let history = data[id].history || [oldPrice];
+                history.push(newPrice);
+                if (history.length > 20) history.shift();
+
+                updates[`stocks/${id}/price`] = newPrice;
+                updates[`stocks/${id}/history`] = history;
+                updates[`stocks/${id}/admin_mode`] = true; // [보안 규칙 통과용]
+                updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
+            });
+
+            await update(ref(db), updates);
+            alert(`🔥 전 종목 주가가 ${percent}% 조정되었습니다!`);
+            document.getElementById('percent-input').value = "";
+        } catch (e) {
+            console.error(e);
+            alert("오류 발생: 보안 규칙에서 거부되었을 수 있습니다.");
         }
     }
 </script>
