@@ -159,9 +159,23 @@ let allUsers = {};
 
 // --- 유저 전체 데이터 리스너 (랭킹 산출용) ---
 onValue(ref(db, 'users/'), (snap) => {
-    allUsers = snap.val() || {};
-    console.log("유저 데이터 갱신됨");
-    updateUI(); // 랭킹뿐만 아니라 내 보유량 정보도 같이 갱신되도록 통합
+    const data = snap.val();
+    if (data) {
+        allUsers = data;
+        console.log("전체 유저 데이터 로드 완료:", Object.keys(allUsers).length, "명");
+        
+        // 중요: 주식 정보(allStocks)가 이미 로드된 상태라면 즉시 랭킹 갱신
+        if (allStocks.length > 0) {
+            renderRanking();
+        }
+    } else {
+        allUsers = {};
+    }
+    
+    // 내 보유량 정보 등을 포함한 전체 UI 업데이트
+    updateUI(); 
+}, (error) => {
+    console.error("유저 데이터 동기화 에러:", error);
 });
 
         
