@@ -168,41 +168,57 @@ onValue(ref(db, 'users/'), (snap) => {
 // 랭킹 집계 함수
 function renderRanking() {
     const rankDiv = document.getElementById('top-rankers');
-    if (!rankDiv || !allStocks.length || !allUsers) return;
+    // 데이터 로드 확인
+    if (!rankDiv || !allStocks || allStocks.length === 0) return;
 
     // 1. 모든 유저의 주식 보유량 합산 계산
-    const stockOwnership = {}; // { 종목ID: 총보유량 }
+    const stockOwnership = {}; 
 
-    Object.values(allUsers).forEach(user => {
-        if (user && user.stocks) {
-            Object.entries(user.stocks).forEach(([stockId, data]) => {
-                if (data.qty > 0) {
-                    stockOwnership[stockId] = (stockOwnership[stockId] || 0) + data.qty;
-                }
-            });
-        }
-    });
+    // [중요] 현재 로그인한 나의 최신 데이터를 먼저 반영 (네트워크 지연 대비)
+    if (userUID && myData && myData.stocks) {
+        Object.entries(myData.stocks).forEach(([stockId, data]) => {
+            const qty = parseInt(data.qty) || 0;
+            if (qty > 0) stockOwnership[stockId] = qty;
+        });
+    }
 
-    // 2. 보유량 기준으로 주식 데이터 매핑 및 정렬
-    const sorted = allStocks.map(s => ({
-        ...s,
-        totalQty: stockOwnership[s.id] || 0
-    }))
-    .filter(s => s.totalQty > 0)
-    .sort((a, b) => b.totalQty - a.totalQty)
-    .slice(0, 5);
+    // 2. 다른 모든 유저의 데이터 합산 (나 제외)
+    if (allUsers) {
+        Object.keys(allUsers).forEach(uid => {
+            if (uid === userUID) return; // 내 데이터는 위에서 이미 처리함
+            const user = allUsers[uid];
+            if (user && user.stocks) {
+                Object.entries(user.stocks).forEach(([stockId, data]) => {
+                    const qty = parseInt(data.qty) || 0;
+                    if (qty > 0) {
+                        stockOwnership[stockId] = (stockOwnership[stockId] || 0) + qty;
+                    }
+                });
+            }
+        });
+    }
 
+    // 3. 보유량 기준으로 주식 데이터 매핑 및 정렬
+    const sorted = allStocks
+        .map(s => ({
+            ...s,
+            totalQty: stockOwnership[s.id] || 0
+        }))
+        .filter(s => s.totalQty > 0)
+        .sort((a, b) => b.totalQty - a.totalQty) // 내림차순 정렬
+        .slice(0, 5);
+
+    // 4. UI 렌더링
     if (sorted.length === 0) {
-        rankDiv.innerHTML = "보유 중인 주식이 아직 없습니다.";
+        rankDiv.innerHTML = `<span style="color:var(--text-sub); font-size:12px;">보유 데이터 없음</span>`;
         return;
     }
 
-    // 3. UI 렌더링
     rankDiv.innerHTML = sorted.map((s, i) => `
         <div class="rank-item">
             <span class="rank-num">${i + 1}</span>
             <span class="rank-name">${s.name}</span>
-            <span class="rank-vol">총 ${s.totalQty.toLocaleString()}주 보유</span>
+            <span class="rank-vol">총 ${s.totalQty.toLocaleString()}주</span>
         </div>
     `).join('');
 }
@@ -285,9 +301,11 @@ window.trade = async function(id, type) {
     // 1. 중복 클릭 방지 및 로그인 체크
     if (isTrading) return; 
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
+    
+    // 지갑 내 주식 주머니가 없으면 생성
     if (!myData.stocks) myData.stocks = {};
 
-    isTrading = true; // [중요] 거래 시작 지점 설정
+    isTrading = true; // 거래 시작
 
     const stockRef = ref(db, `stocks/${id}`);
     const userRef = ref(db, `users/${userUID}`);
@@ -297,7 +315,7 @@ window.trade = async function(id, type) {
     const fee = 0.003;      // 0.3% 수수료
 
     try {
-        // 2. 주가 및 거래 검증 트랜잭션
+        // 2. 주가 및 거래 검증 트랜잭션 (서버 사이드)
         await runTransaction(stockRef, (currentStock) => {
             if (!currentStock) return currentStock;
             
@@ -344,11 +362,12 @@ window.trade = async function(id, type) {
             history.push(newPrice);
             if (history.length > 20) history.shift();
             
+            // 주식 데이터 업데이트 반환
             const updatedStock = {
                 ...currentStock,
                 price: newPrice,
                 history: history,
-                volume: (currentStock.volume || 0) + 1, // 거래당 1씩 누적
+                volume: (currentStock.volume || 0) + 1, // 거래량 누적
                 change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
             };
             
@@ -356,18 +375,22 @@ window.trade = async function(id, type) {
             return updatedStock;
         });
 
-        // 3. 서버에 지갑 데이터 업데이트
+        // 3. 서버에 내 지갑 데이터 업데이트
         await set(userRef, myData);
+
+        // 4. [가장 중요] 거래 완료 후 즉시 랭킹 및 UI 강제 갱신
+        // 서버 리스너보다 먼저 실행되어 사용자에게 즉각적인 피드백을 줍니다.
+        console.log("거래 완료: 랭킹 즉시 갱신 실행");
+        renderRanking(); 
+        updateUI();
 
     } catch (error) {
         console.error("거래 에러:", error);
-        // 에러 메시지에 따른 분기 처리
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
         else if (error.message === "보유부족") alert("보유 주식이 없습니다!");
         else alert("거래 중 오류가 발생했습니다. (주가 급변 등)");
     } finally {
-        // 4. 어떤 상황에서도 거래 플래그 해제
-        isTrading = false; 
+        isTrading = false; // 거래 종료 플래그 해제
     }
 };
 
