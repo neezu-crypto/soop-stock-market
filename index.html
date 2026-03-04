@@ -173,7 +173,7 @@ function renderRanking() {
     const stockOwnership = {}; // { 종목ID: 총보유량 }
 
     Object.values(allUsers).forEach(user => {
-        if (user.stocks) {
+        if (user && user.stocks) {
             Object.entries(user.stocks).forEach(([stockId, data]) => {
                 if (data.qty > 0) {
                     stockOwnership[stockId] = (stockOwnership[stockId] || 0) + data.qty;
