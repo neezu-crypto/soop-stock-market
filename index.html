@@ -133,26 +133,44 @@ let allStocks = [];
 
 function updateUI() {
     const cashDisplay = document.getElementById('my-cash');
-    const overlay = document.getElementById('intro-overlay'); // 오버레이 요소
+    const overlay = document.getElementById('intro-overlay');
+    const statusText = document.querySelector('#login-status p');
     
-    // 데이터가 아직 준비되지 않았다면 중단
-    if (!myData || allStocks.length === 0) return;
+    // 데이터 로딩 상태 체크 (디버깅용 콘솔)
+    console.log("상태 체크 - 유저:", userUID, "지갑:", !!myData, "주식수:", allStocks.length);
 
-    // 데이터가 확인되면 잔고 표시
-    if (cashDisplay) {
-        cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
+    // 1. 유저는 확인되었는데 지갑이나 주식이 없는 경우 메시지 업데이트
+    if (userUID && (!myData || allStocks.length === 0)) {
+        if(statusText) statusText.innerText = "데이터 서버 연결 중...";
+        return;
     }
-    
-    // 주식 리스트 렌더링
-    renderStocks(document.getElementById('search-input')?.value || "");
 
-    // [추가] 데이터가 모두 준비되면 오버레이 숨기기
-    if (overlay && !overlay.classList.contains('hidden')) {
-        setTimeout(() => {
-            overlay.classList.add('hidden');
-        }, 800); // 0.8초 정도 여유를 두어 부드럽게 전환
+    // 2. 모든 데이터 준비 완료 시
+    if (myData && allStocks.length > 0) {
+        if (cashDisplay) {
+            cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
+        }
+        
+        renderStocks(document.getElementById('search-input')?.value || "");
+
+        if (overlay && !overlay.classList.contains('hidden')) {
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                console.log("로딩 완료: 오버레이 제거");
+            }, 500);
+        }
     }
 }
+
+// [추가] 5초 이상 로딩 시 에러 메시지 표시
+setTimeout(() => {
+    const overlay = document.getElementById('intro-overlay');
+    const statusText = document.querySelector('#login-status p');
+    if (overlay && !overlay.classList.contains('hidden')) {
+        statusText.innerHTML = `접속이 지연되고 있습니다.<br>
+        <button onclick="location.reload()" style="margin-top:10px; background:#38bdf8; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">새로고침</button>`;
+    }
+}, 5000);
 
 // --- [보안 핵심] 로그인 및 데이터 동기화 ---
 onAuthStateChanged(auth, async (user) => {
