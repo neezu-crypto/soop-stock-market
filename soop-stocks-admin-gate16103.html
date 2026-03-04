@@ -1,5 +1,33 @@
-<textarea id="list" placeholder="<textarea id="list" placeholder="이 곳에 닉네임을 입력하세요." style="width:100%; height:300px;"></textarea>
-<button onclick="uploadStocks()">🚀 중복 제거 후 일괄 상장하기</button>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>SOOP STOCK - 상장 관리 도구</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 600px; background: #1e293b; padding: 30px; border-radius: 16px; border: 1px solid #334155; shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        h1 { font-size: 22px; color: #38bdf8; margin-bottom: 20px; border-bottom: 2px solid #334155; padding-bottom: 10px; }
+        .info-box { background: #334155; padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; color: #cbd5e1; }
+        textarea { width: 100%; height: 350px; background: #0f172a; border: 1px solid #475569; color: #38bdf8; padding: 15px; border-radius: 8px; box-sizing: border-box; font-size: 15px; line-height: 1.5; resize: none; }
+        textarea:focus { outline: none; border-color: #38bdf8; }
+        button { width: 100%; cursor: pointer; border: none; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 16px; background: #38bdf8; color: #0f172a; margin-top: 20px; transition: 0.2s; }
+        button:hover { background: #7dd3fc; transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🚀 스트리머 일괄 상장</h1>
+    
+    <div class="info-box">
+        💡 <b>사용법:</b> 아래 칸에 스트리머 닉네임을 한 줄에 하나씩 입력하세요. 중복된 이름은 시스템이 알아서 걸러줍니다.
+    </div>
+
+    <textarea id="list" placeholder="봉준&#10;김민교&#10;이상호&#10;..."></textarea>
+    
+    <button onclick="uploadStocks()">데이터베이스에 상장하기</button>
+</div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -18,104 +46,35 @@
 
     window.uploadStocks = async function() {
         const text = document.getElementById('list').value;
-        
-        // 1. 줄바꿈으로 나누고 이름 양옆 공백 제거
+        if (!text.trim()) return alert("상장할 이름을 입력해주세요.");
+
         const allNames = text.split('\n').map(n => n.trim());
-        
-        // 2. Set을 사용하여 중복 제거 + 빈 줄(공백) 제거
         const uniqueNames = [...new Set(allNames)].filter(n => n !== "");
-        
-        // 3. 중복된 개수 계산
         const duplicateCount = allNames.filter(n => n !== "").length - uniqueNames.length;
         
         const stocks = {};
         uniqueNames.forEach((name, i) => {
             stocks[`id_${i}`] = {
                 name: name,
-                price: 10000, // 시작가 만원
+                price: 10000,
                 change: 0
             };
         });
 
-        // 안내 메시지 구성
-        let confirmMsg = `${uniqueNames.length}명을 상장할까요?`;
-        if (duplicateCount > 0) {
-            confirmMsg += `\n(중복된 이름 ${duplicateCount}개가 발견되어 제외되었습니다.)`;
-        }
+        let msg = `${uniqueNames.length}명을 상장하시겠습니까?`;
+        if (duplicateCount > 0) msg += `\n(중복 데이터 ${duplicateCount}건 제외)`;
 
-        if(uniqueNames.length === 0) {
-            alert("상장할 이름이 없습니다.");
-            return;
-        }
-
-        if(confirm(confirmMsg)) {
+        if(confirm(msg)) {
             try {
                 await set(ref(db, 'stocks/'), stocks);
-                alert("상장 완료! 중복 없이 깨끗하게 등록되었습니다.");
-            } catch (error) {
-                console.error(error);
-                alert("데이터 저장 중 오류가 발생했습니다. Firebase 규칙을 확인하세요.");
-            }
-        }
-    }
-</script>" style="width:100%; height:300px;"></textarea>
-<button onclick="uploadStocks()">🚀 중복 제거 후 일괄 상장하기</button>
-
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-
-    const firebaseConfig = {
-        apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
-        authDomain: "soop-stock-market.firebaseapp.com",
-        databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
-        projectId: "soop-stock-market",
-        appId: "1:997788925900:web:cb613d438efec019a3a769"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    window.uploadStocks = async function() {
-        const text = document.getElementById('list').value;
-        
-        // 1. 줄바꿈으로 나누고 이름 양옆 공백 제거
-        const allNames = text.split('\n').map(n => n.trim());
-        
-        // 2. Set을 사용하여 중복 제거 + 빈 줄(공백) 제거
-        const uniqueNames = [...new Set(allNames)].filter(n => n !== "");
-        
-        // 3. 중복된 개수 계산
-        const duplicateCount = allNames.filter(n => n !== "").length - uniqueNames.length;
-        
-        const stocks = {};
-        uniqueNames.forEach((name, i) => {
-            stocks[`id_${i}`] = {
-                name: name,
-                price: 10000, // 시작가 만원
-                change: 0
-            };
-        });
-
-        // 안내 메시지 구성
-        let confirmMsg = `${uniqueNames.length}명을 상장할까요?`;
-        if (duplicateCount > 0) {
-            confirmMsg += `\n(중복된 이름 ${duplicateCount}개가 발견되어 제외되었습니다.)`;
-        }
-
-        if(uniqueNames.length === 0) {
-            alert("상장할 이름이 없습니다.");
-            return;
-        }
-
-        if(confirm(confirmMsg)) {
-            try {
-                await set(ref(db, 'stocks/'), stocks);
-                alert("상장 완료! 중복 없이 깨끗하게 등록되었습니다.");
-            } catch (error) {
-                console.error(error);
-                alert("데이터 저장 중 오류가 발생했습니다. Firebase 규칙을 확인하세요.");
+                alert("🎉 상장이 완료되었습니다!");
+                document.getElementById('list').value = ""; // 입력칸 초기화
+            } catch (e) {
+                console.error(e);
+                alert("오류가 발생했습니다. 콘솔 창을 확인하세요.");
             }
         }
     }
 </script>
+</body>
+</html>
