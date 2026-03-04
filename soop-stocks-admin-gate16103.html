@@ -83,81 +83,18 @@
 
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
-    // --- 개별 주식 검색 및 수정 로직 ---
-let allStocksData = {};
+    // --- 데이터 상태 관리 ---
+    let allStocksData = {};
 
-    // [수정] 로그인이 되어있든 아니든 데이터는 한 번만 감시하도록 밖으로 뺍니다.
-onValue(ref(db, 'stocks/'), (snap) => {
-    allStocksData = snap.val() || {};
-    // 관리자 세션이 활성화된 상태일 때만 리스트를 갱신합니다.
-    const adminSection = document.getElementById('admin-section');
-    if (adminSection && adminSection.style.display === 'block') {
-        renderAdminStockList();
-    }
-});
-
-// 주식 데이터 실시간 로드 (검색용)
-onAuthStateChanged(auth, (user) => {
-    if (user && user.email === ADMIN_EMAIL) {
-        onValue(ref(db, 'stocks/'), (snap) => {
-            allStocksData = snap.val() || {};
-            renderAdminStockList(); // 데이터 변경 시 리스트 갱신
-        });
-    }
-});
-
-// 관리자용 주식 리스트 렌더링
-function renderAdminStockList() {
-    const searchVal = document.getElementById('admin-search').value.toLowerCase();
-    const listDiv = document.getElementById('admin-stock-list');
-    if (!listDiv) return;
-
-    listDiv.innerHTML = "";
-
-    Object.entries(allStocksData).forEach(([id, s]) => {
-        if (s.name.toLowerCase().includes(searchVal)) {
-            const item = document.createElement('div');
-            item.className = 'batch-control'; // 기존 스타일 재활용
-            item.style.padding = "10px";
-            item.style.background = "#0f172a";
-            item.style.borderRadius = "8px";
-            
-            item.innerHTML = `
-                <div style="flex:1; font-size:14px;">${s.name}</div>
-                <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
-                <button class="btn-success" onclick="updateSinglePrice('${id}')" style="padding:8px 12px; font-size:12px;">수정</button>
-            `;
-            listDiv.appendChild(item);
+    // 주식 데이터 실시간 감시는 여기서 '한 번만' 등록합니다.
+    onValue(ref(db, 'stocks/'), (snap) => {
+        allStocksData = snap.val() || {};
+        // 관리자 화면이 켜져 있을 때만 리스트 갱신
+        if (document.getElementById('admin-section').style.display === 'block') {
+            renderAdminStockList();
         }
     });
-}
 
-// 개별 가격 수정 실행
-window.updateSinglePrice = async function(id) {
-    const newPrice = parseInt(document.getElementById(`input-${id}`).value);
-    if (isNaN(newPrice)) return alert("정확한 가격을 입력해주세요.");
-
-    const oldStock = allStocksData[id];
-    let history = oldStock.history || [oldStock.price];
-    history.push(newPrice);
-    if (history.length > 20) history.shift();
-
-    const updates = {};
-    updates[`stocks/${id}/price`] = newPrice;
-    updates[`stocks/${id}/history`] = history;
-    updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
-
-    try {
-        await update(ref(db), updates);
-        alert(`✅ ${oldStock.name}의 가격이 ${newPrice.toLocaleString()}원으로 수정되었습니다.`);
-    } catch (e) {
-        alert("수정 실패: 관리자 권한을 확인하세요.");
-    }
-};
-
-// 검색창 입력 이벤트 연결
-document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
-    
     // --- 인증 로직 ---
     window.login = () => {
         signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
@@ -168,72 +105,115 @@ document.getElementById('admin-search')?.addEventListener('input', renderAdminSt
     };
 
     onAuthStateChanged(auth, (user) => {
-    if (user && user.email === ADMIN_EMAIL) {
-        document.getElementById('login-section').style.display = 'none';
-        document.getElementById('admin-section').style.display = 'block';
-        document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
-        renderAdminStockList(); // 로그인 성공 시 목록 초기 렌더링
-    } else {
+        if (user && user.email === ADMIN_EMAIL) {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('admin-section').style.display = 'block';
+            document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
+            renderAdminStockList(); // 초기 로드
+        } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
             document.getElementById('admin-section').style.display = 'none';
         }
     });
 
-    // --- 주식 상장 (관리자 전용) ---
+    // --- 주식 관리 함수들 ---
+    function renderAdminStockList() {
+        const searchVal = document.getElementById('admin-search').value.toLowerCase();
+        const listDiv = document.getElementById('admin-stock-list');
+        if (!listDiv) return;
+
+        listDiv.innerHTML = "";
+        Object.entries(allStocksData).forEach(([id, s]) => {
+            if (s.name.toLowerCase().includes(searchVal)) {
+                const item = document.createElement('div');
+                item.className = 'batch-control';
+                item.style.padding = "10px";
+                item.style.background = "#0f172a";
+                item.style.borderRadius = "8px";
+                
+                item.innerHTML = `
+                    <div style="flex:1; font-size:14px;">${s.name}</div>
+                    <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
+                    <button class="btn-success" onclick="updateSinglePrice('${id}')" style="padding:8px 12px; font-size:12px;">수정</button>
+                `;
+                listDiv.appendChild(item);
+            }
+        });
+    }
+
+    window.updateSinglePrice = async function(id) {
+        const newPrice = parseInt(document.getElementById(`input-${id}`).value);
+        if (isNaN(newPrice)) return alert("정확한 가격을 입력해주세요.");
+
+        const oldStock = allStocksData[id];
+        let history = oldStock.history || [oldStock.price];
+        history.push(newPrice);
+        if (history.length > 20) history.shift();
+
+        const updates = {};
+        updates[`stocks/${id}/price`] = newPrice;
+        updates[`stocks/${id}/history`] = history;
+        updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
+
+        try {
+            await update(ref(db), updates);
+            alert(`✅ ${oldStock.name}의 가격이 ${newPrice.toLocaleString()}원으로 수정되었습니다.`);
+        } catch (e) {
+            alert("수정 실패: 권한을 확인하세요.");
+        }
+    };
+
+    // 검색창 입력 이벤트
+    document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
+
+    // 주식 일괄 상장
     window.uploadStocks = async function() {
         const text = document.getElementById('list').value;
-        if (!text.trim()) return alert("상장할 이름을 입력해주세요.");
-
+        if (!text.trim()) return alert("이름을 입력해주세요.");
         const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
         const stocks = {};
-
         uniqueNames.forEach((name, i) => {
-            stocks[`id_${i}`] = {
+            stocks[`id_${Date.now()}_${i}`] = { // ID 중복 방지를 위해 Date.now() 추가
                 name: name,
                 price: 10000,
                 change: 0,
                 history: [10000, 10000]
             };
         });
-
         if(confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
             try {
-                await set(ref(db, 'stocks/'), stocks);
+                // 기존 데이터 유지하며 추가하려면 update, 덮어쓰려면 set
+                await update(ref(db, 'stocks/'), stocks); 
                 alert("🎉 상장이 완료되었습니다!");
                 document.getElementById('list').value = "";
-            } catch (e) { alert("권한 거부: 관리자 계정이 아닙니다."); }
+            } catch (e) { alert("오류 발생: " + e.message); }
         }
     }
 
-    // --- 주가 조정 (관리자 전용) ---
+    // 주가 일괄 조정
     window.adjustAllPrices = async function() {
         const percent = parseFloat(document.getElementById('percent-input').value);
         if (isNaN(percent)) return alert("숫자를 입력해주세요.");
-
         try {
             const snapshot = await get(ref(db, 'stocks/'));
             const data = snapshot.val();
             if (!data) return;
-
             const updates = {};
             const multiplier = 1 + (percent / 100);
-
             Object.keys(data).forEach(id => {
                 const oldPrice = data[id].price;
                 const newPrice = Math.round(oldPrice * multiplier);
                 let history = data[id].history || [oldPrice];
                 history.push(newPrice);
                 if (history.length > 20) history.shift();
-
                 updates[`stocks/${id}/price`] = newPrice;
                 updates[`stocks/${id}/history`] = history;
                 updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
             });
-
             await update(ref(db), updates);
             alert(`🔥 전 종목 주가가 ${percent}% 조정되었습니다!`);
-        } catch (e) { alert("권한 거부 또는 오류 발생"); }
+        } catch (e) { alert("오류 발생: " + e.message); }
     }
 </script>
 </body>
