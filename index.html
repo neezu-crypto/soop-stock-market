@@ -130,7 +130,7 @@
 </div>
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
     
@@ -167,7 +167,7 @@ onValue(ref(db, 'users/'), (snap) => {
 // 랭킹 집계 함수
 function renderRanking() {
     const rankDiv = document.getElementById('top-rankers');
-    if (!rankDiv || !allStocks.length) return;
+    if (!rankDiv || !allStocks.length || !allUsers) return;
 
     // 1. 모든 유저의 주식 보유량 합산 계산
     const stockOwnership = {}; // { 종목ID: 총보유량 }
@@ -433,6 +433,15 @@ onValue(ref(db, 'stocks/'), (snap) => {
     allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
     updateUI();
 });
+
+// 2. [추가 필수] 전체 유저 보유량 변동 감시 (랭킹 전용)
+// 누군가 매수/매도하여 users 데이터가 바뀌면 랭킹을 즉시 다시 그립니다.
+onValue(ref(db, 'users/'), (snap) => {
+    allUsers = snap.val() || {}; // 전역 변수 allUsers 업데이트
+    console.log("유저 보유량 데이터 변경 감지 -> 랭킹 갱신");
+    renderRanking(); 
+});
+        
         // 검색창 이벤트 리스너 (캡슐화 끝 부분에 추가)
 document.getElementById('search-input')?.addEventListener('input', (e) => {
     renderStocks(e.target.value);
