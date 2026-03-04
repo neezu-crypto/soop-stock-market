@@ -3,90 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOOP STOCK - 실시간 차트</title>
+    <title>SOOP STOCK - 거래소</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --primary: #38bdf8;
-            --up-color: #ef4444;
-            --down-color: #3b82f6;
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
+            --bg-color: #0f172a; --card-bg: #1e293b; --primary: #38bdf8;
+            --up-color: #ef4444; --down-color: #3b82f6;
+            --text-main: #f8fafc; --text-sub: #94a3b8;
         }
 
-        body { 
-            font-family: 'Pretendard', sans-serif; 
-            background: var(--bg-color); 
-            color: var(--text-main); 
-            margin: 0; padding: 20px;
-            display: flex; justify-content: center;
-        }
-
-        /* 중앙 정렬 및 최대 너비 설정으로 여백 확보 */
+        body { font-family: 'Pretendard', sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .wrapper { width: 100%; max-width: 800px; }
 
-        header {
-            position: sticky; top: 0; background: var(--bg-color);
-            padding: 20px 0; z-index: 10; border-bottom: 1px solid #1e293b;
+        /* 자산 헤더 */
+        .wallet-bar { 
+            position: sticky; top: 0; background: #1e293b; padding: 15px 20px; border-radius: 12px;
+            display: flex; justify-content: space-between; align-items: center; z-index: 100;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 20px; border: 1px solid var(--primary);
         }
+        .wallet-info span { color: var(--primary); font-weight: 800; }
 
-        .search-container { margin-top: 15px; }
+        header { padding: 10px 0; border-bottom: 1px solid #1e293b; margin-bottom: 10px; }
         #search-input {
-            width: 100%; padding: 14px; border-radius: 12px;
-            background: var(--card-bg); border: 1px solid #334155;
-            color: white; font-size: 15px; box-sizing: border-box;
+            width: 100%; padding: 14px; border-radius: 12px; background: var(--card-bg);
+            border: 1px solid #334155; color: white; margin-top: 10px;
         }
 
-        #stock-list { margin-top: 20px; display: grid; gap: 10px; }
-        
+        /* 주식 카드 레이아웃 수정 */
+        #stock-list { display: grid; gap: 12px; }
         .stock-card {
-            background: var(--card-bg); padding: 15px 20px; border-radius: 14px;
-            display: grid; grid-template-columns: 1fr 100px 100px; /* 이름 | 차트 | 가격 */
-            align-items: center; gap: 15px;
-            border: 1px solid #334155;
+            background: var(--card-bg); padding: 20px; border-radius: 16px;
+            display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr; 
+            align-items: center; gap: 10px; border: 1px solid #334155;
         }
 
-        .info-group { display: flex; flex-direction: column; min-width: 120px; }
-        .stock-rank { font-size: 11px; color: var(--primary); font-weight: 600; }
-        .stock-name { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chart-container { width: 80px; height: 35px; }
+        .sparkline { stroke-width: 2.5; fill: none; }
 
-        /* 미니 차트 영역 */
-        .chart-container { width: 100px; height: 40px; }
-        .sparkline { stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        /* 거래 버튼 */
+        .trade-btns { display: flex; gap: 5px; }
+        .btn { border: none; padding: 8px 12px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 13px; }
+        .btn-buy { background: var(--up-color); color: white; }
+        .btn-sell { background: var(--down-color); color: white; }
+        .btn:active { transform: scale(0.95); }
 
-        .price-group { text-align: right; }
-        .current-price { font-size: 16px; font-weight: 700; }
-        .price-change { font-size: 12px; }
+        .my-qty { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
 
         .up { color: var(--up-color); stroke: var(--up-color); }
         .down { color: var(--down-color); stroke: var(--down-color); }
-        .steady { color: var(--text-sub); stroke: var(--text-sub); }
-
-        .loading { text-align: center; padding: 40px; color: var(--text-sub); }
     </style>
 </head>
 <body>
 
 <div class="wrapper">
+    <div class="wallet-bar">
+        <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
+        <div style="font-size: 12px; color: var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
+    </div>
+
     <header>
-        <h1>📈 SOOP STOCK <span>LIVE</span></h1>
-        <div class="search-container">
-            <input type="text" id="search-input" placeholder="관심 있는 스트리머를 찾아보세요">
-        </div>
+        <h1 style="font-size: 20px; margin:0;">📈 SOOP 거래소</h1>
+        <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
 
-    <main id="stock-list">
-        <div class="loading">차트 데이터를 가져오는 중...</div>
-    </main>
+    <main id="stock-list"></main>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
-    // Firebase 설정
     const firebaseConfig = {
         apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
         authDomain: "soop-stock-market.firebaseapp.com",
@@ -97,94 +83,92 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    const stockListDiv = document.getElementById('stock-list');
-    const searchInput = document.getElementById('search-input');
 
+    // --- 지갑 로직 (LocalStorage) ---
+    let myData = JSON.parse(localStorage.getItem('soop_wallet')) || { cash: 1000000, stocks: {} };
+    function saveWallet() {
+        localStorage.setItem('soop_wallet', JSON.stringify(myData));
+        document.getElementById('my-cash').innerText = myData.cash.toLocaleString();
+    }
+    saveWallet();
+
+    // --- 주가 변동 및 거래 로직 ---
+    window.trade = async function(id, type) {
+        const stockRef = ref(db, `stocks/${id}`);
+        const impact = 0.01; // 거래 1회당 1% 변동
+
+        await runTransaction(stockRef, (stock) => {
+            if (!stock) return stock;
+
+            const price = stock.price;
+            if (type === 'buy') {
+                if (myData.cash < price) { alert("잔액이 부족합니다!"); return; }
+                myData.cash -= price;
+                myData.stocks[id] = (myData.stocks[id] || 0) + 1;
+                stock.price = Math.round(price * (1 + impact));
+            } else {
+                if ((myData.stocks[id] || 0) < 1) { alert("보유 주식이 없습니다!"); return; }
+                myData.cash += price;
+                myData.stocks[id] -= 1;
+                stock.price = Math.round(price * (1 - impact));
+            }
+
+            // 히스토리 업데이트 (최근 20회)
+            let history = stock.history || [price];
+            history.push(stock.price);
+            if (history.length > 20) history.shift();
+            stock.history = history;
+            
+            // 전일대비 변동률 계산 (첫 가격 기준)
+            stock.change = (((stock.price - history[0]) / history[0]) * 100).toFixed(2);
+
+            saveWallet();
+            renderStocks(document.getElementById('search-input').value);
+            return stock;
+        });
+    };
+
+    // --- 렌더링 로직 ---
     let allStocks = [];
-    let displayCount = 100;
-
-    // SVG 미니 차트 생성 함수
     function createSparkline(history, isUp) {
         if (!history || history.length < 2) return '';
-        
-        const width = 100;
-        const height = 30;
-        const min = Math.min(...history);
-        const max = Math.max(...history);
-        const range = max - min === 0 ? 1 : max - min;
-
-        // 좌표 계산
-        const points = history.map((val, i) => {
-            const x = (i / (history.length - 1)) * width;
-            const y = height - ((val - min) / range) * height;
-            return `${x},${y}`;
-        }).join(' ');
-
-        const colorClass = isUp ? 'up' : 'down';
-        return `
-            <svg class="chart-container" viewBox="0 0 ${width} ${height}">
-                <polyline class="sparkline ${colorClass}" points="${points}" />
-            </svg>
-        `;
+        const pts = history.map((v, i) => `${(i/19)*80},${35 - ((v - Math.min(...history)) / (Math.max(...history) - Math.min(...history) || 1) * 35)}`).join(' ');
+        return `<svg class="chart-container"><polyline class="sparkline ${isUp?'up':'down'}" points="${pts}" /></svg>`;
     }
 
-    function renderStocks(filter = "", isMore = false) {
-        const filtered = allStocks
-            .filter(s => s.name.toLowerCase().includes(filter.toLowerCase()))
-            .sort((a, b) => b.price - a.price);
-
-        if (!isMore) {
-            displayCount = 100;
-            stockListDiv.innerHTML = "";
-        }
-
-        const itemsToRender = filtered.slice(stockListDiv.children.length, displayCount);
-
-        itemsToRender.forEach((stock) => {
-            const rank = filtered.indexOf(stock) + 1;
-            const isUp = stock.change >= 0;
-            const colorClass = isUp ? 'up' : 'down';
-            
-            // 데이터베이스에 history가 없다면 임시로 현재가 기준 랜덤 생성 (테스트용)
-            // 실제 데이터 운영 시 관리자 페이지에서 history: [가격1, 가격2...] 배열을 넣어줘야 함
-            const mockHistory = stock.history || Array.from({length: 20}, () => stock.price + (Math.random()*1000 - 500));
-
+    function renderStocks(filter = "") {
+        const listDiv = document.getElementById('stock-list');
+        const filtered = allStocks.filter(s => s.name.includes(filter)).sort((a,b) => b.price - a.price).slice(0, 100);
+        
+        listDiv.innerHTML = "";
+        filtered.forEach((s) => {
+            const id = `id_${allStocks.indexOf(s)}`; // 실제 DB 키 구조에 맞춰야 함
+            const isUp = s.change >= 0;
             const card = document.createElement('div');
             card.className = 'stock-card';
             card.innerHTML = `
                 <div class="info-group">
-                    <span class="stock-rank">${rank}위</span>
-                    <span class="stock-name">${stock.name}</span>
+                    <div class="stock-name">${s.name}</div>
+                    <div class="my-qty">보유: ${myData.stocks[id] || 0}주</div>
                 </div>
-                <div>${createSparkline(mockHistory, isUp)}</div>
+                <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
                 <div class="price-group">
-                    <div class="current-price ${colorClass}">${stock.price.toLocaleString()}원</div>
-                    <div class="price-change ${colorClass}">${isUp?'+':''}${stock.change}%</div>
+                    <div class="current-price ${isUp?'up':'down'}">${s.price.toLocaleString()}</div>
+                    <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change}%</div>
+                </div>
+                <div class="trade-btns">
+                    <button class="btn btn-buy" onclick="trade('${id}', 'buy')">매수</button>
+                    <button class="btn btn-sell" onclick="trade('${id}', 'sell')">매도</button>
                 </div>
             `;
-            stockListDiv.appendChild(card);
+            listDiv.appendChild(card);
         });
     }
 
-    // 스크롤 이벤트
-    window.addEventListener('scroll', () => {
-        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
-            if (displayCount < allStocks.length) {
-                displayCount += 10;
-                renderStocks(searchInput.value, true);
-            }
-        }
+    onValue(ref(db, 'stocks/'), (snap) => {
+        allStocks = Object.values(snap.val() || {});
+        renderStocks(document.getElementById('search-input').value);
     });
-
-    onValue(ref(db, 'stocks/'), (snapshot) => {
-        const data = snapshot.val();
-        if (!data) return;
-        allStocks = Object.values(data);
-        renderStocks(searchInput.value);
-    });
-
-    searchInput.addEventListener('input', (e) => renderStocks(e.target.value));
 </script>
-
 </body>
 </html>
