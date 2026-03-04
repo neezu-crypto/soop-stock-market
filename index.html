@@ -164,15 +164,16 @@ onValue(ref(db, 'users/'), (snap) => {
         allUsers = data;
         console.log("전체 유저 데이터 로드 완료:", Object.keys(allUsers).length, "명");
         
-        // 중요: 주식 정보(allStocks)가 이미 로드된 상태라면 즉시 랭킹 갱신
-        if (allStocks.length > 0) {
+        // 내 데이터(myData)를 기다리지 않고, 
+        // 주식 정보(allStocks)만 있다면 바로 랭킹을 그립니다.
+        if (allStocks && allStocks.length > 0) {
             renderRanking();
         }
     } else {
         allUsers = {};
     }
     
-    // 내 보유량 정보 등을 포함한 전체 UI 업데이트
+    // 내 보유량 UI 업데이트 시도
     updateUI(); 
 }, (error) => {
     console.error("유저 데이터 동기화 에러:", error);
@@ -242,16 +243,18 @@ function updateUI() {
     const overlay = document.getElementById('intro-overlay');
     const statusText = document.querySelector('#login-status p');
     
-    // 데이터 로딩 상태 체크 (디버깅용 콘솔)
-    console.log("상태 체크 - 유저:", userUID, "지갑:", !!myData, "주식수:", allStocks.length);
+    // 랭킹은 다른 유저 데이터(allUsers)만 있어도 그릴 수 있으므로 우선 실행
+    if (allStocks.length > 0) {
+        renderRanking();
+    }
 
-    // 1. 유저는 확인되었는데 지갑이나 주식이 없는 경우 메시지 업데이트
+    // 데이터 로딩 상태 체크
     if (userUID && (!myData || allStocks.length === 0)) {
         if(statusText) statusText.innerText = "데이터 서버 연결 중...";
         return;
     }
 
-    // 2. 모든 데이터 준비 완료 시
+    // 내 지갑 정보가 로드되었을 때만 실행되는 구역
     if (myData && allStocks.length > 0) {
         if (cashDisplay) {
             cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
@@ -259,8 +262,7 @@ function updateUI() {
         
         renderStocks(document.getElementById('search-input')?.value || "");
 
-        renderRanking();
-
+        // 모든 데이터 준비 완료 시 오버레이 제거
         if (overlay && !overlay.classList.contains('hidden')) {
             setTimeout(() => {
                 overlay.classList.add('hidden');
