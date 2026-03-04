@@ -279,19 +279,26 @@ function createSparkline(history, isUp) {
 
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
-    if (!listDiv) return;
+    // myData가 없으면 에러가 날 수 있으므로 체크 추가
+    if (!listDiv || !myData) return;
 
-    const filtered = allStocks.filter(s => s.name.includes(filter)).sort((a,b) => b.price - a.price).slice(0, 100);
+    // 데이터가 비어있을 경우를 대비해 기본값(0, 빈 문자열 등) 처리 추가
+    const filtered = allStocks.filter(s => s.name && s.name.includes(filter))
+                              .sort((a,b) => (b.price || 0) - (a.price || 0))
+                              .slice(0, 100);
     listDiv.innerHTML = "";
 
     filtered.forEach((s) => {
         const id = s.id; 
-        const isUp = s.change >= 0;
-        const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+        const isUp = (s.change || 0) >= 0;
+        
+        // [핵심 수정] myData.stocks가 정의되지 않았을 경우 빈 객체{}를 사용하도록 방어
+        const userStocks = myData.stocks || {}; 
+        const userStock = userStocks[id] || { qty: 0, avg: 0 };
         
         let myProfit = 0;
         let profitClass = 'steady';
-        if (userStock.qty > 0) {
+        if (userStock.qty > 0 && userStock.avg > 0) {
             myProfit = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
             profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
         }
@@ -300,13 +307,13 @@ function renderStocks(filter = "") {
         card.className = 'stock-card';
         card.innerHTML = `
             <div class="info-group">
-                <div class="stock-name">${s.name}</div>
+                <div class="stock-name">${s.name || '불러오는 중...'}</div>
                 <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
             </div>
             <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
             <div class="price-group">
-                <div class="current-price ${isUp?'up':'down'}">${s.price.toLocaleString()}원</div>
-                <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change}%</div>
+                <div class="current-price ${isUp?'up':'down'}">${(s.price || 0).toLocaleString()}원</div>
+                <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change || 0}%</div>
             </div>
             <div class="trade-btns">
                 <button class="btn btn-buy" onclick="trade('${id}', 'buy')">매수</button>
@@ -316,7 +323,7 @@ function renderStocks(filter = "") {
         listDiv.appendChild(card);
     });
 }
-
+    
 // 주식 목록 실시간 리스너
 onValue(ref(db, 'stocks/'), (snap) => {
     const data = snap.val() || {};
