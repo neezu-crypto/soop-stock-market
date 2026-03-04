@@ -227,15 +227,24 @@ onAuthStateChanged(auth, async (user) => {
         userUID = user.uid;
         const userRef = ref(db, `users/${userUID}`);
         
+        // [수정] 서버 데이터를 기다리기 전에 로컬 변수(myData)부터 즉시 초기화하여
+        // 아주 빠른 클릭 시 발생할 수 있는 undefined 에러를 방어합니다.
+        if (!myData) {
+            myData = { cash: 1000000, stocks: {} };
+        }
+
         // 지갑 데이터를 실시간 감시
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
-                myData = snapshot.val();
+                const serverData = snapshot.val();
+                // [보강] 서버 데이터에 stocks 객체가 없는 경우를 대비해 빈 객체({})를 넣어줍니다.
+                if (!serverData.stocks) serverData.stocks = {};
+                myData = serverData;
             } else {
-                myData = { cash: 1000000, stocks: {} };
-                set(userRef, myData);
+                // 신규 유저인 경우 서버에 초기 데이터 생성
+                set(userRef, { cash: 1000000, stocks: {} });
             }
-            updateUI(); // 지갑 데이터 로드 후 UI 갱신
+            updateUI(); // 데이터 로드 완료 후 UI 반영
         });
     } else {
         signInAnonymously(auth);
@@ -247,6 +256,7 @@ window.trade = async function(id, type) {
     // 1. 중복 클릭 방지 및 로그인 체크
     if (isTrading) return; 
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
+    if (!myData.stocks) myData.stocks = {};
 
     isTrading = true; // [중요] 거래 시작 지점 설정
 
