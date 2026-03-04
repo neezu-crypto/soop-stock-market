@@ -130,6 +130,7 @@ const auth = getAuth(app);
 let myData = null; // 초기값을 null로 설정하여 로딩 상태 구분
 let userUID = null;
 let allStocks = [];
+let isTrading = false; // [추가] 중복 거래 방지 플래그
 
 function updateUI() {
     const cashDisplay = document.getElementById('my-cash');
@@ -205,19 +206,19 @@ window.trade = async function(id, type) {
     const fee = 0.003;      // 0.3% 수수료
 
     try {
-        // 1. 주가 업데이트 (Transaction)
+        // 주가 트랜잭션 시작
         await runTransaction(stockRef, (currentStock) => {
             if (!currentStock) return currentStock;
             
             const currentPrice = currentStock.price;
             let newPrice = currentPrice;
 
-            // 2. 유저 지갑 계산 (서버 트랜잭션 외부에서 미리 계산된 myData 기반)
-            // 실제 엄격한 보안을 위해선 유저 잔액도 Transaction 내에서 처리해야 하나, 
-            // 여기선 주가 안정성을 우선하여 로직을 구성했습니다.
             if (type === 'buy') {
                 const buyPrice = Math.round(currentPrice * (1 + spread));
-                if (myData.cash < buyPrice) { alert("잔액이 부족합니다!"); return; }
+                // 클라이언트 데이터(myData) 기준으로 1차 체크
+                if (myData.cash < buyPrice) {
+                    throw new Error("잔액부족"); 
+                }
                 
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
                 const totalCost = (userStock.qty * userStock.avg) + buyPrice;
@@ -263,7 +264,10 @@ window.trade = async function(id, type) {
 
     } catch (error) {
         console.error("거래 에러:", error);
-        alert("거래 실패: 주가가 급변했거나 권한이 없습니다.");
+        if (error.message === "잔액부족") alert("잔액이 부족합니다!");
+        else alert("거래 중 오류가 발생했습니다.");
+    } finally {
+        isTrading = false; // 거래 종료 (성공하든 실패하든 해제)
     }
 };
 
