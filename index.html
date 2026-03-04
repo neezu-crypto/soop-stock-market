@@ -139,7 +139,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+import { getDatabase, ref, onValue, runTransaction, get, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
     
 // [캡슐화 시작] 이 함수 안의 변수들은 외부에서 접근할 수 없습니다.
@@ -405,8 +405,11 @@ window.trade = async function(id, type) {
             return updatedStock;
         });
 
-        // 4. 서버에 내 지갑 데이터 업데이트
-        await set(userRef, myData);
+        // 3. 서버에 내 지갑 데이터 업데이트 (이곳에 시간을 추가합니다)
+        await set(userRef, {
+            ...myData,
+            lastTradeTime: serverTimestamp() // ★ 이 부분 ★ 유저 데이터에 시간을 새깁니다.
+        });
 
         // 5. 거래 성공 시 마지막 거래 시간 기록
         lastTradeTime = Date.now();
