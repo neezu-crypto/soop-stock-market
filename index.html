@@ -84,46 +84,70 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // --- 지갑 로직 (LocalStorage) ---
+    // --- 지갑 로직 (평단가 추적 추가) ---
+    // stocks: { "id": { qty: 수량, avg: 평단가 } } 구조로 변경
     let myData = JSON.parse(localStorage.getItem('soop_wallet')) || { cash: 1000000, stocks: {} };
+    
     function saveWallet() {
         localStorage.setItem('soop_wallet', JSON.stringify(myData));
-        document.getElementById('my-cash').innerText = myData.cash.toLocaleString();
+        const cashDisplay = document.getElementById('my-cash');
+        if(cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
     }
     saveWallet();
 
-    // --- 주가 변동 및 거래 로직 ---
+    // --- 주가 변동 및 거래 로직 (0.1% 안정화 버전) ---
     window.trade = async function(id, type) {
         const stockRef = ref(db, `stocks/${id}`);
-        const impact = 0.01; // 거래 1회당 1% 변동
+        
+        // 인플레이션 방지 및 안정화 파라미터
+        const impact = 0.001;   // 0.1% 주가 변동
+        const spread = 0.0005;  // 0.05% 호가 차이
+        const fee = 0.003;      // 0.3% 매도 수수료
 
         await runTransaction(stockRef, (stock) => {
             if (!stock) return stock;
 
-            const price = stock.price;
+            const currentPrice = stock.price;
+            
             if (type === 'buy') {
-                if (myData.cash < price) { alert("잔액이 부족합니다!"); return; }
-                myData.cash -= price;
-                myData.stocks[id] = (myData.stocks[id] || 0) + 1;
-                stock.price = Math.round(price * (1 + impact));
+                const buyPrice = Math.round(currentPrice * (1 + spread));
+                if (myData.cash < buyPrice) { alert("잔액이 부족합니다!"); return; }
+                
+                // 평단가 계산: (기존총액 + 신규총액) / 전체수량
+                const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+                const totalCost = (userStock.qty * userStock.avg) + buyPrice;
+                userStock.qty += 1;
+                userStock.avg = Math.round(totalCost / userStock.qty);
+                
+                myData.cash -= buyPrice;
+                myData.stocks[id] = userStock;
+                
+                stock.price = Math.round(currentPrice * (1 + impact));
             } else {
-                if ((myData.stocks[id] || 0) < 1) { alert("보유 주식이 없습니다!"); return; }
-                myData.cash += price;
-                myData.stocks[id] -= 1;
-                stock.price = Math.round(price * (1 - impact));
+                const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+                if (userStock.qty < 1) { alert("보유 주식이 없습니다!"); return; }
+                
+                const sellPrice = Math.round(currentPrice * (1 - spread));
+                const finalAmount = Math.round(sellPrice * (1 - fee));
+                
+                myData.cash += finalAmount;
+                userStock.qty -= 1;
+                if (userStock.qty === 0) userStock.avg = 0; // 전량 매도 시 초기화
+                
+                myData.stocks[id] = userStock;
+                stock.price = Math.round(currentPrice * (1 - impact));
             }
 
             // 히스토리 업데이트 (최근 20회)
-            let history = stock.history || [price];
+            let history = stock.history || [currentPrice];
             history.push(stock.price);
             if (history.length > 20) history.shift();
             stock.history = history;
             
-            // 전일대비 변동률 계산 (첫 가격 기준)
             stock.change = (((stock.price - history[0]) / history[0]) * 100).toFixed(2);
 
             saveWallet();
-            renderStocks(document.getElementById('search-input').value);
+            // 렌더링은 onValue 리스너에서 자동 실행됨
             return stock;
         });
     };
@@ -132,7 +156,10 @@
     let allStocks = [];
     function createSparkline(history, isUp) {
         if (!history || history.length < 2) return '';
-        const pts = history.map((v, i) => `${(i/19)*80},${35 - ((v - Math.min(...history)) / (Math.max(...history) - Math.min(...history) || 1) * 35)}`).join(' ');
+        const min = Math.min(...history);
+        const max = Math.max(...history);
+        const range = max - min || 1;
+        const pts = history.map((v, i) => `${(i/19)*80},${35 - ((v - min) / range * 35)}`).join(' ');
         return `<svg class="chart-container"><polyline class="sparkline ${isUp?'up':'down'}" points="${pts}" /></svg>`;
     }
 
@@ -142,14 +169,26 @@
         
         listDiv.innerHTML = "";
         filtered.forEach((s) => {
-            const id = `id_${allStocks.indexOf(s)}`; // 실제 DB 키 구조에 맞춰야 함
+            // DB 키를 찾기 위해 allStocks에서 해당 객체의 인덱스나 고유 ID 사용
+            // 여기서는 snapshot 구조에 따라 id를 가져와야 함 (관리자 페이지 상장 시 사용한 키)
+            const id = s.id; 
             const isUp = s.change >= 0;
+            const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
+            
+            // 내 수익률 계산
+            let myProfit = 0;
+            let profitClass = 'steady';
+            if (userStock.qty > 0) {
+                myProfit = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
+                profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
+            }
+
             const card = document.createElement('div');
             card.className = 'stock-card';
             card.innerHTML = `
                 <div class="info-group">
                     <div class="stock-name">${s.name}</div>
-                    <div class="my-qty">보유: ${myData.stocks[id] || 0}주</div>
+                    <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
                 </div>
                 <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
                 <div class="price-group">
@@ -166,7 +205,9 @@
     }
 
     onValue(ref(db, 'stocks/'), (snap) => {
-        allStocks = Object.values(snap.val() || {});
+        const data = snap.val() || {};
+        // 객체의 키(ID)를 객체 내부에 포함시켜 배열로 변환
+        allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
         renderStocks(document.getElementById('search-input').value);
     });
 </script>
