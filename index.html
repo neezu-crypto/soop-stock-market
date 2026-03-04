@@ -1,1 +1,59 @@
 
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>SOOP 스트리머 주식 시장</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; padding: 20px; }
+        .stock-card { border: 1px solid #333; padding: 15px; margin: 10px 0; border-radius: 8px; display: flex; justify-content: space-between; }
+        .price { font-weight: bold; color: #ff4b4b; }
+        #search-input { width: 100%; padding: 10px; margin-bottom: 20px; background: #333; border: none; color: white; }
+    </style>
+</head>
+<body>
+    <h1>📈 SOOP STOCK MARKET</h1>
+    <input type="text" id="search-input" placeholder="스트리머 이름을 검색하세요...">
+    <div id="stock-list">데이터를 불러오는 중...</div>
+
+    <script type="module">
+        // Firebase 설정 (아까 복사한 SDK 코드)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
+            authDomain: "soop-stock-market.firebaseapp.com",
+            databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
+            projectId: "soop-stock-market",
+            storageBucket: "soop-stock-market.firebasestorage.app",
+            messagingSenderId: "997788925900",
+            appId: "1:997788925900:web:cb613d438efec019a3a769"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // 실시간 데이터 읽기
+        const stockListDiv = document.getElementById('stock-list');
+        onValue(ref(db, 'stocks/'), (snapshot) => {
+            const data = snapshot.val();
+            if (!data) {
+                stockListDiv.innerHTML = "상장된 주식이 없습니다. 관리자 페이지에서 상장을 진행해주세요.";
+                return;
+            }
+            
+            stockListDiv.innerHTML = ""; // 기존 내용 초기화
+            Object.values(data).forEach(stock => {
+                const card = document.createElement('div');
+                card.className = 'stock-card';
+                card.innerHTML = `
+                    <span>${stock.name}</span>
+                    <span class="price">${stock.price.toLocaleString()}원</span>
+                `;
+                stockListDiv.appendChild(card);
+            });
+        });
+    </script>
+</body>
+</html>
