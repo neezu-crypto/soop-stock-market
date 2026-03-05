@@ -180,54 +180,64 @@ window.cleanupDuplicateStocks = async function() {
         const data = snapshot.val();
         if (!data) return alert("데이터가 없습니다.");
 
-        const normalizedMap = {}; // { 정규화된키워드: [ {id, originalName}, ... ] }
         const deleteUpdates = {};
         let duplicateFoundCount = 0;
 
-        // 1. 모든 종목을 '정규화된 이름'으로 그룹화
-        Object.entries(data).forEach(([id, stock]) => {
-            const originalName = stock.name.trim();
+        // 1. 모든 종목을 배열로 변환하고 ID(상장 순서) 순으로 정렬
+        const stockList = Object.entries(data).map(([id, stock]) => ({
+            id,
+            originalName: stock.name.trim(),
+            // 한글만 추출 (예: 미르_MIR -> 미르)
+            krName: stock.name.replace(/[^ㄱ-ㅎ가-힣]/g, ''),
+            // 영문+숫자 정규화 (영문 닉네임 대비)
+            enName: stock.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+        })).sort((a, b) => a.id.localeCompare(b.id));
+
+        // 2. 이중 루프를 돌며 상장 순서가 빠른 놈(master)이 느린 놈(target)을 포함하는지 검사
+        for (let i = 0; i < stockList.length; i++) {
+            const master = stockList[i];
             
-            // [정규화 로직] 특수문자, 공백을 제거하고 핵심 단어(한글/영문/숫자)만 추출
-            // 예: "미르_MIR" -> "미르MIR", "^나쵸^" -> "나쵸"
-            const normalizedName = originalName.replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g, '').toLowerCase();
+            // 이미 삭제 대기 중인 놈은 검사할 필요 없음
+            if (deleteUpdates[`stocks/${master.id}`] === null) continue;
 
-            if (!normalizedName) return; // 이름이 유효하지 않으면 패스
+            for (let j = i + 1; j < stockList.length; j++) {
+                const target = stockList[j];
 
-            if (!normalizedMap[normalizedName]) {
-                normalizedMap[normalizedName] = [];
-            }
-            normalizedMap[normalizedName].push({ id, originalName });
-        });
+                // 이미 삭제 대기 중인 놈은 건너뜀
+                if (deleteUpdates[`stocks/${target.id}`] === null) continue;
 
-        // 2. 그룹별로 검사하여 중복 판별
-        Object.entries(normalizedMap).forEach(([key, items]) => {
-            if (items.length > 1) {
-                // ID 기준으로 정렬 (가장 먼저 생성된 ID가 0번 인덱스로)
-                items.sort((a, b) => a.id.localeCompare(b.id));
+                let isMatch = false;
 
-                const master = items[0]; // 유지할 원본 (가장 먼저 만든 것)
-                
-                for (let i = 1; i < items.length; i++) {
-                    const target = items[i];
+                // [중복 판정 규칙]
+                // 1. 한글이 있는 경우: 마스터의 한글명이 타겟의 전체 이름에 포함되는가? (미르 -> 미르_MIR)
+                if (master.krName.length > 0 && target.originalName.includes(master.krName)) {
+                    isMatch = true;
+                } 
+                // 2. 영문/숫자만 있는 경우: 정규화된 이름이 서로 일치하는가?
+                else if (master.enName.length > 0 && master.enName === target.enName) {
+                    isMatch = true;
+                }
+
+                if (isMatch) {
                     deleteUpdates[`stocks/${target.id}`] = null;
                     duplicateFoundCount++;
-                    console.log(`[삭제대상] 원본: ${master.originalName} (${master.id}) <- 삭제: ${target.originalName} (${target.id})`);
+                    console.log(`[정화 대상] 원본: ${master.originalName} -> 중복: ${target.originalName}`);
                 }
             }
-        });
+        }
 
         if (duplicateFoundCount === 0) {
             return alert("✅ 유사한 중복 닉네임이 발견되지 않았습니다.");
         }
 
-        const msg = `🔍 분석 결과:\n유사/중복 종목 ${duplicateFoundCount}개가 발견되었습니다.\n\n` +
-                    `정규화 필터(특수문자 제외 일치)를 통해 가장 먼저 생성된 종목만 남깁니다.\n` +
-                    `정말 삭제하시겠습니까? (삭제된 데이터는 복구 불가)`;
+        const msg = `🔍 분석 결과: 총 ${duplicateFoundCount}개의 유사/중복 종목이 발견되었습니다.\n\n` +
+                    `규칙: 먼저 상장된 이름(한글)이 포함되어 있으면 삭제합니다.\n` +
+                    `(예: '미르'가 있으면 '미르_MIR' 삭제)\n\n` +
+                    `정말 정화하시겠습니까?`;
 
         if (confirm(msg)) {
             await update(ref(db), deleteUpdates);
-            alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정화했습니다!`);
+            alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
         }
     } catch (e) {
         console.error(e);
