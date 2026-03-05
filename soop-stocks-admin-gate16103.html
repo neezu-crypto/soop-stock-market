@@ -183,61 +183,73 @@ window.cleanupDuplicateStocks = async function() {
         const deleteUpdates = {};
         let duplicateFoundCount = 0;
 
-        // 1. 모든 종목을 배열로 변환하고 ID(상장 순서) 순으로 정렬
-        const stockList = Object.entries(data).map(([id, stock]) => ({
-            id,
-            originalName: stock.name.trim(),
-            // 한글만 추출 (예: 미르_MIR -> 미르)
-            krName: stock.name.replace(/[^ㄱ-ㅎ가-힣]/g, ''),
-            // 영문+숫자 정규화 (영문 닉네임 대비)
-            enName: stock.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-        })).sort((a, b) => a.id.localeCompare(b.id));
+        // 1. 제외할 흔한 접사 (여기에 포함된 단어는 중복 판정 기준에서 제외)
+        const commonAffixes = ['BJ', 'TV', 'S2', 'S', 'H_', 'DK', 'T1', 'M', 'YC', 'A-', 'PD', '공식'];
+        
+        // 2. 데이터 전처리 및 정렬
+        const stockList = Object.entries(data).map(([id, stock]) => {
+            const originalName = stock.name.trim();
+            // 접사를 제거한 순수 이름 추출 (중복 판정용)
+            let pureName = originalName;
+            commonAffixes.forEach(affix => {
+                const regex = new RegExp(affix, 'gi');
+                pureName = pureName.replace(regex, '');
+            });
+            // 특수문자 제거
+            pureName = pureName.replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g, '');
 
-        // 2. 이중 루프를 돌며 상장 순서가 빠른 놈(master)이 느린 놈(target)을 포함하는지 검사
+            return { id, originalName, pureName };
+        }).sort((a, b) => a.id.localeCompare(b.id));
+
+        // 3. 정교한 이중 루프 검사
         for (let i = 0; i < stockList.length; i++) {
             const master = stockList[i];
-            
-            // 이미 삭제 대기 중인 놈은 검사할 필요 없음
             if (deleteUpdates[`stocks/${master.id}`] === null) continue;
+            if (master.pureName.length < 2) continue; // "운", "엘" 등 너무 짧은 이름은 master에서 제외
 
             for (let j = i + 1; j < stockList.length; j++) {
                 const target = stockList[j];
-
-                // 이미 삭제 대기 중인 놈은 건너뜀
                 if (deleteUpdates[`stocks/${target.id}`] === null) continue;
 
-                let isMatch = false;
+                let isDuplicate = false;
 
-                // [중복 판정 규칙]
-                // 1. 한글이 있는 경우: 마스터의 한글명이 타겟의 전체 이름에 포함되는가? (미르 -> 미르_MIR)
-                if (master.krName.length > 0 && target.originalName.includes(master.krName)) {
-                    isMatch = true;
-                } 
-                // 2. 영문/숫자만 있는 경우: 정규화된 이름이 서로 일치하는가?
-                else if (master.enName.length > 0 && master.enName === target.enName) {
+                // [정교한 판정 규칙]
+                // 규칙 1: 순수 이름(특수문자/접사 제거)이 완전히 일치하는 경우
+                if (master.pureName === target.pureName) {
                     isMatch = true;
                 }
+                
+                // 규칙 2: 마스터 이름이 타겟 이름에 포함되지만, 타겟이 너무 길지 않을 때 (유사도 검사)
+                // 예: "봉준" -> "짭봉준" (O) / "봉준" -> "봉준호" (X - 이름이 다를 확률 높음)
+                const isContained = target.originalName.includes(master.originalName);
+                const lengthDiff = target.originalName.length - master.originalName.length;
 
-                if (isMatch) {
+                if (isContained && lengthDiff > 0 && lengthDiff <= 5) {
+                    // 단, "BJ", "TV" 등 접사 차이인 경우만 중복으로 인정
+                    isDuplicate = true;
+                }
+
+                // [로그 기반 긴급 예외] 
+                // "마왕0216"이 "마왕루야"를 지우지 못하게 함 (둘은 완전히 다른 사람)
+                if (master.pureName === "마왕0216" && target.pureName.includes("마왕")) isDuplicate = false;
+                // "BJ채리"가 일반 "BJ"를 지우지 못하게 함
+                if (master.originalName.includes("BJ") && target.originalName.includes("BJ")) {
+                    if (master.pureName !== target.pureName) isDuplicate = false;
+                }
+
+                if (isDuplicate) {
                     deleteUpdates[`stocks/${target.id}`] = null;
                     duplicateFoundCount++;
-                    console.log(`[정화 대상] 원본: ${master.originalName} -> 중복: ${target.originalName}`);
+                    console.log(`[정화 결정] 원본: ${master.originalName} -> 중복: ${target.originalName}`);
                 }
             }
         }
 
-        if (duplicateFoundCount === 0) {
-            return alert("✅ 유사한 중복 닉네임이 발견되지 않았습니다.");
-        }
+        if (duplicateFoundCount === 0) return alert("✅ 정교한 필터링 결과 중복이 없습니다.");
 
-        const msg = `🔍 분석 결과: 총 ${duplicateFoundCount}개의 유사/중복 종목이 발견되었습니다.\n\n` +
-                    `규칙: 먼저 상장된 이름(한글)이 포함되어 있으면 삭제합니다.\n` +
-                    `(예: '미르'가 있으면 '미르_MIR' 삭제)\n\n` +
-                    `정말 정화하시겠습니까?`;
-
-        if (confirm(msg)) {
+        if (confirm(`🔍 정교한 분석 완료: ${duplicateFoundCount}개 발견.\n무고한 희생자를 줄이기 위해 접사(BJ, TV 등) 및 이름 길이를 고려했습니다. 실행할까요?`)) {
             await update(ref(db), deleteUpdates);
-            alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
+            alert(`🔥 ${duplicateFoundCount}개의 실제 중복 종목을 정리했습니다!`);
         }
     } catch (e) {
         console.error(e);
