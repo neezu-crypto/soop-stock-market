@@ -339,10 +339,9 @@ window.trade = async function(id, type) {
     if (isTrading) return; 
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
     
-    // 거래 시작 상태 및 버튼 비활성화
+    // [수정] 거래 시작 상태 설정 및 UI 즉시 갱신 (버튼 비활성화)
     isTrading = true; 
-    const allTradeBtns = document.querySelectorAll('.btn-buy, .btn-sell');
-    allTradeBtns.forEach(btn => btn.disabled = true);
+    renderStocks(document.getElementById('search-input')?.value || ""); 
 
     // 지갑 내 주식 주머니가 없으면 생성
     if (!myData.stocks) myData.stocks = {};
@@ -405,10 +404,10 @@ window.trade = async function(id, type) {
             return updatedStock;
         });
 
-        // 3. 서버에 내 지갑 데이터 업데이트 (이곳에 시간을 추가합니다)
+        // 4. 서버에 내 지갑 데이터 업데이트
         await set(userRef, {
             ...myData,
-            lastTradeTime: serverTimestamp() // ★ 이 부분 ★ 유저 데이터에 시간을 새깁니다.
+            lastTradeTime: serverTimestamp()
         });
 
         // 5. 거래 성공 시 마지막 거래 시간 기록
@@ -423,16 +422,18 @@ window.trade = async function(id, type) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
         else if (error.message === "보유부족") alert("보유 주식이 없습니다!");
         else alert("거래 중 오류가 발생했습니다.");
-    } finally {
-        isTrading = false; 
         
-        // 6. 정확히 3초 후에 버튼을 다시 활성화 시킵니다.
+        // 에러 시에도 즉시 버튼 상태 복구를 원한다면 여기서 isTrading = false 처리 가능하나, 
+        // 쿨타임을 지키기 위해 finally에서 처리합니다.
+    } finally {
+        // [수정] 정확히 3초 후에 상태를 해제하고 UI를 다시 그려 버튼을 활성화 시킵니다.
         setTimeout(() => {
-            allTradeBtns.forEach(btn => btn.disabled = false);
+            isTrading = false; 
+            renderStocks(document.getElementById('search-input')?.value || "");
         }, cooldownTime);
     }
 };
-
+        
 // --- 렌더링 로직 ---
 function createSparkline(history, isUp) {
     if (!history || history.length < 2) return '';
@@ -482,12 +483,8 @@ function renderStocks(filter = "") {
                 <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change || 0}%</div>
             </div>
             <div class="trade-btns">
-    <button class="btn btn-buy" 
-            onclick="trade('${id}', 'buy')" 
-            ${isTrading ? 'disabled' : ''}>매수</button>
-    <button class="btn btn-sell" 
-            onclick="trade('${id}', 'sell')" 
-            ${isTrading ? 'disabled' : ''}>매도</button>
+    <button class="btn btn-buy" onclick="trade('${id}', 'buy')" ${isTrading ? 'disabled' : ''}>매수</button>
+    <button class="btn btn-sell" onclick="trade('${id}', 'sell')" ${isTrading ? 'disabled' : ''}>매도</button>
 </div>
         `;
         listDiv.appendChild(card);
