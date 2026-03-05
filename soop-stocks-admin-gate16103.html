@@ -173,49 +173,61 @@
     // 검색창 입력 이벤트
     document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
 
-    // 기존 데이터 중 중복 닉네임 정리 (나중에 생성된 ID 삭제)
+    // 고도화된 중복 닉네임 정리 로직
 window.cleanupDuplicateStocks = async function() {
     try {
         const snapshot = await get(ref(db, 'stocks/'));
         const data = snapshot.val();
         if (!data) return alert("데이터가 없습니다.");
 
-        const nameMap = {}; // { 닉네임: [ID1, ID2, ...] }
+        const normalizedMap = {}; // { 정규화된키워드: [ {id, originalName}, ... ] }
         const deleteUpdates = {};
         let duplicateFoundCount = 0;
 
-        // 1. 모든 종목을 닉네임별로 그룹화
+        // 1. 모든 종목을 '정규화된 이름'으로 그룹화
         Object.entries(data).forEach(([id, stock]) => {
-            const name = stock.name.trim();
-            if (!nameMap[name]) {
-                nameMap[name] = [];
+            const originalName = stock.name.trim();
+            
+            // [정규화 로직] 특수문자, 공백을 제거하고 핵심 단어(한글/영문/숫자)만 추출
+            // 예: "미르_MIR" -> "미르MIR", "^나쵸^" -> "나쵸"
+            const normalizedName = originalName.replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g, '').toLowerCase();
+
+            if (!normalizedName) return; // 이름이 유효하지 않으면 패스
+
+            if (!normalizedMap[normalizedName]) {
+                normalizedMap[normalizedName] = [];
             }
-            nameMap[name].push(id);
+            normalizedMap[normalizedName].push({ id, originalName });
         });
 
-        // 2. 중복된 닉네임 검사
-        Object.entries(nameMap).forEach(([name, ids]) => {
-            if (ids.length > 1) {
-                // ID를 정렬 (생성 순서대로 정렬하기 위함)
-                // 보통 Date.now() 기반 ID라면 문자열 정렬로 선후 관계 파악 가능
-                ids.sort(); 
+        // 2. 그룹별로 검사하여 중복 판별
+        Object.entries(normalizedMap).forEach(([key, items]) => {
+            if (items.length > 1) {
+                // ID 기준으로 정렬 (가장 먼저 생성된 ID가 0번 인덱스로)
+                items.sort((a, b) => a.id.localeCompare(b.id));
 
-                // 첫 번째 ID(가장 오래된 것)만 남기고 나머지는 삭제 리스트에 추가
-                for (let i = 1; i < ids.length; i++) {
-                    const targetId = ids[i];
-                    deleteUpdates[`stocks/${targetId}`] = null; // null로 설정하면 삭제됨
+                const master = items[0]; // 유지할 원본 (가장 먼저 만든 것)
+                
+                for (let i = 1; i < items.length; i++) {
+                    const target = items[i];
+                    deleteUpdates[`stocks/${target.id}`] = null;
                     duplicateFoundCount++;
+                    console.log(`[삭제대상] 원본: ${master.originalName} (${master.id}) <- 삭제: ${target.originalName} (${target.id})`);
                 }
             }
         });
 
         if (duplicateFoundCount === 0) {
-            return alert("✅ 중복된 닉네임이 없습니다.");
+            return alert("✅ 유사한 중복 닉네임이 발견되지 않았습니다.");
         }
 
-        if (confirm(`조회 결과: 중복 종목 ${duplicateFoundCount}개가 발견되었습니다.\n가장 먼저 상장된 종목만 남기고 모두 삭제할까요?`)) {
+        const msg = `🔍 분석 결과:\n유사/중복 종목 ${duplicateFoundCount}개가 발견되었습니다.\n\n` +
+                    `정규화 필터(특수문자 제외 일치)를 통해 가장 먼저 생성된 종목만 남깁니다.\n` +
+                    `정말 삭제하시겠습니까? (삭제된 데이터는 복구 불가)`;
+
+        if (confirm(msg)) {
             await update(ref(db), deleteUpdates);
-            alert(`🔥 총 ${duplicateFoundCount}개의 중복 종목을 정리했습니다!`);
+            alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정화했습니다!`);
         }
     } catch (e) {
         console.error(e);
