@@ -482,9 +482,13 @@ function renderStocks(filter = "") {
                 <div class="current-price ${isUp?'up':'down'}">${(s.price || 0).toLocaleString()}원</div>
                 <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change || 0}%</div>
             </div>
-            <div class="trade-btns">
-    <button class="btn btn-buy" onclick="trade('${id}', 'buy')" ${isTrading ? 'disabled' : ''}>매수</button>
-    <button class="btn btn-sell" onclick="trade('${id}', 'sell')" ${isTrading ? 'disabled' : ''}>매도</button>
+           <div class="trade-btns">
+    <button class="btn btn-buy" 
+            onclick="trade('${id}', 'buy')" 
+            ${isTrading ? 'disabled' : ''}>매수</button>
+    <button class="btn btn-sell" 
+            onclick="trade('${id}', 'sell')" 
+            ${isTrading ? 'disabled' : ''}>매도</button>
 </div>
         `;
         listDiv.appendChild(card);
