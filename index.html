@@ -123,12 +123,9 @@
     </div>
 
     <header>
-    <h1 style="font-size: 20px; margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
-    <p style="font-size: 13px; color: var(--text-sub); margin: 5px 0 0 0;">
-        찾고 있는 스트리머가 있다면 아래 검색창에서 이름을 검색해보세요.
-    </p>
-    <input type="text" id="search-input" placeholder="스트리머 검색...">
-</header>
+        <h1 style="font-size: 20px; margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
+        <input type="text" id="search-input" placeholder="스트리머 검색...">
+    </header>
 
     <div class="ranking-bar">
     <div class="ranking-title">🔥 인기 TOP 5</div>
@@ -160,24 +157,13 @@ const db = getDatabase(app);
 const auth = getAuth(app);
 
 // --- 상태 관리 ---
-let myData = null;
-    let userUID = null;
-    let allStocks = [];
-    let isTrading = false;
-    let allUsers = {}; 
-    let lastTradeTime = 0;
+let myData = null; // 초기값을 null로 설정하여 로딩 상태 구분
+let userUID = null;
+let allStocks = [];
+let isTrading = false; // [추가] 중복 거래 방지 플래그
 
-        // --- [추가] 초성 추출 유틸리티 함수 ---
-    function getChosung(str) {
-        const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
-        let result = "";
-        for(let i=0; i<str.length; i++) {
-            const code = str.charCodeAt(i) - 44032;
-            if(code > -1 && code < 11172) result += cho[Math.floor(code / 588)];
-            else result += str.charAt(i);
-        }
-        return result;
-    }
+// --- 캡슐화 내부 상단 상태 관리 섹션에 추가 ---
+let allUsers = {}; 
 
 // --- 유저 전체 데이터 리스너 (랭킹 산출용) ---
 onValue(ref(db, 'users/'), (snap) => {
@@ -447,35 +433,33 @@ window.trade = async function(id, type) {
         }, cooldownTime);
     }
 };
+        
+// --- 렌더링 로직 ---
+function createSparkline(history, isUp) {
+    if (!history || history.length < 2) return '';
+    const min = Math.min(...history);
+    const max = Math.max(...history);
+    const range = max - min || 1;
+    const pts = history.map((v, i) => `${(i/19)*80},${35 - ((v - min) / range * 35)}`).join(' ');
+    return `<svg class="chart-container"><polyline class="sparkline ${isUp?'up':'down'}" points="${pts}" /></svg>`;
+}
 
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
+    // myData가 없으면 에러가 날 수 있으므로 체크 추가
     if (!listDiv || !myData) return;
 
-    // 검색어 전처리 (소문자화 및 공백 제거)
-    const searchKeyword = filter.toLowerCase().trim();
-
-    const filtered = allStocks.filter(s => {
-        if (!s.name) return false;
-        const name = s.name.toLowerCase();
-        
-        // 1. 일반 포함 검색 (예: '팡이' 입력 시 '팡이요' 검색)
-        if (name.includes(searchKeyword)) return true;
-        
-        // 2. 초성 검색 (예: 'ㅍㅇㅇ' 입력 시 '팡이요' 검색)
-        const nameChosung = getChosung(name);
-        if (nameChosung.includes(searchKeyword)) return true;
-        
-        return false;
-    })
-    .sort((a, b) => (b.price || 0) - (a.price || 0)) // 가격 높은 순 정렬
-    .slice(0, 100);
-
+    // 데이터가 비어있을 경우를 대비해 기본값(0, 빈 문자열 등) 처리 추가
+    const filtered = allStocks.filter(s => s.name && s.name.includes(filter))
+                              .sort((a,b) => (b.price || 0) - (a.price || 0))
+                              .slice(0, 100);
     listDiv.innerHTML = "";
 
     filtered.forEach((s) => {
         const id = s.id; 
         const isUp = (s.change || 0) >= 0;
+        
+        // [핵심 수정] myData.stocks가 정의되지 않았을 경우 빈 객체{}를 사용하도록 방어
         const userStocks = myData.stocks || {}; 
         const userStock = userStocks[id] || { qty: 0, avg: 0 };
         
@@ -490,31 +474,21 @@ function renderStocks(filter = "") {
         card.className = 'stock-card';
         card.innerHTML = `
             <div class="info-group">
-                <div class="stock-name">${s.name}</div>
-                <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? (myProfit > 0 ? '+' : '') + myProfit + '%' : '-'})</span></div>
+                <div class="stock-name">${s.name || '불러오는 중...'}</div>
+                <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
             </div>
             <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
             <div class="price-group">
-                <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
-                <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
+                <div class="current-price ${isUp?'up':'down'}">${(s.price || 0).toLocaleString()}원</div>
+                <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change || 0}%</div>
             </div>
             <div class="trade-btns">
-                <button class="btn btn-buy" onclick="trade('${id}', 'buy')" ${isTrading ? 'disabled' : ''}>매수</button>
-                <button class="btn btn-sell" onclick="trade('${id}', 'sell')" ${isTrading ? 'disabled' : ''}>매도</button>
-            </div>
+    <button class="btn btn-buy" onclick="trade('${id}', 'buy')" ${isTrading ? 'disabled' : ''}>매수</button>
+    <button class="btn btn-sell" onclick="trade('${id}', 'sell')" ${isTrading ? 'disabled' : ''}>매도</button>
+</div>
         `;
         listDiv.appendChild(card);
     });
-}
-        
-// --- 렌더링 로직 ---
-function createSparkline(history, isUp) {
-    if (!history || history.length < 2) return '';
-    const min = Math.min(...history);
-    const max = Math.max(...history);
-    const range = max - min || 1;
-    const pts = history.map((v, i) => `${(i/19)*80},${35 - ((v - min) / range * 35)}`).join(' ');
-    return `<svg class="chart-container"><polyline class="sparkline ${isUp?'up':'down'}" points="${pts}" /></svg>`;
 }
     
 // 주식 목록 실시간 리스너
