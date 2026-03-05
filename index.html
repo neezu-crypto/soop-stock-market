@@ -239,6 +239,10 @@ let myData = null; // 초기값을 null로 설정하여 로딩 상태 구분
 let userUID = null;
 let allStocks = [];
 let isTrading = false; // [추가] 중복 거래 방지 플래그
+        
+// 오디오 객체 사전 로드 (함수 외부 또는 상단에 배치)
+const buySound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
+const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/sell%20sound.mp3");
 
 // --- 캡슐화 내부 상단 상태 관리 섹션에 추가 ---
 let allUsers = {}; 
@@ -487,6 +491,15 @@ window.trade = async function(id, type) {
             ...myData,
             lastTradeTime: serverTimestamp()
         });
+
+        // [추가] 거래 성공 사운드 재생
+        if (type === 'buy') {
+            buySound.currentTime = 0; // 연속 클릭 시에도 처음부터 재생되도록 초기화
+            buySound.play().catch(e => console.log("사운드 재생 실패:", e));
+        } else {
+            sellSound.currentTime = 0;
+            sellSound.play().catch(e => console.log("사운드 재생 실패:", e));
+        }
 
         // 5. 거래 성공 시 마지막 거래 시간 기록
         lastTradeTime = Date.now();
