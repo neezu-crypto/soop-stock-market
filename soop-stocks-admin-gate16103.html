@@ -60,11 +60,14 @@
 </div>
 
     <div class="container" style="display:block">
-        <h1>🚀 신규 스트리머 상장</h1>
-        <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요.</div>
-        <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
+    <h1>🚀 스트리머 상장 및 삭제</h1>
+    <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요. <br>상장은 신규 추가, 삭제는 목록에서 제거합니다.</div>
+    <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
+    <div style="display: flex; gap: 10px;">
         <button class="btn-primary" onclick="uploadStocks()">일괄 상장 실행</button>
+        <button class="btn-primary" style="background: #64748b;" onclick="deleteStocks()">일괄 삭제 실행</button>
     </div>
+</div>
     
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
@@ -281,6 +284,45 @@ window.cleanupDuplicateStocks = async function() {
             } catch (e) { alert("오류 발생: " + e.message); }
         }
     }
+
+    // 입력된 닉네임들을 찾아 일괄 삭제하는 함수
+window.deleteStocks = async function() {
+    const text = document.getElementById('list').value;
+    if (!text.trim()) return alert("삭제할 이름을 입력해주세요.");
+    
+    // 입력된 이름들 배열로 변환
+    const namesToDelete = text.split('\n').map(n => n.trim()).filter(n => n !== "");
+    
+    try {
+        const snapshot = await get(ref(db, 'stocks/'));
+        const data = snapshot.val();
+        if (!data) return alert("데이터가 없습니다.");
+
+        const deleteUpdates = {};
+        let foundCount = 0;
+
+        // DB를 돌면서 입력한 이름과 일치하는 ID 찾기
+        Object.entries(data).forEach(([id, stock]) => {
+            if (namesToDelete.includes(stock.name)) {
+                deleteUpdates[`stocks/${id}`] = null;
+                foundCount++;
+            }
+        });
+
+        if (foundCount === 0) {
+            return alert("❌ 입력하신 이름과 일치하는 종목이 목록에 없습니다.");
+        }
+
+        if (confirm(`입력하신 ${namesToDelete.length}명 중 ${foundCount}명을 목록에서 삭제하시겠습니까?`)) {
+            await update(ref(db), deleteUpdates);
+            alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
+            document.getElementById('list').value = ""; // 입력창 비우기
+        }
+    } catch (e) {
+        console.error(e);
+        alert("삭제 중 오류 발생: " + e.message);
+    }
+};
 
     // 주가 일괄 조정
     window.adjustAllPrices = async function() {
