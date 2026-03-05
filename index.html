@@ -97,6 +97,71 @@
 .rank-num { color: var(--primary); font-weight: 800; }
 .rank-name { color: var(--text-main); }
 .rank-vol { color: var(--text-sub); font-size: 11px; }
+
+        /* 우측 배너 영역 */
+.banner-container {
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    z-index: 1000;
+}
+
+.banner-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.banner-item:hover {
+    transform: scale(1.1);
+}
+
+.banner-circle {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: var(--card-bg);
+    border: 2px solid var(--primary);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    text-align: center;
+    padding: 5px;
+}
+
+.banner-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.banner-no-img {
+    font-size: 10px;
+    color: var(--text-sub);
+    line-height: 1.2;
+}
+
+.banner-name {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-main);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* 모바일 환경에서는 배너 숨기기 (선택 사항) */
+@media (max-width: 1000px) {
+    .banner-container { display: none; }
+}
     </style>
 </head>
 <body>
@@ -124,13 +189,26 @@
 
     <header>
         <h1 style="font-size: 20px; margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
+        <p style="font-size: 13px; color: var(--text-sub); margin: 5px 0 0 0;">
+            찾고 있는 스트리머가 있다면 아래 검색창에서 이름을 검색해보세요.
+        </p>
         <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
 
     <div class="ranking-bar">
-    <div class="ranking-title">🔥 인기 TOP 5</div>
-    <div id="top-rankers" class="ranking-list">
-        불러오는 중...
+        <div class="ranking-title">🔥 인기 TOP 5</div>
+        <div id="top-rankers" class="ranking-list">불러오는 중...</div>
+    </div>
+
+    <main id="stock-list"></main>
+
+    <div class="banner-container" id="banner-list">
+        <a href="https://www.sooplive.co.kr/station/skftodwocks2" target="_blank" class="banner-item">
+            <div class="banner-circle">
+                <div class="banner-no-img">방송국 홍보 문의 가능<br>클릭</div>
+            </div>
+            <div class="banner-name">페이지 개발자</div>
+        </a>
     </div>
 </div>
 
@@ -433,6 +511,39 @@ window.trade = async function(id, type) {
         }, cooldownTime);
     }
 };
+
+        // 홍보 배너
+        function renderBanners() {
+    const bannerList = document.getElementById('banner-list');
+    if (!bannerList) return;
+
+    // 기본 개발자 배너는 유지하고 시작
+    bannerList.innerHTML = `
+        <a href="https://www.sooplive.co.kr/station/skftodwocks2" target="_blank" class="banner-item">
+            <div class="banner-circle">
+                <div class="banner-no-img">배너 문의<br>추가 가능</div>
+            </div>
+            <div class="banner-name">개발자</div>
+        </a>
+    `;
+
+    // 이미지 링크가 있는 스트리머만 필터링하여 배너 생성
+    allStocks.forEach(s => {
+        if (s.bannerImg) { // 데이터베이스에 bannerImg 필드가 있는 경우
+            const a = document.createElement('a');
+            a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`; // 링크 없으면 방송국으로
+            a.target = "_blank";
+            a.className = "banner-item";
+            a.innerHTML = `
+                <div class="banner-circle">
+                    <img src="${s.bannerImg}" alt="${s.name}">
+                </div>
+                <div class="banner-name">${s.name}</div>
+            `;
+            bannerList.appendChild(a);
+        }
+    });
+}
         
 // --- 렌더링 로직 ---
 function createSparkline(history, isUp) {
@@ -500,6 +611,7 @@ onValue(ref(db, 'stocks/'), (snap) => {
     const data = snap.val() || {};
     allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
     updateUI();
+    renderBanners(); // [추가] 배너 렌더링 호출
 });
 
 // 2. [추가 필수] 전체 유저 보유량 변동 감시 (랭킹 전용)
