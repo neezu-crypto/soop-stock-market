@@ -789,12 +789,31 @@ function renderBanners() {
         </a>
     `;
 
-    console.log("--- [배너] 현재 DB에서 불러온 전체 주식 수:", allStocks.length);
+    const now = new Date(); // 현재 시간 기준
 
     // 2. 홍보 배너 생성 및 로그 출력
     allStocks.forEach((s, index) => {
         if (s.bannerImg) {
-            console.log(`--- [배너 발견] ${index + 1}. 이름: ${s.name} | 원본 주소: ${s.bannerImg} ---`);
+            let dDayText = "AD"; // 기본 표시값
+
+            // [추가] 기간 만료 체크 및 D-Day 계산 로직
+            if (s.bannerEndDate) {
+                const endDate = new Date(s.bannerEndDate);
+                // 해당 날짜의 밤 11시 59분 59초까지 인정
+                endDate.setHours(23, 59, 59, 999);
+
+                if (endDate < now) {
+                    console.log(`--- [배너 기간 만료] ${s.name} 스트리머의 광고가 종료되어 표시하지 않습니다. ---`);
+                    return; // 기간이 지났으므로 이 항목은 건너뜁니다.
+                }
+
+                // 남은 일수 계산
+                const diffTime = endDate - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                dDayText = diffDays === 0 ? "오늘만료" : `D-${diffDays}`;
+            }
+
+            console.log(`--- [배너 발견] ${index + 1}. 이름: ${s.name} | 종료일: ${s.bannerEndDate || '미설정'} ---`);
 
             const a = document.createElement('a');
             a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
@@ -808,11 +827,10 @@ function renderBanners() {
             let imgSrc = s.bannerImg;
             if (imgSrc.startsWith('images/')) {
                 imgSrc = './' + imgSrc;
-                console.log(`--- [배너 경로 보정] -> ${imgSrc} ---`);
             }
 
             a.innerHTML = `
-                <div class="promo-badge">AD</div>
+                <div class="promo-badge">${dDayText}</div>
                 <div class="banner-circle">
                     <span id="${loaderId}" class="banner-no-img" style="font-size: 9px; color: #94a3b8;">로딩중...</span>
                     <img id="${imgId}" src="${imgSrc}" alt="${s.name}" 
@@ -827,12 +845,9 @@ function renderBanners() {
 
             if (targetImg) {
                 targetImg.onload = function() {
-                console.log(`--- [배너 로드 성공] 스트리머: ${s.name} | 완료된 경로: ${imgSrc} ---`);
-                targetLoader.style.display = 'none';
-                targetImg.style.display = 'block'; // 기존의 직접적인 표시 방법
-    
-                // [보강 추천] CSS에서 설정한 opacity 효과와 병행하려면 아래 클래스 추가
-                targetImg.classList.add('img-loaded'); 
+                    targetLoader.style.display = 'none';
+                    targetImg.style.display = 'block';
+                    targetImg.classList.add('img-loaded'); 
                 };
 
                 // 캐시 대응
@@ -841,8 +856,6 @@ function renderBanners() {
                 }
 
                 targetImg.onerror = function() {
-                    console.error(`--- [배너 로드 실패!!] 스트리머: ${s.name} | 문제의 경로: ${imgSrc} ---`);
-                    console.warn("팁: 파일명이 대소문자까지 일치하는지, images 폴더 안에 파일이 실제로 있는지 확인하세요.");
                     targetLoader.innerText = "Error";
                     targetLoader.style.color = "#ef4444";
                 };
