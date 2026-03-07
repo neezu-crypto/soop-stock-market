@@ -360,6 +360,10 @@ let isTrading = false; // [추가] 중복 거래 방지 플래그
 const buySound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
 const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/sell%20sound.mp3");
 
+// [추가] 볼륨 조절 (0.5는 50% 볼륨입니다)
+buySound.volume = 0.5;
+sellSound.volume = 0.5;
+
 // --- 캡슐화 내부 상단 상태 관리 섹션에 추가 ---
 let allUsers = {}; 
 
