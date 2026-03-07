@@ -761,12 +761,12 @@ card.innerHTML = `
         <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
     </div>
     <div class="trade-btns">
-        <button class="btn btn-buy-multi" onclick="trade('${id}', 'buy', 10)" ${isTrading ? 'disabled' : ''}>+10</button>
-        <button class="btn btn-buy" onclick="trade('${id}', 'buy', 1)" ${isTrading ? 'disabled' : ''}>매수</button>
-        
-        <button class="btn btn-sell" onclick="trade('${id}', 'sell', 1)" ${isTrading ? 'disabled' : ''}>매도</button>
-        <button class="btn btn-sell-multi" onclick="trade('${id}', 'sell', 10)" ${isTrading ? 'disabled' : ''}>-10</button>
-    </div>
+    <button class="btn btn-buy-multi" onclick="trade('${id}', 'buy', 10)" ${isTrading ? 'disabled' : ''}>+10</button>
+    <button class="btn btn-buy" onclick="trade('${id}', 'buy', 1)" ${isTrading ? 'disabled' : ''}>매수</button>
+    
+    <div style="width: 1px; height: 20px; background: #334155; margin: 0 4px;"></div> <button class="btn btn-sell" onclick="trade('${id}', 'sell', 1)" ${isTrading ? 'disabled' : ''}>매도</button>
+    <button class="btn btn-sell-multi" onclick="trade('${id}', 'sell', 10)" ${isTrading ? 'disabled' : ''}>-10</button>
+</div>
 `;
 listDiv.appendChild(card);
     });
