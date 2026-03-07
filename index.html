@@ -40,14 +40,38 @@
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
 
-        /* 거래 버튼 */
-        .trade-btns { display: flex; gap: 5px; }
-        .btn { border: none; padding: 8px 12px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 13px; }
-        .btn-buy { background: var(--up-color); color: white; }
-        .btn-sell { background: var(--down-color); color: white; }
-        .btn:active { transform: scale(0.95); }
+        /* 거래 버튼 컨테이너 레이아웃 수정 */
+.trade-btns { 
+    display: flex; 
+    gap: 4px; 
+    align-items: center; 
+    justify-content: flex-end;
+}
+
+/* 수량 버튼 전용 스타일 (매수/매도 버튼보다 약간 작게) */
+.btn-buy-multi { background: #991b1b; color: white; padding: 6px 8px; font-size: 11px; } /* 진한 빨강 */
+.btn-sell-multi { background: #1e3a8a; color: white; padding: 6px 8px; font-size: 11px; } /* 진한 파랑 */
+
+/* 기존 버튼 패딩 살짝 조절 (공간 확보) */
+.btn { 
+    border: none; 
+    border-radius: 6px; 
+    font-weight: 700; 
+    cursor: pointer; 
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-buy { padding: 8px 14px; }
+.btn-sell { padding: 8px 14px; }
+
+/* 모바일 대응: 버튼이 너무 많으면 수량 버튼 숨기기 혹은 크기 조절 */
+@media (max-width: 600px) {
+    .stock-card { grid-template-columns: 1fr 1fr; } /* 모바일에서 2줄 레이아웃 권장 */
+    .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
+}
         
-        /* [추가] 3초 쿨타임 중일 때 버튼 스타일 */
+        /* [추가] 쿨타임 중일 때 버튼 스타일 */
     .btn:disabled, .btn.disabled { 
     background: #444 !important; /* 어두운 색으로 변경 */
     opacity: 0.5; 
@@ -532,11 +556,12 @@ onAuthStateChanged(auth, async (user) => {
 let lastTradeTime = 0; // 마지막 거래 시간을 저장 (밀리초)
 
 // --- 주가 변동 및 거래 로직 (서버 사이드 보안 적용) ---
-window.trade = async function(id, type) {
+// 수정된 trade 함수: 세 번째 인자로 qty(기본값 1)를 받습니다.
+window.trade = async function(id, type, qty = 1) {
     const currentTime = Date.now();
     const cooldownTime = 1000; // 1초 (1000ms)
 
-    // 1. 쿨타임 체크 (마지막 거래로부터 1초가 지났는지 확인)
+    // 1. 쿨타임 체크
     if (currentTime - lastTradeTime < cooldownTime) {
         const remaining = Math.ceil((cooldownTime - (currentTime - lastTradeTime)) / 1000);
         alert(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
@@ -547,7 +572,6 @@ window.trade = async function(id, type) {
     if (isTrading) return; 
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
     
-    // [수정] 거래 시작 상태 설정 및 UI 즉시 갱신 (버튼 비활성화)
     isTrading = true; 
     renderStocks(document.getElementById('search-input')?.value || ""); 
 
@@ -557,7 +581,8 @@ window.trade = async function(id, type) {
     const stockRef = ref(db, `stocks/${id}`);
     const userRef = ref(db, `users/${userUID}`);
 
-    const impact = 0.001;   // 0.1% 변동
+    // 수량에 따른 주가 영향도 계산 (1주당 0.1%씩 변동)
+    const impact = 0.001 * qty;   
     const spread = 0.0005;  // 0.05% 스프레드
     const fee = 0.003;      // 0.3% 수수료
 
@@ -570,26 +595,32 @@ window.trade = async function(id, type) {
             let newPrice = currentPrice;
 
             if (type === 'buy') {
-                const buyPrice = Math.round(currentPrice * (1 + spread));
-                if (myData.cash < buyPrice) throw new Error("잔액부족"); 
+                // 수량만큼의 총 매수 가격 계산
+                const singleBuyPrice = Math.round(currentPrice * (1 + spread));
+                const totalBuyPrice = singleBuyPrice * qty;
+
+                if (myData.cash < totalBuyPrice) throw new Error("잔액부족"); 
                 
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                const totalCost = (userStock.qty * userStock.avg) + buyPrice;
-                userStock.qty += 1;
+                // 평단가 계산: (기존총액 + 신규총액) / 전체수량
+                const totalCost = (userStock.qty * userStock.avg) + totalBuyPrice;
+                userStock.qty += qty;
                 userStock.avg = Math.round(totalCost / userStock.qty);
                 
-                myData.cash -= buyPrice;
+                myData.cash -= totalBuyPrice;
                 myData.stocks[id] = userStock;
                 newPrice = Math.round(currentPrice * (1 + impact));
             } else {
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                if (userStock.qty < 1) throw new Error("보유부족"); 
+                // 보유 수량이 요청 수량보다 적으면 에러
+                if (userStock.qty < qty) throw new Error("보유부족"); 
                 
-                const sellPrice = Math.round(currentPrice * (1 - spread));
-                const finalAmount = Math.round(sellPrice * (1 - fee));
+                // 수량만큼의 총 판매 가격 계산
+                const singleSellPrice = Math.round(currentPrice * (1 - spread));
+                const totalSellAmount = Math.round((singleSellPrice * qty) * (1 - fee));
                 
-                myData.cash += finalAmount;
-                userStock.qty -= 1;
+                myData.cash += totalSellAmount;
+                userStock.qty -= qty;
                 if (userStock.qty === 0) userStock.avg = 0;
                 
                 myData.stocks[id] = userStock;
@@ -604,7 +635,7 @@ window.trade = async function(id, type) {
                 ...currentStock,
                 price: newPrice,
                 history: history,
-                volume: (currentStock.volume || 0) + 1,
+                volume: (currentStock.volume || 0) + qty, // 거래량에 수량 반영
                 change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
             };
             
@@ -618,9 +649,9 @@ window.trade = async function(id, type) {
             lastTradeTime: serverTimestamp()
         });
 
-        // [추가] 거래 성공 사운드 재생
+        // 거래 성공 사운드 재생
         if (type === 'buy') {
-            buySound.currentTime = 0; // 연속 클릭 시에도 처음부터 재생되도록 초기화
+            buySound.currentTime = 0;
             buySound.play().catch(e => console.log("사운드 재생 실패:", e));
         } else {
             sellSound.currentTime = 0;
@@ -630,20 +661,17 @@ window.trade = async function(id, type) {
         // 5. 거래 성공 시 마지막 거래 시간 기록
         lastTradeTime = Date.now();
 
-        console.log("거래 완료: UI 갱신");
+        console.log(`거래 완료 (${qty}주): UI 갱신`);
         renderRanking(); 
         updateUI();
 
     } catch (error) {
         console.error("거래 에러:", error);
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
-        else if (error.message === "보유부족") alert("보유 주식이 없습니다!");
+        else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
         else alert("거래 중 오류가 발생했습니다.");
-        
-        // 에러 시에도 즉시 버튼 상태 복구를 원한다면 여기서 isTrading = false 처리 가능하나, 
-        // 쿨타임을 지키기 위해 finally에서 처리합니다.
     } finally {
-        // [수정] 정확히 1초 후에 상태를 해제하고 UI를 다시 그려 버튼을 활성화 시킵니다.
+        // 쿨타임 해제
         setTimeout(() => {
             isTrading = false; 
             renderStocks(document.getElementById('search-input')?.value || "");
@@ -721,27 +749,26 @@ function renderStocks(filter = "") {
         }
 
         const card = document.createElement('div');
-        card.className = 'stock-card';
-        card.innerHTML = `
-            <div class="info-group">
-                <div class="stock-name">${s.name || '불러오는 중...'}</div>
-                <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
-            </div>
-            <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
-            <div class="price-group">
-                <div class="current-price ${isUp?'up':'down'}">${(s.price || 0).toLocaleString()}원</div>
-                <div class="price-change ${isUp?'up':'down'}">${isUp?'+':''}${s.change || 0}%</div>
-            </div>
-           <div class="trade-btns">
-    <button class="btn btn-buy" 
-            onclick="trade('${id}', 'buy')" 
-            ${isTrading ? 'disabled' : ''}>매수</button>
-    <button class="btn btn-sell" 
-            onclick="trade('${id}', 'sell')" 
-            ${isTrading ? 'disabled' : ''}>매도</button>
-</div>
-        `;
-        listDiv.appendChild(card);
+card.className = 'stock-card';
+card.innerHTML = `
+    <div class="info-group">
+        <div class="stock-name">${s.name || '불러오는 중...'}</div>
+        <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
+    </div>
+    <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
+    <div class="price-group">
+        <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
+        <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
+    </div>
+    <div class="trade-btns">
+        <button class="btn btn-buy-multi" onclick="trade('${id}', 'buy', 10)" ${isTrading ? 'disabled' : ''}>+10</button>
+        <button class="btn btn-buy" onclick="trade('${id}', 'buy', 1)" ${isTrading ? 'disabled' : ''}>매수</button>
+        
+        <button class="btn btn-sell" onclick="trade('${id}', 'sell', 1)" ${isTrading ? 'disabled' : ''}>매도</button>
+        <button class="btn btn-sell-multi" onclick="trade('${id}', 'sell', 10)" ${isTrading ? 'disabled' : ''}>-10</button>
+    </div>
+`;
+listDiv.appendChild(card);
     });
 }
     
