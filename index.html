@@ -599,60 +599,60 @@ window.trade = async function(id, type, qty = 1) {
     const fee = 0.003;      // 0.3% 수수료
 
     try {
-        // 3. 주가 및 거래 검증 트랜잭션 (서버 사이드)
         await runTransaction(stockRef, (currentStock) => {
             if (!currentStock) return currentStock;
             
             const currentPrice = currentStock.price;
-            let newPrice = currentPrice;
+            const impact = 0.001 * qty;   // 수량 비례 영향도
+            const spread = 0.0005; 
+            const fee = 0.003;
+
+            let finalTradePrice; // 실제 내가 거래하게 될 1주당 가격
+            let newPrice;        // 거래 후 형성될 새로운 시장가
 
             if (type === 'buy') {
-                // 수량만큼의 총 매수 가격 계산
-                const singleBuyPrice = Math.round(currentPrice * (1 + spread));
-                const totalBuyPrice = singleBuyPrice * qty;
+                // [핵심] 주가를 먼저 올린 후, 그 가격으로 매수합니다.
+                newPrice = Math.round(currentPrice * (1 + impact));
+                finalTradePrice = Math.round(newPrice * (1 + spread));
 
+                const totalBuyPrice = finalTradePrice * qty;
                 if (myData.cash < totalBuyPrice) throw new Error("잔액부족"); 
                 
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                // 평단가 계산: (기존총액 + 신규총액) / 전체수량
                 const totalCost = (userStock.qty * userStock.avg) + totalBuyPrice;
                 userStock.qty += qty;
                 userStock.avg = Math.round(totalCost / userStock.qty);
                 
                 myData.cash -= totalBuyPrice;
                 myData.stocks[id] = userStock;
-                newPrice = Math.round(currentPrice * (1 + impact));
             } else {
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                // 보유 수량이 요청 수량보다 적으면 에러
                 if (userStock.qty < qty) throw new Error("보유부족"); 
+
+                // [핵심] 주가를 먼저 내린 후, 그 가격으로 매도합니다.
+                newPrice = Math.round(currentPrice * (1 - impact));
+                finalTradePrice = Math.round(newPrice * (1 - spread));
                 
-                // 수량만큼의 총 판매 가격 계산
-                const singleSellPrice = Math.round(currentPrice * (1 - spread));
-                const totalSellAmount = Math.round((singleSellPrice * qty) * (1 - fee));
+                const totalSellAmount = Math.round((finalTradePrice * qty) * (1 - fee));
                 
                 myData.cash += totalSellAmount;
                 userStock.qty -= qty;
                 if (userStock.qty === 0) userStock.avg = 0;
-                
                 myData.stocks[id] = userStock;
-                newPrice = Math.round(currentPrice * (1 - impact));
             }
 
+            // 히스토리 및 데이터 업데이트
             let history = currentStock.history || [currentPrice];
             history.push(newPrice);
             if (history.length > 20) history.shift();
             
-            const updatedStock = {
+            return {
                 ...currentStock,
                 price: newPrice,
                 history: history,
-                volume: (currentStock.volume || 0) + qty, // 거래량에 수량 반영
+                volume: (currentStock.volume || 0) + qty,
                 change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
             };
-            
-            delete updatedStock.admin_mode;
-            return updatedStock;
         });
 
         // 4. 서버에 내 지갑 데이터 업데이트
