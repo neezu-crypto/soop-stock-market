@@ -776,7 +776,7 @@ function renderBanners() {
     const bannerList = document.getElementById('banner-list');
     if (!bannerList) return;
 
-    // 1. 기본 개발자 문의 배너
+    // 1. 기본 개발자 문의 배너 (기본 상태 유지)
     bannerList.innerHTML = `
         <a href="https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2" target="_blank" class="banner-item">
             <div class="banner-circle">
@@ -794,21 +794,26 @@ function renderBanners() {
             a.target = "_blank";
             a.className = "banner-item promo-active"; 
             
-            // 고유 ID 생성 (로딩 텍스트 제어용)
             const loaderId = `loader-${s.id}`;
             const imgId = `img-${s.id}`;
             
+            // [보정] 경로가 images/ 로 시작하면 앞에 ./ 를 붙여 절대적인 경로를 확보합니다.
+            let imgSrc = s.bannerImg;
+            if (imgSrc.startsWith('images/')) {
+                imgSrc = './' + imgSrc;
+            }
+
             a.innerHTML = `
                 <div class="promo-badge">AD</div>
                 <div class="banner-circle">
                     <span id="${loaderId}" class="banner-no-img" style="font-size: 9px; color: #94a3b8;">로딩중...</span>
-                    <img id="${imgId}" src="${s.bannerImg}" alt="${s.name}" style="display: none; width: 100%; height: 100%; object-fit: cover;">
+                    <img id="${imgId}" src="${imgSrc}" alt="${s.name}" 
+                         style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
                 </div>
                 <div class="banner-name">${s.name}</div>
             `;
             bannerList.appendChild(a);
 
-            // 이미지 로딩 완료 이벤트 핸들러
             const targetImg = document.getElementById(imgId);
             const targetLoader = document.getElementById(loaderId);
 
@@ -818,13 +823,14 @@ function renderBanners() {
                     targetImg.style.display = 'block';   // 이미지 표시
                 };
 
-                // 캐시된 이미지 대응 (onload가 발생하지 않을 경우 대비)
+                // 캐시된 이미지 대응
                 if (targetImg.complete) {
                     targetImg.onload();
                 }
 
-                // 로딩 실패 시 에러 처리
+                // 로딩 실패 시 에러 처리 및 로그 출력
                 targetImg.onerror = function() {
+                    console.error("이미지 로드 실패 경로:", imgSrc);
                     targetLoader.innerText = "Error";
                     targetLoader.style.color = "#ef4444";
                 };
@@ -898,7 +904,11 @@ onValue(ref(db, 'stocks/'), (snap) => {
     const data = snap.val() || {};
     allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
     updateUI();
-    renderBanners(); // [추가] 배너 렌더링 호출
+    
+    // [수정] DOM이 안정화된 후 배너를 그리도록 0.1초 지연
+    setTimeout(() => {
+        renderBanners();
+    }, 100);
 });
 
 // 2. [추가 필수] 전체 유저 보유량 변동 감시 (랭킹 전용)
