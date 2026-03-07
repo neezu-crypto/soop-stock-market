@@ -179,8 +179,9 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    /* [추가] 이미지가 배너 원형에 딱 맞게 */
-    display: block;
+    display: none; /* 초기 상태 숨김 */
+    opacity: 0;
+    transition: opacity 0.5s ease;
 }
 
 .banner-no-img {
@@ -200,6 +201,25 @@
 /* 모바일 환경에서는 배너 숨기기 (선택 사항) */
 @media (max-width: 1000px) {
     .banner-container { display: none; }
+}
+
+/* 로딩 중 텍스트 스타일 */
+.banner-loading-text {
+    font-size: 10px;
+    color: var(--text-sub);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+}
+
+/* 로딩 완료 시 적용될 클래스 */
+.img-loaded {
+    display: block !important;
+    opacity: 1 !important;
 }
 
 /* --- [새로 추가] 홍보 효과 전용 스타일 --- */
