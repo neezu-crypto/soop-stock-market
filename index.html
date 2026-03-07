@@ -216,6 +216,16 @@
     100% { opacity: 0.5; }
 }
 
+/* 로딩중 문구 깜빡임 효과 */
+@keyframes loading-blink {
+    0% { opacity: 0.4; }
+    50% { opacity: 1; }
+    100% { opacity: 0.4; }
+}
+.banner-circle span[id^="loader-"] {
+    animation: loading-blink 1.5s infinite;
+}
+
 /* 로딩 완료 시 적용될 클래스 */
 .img-loaded {
     display: block !important;
@@ -766,7 +776,7 @@ function renderBanners() {
     const bannerList = document.getElementById('banner-list');
     if (!bannerList) return;
 
-    // 1. 기본 개발자 문의 배너 (기본 상태 유지)
+    // 1. 기본 개발자 문의 배너
     bannerList.innerHTML = `
         <a href="https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2" target="_blank" class="banner-item">
             <div class="banner-circle">
@@ -776,25 +786,49 @@ function renderBanners() {
         </a>
     `;
 
-    // 2. 데이터베이스(allStocks)에 bannerImg가 있는 스트리머만 배너 생성
+    // 2. 홍보 배너 생성 (로딩 상태 관리 포함)
     allStocks.forEach(s => {
         if (s.bannerImg) {
             const a = document.createElement('a');
             a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
             a.target = "_blank";
-            
-            // [수정] promo-active 클래스를 추가하여 CSS 애니메이션(반짝임) 적용
             a.className = "banner-item promo-active"; 
+            
+            // 고유 ID 생성 (로딩 텍스트 제어용)
+            const loaderId = `loader-${s.id}`;
+            const imgId = `img-${s.id}`;
             
             a.innerHTML = `
                 <div class="promo-badge">AD</div>
-                
                 <div class="banner-circle">
-                    <img src="${s.bannerImg}" alt="${s.name}">
+                    <span id="${loaderId}" class="banner-no-img" style="font-size: 9px; color: #94a3b8;">로딩중...</span>
+                    <img id="${imgId}" src="${s.bannerImg}" alt="${s.name}" style="display: none; width: 100%; height: 100%; object-fit: cover;">
                 </div>
                 <div class="banner-name">${s.name}</div>
             `;
             bannerList.appendChild(a);
+
+            // 이미지 로딩 완료 이벤트 핸들러
+            const targetImg = document.getElementById(imgId);
+            const targetLoader = document.getElementById(loaderId);
+
+            if (targetImg) {
+                targetImg.onload = function() {
+                    targetLoader.style.display = 'none'; // 로딩 문구 제거
+                    targetImg.style.display = 'block';   // 이미지 표시
+                };
+
+                // 캐시된 이미지 대응 (onload가 발생하지 않을 경우 대비)
+                if (targetImg.complete) {
+                    targetImg.onload();
+                }
+
+                // 로딩 실패 시 에러 처리
+                targetImg.onerror = function() {
+                    targetLoader.innerText = "Error";
+                    targetLoader.style.color = "#ef4444";
+                };
+            }
         }
     });
 }
