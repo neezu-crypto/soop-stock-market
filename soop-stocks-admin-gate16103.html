@@ -72,20 +72,21 @@
     <div class="container" style="display:block; border-color: #38bdf8;">
     <h1>📺 방송국 배너 관리</h1>
     <div class="info-box">
-        닉네임이 일치하는 종목에 배너와 <b>광고 종료일</b>을 설정합니다.<br>
-        <span style="color: #38bdf8;">* 설정된 날짜가 지나면 메인 페이지에서 자동으로 사라집니다.</span>
+        닉네임이 일치하는 종목에 배너와 <b>노출 기간</b>을 설정합니다.<br>
+        <span style="color: #38bdf8;">* 입력한 일수(Day)만큼 노출 후 자동으로 사라집니다.</span>
     </div>
-    <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="flex-direction: column; gap: 10px; display: flex;">
         <input type="text" id="banner-nickname" placeholder="대상 스트리머 닉네임 (정확히 입력)" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-        <input type="text" id="banner-img-url" placeholder="배너 이미지(GIF/PNG) 주소 (예: images/name.png)" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+        <input type="text" id="banner-img-url" placeholder="배너 이미지(GIF/PNG) 주소" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
         <input type="text" id="banner-link-url" placeholder="클릭 시 이동할 링크 (미입력 시 기본 방송국)" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
         
         <div style="display: flex; align-items: center; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #475569;">
-            <label for="banner-end-date" style="font-size: 13px; color: #94a3b8; white-space: nowrap;">광고 종료일:</label>
-            <input type="date" id="banner-end-date" style="flex: 1; background: transparent; border: none; color: #38bdf8; font-size: 15px; outline: none; cursor: pointer;">
+            <label for="banner-days" style="font-size: 13px; color: #94a3b8; white-space: nowrap;">노출 기간 설정:</label>
+            <input type="number" id="banner-days" placeholder="예: 7" min="1" max="365" style="flex: 1; background: transparent; border: none; color: #38bdf8; font-size: 15px; outline: none;">
+            <span style="color: #94a3b8; font-size: 13px; margin-left: 5px;">일 동안</span>
         </div>
 
-        <button class="btn-primary" onclick="addBannerToStock()">배너 및 광고 기간 적용</button>
+        <button class="btn-primary" onclick="window.addBannerToStock()">배너 및 노출 기간 적용</button>
     </div>
 </div>
     
@@ -374,13 +375,22 @@ window.addBannerToStock = async function() {
     const targetNickname = document.getElementById('banner-nickname').value.trim();
     const imgUrl = document.getElementById('banner-img-url').value.trim();
     const linkUrl = document.getElementById('banner-link-url').value.trim();
-    // [추가] 날짜 입력값 가져오기
-    const endDate = document.getElementById('banner-end-date').value; 
+    
+    // [수정] 날짜 대신 입력받은 일수(숫자)를 가져옵니다.
+    const daysInput = document.getElementById('banner-days').value; 
 
-    // 날짜까지 필수 항목으로 체크합니다.
-    if (!targetNickname || !imgUrl || !endDate) {
-        return alert("닉네임, 이미지 주소, 종료일은 필수 입력 항목입니다.");
+    // 필수 항목 체크 (닉네임, 이미지, 노출 일수)
+    if (!targetNickname || !imgUrl || !daysInput) {
+        return alert("닉네임, 이미지 주소, 노출 기간(일)은 필수 입력 항목입니다.");
     }
+
+    // [핵심] 현재 시간 기준으로 종료 날짜 자동 계산
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + parseInt(daysInput)); // 오늘 + 입력한 일수
+
+    // Firebase에 저장할 YYYY-MM-DD 형식 문자열 생성
+    const endDateStr = endDate.toISOString().split('T')[0];
 
     try {
         const snapshot = await get(ref(db, 'stocks/'));
@@ -403,25 +413,24 @@ window.addBannerToStock = async function() {
         // 2. 업데이트 데이터 생성
         const updates = {};
         updates[`stocks/${targetId}/bannerImg`] = imgUrl;
-        updates[`stocks/${targetId}/bannerEndDate`] = endDate; // [추가] 만료 날짜 저장
+        updates[`stocks/${targetId}/bannerEndDate`] = endDateStr; // 계산된 날짜("2026-03-15" 등) 저장
         
         if (linkUrl) {
             updates[`stocks/${targetId}/link`] = linkUrl;
         } else {
-            // 링크 미입력 시 기본 방송국 주소 생성 (id 활용)
             updates[`stocks/${targetId}/link`] = `https://www.sooplive.co.kr/station/${targetId}`;
         }
 
         // 3. Firebase 업데이트 실행
         await update(ref(db), updates);
         
-        alert(`✅ ${targetNickname} 종목에 배너와 광고 기간(${endDate})이 적용되었습니다!`);
+        alert(`✅ ${targetNickname} 종목에 배너가 적용되었습니다!\n📅 종료일: ${endDateStr} (지금부터 ${daysInput}일간 노출)`);
         
         // 입력창 초기화
         document.getElementById('banner-nickname').value = "";
         document.getElementById('banner-img-url').value = "";
         document.getElementById('banner-link-url').value = "";
-        document.getElementById('banner-end-date').value = ""; // 날짜창도 초기화
+        document.getElementById('banner-days').value = ""; // 입력창 초기화
 
     } catch (e) {
         console.error(e);
