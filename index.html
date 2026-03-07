@@ -162,6 +162,80 @@
 @media (max-width: 1000px) {
     .banner-container { display: none; }
 }
+
+/* 좌측 보유 주식 창 */
+.my-stocks-container {
+    position: fixed;
+    left: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 220px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    border: 1px solid var(--primary);
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    z-index: 1000;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.my-stocks-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--primary);
+    margin-bottom: 15px;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.my-stocks-list {
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* 스크롤바 디자인 */
+.my-stocks-list::-webkit-scrollbar { width: 4px; }
+.my-stocks-list::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
+
+.my-stock-item {
+    margin-bottom: 12px;
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.03);
+}
+
+.my-stock-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.my-stock-name { font-weight: 700; color: var(--text-main); }
+.my-stock-profit { font-weight: 700; font-size: 12px; }
+
+.my-stock-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-sub);
+}
+
+.no-stock-msg {
+    text-align: center;
+    color: var(--text-sub);
+    font-size: 12px;
+    padding: 20px 0;
+}
+
+/* 모바일 및 작은 화면에서 숨기기 */
+@media (max-width: 1300px) {
+    .my-stocks-container { display: none; }
+}
     </style>
 </head>
 <body>
@@ -178,6 +252,16 @@
             <div class="loader"></div>
             <p style="font-size: 13px; color: var(--primary); margin-top: 15px;">익명 보안 로그인 중...</p>
         </div>
+    </div>
+</div>
+
+<div class="my-stocks-container">
+    <div class="my-stocks-title">
+        <span>내 보유 주식</span>
+        <span id="total-assets" style="font-size: 10px; color: var(--text-sub); align-self: flex-end;">평가중...</span>
+    </div>
+    <div id="my-stocks-list" class="my-stocks-list">
+        <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
     </div>
 </div>
 
@@ -328,6 +412,47 @@ function renderRanking() {
     `).join('');
 }
 
+// 내 보유주식 표시
+function renderMyPortfolio() {
+    const portfolioDiv = document.getElementById('my-stocks-list');
+    if (!portfolioDiv || !myData || !myData.stocks) return;
+
+    const userStocks = myData.stocks;
+    const stockIds = Object.keys(userStocks).filter(id => userStocks[id].qty > 0);
+    
+    if (stockIds.length === 0) {
+        portfolioDiv.innerHTML = '<div class="no-stock-msg">보유 중인 주식이 없습니다.</div>';
+        return;
+    }
+
+    portfolioDiv.innerHTML = "";
+    
+    stockIds.forEach(id => {
+        // 전체 주식 데이터(allStocks)에서 해당 주식의 실시간 가격 정보를 찾음
+        const stockData = allStocks.find(s => s.id === id);
+        if (!stockData) return;
+
+        const info = userStocks[id];
+        const currentPrice = stockData.price || 0;
+        const profit = (((currentPrice - info.avg) / info.avg) * 100).toFixed(1);
+        const profitClass = profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
+
+        const item = document.createElement('div');
+        item.className = 'my-stock-item';
+        item.innerHTML = `
+            <div class="my-stock-info">
+                <span class="my-stock-name">${stockData.name}</span>
+                <span class="my-stock-profit ${profitClass}">${profit > 0 ? '+' : ''}${profit}%</span>
+            </div>
+            <div class="my-stock-details">
+                <span>${info.qty}주 보유</span>
+                <span>평균 ${info.avg.toLocaleString()}원</span>
+            </div>
+        `;
+        portfolioDiv.appendChild(item);
+    });
+}
+
 function updateUI() {
     const cashDisplay = document.getElementById('my-cash');
     const overlay = document.getElementById('intro-overlay');
@@ -360,6 +485,7 @@ function updateUI() {
             }, 500);
         }
     }
+    renderMyPortfolio();
 }
 
 // [추가] 5초 이상 로딩 시 에러 메시지 표시
