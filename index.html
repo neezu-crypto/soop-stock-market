@@ -451,25 +451,34 @@ function renderRanking() {
 // 내 보유주식 표시
 function renderMyPortfolio() {
     const portfolioDiv = document.getElementById('my-stocks-list');
+    const totalAssetsDisplay = document.getElementById('total-assets'); // 평가총액 엘리먼트
+    
     if (!portfolioDiv || !myData || !myData.stocks) return;
 
     const userStocks = myData.stocks;
     const stockIds = Object.keys(userStocks).filter(id => userStocks[id].qty > 0);
     
+    // [추가] 평가 총액 초기화 변수
+    let totalStockValue = 0;
+
     if (stockIds.length === 0) {
         portfolioDiv.innerHTML = '<div class="no-stock-msg">보유 중인 주식이 없습니다.</div>';
+        if (totalAssetsDisplay) totalAssetsDisplay.innerText = "0원";
         return;
     }
 
     portfolioDiv.innerHTML = "";
     
     stockIds.forEach(id => {
-        // 전체 주식 데이터(allStocks)에서 해당 주식의 실시간 가격 정보를 찾음
         const stockData = allStocks.find(s => s.id === id);
         if (!stockData) return;
 
         const info = userStocks[id];
         const currentPrice = stockData.price || 0;
+        
+        // [추가] 각 종목의 (현재가 * 보유수량)을 총액에 더함
+        totalStockValue += (currentPrice * info.qty);
+
         const profit = (((currentPrice - info.avg) / info.avg) * 100).toFixed(1);
         const profitClass = profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
 
@@ -487,8 +496,12 @@ function renderMyPortfolio() {
         `;
         portfolioDiv.appendChild(item);
     });
-}
 
+    // [추가] 계산된 평가 총액을 좌측 상단 UI에 반영
+    if (totalAssetsDisplay) {
+        totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
+    }
+}
 function updateUI() {
     const cashDisplay = document.getElementById('my-cash');
     const overlay = document.getElementById('intro-overlay');
