@@ -773,10 +773,15 @@ window.trade = async function(id, type, qty = 1) {
 
 // 홍보 배너 렌더링 함수
 function renderBanners() {
+    console.log("--- [배너] 렌더링 프로세스 시작 ---"); 
+    
     const bannerList = document.getElementById('banner-list');
-    if (!bannerList) return;
+    if (!bannerList) {
+        console.error("--- [배너 에러] 'banner-list' 엘리먼트가 HTML에 존재하지 않습니다. ---");
+        return;
+    }
 
-    // 1. 기본 개발자 문의 배너 (기본 상태 유지)
+    // 1. 기본 개발자 문의 배너
     bannerList.innerHTML = `
         <a href="https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2" target="_blank" class="banner-item">
             <div class="banner-circle">
@@ -786,9 +791,13 @@ function renderBanners() {
         </a>
     `;
 
-    // 2. 홍보 배너 생성 (로딩 상태 관리 포함)
-    allStocks.forEach(s => {
+    console.log("--- [배너] 현재 DB에서 불러온 전체 주식 수:", allStocks.length);
+
+    // 2. 홍보 배너 생성 및 로그 출력
+    allStocks.forEach((s, index) => {
         if (s.bannerImg) {
+            console.log(`--- [배너 발견] ${index + 1}. 이름: ${s.name} | 원본 주소: ${s.bannerImg} ---`);
+
             const a = document.createElement('a');
             a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
             a.target = "_blank";
@@ -797,10 +806,11 @@ function renderBanners() {
             const loaderId = `loader-${s.id}`;
             const imgId = `img-${s.id}`;
             
-            // [보정] 경로가 images/ 로 시작하면 앞에 ./ 를 붙여 절대적인 경로를 확보합니다.
+            // 경로 보정 로직
             let imgSrc = s.bannerImg;
             if (imgSrc.startsWith('images/')) {
                 imgSrc = './' + imgSrc;
+                console.log(`--- [배너 경로 보정] -> ${imgSrc} ---`);
             }
 
             a.innerHTML = `
@@ -819,24 +829,26 @@ function renderBanners() {
 
             if (targetImg) {
                 targetImg.onload = function() {
-                    targetLoader.style.display = 'none'; // 로딩 문구 제거
-                    targetImg.style.display = 'block';   // 이미지 표시
+                    console.log(`--- [배너 로드 성공] 스트리머: ${s.name} | 완료된 경로: ${imgSrc} ---`);
+                    targetLoader.style.display = 'none';
+                    targetImg.style.display = 'block';
                 };
 
-                // 캐시된 이미지 대응
+                // 캐시 대응
                 if (targetImg.complete) {
                     targetImg.onload();
                 }
 
-                // 로딩 실패 시 에러 처리 및 로그 출력
                 targetImg.onerror = function() {
-                    console.error("이미지 로드 실패 경로:", imgSrc);
+                    console.error(`--- [배너 로드 실패!!] 스트리머: ${s.name} | 문제의 경로: ${imgSrc} ---`);
+                    console.warn("팁: 파일명이 대소문자까지 일치하는지, images 폴더 안에 파일이 실제로 있는지 확인하세요.");
                     targetLoader.innerText = "Error";
                     targetLoader.style.color = "#ef4444";
                 };
             }
         }
     });
+    console.log("--- [배너] 렌더링 프로세스 종료 ---");
 }
         
 // --- 렌더링 로직 ---
