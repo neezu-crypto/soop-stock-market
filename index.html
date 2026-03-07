@@ -149,6 +149,8 @@
     text-decoration: none;
     cursor: pointer;
     transition: transform 0.2s;
+    /* [수정] 배지(promo-badge)의 기준점이 되기 위해 추가 */
+    position: relative; 
 }
 
 .banner-item:hover {
@@ -167,13 +169,19 @@
     overflow: hidden;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     text-align: center;
-    padding: 5px;
+    /* [수정] 이미지가 꽉 차게 보이도록 패딩 제거 혹은 조정 */
+    padding: 0; 
+    /* [추가] 애니메이션 적용을 위한 설정 */
+    transition: all 0.3s ease;
 }
 
 .banner-circle img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: none; /* 초기 상태 숨김 */
+    opacity: 0;
+    transition: opacity 0.5s ease;
 }
 
 .banner-no-img {
@@ -193,6 +201,65 @@
 /* 모바일 환경에서는 배너 숨기기 (선택 사항) */
 @media (max-width: 1000px) {
     .banner-container { display: none; }
+}
+
+/* 로딩 중 텍스트 스타일 */
+.banner-loading-text {
+    font-size: 10px;
+    color: var(--text-sub);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+}
+
+/* 로딩중 문구 깜빡임 효과 */
+@keyframes loading-blink {
+    0% { opacity: 0.4; }
+    50% { opacity: 1; }
+    100% { opacity: 0.4; }
+}
+.banner-circle span[id^="loader-"] {
+    animation: loading-blink 1.5s infinite;
+}
+
+/* 로딩 완료 시 적용될 클래스 */
+.img-loaded {
+    display: block !important;
+    opacity: 1 !important;
+}
+
+/* --- [새로 추가] 홍보 효과 전용 스타일 --- */
+/* 1. 테두리 반짝임 애니메이션 */
+@keyframes promo-glow {
+    0% { border-color: var(--primary); box-shadow: 0 0 5px var(--primary); }
+    50% { border-color: #ef4444; box-shadow: 0 0 15px #ef4444; }
+    100% { border-color: var(--primary); box-shadow: 0 0 5px var(--primary); }
+}
+
+/* 2. 홍보 중인 아이템에 적용될 클래스 (JS에서 추가함) */
+.promo-active .banner-circle {
+    animation: promo-glow 2s infinite;
+    border-width: 3px; /* 홍보는 조금 더 두껍게 */
+}
+
+/* 3. AD 배지 스타일 */
+.promo-badge {
+    position: absolute;
+    top: -2px;
+    right: 5px; /* 원형 배너 오른쪽 상단 적절한 위치 */
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 800;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    border: 1px solid #0f172a; /* 배경색과 분리되도록 테두리 추가 */
 }
 
 /* 좌측 보유 주식 창 */
@@ -704,12 +771,12 @@ window.trade = async function(id, type, qty = 1) {
     }
 };
 
-        // 홍보 배너
-        function renderBanners() {
+// 홍보 배너 렌더링 함수
+function renderBanners() {
     const bannerList = document.getElementById('banner-list');
     if (!bannerList) return;
 
-    // 기본 개발자 배너는 유지하고 시작
+    // 1. 기본 개발자 문의 배너
     bannerList.innerHTML = `
         <a href="https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2" target="_blank" class="banner-item">
             <div class="banner-circle">
@@ -719,20 +786,49 @@ window.trade = async function(id, type, qty = 1) {
         </a>
     `;
 
-    // 이미지 링크가 있는 스트리머만 필터링하여 배너 생성
+    // 2. 홍보 배너 생성 (로딩 상태 관리 포함)
     allStocks.forEach(s => {
-        if (s.bannerImg) { // 데이터베이스에 bannerImg 필드가 있는 경우
+        if (s.bannerImg) {
             const a = document.createElement('a');
-            a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`; // 링크 없으면 방송국으로
+            a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
             a.target = "_blank";
-            a.className = "banner-item";
+            a.className = "banner-item promo-active"; 
+            
+            // 고유 ID 생성 (로딩 텍스트 제어용)
+            const loaderId = `loader-${s.id}`;
+            const imgId = `img-${s.id}`;
+            
             a.innerHTML = `
+                <div class="promo-badge">AD</div>
                 <div class="banner-circle">
-                    <img src="${s.bannerImg}" alt="${s.name}">
+                    <span id="${loaderId}" class="banner-no-img" style="font-size: 9px; color: #94a3b8;">로딩중...</span>
+                    <img id="${imgId}" src="${s.bannerImg}" alt="${s.name}" style="display: none; width: 100%; height: 100%; object-fit: cover;">
                 </div>
                 <div class="banner-name">${s.name}</div>
             `;
             bannerList.appendChild(a);
+
+            // 이미지 로딩 완료 이벤트 핸들러
+            const targetImg = document.getElementById(imgId);
+            const targetLoader = document.getElementById(loaderId);
+
+            if (targetImg) {
+                targetImg.onload = function() {
+                    targetLoader.style.display = 'none'; // 로딩 문구 제거
+                    targetImg.style.display = 'block';   // 이미지 표시
+                };
+
+                // 캐시된 이미지 대응 (onload가 발생하지 않을 경우 대비)
+                if (targetImg.complete) {
+                    targetImg.onload();
+                }
+
+                // 로딩 실패 시 에러 처리
+                targetImg.onerror = function() {
+                    targetLoader.innerText = "Error";
+                    targetLoader.style.color = "#ef4444";
+                };
+            }
         }
     });
 }
