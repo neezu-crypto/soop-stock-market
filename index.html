@@ -534,9 +534,9 @@ let lastTradeTime = 0; // 마지막 거래 시간을 저장 (밀리초)
 // --- 주가 변동 및 거래 로직 (서버 사이드 보안 적용) ---
 window.trade = async function(id, type) {
     const currentTime = Date.now();
-    const cooldownTime = 3000; // 3초 (3000ms)
+    const cooldownTime = 1000; // 1초 (1000ms)
 
-    // 1. 쿨타임 체크 (마지막 거래로부터 3초가 지났는지 확인)
+    // 1. 쿨타임 체크 (마지막 거래로부터 1초가 지났는지 확인)
     if (currentTime - lastTradeTime < cooldownTime) {
         const remaining = Math.ceil((cooldownTime - (currentTime - lastTradeTime)) / 1000);
         alert(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
@@ -643,7 +643,7 @@ window.trade = async function(id, type) {
         // 에러 시에도 즉시 버튼 상태 복구를 원한다면 여기서 isTrading = false 처리 가능하나, 
         // 쿨타임을 지키기 위해 finally에서 처리합니다.
     } finally {
-        // [수정] 정확히 3초 후에 상태를 해제하고 UI를 다시 그려 버튼을 활성화 시킵니다.
+        // [수정] 정확히 1초 후에 상태를 해제하고 UI를 다시 그려 버튼을 활성화 시킵니다.
         setTimeout(() => {
             isTrading = false; 
             renderStocks(document.getElementById('search-input')?.value || "");
