@@ -247,7 +247,7 @@ window.loadStockData = async function() {
 
         // 폼에 데이터 채우기
         document.getElementById('edit-stock-id').innerText = targetId;
-        document.getElementById('edit-stock-price').value = targetData.currentPrice || 0;
+        document.getElementById('edit-stock-price').value = targetData.price || 0;
         document.getElementById('edit-stock-banner').value = targetData.bannerImg || "";
         document.getElementById('edit-stock-link').value = targetData.link || "";
         document.getElementById('edit-stock-date').value = targetData.bannerEndDate || "";
