@@ -275,7 +275,7 @@ window.updateStockData = async function() {
 
     try {
         const updates = {};
-        updates[`stocks/${stockId}/currentPrice`] = newPrice;
+        updates[`stocks/${stockId}/price`] = newPrice;
         updates[`stocks/${stockId}/bannerImg`] = newBanner;
         updates[`stocks/${stockId}/link`] = newLink;
         updates[`stocks/${stockId}/bannerEndDate`] = newDate;
