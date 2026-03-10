@@ -134,7 +134,7 @@
 .banner-container {
     position: fixed;
     right: 80px;
-    top: 50%;
+    top: 15%;
     transform: translateY(-50%);
     display: flex;
     flex-direction: column;
@@ -158,8 +158,8 @@
 }
 
 .banner-circle {
-    width: 70px;
-    height: 70px;
+    width: 85px;
+    height: 85px;
     border-radius: 50%;
     background: var(--card-bg);
     border: 2px solid var(--primary);
@@ -179,9 +179,10 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    display: none; /* 초기 상태 숨김 */
+    display: none; /* JS에서 로드 전까지는 숨김 */
     opacity: 0;
     transition: opacity 0.5s ease;
+    border-radius: 50%;
 }
 
 .banner-no-img {
@@ -199,8 +200,8 @@
 }
 
 /* 모바일 환경에서는 배너 숨기기 (선택 사항) */
-@media (max-width: 1000px) {
-    .banner-container { display: none; }
+@media (max-width: 1400px) {
+    .banner-container { right: 20px; }
 }
 
 /* 로딩 중 텍스트 스타일 */
@@ -395,9 +396,6 @@
     </div>
 </div>
 
-    <main id="stock-list"></main>
-</div>
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -428,8 +426,8 @@ const buySound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs
 const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/sell%20sound.mp3");
 
 // [추가] 볼륨 조절 (0.5는 50% 볼륨입니다)
-buySound.volume = 0.1;
-sellSound.volume = 0.1;
+buySound.volume = 0.2;
+sellSound.volume = 0.2;
 
 // --- 캡슐화 내부 상단 상태 관리 섹션에 추가 ---
 let allUsers = {}; 
@@ -773,8 +771,13 @@ window.trade = async function(id, type, qty = 1) {
 
 // 홍보 배너 렌더링 함수
 function renderBanners() {
+    console.log("--- [배너] 렌더링 프로세스 시작 ---"); 
+    
     const bannerList = document.getElementById('banner-list');
-    if (!bannerList) return;
+    if (!bannerList) {
+        console.error("--- [배너 에러] 'banner-list' 엘리먼트가 HTML에 존재하지 않습니다. ---");
+        return;
+    }
 
     // 1. 기본 개발자 문의 배너
     bannerList.innerHTML = `
@@ -786,44 +789,72 @@ function renderBanners() {
         </a>
     `;
 
-    // 2. 홍보 배너 생성 (로딩 상태 관리 포함)
-    allStocks.forEach(s => {
+    const now = new Date(); // 현재 시간 기준
+
+    // 2. 홍보 배너 생성 및 로그 출력
+    allStocks.forEach((s, index) => {
         if (s.bannerImg) {
+            let dDayText = "AD"; // 기본 표시값
+
+            // [추가] 기간 만료 체크 및 D-Day 계산 로직
+            if (s.bannerEndDate) {
+                const endDate = new Date(s.bannerEndDate);
+                // 해당 날짜의 밤 11시 59분 59초까지 인정
+                endDate.setHours(23, 59, 59, 999);
+
+                if (endDate < now) {
+                    console.log(`--- [배너 기간 만료] ${s.name} 스트리머의 광고가 종료되어 표시하지 않습니다. ---`);
+                    return; // 기간이 지났으므로 이 항목은 건너뜁니다.
+                }
+
+                // 남은 일수 계산
+                const diffTime = endDate - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                dDayText = diffDays === 0 ? "오늘만료" : `D-${diffDays}`;
+            }
+
+            console.log(`--- [배너 발견] ${index + 1}. 이름: ${s.name} | 종료일: ${s.bannerEndDate || '미설정'} ---`);
+
             const a = document.createElement('a');
             a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
             a.target = "_blank";
             a.className = "banner-item promo-active"; 
             
-            // 고유 ID 생성 (로딩 텍스트 제어용)
             const loaderId = `loader-${s.id}`;
             const imgId = `img-${s.id}`;
             
+            // 경로 보정 로직
+            let imgSrc = s.bannerImg;
+            if (imgSrc.startsWith('images/')) {
+                imgSrc = './' + imgSrc;
+            }
+
             a.innerHTML = `
-                <div class="promo-badge">AD</div>
+                <div class="promo-badge">${dDayText}</div>
                 <div class="banner-circle">
                     <span id="${loaderId}" class="banner-no-img" style="font-size: 9px; color: #94a3b8;">로딩중...</span>
-                    <img id="${imgId}" src="${s.bannerImg}" alt="${s.name}" style="display: none; width: 100%; height: 100%; object-fit: cover;">
+                    <img id="${imgId}" src="${imgSrc}" alt="${s.name}" 
+                         style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
                 </div>
                 <div class="banner-name">${s.name}</div>
             `;
             bannerList.appendChild(a);
 
-            // 이미지 로딩 완료 이벤트 핸들러
             const targetImg = document.getElementById(imgId);
             const targetLoader = document.getElementById(loaderId);
 
             if (targetImg) {
                 targetImg.onload = function() {
-                    targetLoader.style.display = 'none'; // 로딩 문구 제거
-                    targetImg.style.display = 'block';   // 이미지 표시
+                    targetLoader.style.display = 'none';
+                    targetImg.style.display = 'block';
+                    targetImg.classList.add('img-loaded'); 
                 };
 
-                // 캐시된 이미지 대응 (onload가 발생하지 않을 경우 대비)
+                // 캐시 대응
                 if (targetImg.complete) {
                     targetImg.onload();
                 }
 
-                // 로딩 실패 시 에러 처리
                 targetImg.onerror = function() {
                     targetLoader.innerText = "Error";
                     targetLoader.style.color = "#ef4444";
@@ -831,6 +862,7 @@ function renderBanners() {
             }
         }
     });
+    console.log("--- [배너] 렌더링 프로세스 종료 ---");
 }
         
 // --- 렌더링 로직 ---
@@ -898,7 +930,11 @@ onValue(ref(db, 'stocks/'), (snap) => {
     const data = snap.val() || {};
     allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
     updateUI();
-    renderBanners(); // [추가] 배너 렌더링 호출
+    
+    // [수정] DOM이 안정화된 후 배너를 그리도록 0.1초 지연
+    setTimeout(() => {
+        renderBanners();
+    }, 100);
 });
 
 // 2. [추가 필수] 전체 유저 보유량 변동 감시 (랭킹 전용)
