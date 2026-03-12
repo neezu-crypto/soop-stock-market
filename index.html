@@ -198,6 +198,28 @@
     text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
+/* --- [새로 추가] 홍보 안내 모달 스타일 --- */
+        .promo-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center;
+            z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .promo-modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .promo-modal-content {
+            background: var(--card-bg); width: 90%; max-width: 360px;
+            border-radius: 24px; border: 1px solid var(--primary);
+            padding: 30px; box-shadow: 0 0 40px rgba(56, 189, 248, 0.3);
+            text-align: center;
+        }
+        .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
+        .promo-benefit-box { background: rgba(56, 189, 248, 0.1); padding: 15px; border-radius: 12px; border: 1px dashed var(--primary); margin-bottom: 20px; }
+        .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }
+        .btn-confirm-contact { 
+            width: 100%; background: var(--primary); color: #0f172a; border: none; 
+            padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 15px;
+        }
+        /* --- 모달 스타일 끝 --- */
+
 /* 모바일 환경에서는 배너 숨기기 (선택 사항) */
 @media (max-width: 1400px) {
     .banner-container { right: 20px; }
@@ -364,6 +386,42 @@
     </div>
 </div>
 
+<div id="promo-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header">
+            <h2>📢 방송국 홍보 안내</h2>
+        </div>
+
+        <div class="promo-benefit-box">
+            <span style="background: #ef4444; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 800; vertical-align: middle;">EVENT</span>
+            <p style="margin: 10px 0 0 0; font-size: 15px; color: var(--text-main); font-weight: bold;">최초 7일간 무료</p>
+        </div>
+
+        <ul class="promo-info-list" style="margin-bottom: 20px;">
+            <li>📍 <b>위치:</b> 거래소 우측 상단 배너</li>
+            <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
+            <li>💰 <b>비용:</b> 7일 이후 1일 당 별풍선 10개</li>
+        </ul>
+
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #38bdf8;">
+            <p style="font-size: 13px; color: #38bdf8; font-weight: bold; margin-bottom: 8px;">📋 문의 시 필수 포함 내용</p>
+            <ul style="list-style: none; padding: 0; margin: 0; font-size: 12px; color: var(--text-main); line-height: 1.8;">
+                <li>• 닉네임 및 방송국 주소(URL)</li>
+                <li>• 홍보용 배너 이미지 (사진 또는 GIF)</li>
+            </ul>
+            <p style="font-size: 13px; color: var(--text-sub); margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">
+                💡 파일 용량이 크다면?<br>
+                <span style="color: #94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button onclick="closePromoModal()" style="min-width: 100px; background: #334155; color: white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight: bold;">닫기</button>
+            <button class="btn-confirm-contact" onclick="goToMessage()" style="flex: 2; font-weight: bold;">문의하기</button>
+        </div>
+    </div>
+</div>
+
 <div class="wrapper">
     <div class="wallet-bar">
         <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
@@ -386,12 +444,12 @@
     <main id="stock-list"></main>
 
     <div class="banner-container" id="banner-list">
-        <a href="https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2" target="_blank" class="banner-item">
+        <div onclick="openPromoModal()" class="banner-item">
             <div class="banner-circle">
                 <div class="banner-no-img">방송국 홍보 가능<br></div>
             </div>
             <div class="banner-name">문의하기</div>
-        </a>
+        </div>
     </div>
 </div>
 
@@ -679,6 +737,9 @@ window.trade = async function(id, type, qty = 1) {
         await runTransaction(stockRef, (currentStock) => {
             if (!currentStock) return currentStock;
             
+            // [안전장치] myData가 순간적으로 비어있을 경우 방어
+            if (!myData) throw new Error("데이터 로딩 중");
+            
             const currentPrice = currentStock.price;
             const impact = 0.001 * qty;   // 수량 비례 영향도
             const spread = 0.0005; 
@@ -768,6 +829,20 @@ window.trade = async function(id, type, qty = 1) {
     }
 };
 
+// [추가] 모달 제어 자바스크립트
+    window.openPromoModal = function() {
+        document.getElementById('promo-modal').classList.add('active');
+    }
+
+    window.closePromoModal = function() {
+        document.getElementById('promo-modal').classList.remove('active');
+    }
+
+    window.goToMessage = function() {
+        window.open("https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2", "_blank");
+        closePromoModal();
+    }
+
 // 홍보 배너 렌더링 함수
 function renderBanners() {
     console.log("--- [배너] 렌더링 프로세스 시작 ---"); 
@@ -778,14 +853,14 @@ function renderBanners() {
         return;
     }
 
-    // 1. 기본 개발자 문의 배너
+    // 1. [수정] 기본 개발자 문의 배너 - 쪽지창 대신 모달 오픈 함수 연결
     bannerList.innerHTML = `
-        <a href="https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2" target="_blank" class="banner-item">
+        <div onclick="openPromoModal()" class="banner-item" style="cursor:pointer;">
             <div class="banner-circle">
                 <div class="banner-no-img">방송국 홍보 가능<br></div>
             </div>
             <div class="banner-name">문의하기</div>
-        </a>
+        </div>
     `;
 
     const now = new Date(); // 현재 시간 기준
@@ -793,20 +868,18 @@ function renderBanners() {
     // 2. 홍보 배너 생성 및 로그 출력
     allStocks.forEach((s, index) => {
         if (s.bannerImg) {
-            let dDayText = "AD"; // 기본 표시값
+            let dDayText = "AD"; 
 
-            // [추가] 기간 만료 체크 및 D-Day 계산 로직
+            // 기간 만료 체크 및 D-Day 계산 로직
             if (s.bannerEndDate) {
                 const endDate = new Date(s.bannerEndDate);
-                // 해당 날짜의 밤 11시 59분 59초까지 인정
                 endDate.setHours(23, 59, 59, 999);
 
                 if (endDate < now) {
                     console.log(`--- [배너 기간 만료] ${s.name} 스트리머의 광고가 종료되어 표시하지 않습니다. ---`);
-                    return; // 기간이 지났으므로 이 항목은 건너뜁니다.
+                    return; 
                 }
 
-                // 남은 일수 계산
                 const diffTime = endDate - now;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 dDayText = diffDays === 0 ? "오늘만료" : `D-${diffDays}`;
@@ -822,7 +895,6 @@ function renderBanners() {
             const loaderId = `loader-${s.id}`;
             const imgId = `img-${s.id}`;
             
-            // 경로 보정 로직
             let imgSrc = s.bannerImg;
             if (imgSrc.startsWith('images/')) {
                 imgSrc = './' + imgSrc;
@@ -844,19 +916,20 @@ function renderBanners() {
 
             if (targetImg) {
                 targetImg.onload = function() {
-                    targetLoader.style.display = 'none';
+                    if (targetLoader) targetLoader.style.display = 'none';
                     targetImg.style.display = 'block';
                     targetImg.classList.add('img-loaded'); 
                 };
 
-                // 캐시 대응
                 if (targetImg.complete) {
                     targetImg.onload();
                 }
 
                 targetImg.onerror = function() {
-                    targetLoader.innerText = "Error";
-                    targetLoader.style.color = "#ef4444";
+                    if (targetLoader) {
+                        targetLoader.innerText = "Error";
+                        targetLoader.style.color = "#ef4444";
+                    }
                 };
             }
         }
