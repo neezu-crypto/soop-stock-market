@@ -647,6 +647,7 @@ function updateUI() {
     // 랭킹은 다른 유저 데이터(allUsers)만 있어도 그릴 수 있으므로 우선 실행
     if (allStocks.length > 0) {
         renderRanking();
+        renderBanners();
     }
 
     // 데이터 로딩 상태 체크
@@ -1039,9 +1040,9 @@ onValue(ref(db, 'stocks/'), (snap) => {
     // 3. 현재 상태를 복사하여 저장 (비교용)
     lastStocksMap = JSON.parse(JSON.stringify(data));
 
-    // 4. 배너/UI 업데이트 로직 (기존 최적화 유지)
-    updateUI();
+    // 4. 배너/UI 업데이트 로직 (기존 최적화 유지)    
     handleBannerOptimization(newStocksArray); 
+    updateUI();
 });
 
 // 배너 최적화 로직 분리 (가독성용)
@@ -1052,6 +1053,11 @@ function handleBannerOptimization(stocks) {
         .sort((a, b) => a.id.localeCompare(b.id));
 
     const currentBannerString = JSON.stringify(currentBannerData);
+
+    // 문자열이 다르거나, 현재 배너 컨테이너가 비어있을 때 실행
+    const bannerList = document.getElementById('banner-list');
+    const isBannerEmpty = bannerList && bannerList.innerHTML.trim() === "";
+    
     if (lastBannerDataString !== currentBannerString) {
         lastBannerDataString = currentBannerString;
         clearTimeout(window.bannerTimer);
