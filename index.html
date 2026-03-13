@@ -90,9 +90,14 @@
         }
         .promo-modal-overlay.active { opacity: 1; pointer-events: auto; }
         .promo-modal-content {
-            background: var(--card-bg); width: 90%; max-width: 360px;
+            background: var(--card-bg); width: 90%; max-width: 400px;
             border-radius: 24px; border: 1px solid var(--primary);
             padding: 30px; box-shadow: 0 0 40px rgba(56,189,248,0.3); text-align: center;
+        }
+        .promo-modal-content button:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+        transition: all 0.2s;
         }
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
         .promo-benefit-box { background: rgba(56,189,248,0.1); padding: 15px; border-radius: 12px; border: 1px dashed var(--primary); margin-bottom: 20px; }
@@ -185,10 +190,22 @@
                 <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
             </p>
         </div>
-        <div style="display:flex;gap:10px;justify-content:center;">
-            <button onclick="closePromoModal()" style="min-width:100px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;">닫기</button>
-            <button class="btn-confirm-contact" onclick="goToMessage()" style="flex:2;font-weight:bold;">문의하기</button>
-        </div>
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
+    <button onclick="closePromoModal()" 
+            style="flex: 1; min-width: 80px; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">
+        닫기
+    </button>
+    
+    <button onclick="window.open('https://www.sooplive.co.kr/station/skftodwocks2', '_blank')" 
+            style="flex: 1.2; min-width: 90px; background: #6366f1; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">
+        개발자
+    </button>
+    
+    <button class="btn-confirm-contact" onclick="goToMessage()" 
+            style="flex: 2; min-width: 120px; font-weight:bold; font-size:14px;">
+        문의하기
+    </button>
+</div>
     </div>
 </div>
 
