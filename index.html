@@ -477,6 +477,8 @@ let myData = null; // 초기값을 null로 설정하여 로딩 상태 구분
 let userUID = null;
 let allStocks = [];
 let isTrading = false; // [추가] 중복 거래 방지 플래그
+let rankUpdateTimer = null; 
+let isInitialRankLoad = true; // [추가] 첫 접속 시 즉시 실행을 위한 플래그
         
 // 오디오 객체 사전 로드 (함수 외부 또는 상단에 배치)
 const buySound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
@@ -494,18 +496,27 @@ onValue(ref(db, 'users/'), (snap) => {
     const data = snap.val();
     if (data) {
         allUsers = data;
-        console.log("전체 유저 데이터 로드 완료:", Object.keys(allUsers).length, "명");
-        
-        // 내 데이터(myData)를 기다리지 않고, 
-        // 주식 정보(allStocks)만 있다면 바로 랭킹을 그립니다.
-        if (allStocks && allStocks.length > 0) {
-            renderRanking();
-        }
+        // console.log("전체 유저 데이터 로드 완료:", Object.keys(allUsers).length, "명");
+
+        // 기존 대기 중인 타이머가 있다면 취소
+        clearTimeout(rankUpdateTimer);
+
+        // 첫 접속 시에는 0초(즉시), 이후 데이터 변경 시에는 5초 대기 후 갱신
+        const delay = isInitialRankLoad ? 0 : 5000;
+
+        rankUpdateTimer = setTimeout(() => {
+            if (allStocks && allStocks.length > 0) {
+                console.log("--- [랭킹] 5초 주기 최적화 업데이트 실행 ---");
+                renderRanking();
+                isInitialRankLoad = false; // 첫 로드 완료 표시
+            }
+        }, delay);
+
     } else {
         allUsers = {};
     }
     
-    // 내 보유량 UI 업데이트 시도
+    // 내 보유량 UI 업데이트는 실시간 반영 유지
     updateUI(); 
 }, (error) => {
     console.error("유저 데이터 동기화 에러:", error);
