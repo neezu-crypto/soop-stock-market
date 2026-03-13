@@ -11,355 +11,131 @@
             --up-color: #ef4444; --down-color: #3b82f6;
             --text-main: #f8fafc; --text-sub: #94a3b8;
         }
-
         body { font-family: 'Pretendard', sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .wrapper { width: 100%; max-width: 800px; }
-
-        /* 자산 헤더 */
         .wallet-bar { 
             position: sticky; top: 0; background: #1e293b; padding: 15px 20px; border-radius: 12px;
             display: flex; justify-content: space-between; align-items: center; z-index: 100;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 20px; border: 1px solid var(--primary);
         }
         .wallet-info span { color: var(--primary); font-weight: 800; }
-
         header { padding: 10px 0; border-bottom: 1px solid #1e293b; margin-bottom: 10px; }
         #search-input {
             width: 100%; padding: 14px; border-radius: 12px; background: var(--card-bg);
-            border: 1px solid #334155; color: white; margin-top: 10px;
+            border: 1px solid #334155; color: white; margin-top: 10px; box-sizing: border-box;
         }
-
-        /* 주식 카드 레이아웃 수정 */
         #stock-list { display: grid; gap: 12px; }
         .stock-card {
             background: var(--card-bg); padding: 20px; border-radius: 16px;
             display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr; 
             align-items: center; gap: 10px; border: 1px solid #334155;
         }
-
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
-
-        /* 거래 버튼 컨테이너 레이아웃 수정 */
-.trade-btns { 
-    display: flex; 
-    gap: 4px; 
-    align-items: center; 
-    justify-content: flex-end;
-}
-
-/* 수량 버튼 전용 스타일 (매수/매도 버튼보다 약간 작게) */
-.btn-buy-multi { background: #991b1b; color: white; padding: 6px 8px; font-size: 11px; } /* 진한 빨강 */
-.btn-sell-multi { background: #1e3a8a; color: white; padding: 6px 8px; font-size: 11px; } /* 진한 파랑 */
-
-/* 기존 버튼 패딩 살짝 조절 (공간 확보) */
-.btn { 
-    border: none; 
-    border-radius: 6px; 
-    font-weight: 700; 
-    cursor: pointer; 
-    transition: all 0.2s;
-    white-space: nowrap;
-}
-
-.btn-buy { 
-    background: #ef4444; /* 메인 레드 */
-    color: white; 
-    padding: 8px 12px; 
-}
-.btn-sell { 
-    background: #3b82f6; /* 메인 블루 */
-    color: white; 
-    padding: 8px 12px; 
-}
-
-/* 모바일 대응: 버튼이 너무 많으면 수량 버튼 숨기기 혹은 크기 조절 */
-@media (max-width: 600px) {
-    .stock-card { grid-template-columns: 1fr 1fr; } /* 모바일에서 2줄 레이아웃 권장 */
-    .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
-}
-        
-        /* [추가] 쿨타임 중일 때 버튼 스타일 */
-    .btn:disabled, .btn.disabled { 
-    background: #444 !important; /* 어두운 색으로 변경 */
-    opacity: 0.5; 
-    cursor: not-allowed; 
-    transform: none !important; 
-}
-
+        .trade-btns { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+        .btn-buy-multi  { background: #991b1b; color: white; padding: 6px 8px; font-size: 11px; }
+        .btn-sell-multi { background: #1e3a8a; color: white; padding: 6px 8px; font-size: 11px; }
+        .btn { border: none; border-radius: 6px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .btn-buy  { background: #ef4444; color: white; padding: 8px 12px; }
+        .btn-sell { background: #3b82f6; color: white; padding: 8px 12px; }
+        @media (max-width: 600px) {
+            .stock-card { grid-template-columns: 1fr 1fr; }
+            .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
+        }
+        .btn:disabled, .btn.disabled { background: #444 !important; opacity: 0.5; cursor: not-allowed; transform: none !important; }
         .my-qty { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
-
-        .up { color: var(--up-color); stroke: var(--up-color); }
+        .up   { color: var(--up-color);   stroke: var(--up-color);   }
         .down { color: var(--down-color); stroke: var(--down-color); }
-
-        /* 소개 및 로딩 오버레이 */
-    #intro-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: var(--bg-color); display: flex; justify-content: center; align-items: center;
-        z-index: 999; transition: opacity 0.5s ease;
-    }
-    .intro-content {
-        text-align: center; max-width: 400px; padding: 40px;
-        background: var(--card-bg); border-radius: 24px; border: 1px solid var(--primary);
-        box-shadow: 0 0 30px rgba(56, 189, 248, 0.2);
-    }
-    .intro-logo { font-size: 40px; margin-bottom: 20px; }
-    .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
-    .intro-desc { color: var(--text-sub); line-height: 1.6; margin-bottom: 25px; }
-    
-    /* 로딩 애니메이션 */
-    .loader {
-        width: 30px; height: 30px; border: 3px solid #334155;
-        border-top-color: var(--primary); border-radius: 50%;
-        animation: spin 1s linear infinite; margin: 0 auto;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    
-    .hidden { opacity: 0; pointer-events: none; }
-
-    .ranking-bar {
-    background: var(--card-bg); width: 100%; max-width: 800px;
-    padding: 12px 20px; border-radius: 12px; margin-bottom: 20px;
-    display: flex; align-items: center; border: 1px dashed #334155;
-    overflow: hidden;
-}
-.ranking-title { font-weight: 800; color: var(--primary); margin-right: 15px; white-space: nowrap; font-size: 14px; }
-.ranking-list { display: flex; gap: 20px; font-size: 13px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-.rank-item { display: flex; gap: 6px; }
-.rank-num { color: var(--primary); font-weight: 800; }
-.rank-name { color: var(--text-main); }
-.rank-vol { color: var(--text-sub); font-size: 11px; }
-
-        /* 우측 배너 영역 */
-.banner-container {
-    position: fixed;
-    right: 80px;
-    top: 60px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    z-index: 1000;
-}
-
-.banner-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-decoration: none;
-    cursor: pointer;
-    transition: transform 0.2s;
-    /* [수정] 배지(promo-badge)의 기준점이 되기 위해 추가 */
-    position: relative; 
-}
-
-.banner-item:hover {
-    transform: scale(1.1);
-}
-
-.banner-circle {
-    width: 85px;
-    height: 85px;
-    border-radius: 50%;
-    background: var(--card-bg);
-    border: 2px solid var(--primary);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    text-align: center;
-    /* [수정] 이미지가 꽉 차게 보이도록 패딩 제거 혹은 조정 */
-    padding: 0; 
-    /* [추가] 애니메이션 적용을 위한 설정 */
-    transition: all 0.3s ease;
-}
-
-.banner-circle img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: none; /* JS에서 로드 전까지는 숨김 */
-    opacity: 0;
-    transition: opacity 0.5s ease;
-    border-radius: 50%;
-}
-
-.banner-no-img {
-    font-size: 10px;
-    color: var(--text-sub);
-    line-height: 1.2;
-}
-
-.banner-name {
-    margin-top: 8px;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-main);
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-}
-
-/* --- [새로 추가] 홍보 안내 모달 스타일 --- */
+        #intro-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color); display: flex; justify-content: center; align-items: center;
+            z-index: 999; transition: opacity 0.5s ease;
+        }
+        .intro-content {
+            text-align: center; max-width: 400px; padding: 40px;
+            background: var(--card-bg); border-radius: 24px; border: 1px solid var(--primary);
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0.2);
+        }
+        .intro-logo  { font-size: 40px; margin-bottom: 20px; }
+        .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
+        .intro-desc  { color: var(--text-sub); line-height: 1.6; margin-bottom: 25px; }
+        .loader { width: 30px; height: 30px; border: 3px solid #334155; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hidden { opacity: 0; pointer-events: none; }
+        .ranking-bar {
+            background: var(--card-bg); width: 100%; padding: 12px 20px; border-radius: 12px;
+            margin-bottom: 20px; display: flex; align-items: center; border: 1px dashed #334155; overflow: hidden;
+        }
+        .ranking-title { font-weight: 800; color: var(--primary); margin-right: 15px; white-space: nowrap; font-size: 14px; }
+        .ranking-list  { display: flex; gap: 20px; font-size: 13px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+        .rank-item { display: flex; gap: 6px; }
+        .rank-num  { color: var(--primary); font-weight: 800; }
+        .rank-name { color: var(--text-main); }
+        .rank-vol  { color: var(--text-sub); font-size: 11px; }
+        .banner-container { position: fixed; right: 80px; top: 60px; display: flex; flex-direction: column; gap: 20px; z-index: 1000; }
+        .banner-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; cursor: pointer; transition: transform 0.2s; position: relative; }
+        .banner-item:hover { transform: scale(1.1); }
+        .banner-circle {
+            width: 85px; height: 85px; border-radius: 50%; background: var(--card-bg);
+            border: 2px solid var(--primary); display: flex; justify-content: center; align-items: center;
+            overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.3); text-align: center; padding: 0; transition: all 0.3s ease;
+        }
+        .banner-circle img { width: 100%; height: 100%; object-fit: cover; display: none; opacity: 0; transition: opacity 0.5s ease; border-radius: 50%; }
+        .banner-no-img { font-size: 10px; color: var(--text-sub); line-height: 1.2; }
+        .banner-name { margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--text-main); text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
         .promo-modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
             z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
         }
         .promo-modal-overlay.active { opacity: 1; pointer-events: auto; }
         .promo-modal-content {
             background: var(--card-bg); width: 90%; max-width: 360px;
             border-radius: 24px; border: 1px solid var(--primary);
-            padding: 30px; box-shadow: 0 0 40px rgba(56, 189, 248, 0.3);
-            text-align: center;
+            padding: 30px; box-shadow: 0 0 40px rgba(56,189,248,0.3); text-align: center;
         }
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
-        .promo-benefit-box { background: rgba(56, 189, 248, 0.1); padding: 15px; border-radius: 12px; border: 1px dashed var(--primary); margin-bottom: 20px; }
+        .promo-benefit-box { background: rgba(56,189,248,0.1); padding: 15px; border-radius: 12px; border: 1px dashed var(--primary); margin-bottom: 20px; }
         .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }
-        .btn-confirm-contact { 
-            width: 100%; background: var(--primary); color: #0f172a; border: none; 
-            padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 15px;
+        .btn-confirm-contact { width: 100%; background: var(--primary); color: #0f172a; border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 15px; }
+        @media (max-width: 1400px) { .banner-container { right: 20px; } }
+        @keyframes loading-blink { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+        .banner-circle span[id^="loader-"] { animation: loading-blink 1.5s infinite; }
+        .img-loaded { display: block !important; opacity: 1 !important; }
+        @keyframes promo-glow {
+            0%   { border-color: var(--primary); box-shadow: 0 0 5px var(--primary); }
+            50%  { border-color: #ef4444;        box-shadow: 0 0 15px #ef4444; }
+            100% { border-color: var(--primary); box-shadow: 0 0 5px var(--primary); }
         }
-        /* --- 모달 스타일 끝 --- */
-
-/* 모바일 환경에서는 배너 숨기기 (선택 사항) */
-@media (max-width: 1400px) {
-    .banner-container { right: 20px; }
-}
-
-/* 로딩 중 텍스트 스타일 */
-.banner-loading-text {
-    font-size: 10px;
-    color: var(--text-sub);
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 0.5; }
-    50% { opacity: 1; }
-    100% { opacity: 0.5; }
-}
-
-/* 로딩중 문구 깜빡임 효과 */
-@keyframes loading-blink {
-    0% { opacity: 0.4; }
-    50% { opacity: 1; }
-    100% { opacity: 0.4; }
-}
-.banner-circle span[id^="loader-"] {
-    animation: loading-blink 1.5s infinite;
-}
-
-/* 로딩 완료 시 적용될 클래스 */
-.img-loaded {
-    display: block !important;
-    opacity: 1 !important;
-}
-
-/* --- [새로 추가] 홍보 효과 전용 스타일 --- */
-/* 1. 테두리 반짝임 애니메이션 */
-@keyframes promo-glow {
-    0% { border-color: var(--primary); box-shadow: 0 0 5px var(--primary); }
-    50% { border-color: #ef4444; box-shadow: 0 0 15px #ef4444; }
-    100% { border-color: var(--primary); box-shadow: 0 0 5px var(--primary); }
-}
-
-/* 2. 홍보 중인 아이템에 적용될 클래스 (JS에서 추가함) */
-.promo-active .banner-circle {
-    animation: promo-glow 2s infinite;
-    border-width: 3px; /* 홍보는 조금 더 두껍게 */
-}
-
-/* 3. AD 배지 스타일 */
-.promo-badge {
-    position: absolute;
-    top: -2px;
-    right: 5px; /* 원형 배너 오른쪽 상단 적절한 위치 */
-    background: #ef4444;
-    color: white;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: 800;
-    z-index: 10;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    border: 1px solid #0f172a; /* 배경색과 분리되도록 테두리 추가 */
-}
-
-/* 좌측 보유 주식 창 */
-.my-stocks-container {
-    position: fixed;
-    left: 80px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 220px;
-    background: var(--card-bg);
-    border-radius: 20px;
-    border: 1px solid var(--primary);
-    padding: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    z-index: 1000;
-    max-height: 70vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.my-stocks-title {
-    font-size: 16px;
-    font-weight: 800;
-    color: var(--primary);
-    margin-bottom: 15px;
-    border-bottom: 1px solid #334155;
-    padding-bottom: 10px;
-    display: flex;
-    justify-content: space-between;
-}
-
-.my-stocks-list {
-    overflow-y: auto;
-    flex: 1;
-}
-
-/* 스크롤바 디자인 */
-.my-stocks-list::-webkit-scrollbar { width: 4px; }
-.my-stocks-list::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
-
-.my-stock-item {
-    margin-bottom: 12px;
-    padding: 8px;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.03);
-}
-
-.my-stock-info {
-    display: flex;
-    justify-content: space-between;
-    font-size: 13px;
-    margin-bottom: 4px;
-}
-
-.my-stock-name { font-weight: 700; color: var(--text-main); }
-.my-stock-profit { font-weight: 700; font-size: 12px; }
-
-.my-stock-details {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--text-sub);
-}
-
-.no-stock-msg {
-    text-align: center;
-    color: var(--text-sub);
-    font-size: 12px;
-    padding: 20px 0;
-}
-
-/* 모바일 및 작은 화면에서 숨기기 */
-@media (max-width: 1300px) {
-    .my-stocks-container { display: none; }
-}
+        .promo-active .banner-circle { animation: promo-glow 2s infinite; border-width: 3px; }
+        .promo-badge {
+            position: absolute; top: -2px; right: 5px;
+            background: #ef4444; color: white; font-size: 10px; padding: 2px 6px;
+            border-radius: 10px; font-weight: 800; z-index: 10;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3); border: 1px solid #0f172a;
+        }
+        .my-stocks-container {
+            position: fixed; left: 80px; top: 50%; transform: translateY(-50%);
+            width: 220px; background: var(--card-bg); border-radius: 20px;
+            border: 1px solid var(--primary); padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 1000;
+            max-height: 70vh; display: flex; flex-direction: column;
+        }
+        .my-stocks-title { font-size: 16px; font-weight: 800; color: var(--primary); margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 10px; display: flex; justify-content: space-between; }
+        .my-stocks-list { overflow-y: auto; flex: 1; }
+        .my-stocks-list::-webkit-scrollbar { width: 4px; }
+        .my-stocks-list::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
+        .my-stock-item { margin-bottom: 12px; padding: 8px; border-radius: 8px; background: rgba(255,255,255,0.03); }
+        .my-stock-info { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+        .my-stock-name   { font-weight: 700; color: var(--text-main); }
+        .my-stock-profit { font-weight: 700; font-size: 12px; }
+        .my-stock-details { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sub); }
+        .no-stock-msg { text-align: center; color: var(--text-sub); font-size: 12px; padding: 20px 0; }
+        @media (max-width: 1300px) { .my-stocks-container { display: none; } }
     </style>
 </head>
 <body>
+
 <div id="intro-overlay">
     <div class="intro-content">
         <div class="intro-logo">📈</div>
@@ -388,36 +164,30 @@
 
 <div id="promo-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
-        <div class="promo-modal-header">
-            <h2>📢 방송국 홍보 안내</h2>
-        </div>
-
+        <div class="promo-modal-header"><h2>📢 방송국 홍보 안내</h2></div>
         <div class="promo-benefit-box">
-            <span style="background: #ef4444; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 800; vertical-align: middle;">EVENT</span>
-            <p style="margin: 10px 0 0 0; font-size: 15px; color: var(--text-main); font-weight: bold;">최초 7일간 무료</p>
+            <span style="background:#ef4444;color:white;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:800;vertical-align:middle;">EVENT</span>
+            <p style="margin:10px 0 0 0;font-size:15px;color:var(--text-main);font-weight:bold;">최초 7일간 무료</p>
         </div>
-
-        <ul class="promo-info-list" style="margin-bottom: 20px;">
+        <ul class="promo-info-list" style="margin-bottom:20px;">
             <li>📍 <b>위치:</b> 거래소 우측 상단 배너</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
             <li>💰 <b>비용:</b> 7일 이후 1일 당 별풍선 10개</li>
         </ul>
-
-        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #38bdf8;">
-            <p style="font-size: 13px; color: #38bdf8; font-weight: bold; margin-bottom: 8px;">📋 문의 시 필수 포함 내용</p>
-            <ul style="list-style: none; padding: 0; margin: 0; font-size: 12px; color: var(--text-main); line-height: 1.8;">
+        <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;">
+            <p style="font-size:13px;color:#38bdf8;font-weight:bold;margin-bottom:8px;">📋 문의 시 필수 포함 내용</p>
+            <ul style="list-style:none;padding:0;margin:0;font-size:12px;color:var(--text-main);line-height:1.8;">
                 <li>• 닉네임 및 방송국 주소(URL)</li>
                 <li>• 홍보용 배너 이미지 (사진 또는 GIF)</li>
             </ul>
-            <p style="font-size: 13px; color: var(--text-sub); margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">
+            <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
                 💡 파일 용량이 크다면?<br>
-                <span style="color: #94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+                <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
             </p>
         </div>
-
-        <div style="display: flex; gap: 10px; justify-content: center;">
-            <button onclick="closePromoModal()" style="min-width: 100px; background: #334155; color: white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight: bold;">닫기</button>
-            <button class="btn-confirm-contact" onclick="goToMessage()" style="flex: 2; font-weight: bold;">문의하기</button>
+        <div style="display:flex;gap:10px;justify-content:center;">
+            <button onclick="closePromoModal()" style="min-width:100px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;">닫기</button>
+            <button class="btn-confirm-contact" onclick="goToMessage()" style="flex:2;font-weight:bold;">문의하기</button>
         </div>
     </div>
 </div>
@@ -425,174 +195,105 @@
 <div class="wrapper">
     <div class="wallet-bar">
         <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
-        <div style="font-size: 12px; color: var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
+        <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
     </div>
-
     <header>
-        <h1 style="font-size: 20px; margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
-        <p style="font-size: 13px; color: var(--text-sub); margin: 5px 0 0 0;">
+        <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
+        <p style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
             찾고 있는 스트리머가 있다면 아래 검색창에서 이름을 검색해보세요.
         </p>
         <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
-
     <div class="ranking-bar">
         <div class="ranking-title">🔥 인기 TOP 5</div>
         <div id="top-rankers" class="ranking-list">불러오는 중...</div>
     </div>
-
     <main id="stock-list"></main>
-
     <div class="banner-container" id="banner-list">
         <div onclick="openPromoModal()" class="banner-item">
-            <div class="banner-circle">
-                <div class="banner-no-img">방송국 홍보 가능<br></div>
-            </div>
+            <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
             <div class="banner-name">문의하기</div>
         </div>
     </div>
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-    
-// [캡슐화 시작] 이 함수 안의 변수들은 외부에서 접근할 수 없습니다.
-    (function() {
-const firebaseConfig = {
-    apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
-    authDomain: "soop-stock-market.firebaseapp.com",
-    databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
-    projectId: "soop-stock-market",
-    appId: "1:997788925900:web:cb613d438efec019a3a769"
-};
+import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { getDatabase, ref, onValue, runTransaction, get, set, serverTimestamp }
+                             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+import { getAuth, signInAnonymously, onAuthStateChanged }
+                             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+(function () {
+
+const firebaseConfig = {
+    apiKey:      "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
+    authDomain:  "soop-stock-market.firebaseapp.com",
+    databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
+    projectId:   "soop-stock-market",
+    appId:       "1:997788925900:web:cb613d438efec019a3a769"
+};
+const app  = initializeApp(firebaseConfig);
+const db   = getDatabase(app);
 const auth = getAuth(app);
 
-// --- 상태 관리 ---
-let myData = null; // 초기값을 null로 설정하여 로딩 상태 구분
-let userUID = null;
-let allStocks = [];
-let isTrading = false; // [추가] 중복 거래 방지 플래그
-let rankUpdateTimer = null; 
-let isInitialRankLoad = true; // [추가] 첫 접속 시 즉시 실행을 위한 플래그
-let isBannerRendered = false; // [추가] 배너 최초 렌더링 여부 플래그
-        
-// 오디오 객체 사전 로드 (함수 외부 또는 상단에 배치)
-const buySound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
-const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/sell%20sound.mp3");
+// ── 상태 ────────────────────────────────────────────────────
+let myData           = null;
+let userUID          = null;
+let allStocks        = [];
+let isTrading        = false;
+let isBannerRendered = false;
+let stockElements    = {};
+let lastTradeTime    = 0;
 
-// [추가] 볼륨 조절 (0.5는 50% 볼륨입니다)
-buySound.volume = 0.2;
+// ── 사운드 ──────────────────────────────────────────────────
+const buySound  = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
+const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/sell%20sound.mp3");
+buySound.volume  = 0.2;
 sellSound.volume = 0.2;
 
-// --- 캡슐화 내부 상단 상태 관리 섹션에 추가 ---
-let allUsers = {}; 
+// ── 랭킹 디바운싱 상태 ──────────────────────────────────────
+// 30초에 최대 1번만 Firebase에 실제로 write합니다.
+// 그 사이에 발생한 모든 거래의 qtyDelta는 pendingDeltas에 누적됩니다.
+const RANKING_DEBOUNCE_MS = 30000; // 30초
+let rankingDebounceTimer  = null;  // 예약된 타이머
+let pendingDeltas         = {};    // { stockId: 누적 qtyDelta }
+let lastRankingWriteTime  = 0;     // 마지막 실제 write 시각
 
-// --- 유저 전체 데이터 리스너 (랭킹 산출용) ---
-onValue(ref(db, 'users/'), (snap) => {
-    const data = snap.val();
-    if (data) {
-        allUsers = data;
-        // console.log("전체 유저 데이터 로드 완료:", Object.keys(allUsers).length, "명");
-
-        // 기존 대기 중인 타이머가 있다면 취소
-        clearTimeout(rankUpdateTimer);
-
-        // 첫 접속 시에는 0초(즉시), 이후 데이터 변경 시에는 5초 대기 후 갱신
-        const delay = isInitialRankLoad ? 0 : 5000;
-
-        rankUpdateTimer = setTimeout(() => {
-            if (allStocks && allStocks.length > 0) {
-                console.log("--- [랭킹] 5초 주기 최적화 업데이트 실행 ---");
-                renderRanking();
-                isInitialRankLoad = false; // 첫 로드 완료 표시
-            }
-        }, delay);
-
-    } else {
-        allUsers = {};
-    }
-    
-    // 내 보유량 UI 업데이트는 실시간 반영 유지
-    updateUI(); 
-}, (error) => {
-    console.error("유저 데이터 동기화 에러:", error);
-});
-
-        
-// 랭킹 집계 함수
-function renderRanking() {
-    const rankDiv = document.getElementById('top-rankers');
-    // 데이터 로드 확인
-    if (!rankDiv || !allStocks || allStocks.length === 0) return;
-
-    // 1. 모든 유저의 주식 보유량 합산 계산
-    const stockOwnership = {}; 
-
-    // [중요] 현재 로그인한 나의 최신 데이터를 먼저 반영 (네트워크 지연 대비)
-    if (userUID && myData && myData.stocks) {
-        Object.entries(myData.stocks).forEach(([stockId, data]) => {
-            const qty = parseInt(data.qty) || 0;
-            if (qty > 0) stockOwnership[stockId] = qty;
-        });
-    }
-
-    // 2. 다른 모든 유저의 데이터 합산 (나 제외)
-    if (allUsers) {
-        Object.keys(allUsers).forEach(uid => {
-            if (uid === userUID) return; // 내 데이터는 위에서 이미 처리함
-            const user = allUsers[uid];
-            if (user && user.stocks) {
-                Object.entries(user.stocks).forEach(([stockId, data]) => {
-                    const qty = parseInt(data.qty) || 0;
-                    if (qty > 0) {
-                        stockOwnership[stockId] = (stockOwnership[stockId] || 0) + qty;
-                    }
-                });
-            }
-        });
-    }
-
-    // 3. 보유량 기준으로 주식 데이터 매핑 및 정렬
-    const sorted = allStocks
-        .map(s => ({
-            ...s,
-            totalQty: stockOwnership[s.id] || 0
-        }))
-        .filter(s => s.totalQty > 0)
-        .sort((a, b) => b.totalQty - a.totalQty) // 내림차순 정렬
-        .slice(0, 5);
-
-    // 4. UI 렌더링
-    if (sorted.length === 0) {
-        rankDiv.innerHTML = `<span style="color:var(--text-sub); font-size:12px;">보유 데이터 없음</span>`;
+// ── rankings/top5 구독 ──────────────────────────────────────
+onValue(ref(db, 'rankings/top5'), (snap) => {
+    if (!snap.exists()) {
+        const rankDiv = document.getElementById('top-rankers');
+        if (rankDiv) rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">집계 데이터 없음</span>`;
         return;
     }
+    renderRankingFromCache(snap.val().items || []);
+});
 
-    rankDiv.innerHTML = sorted.map((s, i) => `
+function renderRankingFromCache(items) {
+    const rankDiv = document.getElementById('top-rankers');
+    if (!rankDiv) return;
+    if (items.length === 0) {
+        rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">보유 데이터 없음</span>`;
+        return;
+    }
+    rankDiv.innerHTML = items.map(s => `
         <div class="rank-item">
-            <span class="rank-num">${i + 1}</span>
+            <span class="rank-num">${s.rank}</span>
             <span class="rank-name">${s.name}</span>
             <span class="rank-vol">총 ${s.totalQty.toLocaleString()}주</span>
         </div>
     `).join('');
 }
 
-// 내 보유주식 표시
+// ── 내 보유 주식 패널 ────────────────────────────────────────
 function renderMyPortfolio() {
-    const portfolioDiv = document.getElementById('my-stocks-list');
-    const totalAssetsDisplay = document.getElementById('total-assets'); // 평가총액 엘리먼트
-    
-    if (!portfolioDiv || !myData || !myData.stocks) return;
+    const portfolioDiv       = document.getElementById('my-stocks-list');
+    const totalAssetsDisplay = document.getElementById('total-assets');
+    if (!portfolioDiv || !myData?.stocks) return;
 
     const userStocks = myData.stocks;
-    const stockIds = Object.keys(userStocks).filter(id => userStocks[id].qty > 0);
-    
-    // [추가] 평가 총액 초기화 변수
+    const stockIds   = Object.keys(userStocks).filter(id => userStocks[id].qty > 0);
     let totalStockValue = 0;
 
     if (stockIds.length === 0) {
@@ -602,18 +303,15 @@ function renderMyPortfolio() {
     }
 
     portfolioDiv.innerHTML = "";
-    
     stockIds.forEach(id => {
         const stockData = allStocks.find(s => s.id === id);
         if (!stockData) return;
 
-        const info = userStocks[id];
+        const info         = userStocks[id];
         const currentPrice = stockData.price || 0;
-        
-        // [추가] 각 종목의 (현재가 * 보유수량)을 총액에 더함
-        totalStockValue += (currentPrice * info.qty);
+        totalStockValue   += currentPrice * info.qty;
 
-        const profit = (((currentPrice - info.avg) / info.avg) * 100).toFixed(1);
+        const profit      = (((currentPrice - info.avg) / info.avg) * 100).toFixed(1);
         const profitClass = profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
 
         const item = document.createElement('div');
@@ -631,201 +329,233 @@ function renderMyPortfolio() {
         portfolioDiv.appendChild(item);
     });
 
-    // [추가] 계산된 평가 총액을 좌측 상단 UI에 반영
-    if (totalAssetsDisplay) {
-        totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
-    }
+    if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
 }
-function updateUI() {
+
+// ── UI 갱신 ──────────────────────────────────────────────────
+function updateUI(isFullRender = true) {
     const cashDisplay = document.getElementById('my-cash');
-    const overlay = document.getElementById('intro-overlay');
-    const statusText = document.querySelector('#login-status p');
-    
-    // 랭킹은 다른 유저 데이터(allUsers)만 있어도 그릴 수 있으므로 우선 실행
-    if (allStocks.length > 0) {
-        renderRanking();
+    const overlay     = document.getElementById('intro-overlay');
+
+    if (myData) {
+        if (cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
+        renderMyPortfolio();
     }
 
-    // 데이터 로딩 상태 체크
-    if (userUID && (!myData || allStocks.length === 0)) {
-        if(statusText) statusText.innerText = "데이터 서버 연결 중...";
-        return;
-    }
-
-    // 내 지갑 정보가 로드되었을 때만 실행되는 구역
-    if (myData && allStocks.length > 0) {
-        if (cashDisplay) {
-            cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
-        }
-        
+    if (isFullRender && allStocks.length > 0) {
         renderStocks(document.getElementById('search-input')?.value || "");
-
-        // 모든 데이터 준비 완료 시 오버레이 제거
         if (overlay && !overlay.classList.contains('hidden')) {
-            setTimeout(() => {
-                overlay.classList.add('hidden');
-                console.log("로딩 완료: 오버레이 제거");
-            }, 500);
+            setTimeout(() => overlay.classList.add('hidden'), 500);
         }
     }
-    renderMyPortfolio();
 }
 
-// [추가] 5초 이상 로딩 시 에러 메시지 표시
+// ── 5초 로딩 타임아웃 ────────────────────────────────────────
 setTimeout(() => {
-    const overlay = document.getElementById('intro-overlay');
+    const overlay    = document.getElementById('intro-overlay');
     const statusText = document.querySelector('#login-status p');
     if (overlay && !overlay.classList.contains('hidden')) {
         statusText.innerHTML = `접속이 지연되고 있습니다.<br>
-        <button onclick="location.reload()" style="margin-top:10px; background:#38bdf8; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">새로고침</button>`;
+        <button onclick="location.reload()" style="margin-top:10px;background:#38bdf8;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;">새로고침</button>`;
     }
 }, 5000);
 
-// --- [보안 핵심] 로그인 및 데이터 동기화 ---
+// ── 인증 & 내 데이터 동기화 ─────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         userUID = user.uid;
         const userRef = ref(db, `users/${userUID}`);
-        
-        // [수정] 서버 데이터를 기다리기 전에 로컬 변수(myData)부터 즉시 초기화하여
-        // 아주 빠른 클릭 시 발생할 수 있는 undefined 에러를 방어합니다.
-        if (!myData) {
-            myData = { cash: 1000000, stocks: {} };
-        }
 
-        // 지갑 데이터를 실시간 감시
+        if (!myData) myData = { cash: 1000000, stocks: {} };
+
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
-                // [보강] 서버 데이터에 stocks 객체가 없는 경우를 대비해 빈 객체({})를 넣어줍니다.
-                if (!serverData.stocks) serverData.stocks = {};
-                myData = serverData;
+                myData = {
+                    cash:   serverData.cash   ?? 1000000,
+                    stocks: serverData.stocks || {},
+                    ...serverData
+                };
             } else {
-                // 신규 유저인 경우 서버에 초기 데이터 생성
-                set(userRef, { cash: 1000000, stocks: {} });
+                const initialData = { cash: 1000000, stocks: {} };
+                set(userRef, initialData);
+                myData = initialData;
             }
-            updateUI(); // 데이터 로드 완료 후 UI 반영
+            updateUI(true);
         });
     } else {
         signInAnonymously(auth);
     }
 });
 
-// --- 상태 관리 섹션에 추가 ---
-let lastTradeTime = 0; // 마지막 거래 시간을 저장 (밀리초)
+// ── [핵심] 랭킹 디바운싱 업데이트 ──────────────────────────
+//
+// 동작 방식:
+//   1. 거래 발생 → scheduleRankingUpdate(stockId, qtyDelta) 호출
+//   2. pendingDeltas에 누적 (같은 종목 여러 번 거래해도 합산)
+//   3. 타이머가 없으면 30초 후 실행 예약
+//   4. 30초 뒤 flushRankingUpdate() 실행 → 누적분 한 번에 Firebase write
+//
+// 효과:
+//   - 1000명이 동시에 거래해도 30초에 write 1번
+//   - 1000개의 onValue 리스너가 30초에 1번만 깨어남
+//
+function scheduleRankingUpdate(stockId, qtyDelta) {
+    // 누적 delta 합산 (같은 종목의 여러 거래를 하나로 묶음)
+    pendingDeltas[stockId] = (pendingDeltas[stockId] || 0) + qtyDelta;
 
-// --- 주가 변동 및 거래 로직 (서버 사이드 보안 적용) ---
-// 수정된 trade 함수: 세 번째 인자로 qty(기본값 1)를 받습니다.
-window.trade = async function(id, type, qty = 1) {
-    const currentTime = Date.now();
-    const cooldownTime = 1000; // 1초 (1000ms)
+    // 이미 타이머가 예약돼 있으면 추가 예약 없이 누적만 함
+    if (rankingDebounceTimer !== null) return;
 
-    // 1. 쿨타임 체크
+    // 마지막 write로부터 30초가 지났으면 즉시 실행, 아니면 남은 시간만큼 대기
+    const elapsed   = Date.now() - lastRankingWriteTime;
+    const waitTime  = Math.max(0, RANKING_DEBOUNCE_MS - elapsed);
+
+    rankingDebounceTimer = setTimeout(flushRankingUpdate, waitTime);
+}
+
+async function flushRankingUpdate() {
+    rankingDebounceTimer = null;
+
+    // 처리할 delta가 없으면 종료
+    const deltas = { ...pendingDeltas };
+    pendingDeltas = {};
+
+    if (Object.keys(deltas).length === 0) return;
+
+    try {
+        const snap = await get(ref(db, 'rankings/top5'));
+        if (!snap.exists()) return;
+
+        const current = snap.val();
+        const items   = current.items || [];
+
+        // top5 안에 있는 종목만 업데이트 (없는 종목은 순위 변동 없음)
+        let changed = false;
+        items.forEach(item => {
+            if (deltas[item.id] !== undefined) {
+                item.totalQty = Math.max(0, item.totalQty + deltas[item.id]);
+
+                // 현재 주가도 최신으로 갱신
+                const stockData = allStocks.find(s => s.id === item.id);
+                if (stockData) item.price = stockData.price;
+
+                changed = true;
+            }
+        });
+
+        if (!changed) return; // top5와 무관한 거래였으면 write 스킵
+
+        // 재정렬 후 rank 번호 부여
+        items.sort((a, b) => b.totalQty - a.totalQty);
+        items.forEach((item, i) => { item.rank = i + 1; });
+
+        await set(ref(db, 'rankings/top5'), {
+            savedAt: current.savedAt,
+            items
+        });
+
+        lastRankingWriteTime = Date.now();
+        console.log('[rankings] 디바운싱 write 완료:', deltas);
+
+    } catch (e) {
+        console.warn('[rankings] 업데이트 실패 (무시):', e.message);
+        // 실패한 delta는 다음 주기에 재시도하기 위해 pendingDeltas에 복원
+        Object.entries(deltas).forEach(([id, delta]) => {
+            pendingDeltas[id] = (pendingDeltas[id] || 0) + delta;
+        });
+        // 실패 시 15초 후 재시도 (즉시 재시도하면 또 실패할 가능성이 높음)
+        if (rankingDebounceTimer === null) {
+            rankingDebounceTimer = setTimeout(flushRankingUpdate, 15000);
+        }
+    }
+}
+
+// ── 거래 함수 ────────────────────────────────────────────────
+window.trade = async function (id, type, qty = 1) {
+    const currentTime  = Date.now();
+    const cooldownTime = 1000;
+
     if (currentTime - lastTradeTime < cooldownTime) {
         const remaining = Math.ceil((cooldownTime - (currentTime - lastTradeTime)) / 1000);
         alert(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
         return;
     }
-    
-    // 2. 중복 클릭 방지 및 로그인 체크
-    if (isTrading) return; 
+    if (isTrading) return;
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
-    
-    isTrading = true; 
-    renderStocks(document.getElementById('search-input')?.value || ""); 
 
-    // 지갑 내 주식 주머니가 없으면 생성
+    isTrading = true;
+    updateUI(false);
+
     if (!myData.stocks) myData.stocks = {};
 
     const stockRef = ref(db, `stocks/${id}`);
-    const userRef = ref(db, `users/${userUID}`);
+    const userRef  = ref(db, `users/${userUID}`);
+    const impact   = 0.001 * qty;
+    const spread   = 0.0005;
+    const fee      = 0.003;
 
-    // 수량에 따른 주가 영향도 계산 (1주당 0.1%씩 변동)
-    const impact = 0.001 * qty;   
-    const spread = 0.0005;  // 0.05% 스프레드
-    const fee = 0.003;      // 0.3% 수수료
+    let qtyDelta = 0;
 
     try {
         await runTransaction(stockRef, (currentStock) => {
             if (!currentStock) return currentStock;
-            
-            // [안전장치] myData가 순간적으로 비어있을 경우 방어
             if (!myData) throw new Error("데이터 로딩 중");
-            
-            const currentPrice = currentStock.price;
-            const impact = 0.001 * qty;   // 수량 비례 영향도
-            const spread = 0.0005; 
-            const fee = 0.003;
 
-            let finalTradePrice; // 실제 내가 거래하게 될 1주당 가격
-            let newPrice;        // 거래 후 형성될 새로운 시장가
+            let finalTradePrice, newPrice;
 
             if (type === 'buy') {
-                // [핵심] 주가를 먼저 올린 후, 그 가격으로 매수합니다.
-                newPrice = Math.round(currentPrice * (1 + impact));
+                newPrice        = Math.round(currentStock.price * (1 + impact));
                 finalTradePrice = Math.round(newPrice * (1 + spread));
-
                 const totalBuyPrice = finalTradePrice * qty;
-                if (myData.cash < totalBuyPrice) throw new Error("잔액부족"); 
-                
-                const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                const totalCost = (userStock.qty * userStock.avg) + totalBuyPrice;
-                userStock.qty += qty;
-                userStock.avg = Math.round(totalCost / userStock.qty);
-                
-                myData.cash -= totalBuyPrice;
+                if (myData.cash < totalBuyPrice) throw new Error("잔액부족");
+
+                const userStock  = myData.stocks[id] || { qty: 0, avg: 0 };
+                const totalCost  = (userStock.qty * userStock.avg) + totalBuyPrice;
+                userStock.qty   += qty;
+                userStock.avg    = Math.round(totalCost / userStock.qty);
+                myData.cash     -= totalBuyPrice;
                 myData.stocks[id] = userStock;
+                qtyDelta = qty;
             } else {
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                if (userStock.qty < qty) throw new Error("보유부족"); 
+                if (userStock.qty < qty) throw new Error("보유부족");
 
-                // [핵심] 주가를 먼저 내린 후, 그 가격으로 매도합니다.
-                newPrice = Math.round(currentPrice * (1 - impact));
+                newPrice        = Math.round(currentStock.price * (1 - impact));
                 finalTradePrice = Math.round(newPrice * (1 - spread));
-                
                 const totalSellAmount = Math.round((finalTradePrice * qty) * (1 - fee));
-                
-                myData.cash += totalSellAmount;
-                userStock.qty -= qty;
+
+                myData.cash      += totalSellAmount;
+                userStock.qty    -= qty;
                 if (userStock.qty === 0) userStock.avg = 0;
                 myData.stocks[id] = userStock;
+                qtyDelta = -qty;
             }
 
-            // 히스토리 및 데이터 업데이트
-            let history = currentStock.history || [currentPrice];
+            let history = currentStock.history || [currentStock.price];
             history.push(newPrice);
             if (history.length > 20) history.shift();
-            
+
             return {
                 ...currentStock,
-                price: newPrice,
+                price:   newPrice,
                 history: history,
-                volume: (currentStock.volume || 0) + qty,
-                change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
+                volume:  (currentStock.volume || 0) + qty,
+                change:  (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
             };
         });
 
-        // 4. 서버에 내 지갑 데이터 업데이트
-        await set(userRef, {
-            ...myData,
-            lastTradeTime: serverTimestamp()
-        });
+        await set(userRef, { ...myData, lastTradeTime: serverTimestamp() });
 
-        // 거래 성공 사운드 재생
-        if (type === 'buy') {
-            buySound.currentTime = 0;
-            buySound.play().catch(e => console.log("사운드 재생 실패:", e));
-        } else {
-            sellSound.currentTime = 0;
-            sellSound.play().catch(e => console.log("사운드 재생 실패:", e));
-        }
+        const sound = type === 'buy' ? buySound : sellSound;
+        sound.currentTime = 0;
+        sound.play().catch(() => {});
 
-        // 5. 거래 성공 시 마지막 거래 시간 기록
         lastTradeTime = Date.now();
+        updateUI(true);
 
-        console.log(`거래 완료 (${qty}주): UI 갱신`);
-        renderRanking(); 
-        updateUI();
+        // [변경] 즉시 write 대신 디바운싱 큐에 등록
+        scheduleRankingUpdate(id, qtyDelta);
 
     } catch (error) {
         console.error("거래 에러:", error);
@@ -833,211 +563,173 @@ window.trade = async function(id, type, qty = 1) {
         else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
         else alert("거래 중 오류가 발생했습니다.");
     } finally {
-        // 쿨타임 해제
-        setTimeout(() => {
-            isTrading = false; 
-            renderStocks(document.getElementById('search-input')?.value || "");
-        }, cooldownTime);
+        setTimeout(() => { isTrading = false; updateUI(false); }, cooldownTime);
     }
 };
 
-// [추가] 모달 제어 자바스크립트
-    window.openPromoModal = function() {
-        document.getElementById('promo-modal').classList.add('active');
-    }
+// ── 모달 ─────────────────────────────────────────────────────
+window.openPromoModal  = () => document.getElementById('promo-modal').classList.add('active');
+window.closePromoModal = () => document.getElementById('promo-modal').classList.remove('active');
+window.goToMessage     = () => {
+    window.open("https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2", "_blank");
+    window.closePromoModal();
+};
 
-    window.closePromoModal = function() {
-        document.getElementById('promo-modal').classList.remove('active');
-    }
-
-    window.goToMessage = function() {
-        window.open("https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2", "_blank");
-        closePromoModal();
-    }
-
-// 홍보 배너 렌더링 함수
+// ── 배너 렌더링 ──────────────────────────────────────────────
 function renderBanners() {
-    console.log("--- [배너] 렌더링 프로세스 시작 ---"); 
-    
     const bannerList = document.getElementById('banner-list');
-    if (!bannerList) {
-        console.error("--- [배너 에러] 'banner-list' 엘리먼트가 HTML에 존재하지 않습니다. ---");
-        return;
-    }
+    if (!bannerList) return;
 
-    // 1. [수정] 기본 개발자 문의 배너 - 쪽지창 대신 모달 오픈 함수 연결
     bannerList.innerHTML = `
         <div onclick="openPromoModal()" class="banner-item" style="cursor:pointer;">
-            <div class="banner-circle">
-                <div class="banner-no-img">방송국 홍보 가능<br></div>
-            </div>
+            <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
             <div class="banner-name">문의하기</div>
         </div>
     `;
 
-    const now = new Date(); // 현재 시간 기준
+    const now = new Date();
+    allStocks.forEach(s => {
+        if (!s.bannerImg) return;
 
-    // 2. 홍보 배너 생성 및 로그 출력
-    allStocks.forEach((s, index) => {
-        if (s.bannerImg) {
-            let dDayText = "AD"; 
+        let dDayText = "AD";
+        if (s.bannerEndDate) {
+            const endDate = new Date(s.bannerEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (endDate < now) return;
+            const diffDays = Math.ceil((endDate - now) / 86400000);
+            dDayText = diffDays === 0 ? "오늘만료" : `D-${diffDays}`;
+        }
 
-            // 기간 만료 체크 및 D-Day 계산 로직
-            if (s.bannerEndDate) {
-                const endDate = new Date(s.bannerEndDate);
-                endDate.setHours(23, 59, 59, 999);
+        const a      = document.createElement('a');
+        a.href       = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
+        a.target     = "_blank";
+        a.className  = "banner-item promo-active";
 
-                if (endDate < now) {
-                    console.log(`--- [배너 기간 만료] ${s.name} 스트리머의 광고가 종료되어 표시하지 않습니다. ---`);
-                    return; 
-                }
+        const imgSrc   = s.bannerImg.startsWith('images/') ? './' + s.bannerImg : s.bannerImg;
+        const loaderId = `loader-${s.id}`;
+        const imgId    = `img-${s.id}`;
 
-                const diffTime = endDate - now;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                dDayText = diffDays === 0 ? "오늘만료" : `D-${diffDays}`;
-            }
+        a.innerHTML = `
+            <div class="promo-badge">${dDayText}</div>
+            <div class="banner-circle">
+                <span id="${loaderId}" class="banner-no-img" style="font-size:9px;color:#94a3b8;">로딩중...</span>
+                <img id="${imgId}" src="${imgSrc}" alt="${s.name}"
+                     style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;">
+            </div>
+            <div class="banner-name">${s.name}</div>
+        `;
+        bannerList.appendChild(a);
 
-            console.log(`--- [배너 발견] ${index + 1}. 이름: ${s.name} | 종료일: ${s.bannerEndDate || '미설정'} ---`);
-
-            const a = document.createElement('a');
-            a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
-            a.target = "_blank";
-            a.className = "banner-item promo-active"; 
-            
-            const loaderId = `loader-${s.id}`;
-            const imgId = `img-${s.id}`;
-            
-            let imgSrc = s.bannerImg;
-            if (imgSrc.startsWith('images/')) {
-                imgSrc = './' + imgSrc;
-            }
-
-            a.innerHTML = `
-                <div class="promo-badge">${dDayText}</div>
-                <div class="banner-circle">
-                    <span id="${loaderId}" class="banner-no-img" style="font-size: 9px; color: #94a3b8;">로딩중...</span>
-                    <img id="${imgId}" src="${imgSrc}" alt="${s.name}" 
-                         style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
-                </div>
-                <div class="banner-name">${s.name}</div>
-            `;
-            bannerList.appendChild(a);
-
-            const targetImg = document.getElementById(imgId);
-            const targetLoader = document.getElementById(loaderId);
-
-            if (targetImg) {
-                targetImg.onload = function() {
-                    if (targetLoader) targetLoader.style.display = 'none';
-                    targetImg.style.display = 'block';
-                    targetImg.classList.add('img-loaded'); 
-                };
-
-                if (targetImg.complete) {
-                    targetImg.onload();
-                }
-
-                targetImg.onerror = function() {
-                    if (targetLoader) {
-                        targetLoader.innerText = "Error";
-                        targetLoader.style.color = "#ef4444";
-                    }
-                };
-            }
+        const img    = document.getElementById(imgId);
+        const loader = document.getElementById(loaderId);
+        if (img) {
+            img.onload = () => {
+                if (loader) loader.style.display = 'none';
+                img.style.display = 'block';
+                img.classList.add('img-loaded');
+            };
+            if (img.complete) img.onload();
+            img.onerror = () => {
+                if (loader) { loader.innerText = "Error"; loader.style.color = "#ef4444"; }
+            };
         }
     });
-    console.log("--- [배너] 렌더링 프로세스 종료 ---");
 }
-        
-// --- 렌더링 로직 ---
+
+// ── 스파크라인 ───────────────────────────────────────────────
 function createSparkline(history, isUp) {
     if (!history || history.length < 2) return '';
-    const min = Math.min(...history);
-    const max = Math.max(...history);
+    const min   = Math.min(...history);
+    const max   = Math.max(...history);
     const range = max - min || 1;
-    const pts = history.map((v, i) => `${(i/19)*80},${35 - ((v - min) / range * 35)}`).join(' ');
-    return `<svg class="chart-container"><polyline class="sparkline ${isUp?'up':'down'}" points="${pts}" /></svg>`;
+    const pts   = history.map((v, i) => `${(i / 19) * 80},${35 - ((v - min) / range * 35)}`).join(' ');
+    return `<svg class="chart-container"><polyline class="sparkline ${isUp ? 'up' : 'down'}" points="${pts}" /></svg>`;
 }
 
+// ── 주식 목록 렌더링 ─────────────────────────────────────────
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
-    // myData가 없으면 에러가 날 수 있으므로 체크 추가
     if (!listDiv || !myData) return;
 
-    // 데이터가 비어있을 경우를 대비해 기본값(0, 빈 문자열 등) 처리 추가
-    const filtered = allStocks.filter(s => s.name && s.name.includes(filter))
-                              .sort((a,b) => (b.price || 0) - (a.price || 0))
-                              .slice(0, 100);
+    const filtered = allStocks
+        .filter(s => s.name && s.name.includes(filter))
+        .sort((a, b) => (b.price || 0) - (a.price || 0))
+        .slice(0, 100);
+
     listDiv.innerHTML = "";
-
-    filtered.forEach((s) => {
-        const id = s.id; 
-        const isUp = (s.change || 0) >= 0;
-        
-        // [핵심 수정] myData.stocks가 정의되지 않았을 경우 빈 객체{}를 사용하도록 방어
-        const userStocks = myData.stocks || {}; 
-        const userStock = userStocks[id] || { qty: 0, avg: 0 };
-        
-        let myProfit = 0;
-        let profitClass = 'steady';
-        if (userStock.qty > 0 && userStock.avg > 0) {
-            myProfit = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
-            profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
-        }
-
-        const card = document.createElement('div');
-card.className = 'stock-card';
-card.innerHTML = `
-    <div class="info-group">
-        <div class="stock-name">${s.name || '불러오는 중...'}</div>
-        <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
-    </div>
-    <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
-    <div class="price-group">
-        <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
-        <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
-    </div>
-    <div class="trade-btns">
-    <button class="btn btn-buy-multi" onclick="trade('${id}', 'buy', 10)" ${isTrading ? 'disabled' : ''}>+10</button>
-    <button class="btn btn-buy" onclick="trade('${id}', 'buy', 1)" ${isTrading ? 'disabled' : ''}>매수</button>
-    
-    <div style="width: 1px; height: 20px; background: #334155; margin: 0 4px;"></div> <button class="btn btn-sell" onclick="trade('${id}', 'sell', 1)" ${isTrading ? 'disabled' : ''}>매도</button>
-    <button class="btn btn-sell-multi" onclick="trade('${id}', 'sell', 10)" ${isTrading ? 'disabled' : ''}>-10</button>
-</div>
-`;
-listDiv.appendChild(card);
+    stockElements = {};
+    filtered.forEach(s => {
+        const card = createStockCard(s);
+        stockElements[s.id] = card;
+        listDiv.appendChild(card);
     });
 }
-    
-// 주식 목록 실시간 리스너
+
+function createStockCard(s) {
+    const card = document.createElement('div');
+    card.className = 'stock-card';
+    card.setAttribute('data-id', s.id);
+    updateCardContent(card, s, (myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
+    return card;
+}
+
+function updateCardContent(card, s, userStock) {
+    const isUp = (s.change || 0) >= 0;
+    let myProfit = 0, profitClass = 'steady';
+    if (userStock.qty > 0 && userStock.avg > 0) {
+        myProfit    = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
+        profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
+    }
+    card.innerHTML = `
+        <div class="info-group">
+            <div class="stock-name">${s.name}</div>
+            <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
+        </div>
+        <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
+        <div class="price-group">
+            <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
+            <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
+        </div>
+        <div class="trade-btns">
+            <button class="btn btn-buy-multi"  onclick="trade('${s.id}','buy',10)"   ${isTrading ? 'disabled' : ''}>+10</button>
+            <button class="btn btn-buy"         onclick="trade('${s.id}','buy',1)"    ${isTrading ? 'disabled' : ''}>매수</button>
+            <div style="width:1px;height:20px;background:#334155;margin:0 4px;"></div>
+            <button class="btn btn-sell"        onclick="trade('${s.id}','sell',1)"   ${isTrading ? 'disabled' : ''}>매도</button>
+            <button class="btn btn-sell-multi"  onclick="trade('${s.id}','sell',10)"  ${isTrading ? 'disabled' : ''}>-10</button>
+        </div>
+    `;
+}
+
+// ── 주식 데이터 실시간 리스너 ────────────────────────────────
 onValue(ref(db, 'stocks/'), (snap) => {
-    const data = snap.val() || {};
-    allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
-    updateUI();
-    
-    // [핵심 수정] 배너는 아직 그려지지 않았고, 주식 데이터가 로드되었을 때만 딱 1번 실행
+    const data      = snap.val() || {};
+    const newStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
+
+    if (allStocks.length === 0) {
+        allStocks = newStocks;
+        renderStocks();
+    } else {
+        newStocks.forEach(ns => {
+            const old = allStocks.find(os => os.id === ns.id);
+            if (old && (old.price !== ns.price || old.change !== ns.change)) {
+                const card = stockElements[ns.id];
+                if (card) updateCardContent(card, ns, (myData?.stocks || {})[ns.id] || { qty: 0, avg: 0 });
+            }
+        });
+        allStocks = newStocks;
+    }
+
+    updateUI(false);
+
     if (!isBannerRendered && allStocks.length > 0) {
-        setTimeout(() => {
-            renderBanners();
-            isBannerRendered = true; // 렌더링 완료 후 플래그 차단
-            console.log("--- [배너] 최초 1회 렌더링 완료 (이후 업데이트 차단) ---");
-        }, 100);
+        setTimeout(() => { renderBanners(); isBannerRendered = true; }, 100);
     }
 });
 
-// 2. [추가 필수] 전체 유저 보유량 변동 감시 (랭킹 전용)
-// 누군가 매수/매도하여 users 데이터가 바뀌면 랭킹을 즉시 다시 그립니다.
-onValue(ref(db, 'users/'), (snap) => {
-    allUsers = snap.val() || {}; // 전역 변수 allUsers 업데이트
-    console.log("유저 보유량 데이터 변경 감지 -> 랭킹 갱신");
-    renderRanking(); 
-});
-        
-        // 검색창 이벤트 리스너 (캡슐화 끝 부분에 추가)
-document.getElementById('search-input')?.addEventListener('input', (e) => {
-    renderStocks(e.target.value);
-});
-        })(); // [캡슐화 끝]
+// ── 검색창 ───────────────────────────────────────────────────
+document.getElementById('search-input')?.addEventListener('input', () => updateUI(true));
+
+})();
 </script>
 </body>
 </html>
