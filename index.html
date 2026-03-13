@@ -56,7 +56,21 @@
             background: var(--card-bg); border-radius: 24px; border: 1px solid var(--primary);
             box-shadow: 0 0 30px rgba(56, 189, 248, 0.2);
         }
-        .intro-logo  { font-size: 40px; margin-bottom: 20px; }
+        .intro-logo {
+        /* font-size: 40px; 기존 이모지 크기 설정 삭제 */
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: center; /* 이미지 중앙 정렬 */
+        align-items: center;
+        }
+        .intro-logo img {
+        width: 60px;            /* 로고 이미지의 가로 크기 (원하는 대로 조정 가능) */
+        height: 60px;           /* 가로와 동일하게 설정하여 1:1 비율 유지 */
+        object-fit: contain;    /* 이미지 비율을 유지하면서 영역 내에 꽉 차게 표시 */
+        border-radius: 12px;    /* 부드러운 느낌을 위해 모서리를 약간 둥글게 (선택 사항) */
+        /* border: 2px solid var(--primary); 로고에 테두리를 넣고 싶다면 주석 해제 */
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3); /* 로고에 살짝 그림자 효과 (선택 사항) */
+        }
         .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
         .intro-desc  { color: var(--text-sub); line-height: 1.6; margin-bottom: 25px; }
         .loader { width: 30px; height: 30px; border: 3px solid #334155; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
@@ -143,7 +157,9 @@
 
 <div id="intro-overlay">
     <div class="intro-content">
-        <div class="intro-logo">📈</div>
+        <div class="intro-logo">
+    <img src="https://stimg.sooplive.co.kr/LOGO/sk/skftodwocks2/skftodwocks2.jpg" alt="숲 주식 시장 로고">
+        </div>
         <div class="intro-title">스트리머 주식시장</div>
         <div class="intro-desc">
             숲 주식 시장에 오신 것을 환영합니다!<br>
