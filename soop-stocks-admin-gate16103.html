@@ -19,59 +19,22 @@
         .btn-google { background: white; color: #334155; display: flex; align-items: center; gap: 10px; font-size: 16px; }
         button:hover { opacity: 0.8; transform: translateY(-1px); }
         #admin-info { margin-bottom: 20px; font-size: 14px; color: #94a3b8; }
-
-        /* 랭킹 미리보기 테이블 */
-        .ranking-preview {
-            margin-top: 15px;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 1px solid #334155;
-            display: none;
-        }
-        .ranking-preview table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-        .ranking-preview th {
-            background: #0f172a;
-            color: #38bdf8;
-            padding: 10px 14px;
-            text-align: left;
-            font-weight: 700;
-        }
-        .ranking-preview td {
-            padding: 10px 14px;
-            border-top: 1px solid #1e293b;
-            color: #f8fafc;
-        }
+        .ranking-preview { margin-top: 15px; border-radius: 10px; overflow: hidden; border: 1px solid #334155; display: none; }
+        .ranking-preview table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .ranking-preview th { background: #0f172a; color: #38bdf8; padding: 10px 14px; text-align: left; font-weight: 700; }
+        .ranking-preview td { padding: 10px 14px; border-top: 1px solid #1e293b; color: #f8fafc; }
         .ranking-preview tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
-        .rank-badge {
-            display: inline-block;
-            width: 22px; height: 22px;
-            border-radius: 50%;
-            background: #38bdf8;
-            color: #0f172a;
-            font-weight: 800;
-            font-size: 12px;
-            text-align: center;
-            line-height: 22px;
-        }
+        .rank-badge { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: #38bdf8; color: #0f172a; font-weight: 800; font-size: 12px; text-align: center; line-height: 22px; }
         .rank-badge.gold   { background: #f59e0b; }
         .rank-badge.silver { background: #94a3b8; }
         .rank-badge.bronze { background: #b45309; }
-
-        /* 상태 칩 */
-        .status-chip {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-        }
-        .status-chip.saved    { background: #166534; color: #86efac; }
-        .status-chip.unsaved  { background: #7c2d12; color: #fca5a5; }
-        .status-chip.loading  { background: #1e3a5f; color: #93c5fd; }
+        .status-chip { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .status-chip.saved   { background: #166534; color: #86efac; }
+        .status-chip.unsaved { background: #7c2d12; color: #fca5a5; }
+        .status-chip.loading { background: #1e3a5f; color: #93c5fd; }
+        .data-status-bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 15px; font-size: 13px; }
+        .data-status-bar span { color: #94a3b8; }
+        .data-status-bar b { color: #38bdf8; }
     </style>
 </head>
 <body>
@@ -86,9 +49,7 @@
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
 
-    <!-- ════════════════════════════════════════════
-         🏆  랭킹 TOP5 관리  (신규 섹션)
-    ════════════════════════════════════════════ -->
+    <!-- 🏆 랭킹 TOP5 관리 -->
     <div class="container" style="display:block; border-color: #a855f7;">
         <h1>🏆 랭킹 TOP5 관리</h1>
         <div class="info-box">
@@ -96,76 +57,59 @@
             메인 페이지는 이 경로만 구독하므로, <span style="color:#38bdf8">users/ 전체를 읽지 않아도 됩니다.</span><br>
             거래량이 많을 때 수동으로 눌러 최신 상태를 반영하세요.
         </div>
-
-        <!-- 현재 저장된 TOP5 상태 -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <span style="font-size:13px; color:#94a3b8;">저장된 TOP5 상태:</span>
             <span id="ranking-status" class="status-chip loading">불러오는 중...</span>
         </div>
-
-        <!-- 액션 버튼 -->
         <div style="display:flex; gap:10px;">
-            <button class="btn-success" style="flex:1;" onclick="previewRankings()">
-                🔍 집계 미리보기
-            </button>
-            <button class="btn-primary" style="flex:2; margin-top:0;" onclick="saveRankingsToFirebase()">
-                💾 TOP5 저장 (DB 반영)
-            </button>
+            <button class="btn-success" style="flex:1;" onclick="previewRankings()">🔍 집계 미리보기</button>
+            <button class="btn-primary" style="flex:2; margin-top:0;" onclick="saveRankingsToFirebase()">💾 TOP5 저장 (DB 반영)</button>
         </div>
-
-        <!-- 자동 갱신 옵션 -->
-        <div style="margin-top:14px; display:flex; align-items:center; gap:10px; background:#0f172a; padding:10px 14px; border-radius:8px; border:1px solid #334155;">
-            <input type="checkbox" id="auto-rank-update" style="width:16px;height:16px;accent-color:#a855f7; flex:none;">
-            <label for="auto-rank-update" style="font-size:13px; color:#cbd5e1; cursor:pointer;">
-                주가 수정·상장·삭제 작업 시 <b>TOP5 자동 갱신</b> (이 탭이 열려있는 동안)
-            </label>
-        </div>
-
-        <!-- 미리보기 테이블 -->
         <div class="ranking-preview" id="ranking-preview-table">
             <table>
-                <thead>
-                    <tr>
-                        <th>순위</th>
-                        <th>스트리머</th>
-                        <th>총 보유량</th>
-                        <th>현재가</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>순위</th><th>스트리머</th><th>총 보유량</th><th>현재가</th></tr></thead>
                 <tbody id="ranking-preview-body"></tbody>
             </table>
         </div>
     </div>
-    <!-- ════════════ 랭킹 섹션 끝 ════════════ -->
 
+    <!-- 🔍 개별 종목 관리 -->
     <div class="container" style="display:block">
-    <h1>🔍 개별 종목 관리</h1>
-    <div class="info-box">종목 이름을 검색하여 가격을 직접 수정할 수 있습니다.</div>
-    <input type="text" id="admin-search" placeholder="스트리머 검색..." style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box; margin-bottom:15px;">
-    <div id="admin-stock-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;"></div>
-</div>
-
-<div class="container" style="display:block; border-color: #f59e0b;">
-    <h1>🛠 종목 상세 정보 수정</h1>
-    <div class="info-box">닉네임을 입력하고 '불러오기'를 누르면 현재 저장된 모든 정보를 수정할 수 있습니다.</div>
-    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-        <input type="text" id="edit-search-name" placeholder="수정할 스트리머 닉네임" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-        <button class="btn-success" onclick="loadStockData()" style="white-space:nowrap;">불러오기</button>
+        <h1>🔍 개별 종목 관리</h1>
+        <div class="data-status-bar">
+            <span>종목 데이터: <b id="stocks-load-status">로딩 중...</b></span>
+            <button class="btn-success" onclick="reloadStocks()" style="padding:6px 14px; font-size:12px;">🔄 새로고침</button>
+        </div>
+        <div class="info-box">종목 이름을 검색하여 가격을 직접 수정할 수 있습니다.</div>
+        <input type="text" id="admin-search" placeholder="스트리머 검색..."
+            style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box; margin-bottom:15px;">
+        <div id="admin-stock-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;"></div>
     </div>
-    <div id="edit-form" style="display: none; flex-direction: column; gap: 10px; border-top: 1px solid #334155; padding-top: 15px;">
-        <div style="font-size: 12px; color: #94a3b8;">종목 ID: <span id="edit-stock-id">-</span></div>
-        <label style="font-size: 13px; color: #38bdf8;">현재 가격 (원)</label>
-        <input type="number" id="edit-stock-price" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
-        <label style="font-size: 13px; color: #38bdf8;">배너 이미지 경로</label>
-        <input type="text" id="edit-stock-banner" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
-        <label style="font-size: 13px; color: #38bdf8;">방송국/이동 링크</label>
-        <input type="text" id="edit-stock-link" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
-        <label style="font-size: 13px; color: #38bdf8;">광고 종료일 (YYYY-MM-DD)</label>
-        <input type="text" id="edit-stock-date" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;" placeholder="예: 2026-03-15">
-        <button class="btn-primary" style="background: #f59e0b; color: #0f172a;" onclick="updateStockData()">정보 최종 수정하기</button>
-    </div>
-</div>
 
+    <!-- 🛠 종목 상세 정보 수정 -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <h1>🛠 종목 상세 정보 수정</h1>
+        <div class="info-box">닉네임을 입력하고 '불러오기'를 누르면 현재 저장된 모든 정보를 수정할 수 있습니다.</div>
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <input type="text" id="edit-search-name" placeholder="수정할 스트리머 닉네임"
+                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+            <button class="btn-success" onclick="loadStockData()" style="white-space:nowrap;">불러오기</button>
+        </div>
+        <div id="edit-form" style="display: none; flex-direction: column; gap: 10px; border-top: 1px solid #334155; padding-top: 15px;">
+            <div style="font-size: 12px; color: #94a3b8;">종목 ID: <span id="edit-stock-id">-</span></div>
+            <label style="font-size: 13px; color: #38bdf8;">현재 가격 (원)</label>
+            <input type="number" id="edit-stock-price" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
+            <label style="font-size: 13px; color: #38bdf8;">배너 이미지 경로</label>
+            <input type="text" id="edit-stock-banner" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
+            <label style="font-size: 13px; color: #38bdf8;">방송국/이동 링크</label>
+            <input type="text" id="edit-stock-link" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
+            <label style="font-size: 13px; color: #38bdf8;">광고 종료일 (YYYY-MM-DD)</label>
+            <input type="text" id="edit-stock-date" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;" placeholder="예: 2026-03-15">
+            <button class="btn-primary" style="background: #f59e0b; color: #0f172a;" onclick="updateStockData()">정보 최종 수정하기</button>
+        </div>
+    </div>
+
+    <!-- 📈 주가 일괄 조정 -->
     <div class="container" style="display:block">
         <h1>📈 주가 일괄 조정 (% 단위)</h1>
         <div class="info-box">입력한 수치만큼 전 종목 주가를 변동시킵니다.</div>
@@ -175,47 +119,68 @@
         </div>
     </div>
 
+    <!-- 🧹 데이터 무결성 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
-    <h1>🧹 데이터 무결성 관리</h1>
-    <div class="info-box" style="color: #fca5a5;">이미 상장된 종목 중 중복된 닉네임을 찾아 정리합니다. (최초 상장본 유지)</div>
-    <button class="btn-primary" style="background: #ef4444; color: white;" onclick="cleanupDuplicateStocks()">중복 닉네임 일괄 정리</button>
-</div>
-
-    <div class="container" style="display:block">
-    <h1>🚀 스트리머 상장 및 삭제</h1>
-    <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요. <br>상장은 신규 추가, 삭제는 목록에서 제거합니다.</div>
-    <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
-    <div style="display: flex; gap: 10px;">
-        <button class="btn-primary" onclick="uploadStocks()">일괄 상장 실행</button>
-        <button class="btn-primary" style="background: #64748b;" onclick="deleteStocks()">일괄 삭제 실행</button>
+        <h1>🧹 데이터 무결성 관리</h1>
+        <div class="info-box" style="color: #fca5a5;">이미 상장된 종목 중 중복된 닉네임을 찾아 정리합니다. (최초 상장본 유지)</div>
+        <button class="btn-primary" style="background: #ef4444; color: white;" onclick="cleanupDuplicateStocks()">중복 닉네임 일괄 정리</button>
     </div>
-</div>
 
-    <div class="container" style="display:block; border-color: #38bdf8;">
-    <h1>📺 방송국 배너 관리</h1>
-    <div class="info-box">
-        닉네임이 일치하는 종목에 배너와 <b>노출 기간</b>을 설정합니다.<br>
-        <span style="color: #38bdf8;">* 입력한 일수(Day)만큼 노출 후 자동으로 사라집니다.</span>
-    </div>
-    <div style="flex-direction: column; gap: 10px; display: flex;">
-        <input type="text" id="banner-nickname" placeholder="대상 스트리머 닉네임 (정확히 입력)" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-        <input type="text" id="banner-img-url" placeholder="배너 이미지(GIF/PNG) 주소" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-        <input type="text" id="banner-link-url" placeholder="클릭 시 이동할 링크 (미입력 시 기본 방송국)" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-        <div style="display: flex; align-items: center; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #475569;">
-            <label for="banner-days" style="font-size: 13px; color: #94a3b8; white-space: nowrap;">노출 기간 설정:</label>
-            <input type="number" id="banner-days" placeholder="예: 7" min="1" max="365" style="flex: 1; background: transparent; border: none; color: #38bdf8; font-size: 15px; outline: none;">
-            <span style="color: #94a3b8; font-size: 13px; margin-left: 5px;">일 동안</span>
+    <!-- 🗑 미거래 유저 데이터 정리 -->
+    <div class="container" style="display:block; border-color: #f97316;">
+        <h1>🗑 미거래 유저 데이터 정리</h1>
+        <div class="info-box" style="color: #fed7aa;">
+            한 번도 거래하지 않은 유저(잔고 1,000,000원 & 보유 주식 없음)의 데이터를 삭제합니다.<br>
+            <span style="color:#38bdf8;">Firebase 저장 용량과 랭킹 집계 속도를 개선합니다.</span>
         </div>
-        <button class="btn-primary" onclick="window.addBannerToStock()">배너 및 노출 기간 적용</button>
+        <div id="cleanup-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-success" style="flex:1;" onclick="previewInactiveUsers()">🔍 미거래 유저 집계</button>
+            <button class="btn-primary" style="flex:2; margin-top:0; background:#f97316; color:white;" onclick="cleanupInactiveUsers()">🗑 미거래 유저 삭제</button>
+        </div>
     </div>
-</div>
+
+    <!-- 🚀 스트리머 상장 및 삭제 -->
+    <div class="container" style="display:block">
+        <h1>🚀 스트리머 상장 및 삭제</h1>
+        <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요. <br>상장은 신규 추가, 삭제는 목록에서 제거합니다.</div>
+        <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-primary" onclick="uploadStocks()">일괄 상장 실행</button>
+            <button class="btn-primary" style="background: #64748b;" onclick="deleteStocks()">일괄 삭제 실행</button>
+        </div>
+    </div>
+
+    <!-- 📺 방송국 배너 관리 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>📺 방송국 배너 관리</h1>
+        <div class="info-box">
+            닉네임이 일치하는 종목에 배너와 <b>노출 기간</b>을 설정합니다.<br>
+            <span style="color: #38bdf8;">* 입력한 일수(Day)만큼 노출 후 자동으로 사라집니다.</span>
+        </div>
+        <div style="flex-direction: column; gap: 10px; display: flex;">
+            <input type="text" id="banner-nickname" placeholder="대상 스트리머 닉네임 (정확히 입력)"
+                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+            <input type="text" id="banner-img-url" placeholder="배너 이미지(GIF/PNG) 주소"
+                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+            <input type="text" id="banner-link-url" placeholder="클릭 시 이동할 링크 (미입력 시 기본 방송국)"
+                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+            <div style="display: flex; align-items: center; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #475569;">
+                <label for="banner-days" style="font-size: 13px; color: #94a3b8; white-space: nowrap;">노출 기간 설정:</label>
+                <input type="number" id="banner-days" placeholder="예: 7" min="1" max="365"
+                    style="flex: 1; background: transparent; border: none; color: #38bdf8; font-size: 15px; outline: none;">
+                <span style="color: #94a3b8; font-size: 13px; margin-left: 5px;">일 동안</span>
+            </div>
+            <button class="btn-primary" onclick="window.addBannerToStock()">배너 및 노출 기간 적용</button>
+        </div>
+    </div>
 
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -231,47 +196,65 @@
     const provider = new GoogleAuthProvider();
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
-    // --- 데이터 상태 관리 ---
+    // ── 데이터 상태 ─────────────────────────────────────────
     let allStocksData = {};
 
-    onValue(ref(db, 'stocks/'), (snap) => {
-        allStocksData = snap.val() || {};
-        if (document.getElementById('admin-section').style.display === 'block') {
-            renderAdminStockList();
-            // 자동 갱신 체크박스가 켜져 있으면 랭킹도 갱신
-            if (document.getElementById('auto-rank-update')?.checked) {
-                saveRankingsToFirebase(true); // silent=true (알림 없이)
-            }
-        }
-    });
+    // [핵심 최적화]
+    // 기존: onValue(stocks/) → 거래 발생마다 실시간 수신 + DOM 재렌더링 → 모바일 렉
+    //       auto-rank-update 체크 시 매 변경마다 users/ 전체 읽기 → 트래픽 폭발
+    // 변경: get() 1회 읽기 → 수동 새로고침 버튼으로만 갱신
+    //       onValue 구독 완전 제거 → Firebase 연결 비용 0
 
-    // 현재 저장된 /rankings/top5 상태 표시
-    onValue(ref(db, 'rankings/top5'), (snap) => {
+    async function loadStocksOnce() {
+        const statusEl = document.getElementById('stocks-load-status');
+        if (statusEl) statusEl.innerText = '로딩 중...';
+        try {
+            const snap = await get(ref(db, 'stocks/'));
+            allStocksData = snap.val() || {};
+            const count = Object.keys(allStocksData).length;
+            if (statusEl) statusEl.innerText = `${count}개 종목 로드됨`;
+            renderAdminStockList();
+        } catch (e) {
+            if (statusEl) statusEl.innerText = '로드 실패';
+            console.error(e);
+        }
+    }
+
+    window.reloadStocks = async function() {
+        await loadStocksOnce();
+    };
+
+    async function loadRankingStatus() {
         const statusEl = document.getElementById('ranking-status');
         if (!statusEl) return;
-        if (snap.exists()) {
-            const data = snap.val();
-            const savedAt = data.savedAt ? new Date(data.savedAt).toLocaleString('ko-KR') : '시각 불명';
-            statusEl.className = 'status-chip saved';
-            statusEl.innerText = `✅ 저장됨 (${savedAt})`;
-        } else {
+        try {
+            const snap = await get(ref(db, 'rankings/top5'));
+            if (snap.exists()) {
+                const data = snap.val();
+                const savedAt = data.savedAt ? new Date(data.savedAt).toLocaleString('ko-KR') : '시각 불명';
+                statusEl.className = 'status-chip saved';
+                statusEl.innerText = `✅ 저장됨 (${savedAt})`;
+            } else {
+                statusEl.className = 'status-chip unsaved';
+                statusEl.innerText = '❌ 저장 안 됨';
+            }
+        } catch (e) {
             statusEl.className = 'status-chip unsaved';
-            statusEl.innerText = '❌ 저장 안 됨';
+            statusEl.innerText = '확인 실패';
         }
-    });
+    }
 
-    // --- 인증 로직 ---
-    window.login = () => {
-        signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
-    };
-    window.logout = () => { signOut(auth); };
+    // ── 인증 ────────────────────────────────────────────────
+    window.login  = () => signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
+    window.logout = () => signOut(auth);
 
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
         if (user && user.email === ADMIN_EMAIL) {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-section').style.display = 'block';
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
-            renderAdminStockList();
+            await loadStocksOnce();
+            await loadRankingStatus();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -279,26 +262,15 @@
         }
     });
 
-    // ════════════════════════════════════════════
-    //  🏆  랭킹 TOP5 계산 & 저장 함수 (핵심 신규)
-    // ════════════════════════════════════════════
-
-    /**
-     * users/ 전체를 읽어 종목별 총 보유량을 집계하고
-     * 상위 5개를 반환합니다.
-     */
+    // ── 랭킹 TOP5 ───────────────────────────────────────────
     async function calcTop5() {
         const [usersSnap, stocksSnap] = await Promise.all([
             get(ref(db, 'users/')),
             get(ref(db, 'stocks/'))
         ]);
-
         const usersData  = usersSnap.val()  || {};
         const stocksData = stocksSnap.val() || {};
-
-        // 종목별 총 보유량 합산
-        const ownership = {}; // { stockId: totalQty }
-
+        const ownership  = {};
         Object.values(usersData).forEach(user => {
             if (!user.stocks) return;
             Object.entries(user.stocks).forEach(([stockId, info]) => {
@@ -306,32 +278,19 @@
                 if (qty > 0) ownership[stockId] = (ownership[stockId] || 0) + qty;
             });
         });
-
-        // 주식 정보와 조합 후 정렬
-        const ranked = Object.entries(ownership)
+        return Object.entries(ownership)
             .map(([id, totalQty]) => {
                 const stock = stocksData[id] || {};
-                return {
-                    id,
-                    name:     stock.name  || id,
-                    price:    stock.price || 0,
-                    totalQty
-                };
+                return { id, name: stock.name || id, price: stock.price || 0, totalQty };
             })
             .sort((a, b) => b.totalQty - a.totalQty)
             .slice(0, 5);
-
-        return ranked;
     }
 
-    /**
-     * 집계 결과를 테이블로 보여줍니다 (DB 저장 없음).
-     */
     window.previewRankings = async function() {
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading';
         statusEl.innerText = '집계 중...';
-
         try {
             const top5 = await calcTop5();
             renderPreviewTable(top5);
@@ -345,42 +304,25 @@
         }
     };
 
-    /**
-     * 집계 후 /rankings/top5 에 저장합니다.
-     * @param {boolean} silent - true면 완료 alert 생략 (자동 갱신 시 사용)
-     */
     window.saveRankingsToFirebase = async function(silent = false) {
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading';
         statusEl.innerText = '저장 중...';
-
         try {
             const top5 = await calcTop5();
-
-            // DB에 저장할 구조
-            // { savedAt, items: [ {rank, id, name, price, totalQty}, ... ] }
             const payload = {
                 savedAt: new Date().toISOString(),
                 items: top5.map((s, i) => ({
-                    rank:     i + 1,
-                    id:       s.id,
-                    name:     s.name,
-                    price:    s.price,
-                    totalQty: s.totalQty
+                    rank: i + 1, id: s.id, name: s.name, price: s.price, totalQty: s.totalQty
                 }))
             };
-
             await set(ref(db, 'rankings/top5'), payload);
-
-            // 미리보기 테이블도 갱신
             renderPreviewTable(top5);
-
             if (!silent) {
                 alert(`✅ /rankings/top5 저장 완료!\n\n` +
                       top5.map((s, i) => `${i+1}위 ${s.name} (${s.totalQty.toLocaleString()}주)`).join('\n'));
             }
-
-            // onValue 리스너가 상태 칩을 자동 갱신하므로 여기선 별도 처리 불필요
+            await loadRankingStatus();
         } catch(e) {
             console.error(e);
             if (!silent) alert("저장 중 오류: " + e.message);
@@ -389,18 +331,14 @@
         }
     };
 
-    /** 미리보기 테이블 렌더링 헬퍼 */
     function renderPreviewTable(top5) {
-        const tbody = document.getElementById('ranking-preview-body');
+        const tbody     = document.getElementById('ranking-preview-body');
         const tableWrap = document.getElementById('ranking-preview-table');
         if (!tbody || !tableWrap) return;
-
         const badgeClass = ['gold', 'silver', 'bronze', '', ''];
-
-        if (top5.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">보유 데이터 없음</td></tr>`;
-        } else {
-            tbody.innerHTML = top5.map((s, i) => `
+        tbody.innerHTML = top5.length === 0
+            ? `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">보유 데이터 없음</td></tr>`
+            : top5.map((s, i) => `
                 <tr>
                     <td><span class="rank-badge ${badgeClass[i]}">${i + 1}</span></td>
                     <td style="font-weight:700;">${s.name}</td>
@@ -408,27 +346,72 @@
                     <td style="color:#94a3b8;">${s.price.toLocaleString()}원</td>
                 </tr>
             `).join('');
-        }
-
         tableWrap.style.display = 'block';
     }
 
-    // ════════════════════════════════════════════
-    //  기존 관리 함수들 (변경 없음)
-    // ════════════════════════════════════════════
+    // ── 미거래 유저 정리 ─────────────────────────────────────
+    async function getInactiveUsers() {
+        const snap = await get(ref(db, 'users/'));
+        const data = snap.val() || {};
+        const inactive = [];
+        Object.entries(data).forEach(([uid, user]) => {
+            const isDefaultCash = (user.cash ?? 1000000) === 1000000;
+            const hasNoStocks   = !user.stocks || Object.keys(user.stocks).length === 0;
+            const hasZeroStocks = user.stocks && Object.values(user.stocks).every(s => (s.qty || 0) === 0);
+            if (isDefaultCash && (hasNoStocks || hasZeroStocks)) inactive.push(uid);
+        });
+        return inactive;
+    }
 
+    window.previewInactiveUsers = async function() {
+        const statusEl = document.getElementById('cleanup-status');
+        statusEl.innerText = '집계 중...';
+        try {
+            const inactive = await getInactiveUsers();
+            statusEl.innerText = `미거래 유저 ${inactive.length.toLocaleString()}명 발견`;
+        } catch(e) {
+            statusEl.innerText = '집계 실패: ' + e.message;
+        }
+    };
+
+    window.cleanupInactiveUsers = async function() {
+        const statusEl = document.getElementById('cleanup-status');
+        statusEl.innerText = '집계 중...';
+        try {
+            const inactive = await getInactiveUsers();
+            if (inactive.length === 0) {
+                statusEl.innerText = '삭제할 미거래 유저가 없습니다.';
+                return;
+            }
+            if (!confirm(`미거래 유저 ${inactive.length.toLocaleString()}명을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+            // 500개씩 나눠서 삭제 (Firebase 일괄 업데이트 제한 대응)
+            const BATCH = 500;
+            let deleted = 0;
+            for (let i = 0; i < inactive.length; i += BATCH) {
+                const batch   = inactive.slice(i, i + BATCH);
+                const updates = {};
+                batch.forEach(uid => { updates[`users/${uid}`] = null; });
+                await update(ref(db), updates);
+                deleted += batch.length;
+                statusEl.innerText = `삭제 중... (${deleted}/${inactive.length})`;
+            }
+            statusEl.innerText = `✅ ${inactive.length.toLocaleString()}명 삭제 완료`;
+        } catch(e) {
+            statusEl.innerText = '삭제 실패: ' + e.message;
+        }
+    };
+
+    // ── 종목 관리 ────────────────────────────────────────────
     function renderAdminStockList() {
-        const searchVal = document.getElementById('admin-search').value.toLowerCase();
-        const listDiv = document.getElementById('admin-stock-list');
+        const searchVal = (document.getElementById('admin-search')?.value || '').toLowerCase();
+        const listDiv   = document.getElementById('admin-stock-list');
         if (!listDiv) return;
         listDiv.innerHTML = "";
         Object.entries(allStocksData).forEach(([id, s]) => {
             if (s.name.toLowerCase().includes(searchVal)) {
                 const item = document.createElement('div');
                 item.className = 'batch-control';
-                item.style.padding = "10px";
-                item.style.background = "#0f172a";
-                item.style.borderRadius = "8px";
+                item.style.cssText = "padding:10px; background:#0f172a; border-radius:8px;";
                 item.innerHTML = `
                     <div style="flex:1; font-size:14px;">${s.name}</div>
                     <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
@@ -445,13 +428,14 @@
         const oldStock = allStocksData[id];
         let history = oldStock.history || [oldStock.price];
         history.push(newPrice);
-        if (history.length > 20) history.shift();
+        if (history.length > 10) history.shift();
         const updates = {};
-        updates[`stocks/${id}/price`] = newPrice;
+        updates[`stocks/${id}/price`]   = newPrice;
         updates[`stocks/${id}/history`] = history;
-        updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
+        updates[`stocks/${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
         try {
             await update(ref(db), updates);
+            allStocksData[id].price = newPrice;
             alert(`✅ ${oldStock.name}의 가격이 ${newPrice.toLocaleString()}원으로 수정되었습니다.`);
         } catch (e) {
             alert("수정 실패: 권한을 확인하세요.");
@@ -470,11 +454,11 @@
                 if (stock.name === searchName) { targetId = id; targetData = stock; }
             });
             if (!targetId) return alert("해당 종목을 찾을 수 없습니다.");
-            document.getElementById('edit-stock-id').innerText = targetId;
-            document.getElementById('edit-stock-price').value = targetData.price || 0;
-            document.getElementById('edit-stock-banner').value = targetData.bannerImg || "";
-            document.getElementById('edit-stock-link').value = targetData.link || "";
-            document.getElementById('edit-stock-date').value = targetData.bannerEndDate || "";
+            document.getElementById('edit-stock-id').innerText      = targetId;
+            document.getElementById('edit-stock-price').value       = targetData.price || 0;
+            document.getElementById('edit-stock-banner').value      = targetData.bannerImg || "";
+            document.getElementById('edit-stock-link').value        = targetData.link || "";
+            document.getElementById('edit-stock-date').value        = targetData.bannerEndDate || "";
             document.getElementById('edit-form').style.display = 'flex';
             alert(`✅ '${searchName}' 데이터를 불러왔습니다.`);
         } catch (e) {
@@ -538,10 +522,7 @@
                     if (isMatch && master.pureName !== target.pureName) {
                         if (master.originalName.includes('BJ') && target.originalName.includes('BJ')) isMatch = false;
                     }
-                    if (isMatch) {
-                        deleteUpdates[`stocks/${target.id}`] = null;
-                        duplicateFoundCount++;
-                    }
+                    if (isMatch) { deleteUpdates[`stocks/${target.id}`] = null; duplicateFoundCount++; }
                 }
             }
             if (duplicateFoundCount === 0) return alert("✅ 중복이 없습니다.");
@@ -567,6 +548,7 @@
                 await update(ref(db, 'stocks/'), stocks);
                 alert("🎉 상장이 완료되었습니다!");
                 document.getElementById('list').value = "";
+                await loadStocksOnce();
             } catch (e) { alert("오류 발생: " + e.message); }
         }
     };
@@ -589,6 +571,7 @@
                 await update(ref(db), deleteUpdates);
                 alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
+                await loadStocksOnce();
             }
         } catch (e) {
             alert("삭제 중 오류 발생: " + e.message);
@@ -609,21 +592,22 @@
                 const newPrice = Math.round(oldPrice * multiplier);
                 let history = data[id].history || [oldPrice];
                 history.push(newPrice);
-                if (history.length > 20) history.shift();
-                updates[`stocks/${id}/price`] = newPrice;
+                if (history.length > 10) history.shift();
+                updates[`stocks/${id}/price`]   = newPrice;
                 updates[`stocks/${id}/history`] = history;
-                updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
+                updates[`stocks/${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
             });
             await update(ref(db), updates);
             alert(`🔥 전 종목 주가가 ${percent}% 조정되었습니다!`);
+            await loadStocksOnce();
         } catch (e) { alert("오류 발생: " + e.message); }
     };
 
     window.addBannerToStock = async function() {
         const targetNickname = document.getElementById('banner-nickname').value.trim();
-        const imgUrl  = document.getElementById('banner-img-url').value.trim();
-        const linkUrl = document.getElementById('banner-link-url').value.trim();
-        const daysInput = document.getElementById('banner-days').value;
+        const imgUrl         = document.getElementById('banner-img-url').value.trim();
+        const linkUrl        = document.getElementById('banner-link-url').value.trim();
+        const daysInput      = document.getElementById('banner-days').value;
         if (!targetNickname || !imgUrl || !daysInput) return alert("닉네임, 이미지 주소, 노출 기간(일)은 필수 입력 항목입니다.");
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + parseInt(daysInput));
@@ -642,9 +626,9 @@
             await update(ref(db), updates);
             alert(`✅ ${targetNickname} 종목에 배너가 적용되었습니다!\n📅 종료일: ${endDateStr}`);
             document.getElementById('banner-nickname').value = "";
-            document.getElementById('banner-img-url').value = "";
+            document.getElementById('banner-img-url').value  = "";
             document.getElementById('banner-link-url').value = "";
-            document.getElementById('banner-days').value = "";
+            document.getElementById('banner-days').value     = "";
         } catch (e) {
             alert("배너 추가 중 오류 발생: " + e.message);
         }
