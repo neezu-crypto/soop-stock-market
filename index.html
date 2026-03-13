@@ -270,7 +270,7 @@
 
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set, increment, onDisconnect, serverTimestamp }
+import { getDatabase, ref, onValue, runTransaction, get, set, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
@@ -446,8 +446,9 @@ onAuthStateChanged(auth, async (user) => {
         // 접속 시 +1, 퇴장 시 Firebase 서버가 자동으로 -1 (onDisconnect)
         // 카운터를 get() 1회만 읽어 화면에 표시 → 이후 갱신 없음 (구독 X)
         try {
-            await runTransaction(countRef, (current) => Math.max(0, (current || 0) + 1));
-            onDisconnect(countRef).set(increment(-1));
+            const myPresenceRef = ref(db, `presence/${userUID}`);
+            await set(myPresenceRef, true);
+            onDisconnect(myPresenceRef).remove();
 
             const snap  = await get(countRef);
             const count = snap.exists() ? snap.val() : 1;
