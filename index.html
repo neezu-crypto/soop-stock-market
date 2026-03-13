@@ -479,6 +479,7 @@ let allStocks = [];
 let isTrading = false; // [추가] 중복 거래 방지 플래그
 let rankUpdateTimer = null; 
 let isInitialRankLoad = true; // [추가] 첫 접속 시 즉시 실행을 위한 플래그
+let isBannerRendered = false; // [추가] 배너 최초 렌더링 여부 플래그
         
 // 오디오 객체 사전 로드 (함수 외부 또는 상단에 배치)
 const buySound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
@@ -1014,10 +1015,14 @@ onValue(ref(db, 'stocks/'), (snap) => {
     allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
     updateUI();
     
-    // [수정] DOM이 안정화된 후 배너를 그리도록 0.1초 지연
-    setTimeout(() => {
-        renderBanners();
-    }, 100);
+    // [핵심 수정] 배너는 아직 그려지지 않았고, 주식 데이터가 로드되었을 때만 딱 1번 실행
+    if (!isBannerRendered && allStocks.length > 0) {
+        setTimeout(() => {
+            renderBanners();
+            isBannerRendered = true; // 렌더링 완료 후 플래그 차단
+            console.log("--- [배너] 최초 1회 렌더링 완료 (이후 업데이트 차단) ---");
+        }, 100);
+    }
 });
 
 // 2. [추가 필수] 전체 유저 보유량 변동 감시 (랭킹 전용)
