@@ -19,10 +19,62 @@
         .btn-google { background: white; color: #334155; display: flex; align-items: center; gap: 10px; font-size: 16px; }
         button:hover { opacity: 0.8; transform: translateY(-1px); }
         #admin-info { margin-bottom: 20px; font-size: 14px; color: #94a3b8; }
+
+        /* 랭킹 미리보기 테이블 */
+        .ranking-preview {
+            margin-top: 15px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #334155;
+            display: none;
+        }
+        .ranking-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .ranking-preview th {
+            background: #0f172a;
+            color: #38bdf8;
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 700;
+        }
+        .ranking-preview td {
+            padding: 10px 14px;
+            border-top: 1px solid #1e293b;
+            color: #f8fafc;
+        }
+        .ranking-preview tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+        .rank-badge {
+            display: inline-block;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            background: #38bdf8;
+            color: #0f172a;
+            font-weight: 800;
+            font-size: 12px;
+            text-align: center;
+            line-height: 22px;
+        }
+        .rank-badge.gold   { background: #f59e0b; }
+        .rank-badge.silver { background: #94a3b8; }
+        .rank-badge.bronze { background: #b45309; }
+
+        /* 상태 칩 */
+        .status-chip {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .status-chip.saved    { background: #166534; color: #86efac; }
+        .status-chip.unsaved  { background: #7c2d12; color: #fca5a5; }
+        .status-chip.loading  { background: #1e3a5f; color: #93c5fd; }
     </style>
 </head>
 <body>
-
 <div id="login-section" class="login-box">
     <h2 style="margin:0">Admin Auth</h2>
     <p style="color:#94a3b8; font-size:14px">관리자 계정으로 로그인하세요.</p>
@@ -31,43 +83,85 @@
         Google로 로그인
     </button>
 </div>
-
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
+
+    <!-- ════════════════════════════════════════════
+         🏆  랭킹 TOP5 관리  (신규 섹션)
+    ════════════════════════════════════════════ -->
+    <div class="container" style="display:block; border-color: #a855f7;">
+        <h1>🏆 랭킹 TOP5 관리</h1>
+        <div class="info-box">
+            모든 유저의 보유 주식을 집계하여 <b>/rankings/top5</b> 경로에 저장합니다.<br>
+            메인 페이지는 이 경로만 구독하므로, <span style="color:#38bdf8">users/ 전체를 읽지 않아도 됩니다.</span><br>
+            거래량이 많을 때 수동으로 눌러 최신 상태를 반영하세요.
+        </div>
+
+        <!-- 현재 저장된 TOP5 상태 -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <span style="font-size:13px; color:#94a3b8;">저장된 TOP5 상태:</span>
+            <span id="ranking-status" class="status-chip loading">불러오는 중...</span>
+        </div>
+
+        <!-- 액션 버튼 -->
+        <div style="display:flex; gap:10px;">
+            <button class="btn-success" style="flex:1;" onclick="previewRankings()">
+                🔍 집계 미리보기
+            </button>
+            <button class="btn-primary" style="flex:2; margin-top:0;" onclick="saveRankingsToFirebase()">
+                💾 TOP5 저장 (DB 반영)
+            </button>
+        </div>
+
+        <!-- 자동 갱신 옵션 -->
+        <div style="margin-top:14px; display:flex; align-items:center; gap:10px; background:#0f172a; padding:10px 14px; border-radius:8px; border:1px solid #334155;">
+            <input type="checkbox" id="auto-rank-update" style="width:16px;height:16px;accent-color:#a855f7; flex:none;">
+            <label for="auto-rank-update" style="font-size:13px; color:#cbd5e1; cursor:pointer;">
+                주가 수정·상장·삭제 작업 시 <b>TOP5 자동 갱신</b> (이 탭이 열려있는 동안)
+            </label>
+        </div>
+
+        <!-- 미리보기 테이블 -->
+        <div class="ranking-preview" id="ranking-preview-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>순위</th>
+                        <th>스트리머</th>
+                        <th>총 보유량</th>
+                        <th>현재가</th>
+                    </tr>
+                </thead>
+                <tbody id="ranking-preview-body"></tbody>
+            </table>
+        </div>
+    </div>
+    <!-- ════════════ 랭킹 섹션 끝 ════════════ -->
 
     <div class="container" style="display:block">
     <h1>🔍 개별 종목 관리</h1>
     <div class="info-box">종목 이름을 검색하여 가격을 직접 수정할 수 있습니다.</div>
     <input type="text" id="admin-search" placeholder="스트리머 검색..." style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box; margin-bottom:15px;">
-    
-    <div id="admin-stock-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;">
-        </div>
+    <div id="admin-stock-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;"></div>
 </div>
 
 <div class="container" style="display:block; border-color: #f59e0b;">
     <h1>🛠 종목 상세 정보 수정</h1>
     <div class="info-box">닉네임을 입력하고 '불러오기'를 누르면 현재 저장된 모든 정보를 수정할 수 있습니다.</div>
-    
     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
         <input type="text" id="edit-search-name" placeholder="수정할 스트리머 닉네임" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
         <button class="btn-success" onclick="loadStockData()" style="white-space:nowrap;">불러오기</button>
     </div>
-
     <div id="edit-form" style="display: none; flex-direction: column; gap: 10px; border-top: 1px solid #334155; padding-top: 15px;">
         <div style="font-size: 12px; color: #94a3b8;">종목 ID: <span id="edit-stock-id">-</span></div>
-        
         <label style="font-size: 13px; color: #38bdf8;">현재 가격 (원)</label>
         <input type="number" id="edit-stock-price" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
-        
         <label style="font-size: 13px; color: #38bdf8;">배너 이미지 경로</label>
         <input type="text" id="edit-stock-banner" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
-        
         <label style="font-size: 13px; color: #38bdf8;">방송국/이동 링크</label>
         <input type="text" id="edit-stock-link" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
-        
         <label style="font-size: 13px; color: #38bdf8;">광고 종료일 (YYYY-MM-DD)</label>
         <input type="text" id="edit-stock-date" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;" placeholder="예: 2026-03-15">
-
         <button class="btn-primary" style="background: #f59e0b; color: #0f172a;" onclick="updateStockData()">정보 최종 수정하기</button>
     </div>
 </div>
@@ -107,17 +201,15 @@
         <input type="text" id="banner-nickname" placeholder="대상 스트리머 닉네임 (정확히 입력)" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
         <input type="text" id="banner-img-url" placeholder="배너 이미지(GIF/PNG) 주소" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
         <input type="text" id="banner-link-url" placeholder="클릭 시 이동할 링크 (미입력 시 기본 방송국)" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-        
         <div style="display: flex; align-items: center; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #475569;">
             <label for="banner-days" style="font-size: 13px; color: #94a3b8; white-space: nowrap;">노출 기간 설정:</label>
             <input type="number" id="banner-days" placeholder="예: 7" min="1" max="365" style="flex: 1; background: transparent; border: none; color: #38bdf8; font-size: 15px; outline: none;">
             <span style="color: #94a3b8; font-size: 13px; margin-left: 5px;">일 동안</span>
         </div>
-
         <button class="btn-primary" onclick="window.addBannerToStock()">배너 및 노출 기간 적용</button>
     </div>
 </div>
-    
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -133,23 +225,38 @@
         projectId: "soop-stock-market",
         appId: "1:997788925900:web:cb613d438efec019a3a769"
     };
-
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
-
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
     // --- 데이터 상태 관리 ---
     let allStocksData = {};
 
-    // 주식 데이터 실시간 감시는 여기서 '한 번만' 등록합니다.
     onValue(ref(db, 'stocks/'), (snap) => {
         allStocksData = snap.val() || {};
-        // 관리자 화면이 켜져 있을 때만 리스트 갱신
         if (document.getElementById('admin-section').style.display === 'block') {
             renderAdminStockList();
+            // 자동 갱신 체크박스가 켜져 있으면 랭킹도 갱신
+            if (document.getElementById('auto-rank-update')?.checked) {
+                saveRankingsToFirebase(true); // silent=true (알림 없이)
+            }
+        }
+    });
+
+    // 현재 저장된 /rankings/top5 상태 표시
+    onValue(ref(db, 'rankings/top5'), (snap) => {
+        const statusEl = document.getElementById('ranking-status');
+        if (!statusEl) return;
+        if (snap.exists()) {
+            const data = snap.val();
+            const savedAt = data.savedAt ? new Date(data.savedAt).toLocaleString('ko-KR') : '시각 불명';
+            statusEl.className = 'status-chip saved';
+            statusEl.innerText = `✅ 저장됨 (${savedAt})`;
+        } else {
+            statusEl.className = 'status-chip unsaved';
+            statusEl.innerText = '❌ 저장 안 됨';
         }
     });
 
@@ -157,17 +264,14 @@
     window.login = () => {
         signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
     };
-
-    window.logout = () => {
-        signOut(auth);
-    };
+    window.logout = () => { signOut(auth); };
 
     onAuthStateChanged(auth, (user) => {
         if (user && user.email === ADMIN_EMAIL) {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-section').style.display = 'block';
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
-            renderAdminStockList(); // 초기 로드
+            renderAdminStockList();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -175,12 +279,148 @@
         }
     });
 
-    // --- 주식 관리 함수들 ---
+    // ════════════════════════════════════════════
+    //  🏆  랭킹 TOP5 계산 & 저장 함수 (핵심 신규)
+    // ════════════════════════════════════════════
+
+    /**
+     * users/ 전체를 읽어 종목별 총 보유량을 집계하고
+     * 상위 5개를 반환합니다.
+     */
+    async function calcTop5() {
+        const [usersSnap, stocksSnap] = await Promise.all([
+            get(ref(db, 'users/')),
+            get(ref(db, 'stocks/'))
+        ]);
+
+        const usersData  = usersSnap.val()  || {};
+        const stocksData = stocksSnap.val() || {};
+
+        // 종목별 총 보유량 합산
+        const ownership = {}; // { stockId: totalQty }
+
+        Object.values(usersData).forEach(user => {
+            if (!user.stocks) return;
+            Object.entries(user.stocks).forEach(([stockId, info]) => {
+                const qty = parseInt(info.qty) || 0;
+                if (qty > 0) ownership[stockId] = (ownership[stockId] || 0) + qty;
+            });
+        });
+
+        // 주식 정보와 조합 후 정렬
+        const ranked = Object.entries(ownership)
+            .map(([id, totalQty]) => {
+                const stock = stocksData[id] || {};
+                return {
+                    id,
+                    name:     stock.name  || id,
+                    price:    stock.price || 0,
+                    totalQty
+                };
+            })
+            .sort((a, b) => b.totalQty - a.totalQty)
+            .slice(0, 5);
+
+        return ranked;
+    }
+
+    /**
+     * 집계 결과를 테이블로 보여줍니다 (DB 저장 없음).
+     */
+    window.previewRankings = async function() {
+        const statusEl = document.getElementById('ranking-status');
+        statusEl.className = 'status-chip loading';
+        statusEl.innerText = '집계 중...';
+
+        try {
+            const top5 = await calcTop5();
+            renderPreviewTable(top5);
+            statusEl.className = 'status-chip unsaved';
+            statusEl.innerText = '⚠️ 미리보기 (아직 저장 안 됨)';
+        } catch(e) {
+            console.error(e);
+            alert("집계 중 오류: " + e.message);
+            statusEl.className = 'status-chip unsaved';
+            statusEl.innerText = '오류 발생';
+        }
+    };
+
+    /**
+     * 집계 후 /rankings/top5 에 저장합니다.
+     * @param {boolean} silent - true면 완료 alert 생략 (자동 갱신 시 사용)
+     */
+    window.saveRankingsToFirebase = async function(silent = false) {
+        const statusEl = document.getElementById('ranking-status');
+        statusEl.className = 'status-chip loading';
+        statusEl.innerText = '저장 중...';
+
+        try {
+            const top5 = await calcTop5();
+
+            // DB에 저장할 구조
+            // { savedAt, items: [ {rank, id, name, price, totalQty}, ... ] }
+            const payload = {
+                savedAt: new Date().toISOString(),
+                items: top5.map((s, i) => ({
+                    rank:     i + 1,
+                    id:       s.id,
+                    name:     s.name,
+                    price:    s.price,
+                    totalQty: s.totalQty
+                }))
+            };
+
+            await set(ref(db, 'rankings/top5'), payload);
+
+            // 미리보기 테이블도 갱신
+            renderPreviewTable(top5);
+
+            if (!silent) {
+                alert(`✅ /rankings/top5 저장 완료!\n\n` +
+                      top5.map((s, i) => `${i+1}위 ${s.name} (${s.totalQty.toLocaleString()}주)`).join('\n'));
+            }
+
+            // onValue 리스너가 상태 칩을 자동 갱신하므로 여기선 별도 처리 불필요
+        } catch(e) {
+            console.error(e);
+            if (!silent) alert("저장 중 오류: " + e.message);
+            statusEl.className = 'status-chip unsaved';
+            statusEl.innerText = '저장 실패';
+        }
+    };
+
+    /** 미리보기 테이블 렌더링 헬퍼 */
+    function renderPreviewTable(top5) {
+        const tbody = document.getElementById('ranking-preview-body');
+        const tableWrap = document.getElementById('ranking-preview-table');
+        if (!tbody || !tableWrap) return;
+
+        const badgeClass = ['gold', 'silver', 'bronze', '', ''];
+
+        if (top5.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">보유 데이터 없음</td></tr>`;
+        } else {
+            tbody.innerHTML = top5.map((s, i) => `
+                <tr>
+                    <td><span class="rank-badge ${badgeClass[i]}">${i + 1}</span></td>
+                    <td style="font-weight:700;">${s.name}</td>
+                    <td style="color:#38bdf8;">${s.totalQty.toLocaleString()}주</td>
+                    <td style="color:#94a3b8;">${s.price.toLocaleString()}원</td>
+                </tr>
+            `).join('');
+        }
+
+        tableWrap.style.display = 'block';
+    }
+
+    // ════════════════════════════════════════════
+    //  기존 관리 함수들 (변경 없음)
+    // ════════════════════════════════════════════
+
     function renderAdminStockList() {
         const searchVal = document.getElementById('admin-search').value.toLowerCase();
         const listDiv = document.getElementById('admin-stock-list');
         if (!listDiv) return;
-
         listDiv.innerHTML = "";
         Object.entries(allStocksData).forEach(([id, s]) => {
             if (s.name.toLowerCase().includes(searchVal)) {
@@ -189,7 +429,6 @@
                 item.style.padding = "10px";
                 item.style.background = "#0f172a";
                 item.style.borderRadius = "8px";
-                
                 item.innerHTML = `
                     <div style="flex:1; font-size:14px;">${s.name}</div>
                     <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
@@ -203,17 +442,14 @@
     window.updateSinglePrice = async function(id) {
         const newPrice = parseInt(document.getElementById(`input-${id}`).value);
         if (isNaN(newPrice)) return alert("정확한 가격을 입력해주세요.");
-
         const oldStock = allStocksData[id];
         let history = oldStock.history || [oldStock.price];
         history.push(newPrice);
         if (history.length > 20) history.shift();
-
         const updates = {};
         updates[`stocks/${id}/price`] = newPrice;
         updates[`stocks/${id}/history`] = history;
         updates[`stocks/${id}/change`] = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
-
         try {
             await update(ref(db), updates);
             alert(`✅ ${oldStock.name}의 가격이 ${newPrice.toLocaleString()}원으로 수정되었습니다.`);
@@ -222,228 +458,143 @@
         }
     };
 
-// 1. 데이터 불러오기 함수
-window.loadStockData = async function() {
-    const searchName = document.getElementById('edit-search-name').value.trim();
-    if (!searchName) return alert("닉네임을 입력해주세요.");
+    window.loadStockData = async function() {
+        const searchName = document.getElementById('edit-search-name').value.trim();
+        if (!searchName) return alert("닉네임을 입력해주세요.");
+        try {
+            const snapshot = await get(ref(db, 'stocks/'));
+            const data = snapshot.val();
+            if (!data) return alert("데이터가 없습니다.");
+            let targetId = null, targetData = null;
+            Object.entries(data).forEach(([id, stock]) => {
+                if (stock.name === searchName) { targetId = id; targetData = stock; }
+            });
+            if (!targetId) return alert("해당 종목을 찾을 수 없습니다.");
+            document.getElementById('edit-stock-id').innerText = targetId;
+            document.getElementById('edit-stock-price').value = targetData.price || 0;
+            document.getElementById('edit-stock-banner').value = targetData.bannerImg || "";
+            document.getElementById('edit-stock-link').value = targetData.link || "";
+            document.getElementById('edit-stock-date').value = targetData.bannerEndDate || "";
+            document.getElementById('edit-form').style.display = 'flex';
+            alert(`✅ '${searchName}' 데이터를 불러왔습니다.`);
+        } catch (e) {
+            alert("불러오기 실패: " + e.message);
+        }
+    };
 
-    try {
-        const snapshot = await get(ref(db, 'stocks/'));
-        const data = snapshot.val();
-        if (!data) return alert("데이터가 없습니다.");
+    window.updateStockData = async function() {
+        const stockId = document.getElementById('edit-stock-id').innerText;
+        if (stockId === "-") return;
+        const newPrice  = parseInt(document.getElementById('edit-stock-price').value);
+        const newBanner = document.getElementById('edit-stock-banner').value.trim();
+        const newLink   = document.getElementById('edit-stock-link').value.trim();
+        const newDate   = document.getElementById('edit-stock-date').value.trim();
+        if (isNaN(newPrice)) return alert("가격은 숫자여야 합니다.");
+        try {
+            const updates = {};
+            updates[`stocks/${stockId}/price`]         = newPrice;
+            updates[`stocks/${stockId}/bannerImg`]     = newBanner;
+            updates[`stocks/${stockId}/link`]          = newLink;
+            updates[`stocks/${stockId}/bannerEndDate`] = newDate;
+            await update(ref(db), updates);
+            alert("✅ 종목 정보가 성공적으로 수정되었습니다!");
+            document.getElementById('edit-form').style.display = 'none';
+            document.getElementById('edit-search-name').value = "";
+        } catch (e) {
+            alert("수정 실패: " + e.message);
+        }
+    };
 
-        let targetId = null;
-        let targetData = null;
-
-        // 닉네임으로 찾기
-        Object.entries(data).forEach(([id, stock]) => {
-            if (stock.name === searchName) {
-                targetId = id;
-                targetData = stock;
-            }
-        });
-
-        if (!targetId) return alert("해당 종목을 찾을 수 없습니다.");
-
-        // 폼에 데이터 채우기
-        document.getElementById('edit-stock-id').innerText = targetId;
-        document.getElementById('edit-stock-price').value = targetData.price || 0;
-        document.getElementById('edit-stock-banner').value = targetData.bannerImg || "";
-        document.getElementById('edit-stock-link').value = targetData.link || "";
-        document.getElementById('edit-stock-date').value = targetData.bannerEndDate || "";
-
-        document.getElementById('edit-form').style.display = 'flex';
-        alert(`✅ '${searchName}' 데이터를 불러왔습니다.`);
-
-    } catch (e) {
-        console.error(e);
-        alert("불러오기 실패: " + e.message);
-    }
-};
-
-// 2. 데이터 최종 업데이트 함수
-window.updateStockData = async function() {
-    const stockId = document.getElementById('edit-stock-id').innerText;
-    if (stockId === "-") return;
-
-    const newPrice = parseInt(document.getElementById('edit-stock-price').value);
-    const newBanner = document.getElementById('edit-stock-banner').value.trim();
-    const newLink = document.getElementById('edit-stock-link').value.trim();
-    const newDate = document.getElementById('edit-stock-date').value.trim();
-
-    if (isNaN(newPrice)) return alert("가격은 숫자여야 합니다.");
-
-    try {
-        const updates = {};
-        updates[`stocks/${stockId}/price`] = newPrice;
-        updates[`stocks/${stockId}/bannerImg`] = newBanner;
-        updates[`stocks/${stockId}/link`] = newLink;
-        updates[`stocks/${stockId}/bannerEndDate`] = newDate;
-
-        await update(ref(db), updates);
-        alert("✅ 종목 정보가 성공적으로 수정되었습니다!");
-        
-        // 폼 숨기기 및 초기화
-        document.getElementById('edit-form').style.display = 'none';
-        document.getElementById('edit-search-name').value = "";
-    } catch (e) {
-        console.error(e);
-        alert("수정 실패: " + e.message);
-    }
-};
-
-    // 검색창 입력 이벤트
     document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
 
-    // 고도화된 중복 닉네임 정리 로직
-window.cleanupDuplicateStocks = async function() {
-    try {
-        const snapshot = await get(ref(db, 'stocks/'));
-        const data = snapshot.val();
-        if (!data) return alert("데이터가 없습니다.");
-
-        const deleteUpdates = {};
-        let duplicateFoundCount = 0;
-
-        // [필터 설정] 중복 판정 시 무시할 흔한 단어들
-        const commonTags = ['BJ', 'TV', 'S2', 'H_', 'T1', 'DK', '공식', 'S', 'P'];
-        
-        const stockList = Object.entries(data).map(([id, stock]) => {
-            const name = stock.name.trim();
-            // 1. 태그와 특수문자를 제거한 '순수 닉네임' 생성 (비교용)
-            let pureName = name;
-            commonTags.forEach(tag => {
-                const regex = new RegExp(tag, 'gi');
-                pureName = pureName.replace(regex, '');
-            });
-            pureName = pureName.replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g, '').toLowerCase();
-
-            return { id, originalName: name, pureName };
-        }).sort((a, b) => a.id.localeCompare(b.id));
-
-        for (let i = 0; i < stockList.length; i++) {
-            const master = stockList[i];
-            if (deleteUpdates[`stocks/${master.id}`] === null) continue;
-            
-            // 너무 짧은 이름(예: "운", "엘")이 master가 되어 모두를 지우는 것 방지
-            if (master.pureName.length < 2) continue;
-
-            for (let j = i + 1; j < stockList.length; j++) {
-                const target = stockList[j];
-                if (deleteUpdates[`stocks/${target.id}`] === null) continue;
-
-                let isMatch = false;
-
-                // [강화된 판정 규칙]
-                // 1. 순수 닉네임이 완전히 일치하는 경우 (예: "미르_" vs "미르_MIR" -> 둘 다 "미르")
-                if (master.pureName === target.pureName) {
-                    isMatch = true;
-                }
-                // 2. 마스터의 이름이 타겟에 포함되지만, 타겟이 너무 길지 않을 때 (유사성 검사)
-                // 예: "봉준" -> "짭봉준"(O), "봉준" -> "봉준호"(X, 이름 자체가 다름)
-                else if (target.originalName.includes(master.originalName)) {
-                    const diffLength = target.originalName.length - master.originalName.length;
-                    if (diffLength > 0 && diffLength <= 4) { // 4글자 내외의 수식어만 허용
-                        isMatch = true;
+    window.cleanupDuplicateStocks = async function() {
+        try {
+            const snapshot = await get(ref(db, 'stocks/'));
+            const data = snapshot.val();
+            if (!data) return alert("데이터가 없습니다.");
+            const deleteUpdates = {};
+            let duplicateFoundCount = 0;
+            const commonTags = ['BJ', 'TV', 'S2', 'H_', 'T1', 'DK', '공식', 'S', 'P'];
+            const stockList = Object.entries(data).map(([id, stock]) => {
+                const name = stock.name.trim();
+                let pureName = name;
+                commonTags.forEach(tag => { pureName = pureName.replace(new RegExp(tag, 'gi'), ''); });
+                pureName = pureName.replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g, '').toLowerCase();
+                return { id, originalName: name, pureName };
+            }).sort((a, b) => a.id.localeCompare(b.id));
+            for (let i = 0; i < stockList.length; i++) {
+                const master = stockList[i];
+                if (deleteUpdates[`stocks/${master.id}`] === null) continue;
+                if (master.pureName.length < 2) continue;
+                for (let j = i + 1; j < stockList.length; j++) {
+                    const target = stockList[j];
+                    if (deleteUpdates[`stocks/${target.id}`] === null) continue;
+                    let isMatch = false;
+                    if (master.pureName === target.pureName) isMatch = true;
+                    else if (target.originalName.includes(master.originalName)) {
+                        const diffLength = target.originalName.length - master.originalName.length;
+                        if (diffLength > 0 && diffLength <= 4) isMatch = true;
+                    }
+                    if (isMatch && master.pureName !== target.pureName) {
+                        if (master.originalName.includes('BJ') && target.originalName.includes('BJ')) isMatch = false;
+                    }
+                    if (isMatch) {
+                        deleteUpdates[`stocks/${target.id}`] = null;
+                        duplicateFoundCount++;
                     }
                 }
-
-                // [예외 처리] 로그에 나타난 오탐지 방어
-                // "BJ채리"가 "BJ햄찡"을 지우지 못하게: 순수 이름이 다르면 BJ 태그만으로는 매칭 안함
-                if (isMatch && master.pureName !== target.pureName) {
-                    // 둘 다 BJ인데 이름이 다르면 패스
-                    const isBothBJ = master.originalName.includes('BJ') && target.originalName.includes('BJ');
-                    if (isBothBJ) isMatch = false;
-                }
-
-                if (isMatch) {
-                    deleteUpdates[`stocks/${target.id}`] = null;
-                    duplicateFoundCount++;
-                    console.log(`[정화 결정] 원본: ${master.originalName} -> 중복: ${target.originalName}`);
-                }
             }
+            if (duplicateFoundCount === 0) return alert("✅ 중복이 없습니다.");
+            if (confirm(`${duplicateFoundCount}개의 중복 종목을 삭제하시겠습니까?`)) {
+                await update(ref(db), deleteUpdates);
+                alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
+            }
+        } catch (e) {
+            alert("오류 발생: " + e.message);
         }
+    };
 
-        if (duplicateFoundCount === 0) return alert("✅ 정교한 필터링 결과 중복이 없습니다.");
-
-        const msg = `🔍 분석 결과: 총 ${duplicateFoundCount}개의 중복 종목 발견.\n\n` +
-                    `단순 포함이 아닌 '순수 이름' 일치 여부와 이름 길이를 계산하여 정교화했습니다.\n` +
-                    `정말 삭제하시겠습니까?`;
-
-        if (confirm(msg)) {
-            await update(ref(db), deleteUpdates);
-            alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
-        }
-    } catch (e) {
-        console.error(e);
-        alert("오류 발생: " + e.message);
-    }
-};
-
-    // 주식 일괄 상장
     window.uploadStocks = async function() {
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("이름을 입력해주세요.");
         const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
         const stocks = {};
         uniqueNames.forEach((name, i) => {
-            stocks[`id_${Date.now()}_${i}`] = { // ID 중복 방지를 위해 Date.now() 추가
-                name: name,
-                price: 10000,
-                change: 0,
-                history: [10000, 10000]
-            };
+            stocks[`id_${Date.now()}_${i}`] = { name, price: 10000, change: 0, history: [10000, 10000] };
         });
-        if(confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
+        if (confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
             try {
-                // 기존 데이터 유지하며 추가하려면 update, 덮어쓰려면 set
-                await update(ref(db, 'stocks/'), stocks); 
+                await update(ref(db, 'stocks/'), stocks);
                 alert("🎉 상장이 완료되었습니다!");
                 document.getElementById('list').value = "";
             } catch (e) { alert("오류 발생: " + e.message); }
         }
-    }
+    };
 
-    // 입력된 닉네임들을 찾아 일괄 삭제하는 함수
-window.deleteStocks = async function() {
-    const text = document.getElementById('list').value;
-    if (!text.trim()) return alert("삭제할 이름을 입력해주세요.");
-    
-    // 입력된 이름들 배열로 변환
-    const namesToDelete = text.split('\n').map(n => n.trim()).filter(n => n !== "");
-    
-    try {
-        const snapshot = await get(ref(db, 'stocks/'));
-        const data = snapshot.val();
-        if (!data) return alert("데이터가 없습니다.");
-
-        const deleteUpdates = {};
-        let foundCount = 0;
-
-        // DB를 돌면서 입력한 이름과 일치하는 ID 찾기
-        Object.entries(data).forEach(([id, stock]) => {
-            if (namesToDelete.includes(stock.name)) {
-                deleteUpdates[`stocks/${id}`] = null;
-                foundCount++;
+    window.deleteStocks = async function() {
+        const text = document.getElementById('list').value;
+        if (!text.trim()) return alert("삭제할 이름을 입력해주세요.");
+        const namesToDelete = text.split('\n').map(n => n.trim()).filter(n => n !== "");
+        try {
+            const snapshot = await get(ref(db, 'stocks/'));
+            const data = snapshot.val();
+            if (!data) return alert("데이터가 없습니다.");
+            const deleteUpdates = {};
+            let foundCount = 0;
+            Object.entries(data).forEach(([id, stock]) => {
+                if (namesToDelete.includes(stock.name)) { deleteUpdates[`stocks/${id}`] = null; foundCount++; }
+            });
+            if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
+            if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
+                await update(ref(db), deleteUpdates);
+                alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
+                document.getElementById('list').value = "";
             }
-        });
-
-        if (foundCount === 0) {
-            return alert("❌ 입력하신 이름과 일치하는 종목이 목록에 없습니다.");
+        } catch (e) {
+            alert("삭제 중 오류 발생: " + e.message);
         }
+    };
 
-        if (confirm(`입력하신 ${namesToDelete.length}명 중 ${foundCount}명을 목록에서 삭제하시겠습니까?`)) {
-            await update(ref(db), deleteUpdates);
-            alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
-            document.getElementById('list').value = ""; // 입력창 비우기
-        }
-    } catch (e) {
-        console.error(e);
-        alert("삭제 중 오류 발생: " + e.message);
-    }
-};
-
-    // 주가 일괄 조정
     window.adjustAllPrices = async function() {
         const percent = parseFloat(document.getElementById('percent-input').value);
         if (isNaN(percent)) return alert("숫자를 입력해주세요.");
@@ -466,75 +617,38 @@ window.deleteStocks = async function() {
             await update(ref(db), updates);
             alert(`🔥 전 종목 주가가 ${percent}% 조정되었습니다!`);
         } catch (e) { alert("오류 발생: " + e.message); }
-    }
+    };
 
-    // 배너 정보 및 광고 기간 업데이트 함수
-window.addBannerToStock = async function() {
-    const targetNickname = document.getElementById('banner-nickname').value.trim();
-    const imgUrl = document.getElementById('banner-img-url').value.trim();
-    const linkUrl = document.getElementById('banner-link-url').value.trim();
-    
-    // [수정] 날짜 대신 입력받은 일수(숫자)를 가져옵니다.
-    const daysInput = document.getElementById('banner-days').value; 
-
-    // 필수 항목 체크 (닉네임, 이미지, 노출 일수)
-    if (!targetNickname || !imgUrl || !daysInput) {
-        return alert("닉네임, 이미지 주소, 노출 기간(일)은 필수 입력 항목입니다.");
-    }
-
-    // [핵심] 현재 시간 기준으로 종료 날짜 자동 계산
-    const today = new Date();
-    const endDate = new Date(today);
-    endDate.setDate(today.getDate() + parseInt(daysInput)); // 오늘 + 입력한 일수
-
-    // Firebase에 저장할 YYYY-MM-DD 형식 문자열 생성
-    const endDateStr = endDate.toISOString().split('T')[0];
-
-    try {
-        const snapshot = await get(ref(db, 'stocks/'));
-        const data = snapshot.val();
-        if (!data) return alert("데이터가 없습니다.");
-
-        let targetId = null;
-        
-        // 1. 닉네임이 일치하는 종목 찾기
-        Object.entries(data).forEach(([id, stock]) => {
-            if (stock.name === targetNickname) {
-                targetId = id;
-            }
-        });
-
-        if (!targetId) {
-            return alert(`❌ '${targetNickname}' 이름과 정확히 일치하는 종목을 찾을 수 없습니다.`);
+    window.addBannerToStock = async function() {
+        const targetNickname = document.getElementById('banner-nickname').value.trim();
+        const imgUrl  = document.getElementById('banner-img-url').value.trim();
+        const linkUrl = document.getElementById('banner-link-url').value.trim();
+        const daysInput = document.getElementById('banner-days').value;
+        if (!targetNickname || !imgUrl || !daysInput) return alert("닉네임, 이미지 주소, 노출 기간(일)은 필수 입력 항목입니다.");
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + parseInt(daysInput));
+        const endDateStr = endDate.toISOString().split('T')[0];
+        try {
+            const snapshot = await get(ref(db, 'stocks/'));
+            const data = snapshot.val();
+            if (!data) return alert("데이터가 없습니다.");
+            let targetId = null;
+            Object.entries(data).forEach(([id, stock]) => { if (stock.name === targetNickname) targetId = id; });
+            if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
+            const updates = {};
+            updates[`stocks/${targetId}/bannerImg`]     = imgUrl;
+            updates[`stocks/${targetId}/bannerEndDate`] = endDateStr;
+            updates[`stocks/${targetId}/link`] = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
+            await update(ref(db), updates);
+            alert(`✅ ${targetNickname} 종목에 배너가 적용되었습니다!\n📅 종료일: ${endDateStr}`);
+            document.getElementById('banner-nickname').value = "";
+            document.getElementById('banner-img-url').value = "";
+            document.getElementById('banner-link-url').value = "";
+            document.getElementById('banner-days').value = "";
+        } catch (e) {
+            alert("배너 추가 중 오류 발생: " + e.message);
         }
-
-        // 2. 업데이트 데이터 생성
-        const updates = {};
-        updates[`stocks/${targetId}/bannerImg`] = imgUrl;
-        updates[`stocks/${targetId}/bannerEndDate`] = endDateStr; // 계산된 날짜("2026-03-15" 등) 저장
-        
-        if (linkUrl) {
-            updates[`stocks/${targetId}/link`] = linkUrl;
-        } else {
-            updates[`stocks/${targetId}/link`] = `https://www.sooplive.co.kr/station/${targetId}`;
-        }
-
-        // 3. Firebase 업데이트 실행
-        await update(ref(db), updates);
-        
-        alert(`✅ ${targetNickname} 종목에 배너가 적용되었습니다!\n📅 종료일: ${endDateStr} (지금부터 ${daysInput}일간 노출)`);
-        
-        // 입력창 초기화
-        document.getElementById('banner-nickname').value = "";
-        document.getElementById('banner-img-url').value = "";
-        document.getElementById('banner-link-url').value = "";
-        document.getElementById('banner-days').value = ""; // 입력창 초기화
-
-    } catch (e) {
-        console.error(e);
-        alert("배너 추가 중 오류 발생: " + e.message);
-    }
-};
+    };
 </script>
 </body>
 </html>
