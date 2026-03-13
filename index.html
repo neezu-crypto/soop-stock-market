@@ -57,19 +57,17 @@
             box-shadow: 0 0 30px rgba(56, 189, 248, 0.2);
         }
         .intro-logo {
-        /* font-size: 40px; 기존 이모지 크기 설정 삭제 */
         margin-bottom: 20px;
         display: flex;
-        justify-content: center; /* 이미지 중앙 정렬 */
+        justify-content: center;
         align-items: center;
         }
         .intro-logo img {
-        width: 60px;            /* 로고 이미지의 가로 크기 (원하는 대로 조정 가능) */
-        height: 60px;           /* 가로와 동일하게 설정하여 1:1 비율 유지 */
-        object-fit: contain;    /* 이미지 비율을 유지하면서 영역 내에 꽉 차게 표시 */
-        border-radius: 12px;    /* 부드러운 느낌을 위해 모서리를 약간 둥글게 (선택 사항) */
-        /* border: 2px solid var(--primary); 로고에 테두리를 넣고 싶다면 주석 해제 */
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3); /* 로고에 살짝 그림자 효과 (선택 사항) */
+        width: 60px;
+        height: 60px;
+        object-fit: contain;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
         .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
         .intro-desc  { color: var(--text-sub); line-height: 1.6; margin-bottom: 25px; }
@@ -151,16 +149,15 @@
         .my-stock-profit { font-weight: 700; font-size: 12px; }
         .my-stock-details { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sub); }
         .no-stock-msg { text-align: center; color: var(--text-sub); font-size: 12px; padding: 20px 0; }
-        /* 안내 문구 스타일 (수정)*/
         .my-stocks-guide {
         font-size: 13px;
         color: var(--text-sub);
         text-align: center;
         margin-top: 15px;
         padding-top: 10px;
-        border-top: 1px solid rgba(51, 65, 85, 0.5); /* 상단에 얇은 구분선 */
+        border-top: 1px solid rgba(51, 65, 85, 0.5);
         opacity: 0.8;
-        pointer-events: none; /* 클릭 방해 금지 */
+        pointer-events: none;
         }
         @media (max-width: 1300px) { .my-stocks-container { display: none; } }
     </style>
@@ -243,7 +240,13 @@
 <div class="wrapper">
     <div class="wallet-bar">
         <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
-        <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
+        <!-- [추가] 우측: 초기자산 안내 + 동시접속자 수 -->
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+            <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
+            <div style="font-size:12px;color:var(--text-sub);">
+                🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
+            </div>
+        </div>
     </div>
     <header>
         <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
@@ -267,7 +270,7 @@
 
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set, serverTimestamp }
+import { getDatabase, ref, onValue, runTransaction, get, set, increment, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
@@ -303,7 +306,7 @@ sellSound.volume = 0.2;
 // ── 랭킹 디바운싱 상태 ──────────────────────────────────────
 // 30초에 최대 1번만 Firebase에 실제로 write합니다.
 // 그 사이에 발생한 모든 거래의 qtyDelta는 pendingDeltas에 누적됩니다.
-const RANKING_DEBOUNCE_MS = 30000; // 30초
+const RANKING_DEBOUNCE_MS = 30000;
 let rankingDebounceTimer  = null;  // 예약된 타이머
 let pendingDeltas         = {};    // { stockId: 누적 qtyDelta }
 let lastRankingWriteTime  = 0;     // 마지막 실제 write 시각
@@ -334,12 +337,11 @@ function renderRankingFromCache(items) {
     `).join('');
 }
 
-// 1. 페이지 로드 시(초기 1회) 부모에게 이벤트 위임 ------------------------------
+// ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
 document.getElementById('my-stocks-list').addEventListener('click', (e) => {
-    // 클릭된 요소나 그 부모 중 .my-stock-item이 있는지 확인
     const item = e.target.closest('.my-stock-item');
     if (item) {
-        const stockName = item.getAttribute('data-name'); // 아이템 생성 시 넣은 이름 데이터
+        const stockName = item.getAttribute('data-name');
         selectStockForSearch(stockName);
     }
 });
@@ -348,7 +350,6 @@ document.getElementById('my-stocks-list').addEventListener('click', (e) => {
 function renderMyPortfolio() {
     const portfolioDiv       = document.getElementById('my-stocks-list');
     const totalAssetsDisplay = document.getElementById('total-assets');
-    const searchInput        = document.getElementById('search-input'); // 검색창 참조 추가
 
     if (!portfolioDiv || !myData?.stocks) return;
 
@@ -376,11 +377,8 @@ function renderMyPortfolio() {
 
         const item = document.createElement('div');
         item.className = 'my-stock-item';
-        item.setAttribute('data-name', stockData.name); // 이름을 데이터 속성으로 저장
-        
-        // --- 클릭 시 검색창에 이름 넣기 로직 추가 ---
-        item.style.cursor = 'pointer'; // 클릭 가능함을 시각적으로 표시
-        
+        item.setAttribute('data-name', stockData.name);
+        item.style.cursor = 'pointer';
         item.innerHTML = `
             <div class="my-stock-info">
                 <span class="my-stock-name">${stockData.name}</span>
@@ -397,21 +395,12 @@ function renderMyPortfolio() {
     if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
 }
 
-// 보유 주식 클릭 시 검색창으로 전달하는 함수 --------------------------------
 function selectStockForSearch(stockName) {
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
-        // 1. 기존 검색어 지우고 새 이름 넣기
         searchInput.value = stockName;
-        
-        // 2. 검색창에 포커스 주기 (시각적 피드백)
         searchInput.focus();
-
-        // 3. 중요한 부분: 값이 바뀌었다는 것을 브라우저에 알려서 리스트를 필터링하게 함
-        // 기존에 작성하신 검색 필터링 로직이 'input' 이벤트에 연결되어 있다면 아래 코드가 실행시켜줍니다.
         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-        
-        // 4. (선택 사항) 화면 상단 검색창 위치로 부드럽게 스크롤
         searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
@@ -448,10 +437,29 @@ setTimeout(() => {
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         userUID = user.uid;
-        const userRef = ref(db, `users/${userUID}`);
+        const userRef    = ref(db, `users/${userUID}`);
+        const countRef   = ref(db, 'presence/count');
 
         if (!myData) myData = { cash: 1000000, stocks: {} };
 
+        // ── 동시접속자 카운터 ────────────────────────────────
+        // 접속 시 +1, 퇴장 시 Firebase 서버가 자동으로 -1 (onDisconnect)
+        // 카운터를 get() 1회만 읽어 화면에 표시 → 이후 갱신 없음 (구독 X)
+        try {
+            await runTransaction(countRef, (current) => Math.max(0, (current || 0) + 1));
+            onDisconnect(countRef).set(increment(-1));
+
+            const snap  = await get(countRef);
+            const count = snap.exists() ? snap.val() : 1;
+            const el    = document.getElementById('online-count');
+            if (el) el.innerText = count.toLocaleString();
+        } catch (e) {
+            console.warn('[presence] 카운터 처리 실패 (무시):', e.message);
+            const el = document.getElementById('online-count');
+            if (el) el.innerText = '?';
+        }
+
+        // 내 데이터 구독 (users/{uid} 단일 노드)
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
@@ -485,15 +493,12 @@ onAuthStateChanged(auth, async (user) => {
 //   - 1000개의 onValue 리스너가 30초에 1번만 깨어남
 //
 function scheduleRankingUpdate(stockId, qtyDelta) {
-    // 누적 delta 합산 (같은 종목의 여러 거래를 하나로 묶음)
     pendingDeltas[stockId] = (pendingDeltas[stockId] || 0) + qtyDelta;
 
-    // 이미 타이머가 예약돼 있으면 추가 예약 없이 누적만 함
     if (rankingDebounceTimer !== null) return;
 
-    // 마지막 write로부터 30초가 지났으면 즉시 실행, 아니면 남은 시간만큼 대기
-    const elapsed   = Date.now() - lastRankingWriteTime;
-    const waitTime  = Math.max(0, RANKING_DEBOUNCE_MS - elapsed);
+    const elapsed  = Date.now() - lastRankingWriteTime;
+    const waitTime = Math.max(0, RANKING_DEBOUNCE_MS - elapsed);
 
     rankingDebounceTimer = setTimeout(flushRankingUpdate, waitTime);
 }
@@ -501,7 +506,6 @@ function scheduleRankingUpdate(stockId, qtyDelta) {
 async function flushRankingUpdate() {
     rankingDebounceTimer = null;
 
-    // 처리할 delta가 없으면 종료
     const deltas = { ...pendingDeltas };
     pendingDeltas = {};
 
@@ -534,10 +538,7 @@ async function flushRankingUpdate() {
         items.sort((a, b) => b.totalQty - a.totalQty);
         items.forEach((item, i) => { item.rank = i + 1; });
 
-        await set(ref(db, 'rankings/top5'), {
-            savedAt: current.savedAt,
-            items
-        });
+        await set(ref(db, 'rankings/top5'), { savedAt: current.savedAt, items });
 
         lastRankingWriteTime = Date.now();
         console.log('[rankings] 디바운싱 write 완료:', deltas);
@@ -636,8 +637,6 @@ window.trade = async function (id, type, qty = 1) {
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
-
-        // [변경] 즉시 write 대신 디바운싱 큐에 등록
         scheduleRankingUpdate(id, qtyDelta);
 
     } catch (error) {
@@ -648,7 +647,7 @@ window.trade = async function (id, type, qty = 1) {
     } finally {
         setTimeout(() => {
             isTrading = false;
-            updateUI(true); // true: renderStocks()까지 실행해서 버튼 disabled 해제
+            updateUI(true);
         }, cooldownTime);
     }
 };
