@@ -552,7 +552,6 @@ window.trade = async function (id, type, qty = 1) {
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
-        updateUI(true);
 
         // [변경] 즉시 write 대신 디바운싱 큐에 등록
         scheduleRankingUpdate(id, qtyDelta);
@@ -563,7 +562,10 @@ window.trade = async function (id, type, qty = 1) {
         else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
         else alert("거래 중 오류가 발생했습니다.");
     } finally {
-        setTimeout(() => { isTrading = false; updateUI(false); }, cooldownTime);
+        setTimeout(() => {
+            isTrading = false;
+            updateUI(true); // true: renderStocks()까지 실행해서 버튼 disabled 해제
+        }, cooldownTime);
     }
 };
 
