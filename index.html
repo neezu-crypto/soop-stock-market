@@ -136,7 +136,7 @@
         .my-stocks-container {
             position: fixed; left: 80px; top: 50%; transform: translateY(-50%);
             width: 220px; background: var(--card-bg); border-radius: 20px;
-            border: 1px solid var(--primary); padding: 20px;
+            border: 1px solid var(--primary); padding: 20px 20px 15px 20px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 1000;
             max-height: 70vh; display: flex; flex-direction: column;
         }
@@ -144,12 +144,24 @@
         .my-stocks-list { overflow-y: auto; flex: 1; }
         .my-stocks-list::-webkit-scrollbar { width: 4px; }
         .my-stocks-list::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
-        .my-stock-item { margin-bottom: 12px; padding: 8px; border-radius: 8px; background: rgba(255,255,255,0.03); }
+        .my-stock-item { margin-bottom: 12px; padding: 8px; border-radius: 8px; background: rgba(255,255,255,0.03); cursor: pointer; transition: background 0.2s; }
+        .my-stock-item:hover { background: rgba(56, 189, 248, 0.1); border-radius: 8px; transition: background 0.2s; }
         .my-stock-info { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
         .my-stock-name   { font-weight: 700; color: var(--text-main); }
         .my-stock-profit { font-weight: 700; font-size: 12px; }
         .my-stock-details { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sub); }
         .no-stock-msg { text-align: center; color: var(--text-sub); font-size: 12px; padding: 20px 0; }
+        /* 안내 문구 스타일 */
+        .my-stocks-guide {
+        font-size: 13px;
+        color: var(--text-sub);
+        text-align: center;
+        margin-top: 15px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(51, 65, 85, 0.5); /* 상단에 얇은 구분선 */
+        opacity: 0.8;
+        pointer-events: none; /* 클릭 방해 금지 */
+        }
         @media (max-width: 1300px) { .my-stocks-container { display: none; } }
     </style>
 </head>
@@ -180,6 +192,9 @@
     </div>
     <div id="my-stocks-list" class="my-stocks-list">
         <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
+    </div>
+    <div class="my-stocks-guide">
+        💡 클릭 시 즉시 검색됩니다
     </div>
 </div>
 
@@ -319,14 +334,26 @@ function renderRankingFromCache(items) {
     `).join('');
 }
 
+// 1. 페이지 로드 시(초기 1회) 부모에게 이벤트 위임 ------------------------------
+document.getElementById('my-stocks-list').addEventListener('click', (e) => {
+    // 클릭된 요소나 그 부모 중 .my-stock-item이 있는지 확인
+    const item = e.target.closest('.my-stock-item');
+    if (item) {
+        const stockName = item.getAttribute('data-name'); // 아이템 생성 시 넣은 이름 데이터
+        selectStockForSearch(stockName);
+    }
+});
+
 // ── 내 보유 주식 패널 ────────────────────────────────────────
 function renderMyPortfolio() {
     const portfolioDiv       = document.getElementById('my-stocks-list');
     const totalAssetsDisplay = document.getElementById('total-assets');
+    const searchInput        = document.getElementById('search-input'); // 검색창 참조 추가
+
     if (!portfolioDiv || !myData?.stocks) return;
 
     const userStocks = myData.stocks;
-    const stockIds   = Object.keys(userStocks).filter(id => userStocks[id].qty > 0);
+    const stockIds   = Object.keys(userStocks).filter(id => userStocks[id] && userStocks[id].qty > 0);
     let totalStockValue = 0;
 
     if (stockIds.length === 0) {
@@ -349,6 +376,11 @@ function renderMyPortfolio() {
 
         const item = document.createElement('div');
         item.className = 'my-stock-item';
+        item.setAttribute('data-name', stockData.name); // 이름을 데이터 속성으로 저장
+        
+        // --- 클릭 시 검색창에 이름 넣기 로직 추가 ---
+        item.style.cursor = 'pointer'; // 클릭 가능함을 시각적으로 표시
+        
         item.innerHTML = `
             <div class="my-stock-info">
                 <span class="my-stock-name">${stockData.name}</span>
@@ -363,6 +395,25 @@ function renderMyPortfolio() {
     });
 
     if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
+}
+
+// 보유 주식 클릭 시 검색창으로 전달하는 함수 --------------------------------
+function selectStockForSearch(stockName) {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        // 1. 기존 검색어 지우고 새 이름 넣기
+        searchInput.value = stockName;
+        
+        // 2. 검색창에 포커스 주기 (시각적 피드백)
+        searchInput.focus();
+
+        // 3. 중요한 부분: 값이 바뀌었다는 것을 브라우저에 알려서 리스트를 필터링하게 함
+        // 기존에 작성하신 검색 필터링 로직이 'input' 이벤트에 연결되어 있다면 아래 코드가 실행시켜줍니다.
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        // 4. (선택 사항) 화면 상단 검색창 위치로 부드럽게 스크롤
+        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }
 
 // ── UI 갱신 ──────────────────────────────────────────────────
