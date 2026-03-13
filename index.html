@@ -619,7 +619,7 @@ window.trade = async function (id, type, qty = 1) {
 
             let history = currentStock.history || [currentStock.price];
             history.push(newPrice);
-            if (history.length > 20) history.shift();
+            if (history.length > 10) history.shift();
 
             return {
                 ...currentStock,
