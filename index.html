@@ -270,7 +270,7 @@
 
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set, onDisconnect, serverTimestamp }
+import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
@@ -284,7 +284,6 @@ const firebaseConfig = {
     projectId:   "soop-stock-market",
     appId:       "1:997788925900:web:cb613d438efec019a3a769"
 };
-    
 const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const auth = getAuth(app);
@@ -447,9 +446,8 @@ onAuthStateChanged(auth, async (user) => {
         // 접속 시 +1, 퇴장 시 Firebase 서버가 자동으로 -1 (onDisconnect)
         // 카운터를 get() 1회만 읽어 화면에 표시 → 이후 갱신 없음 (구독 X)
         try {
-            const myPresenceRef = ref(db, `presence/${userUID}`);
-            await set(myPresenceRef, true);
-            onDisconnect(myPresenceRef).remove();
+            await runTransaction(countRef, (current) => Math.max(0, (current || 0) + 1));
+            onDisconnect(countRef).set(increment(-1));
 
             const snap  = await get(countRef);
             const count = snap.exists() ? snap.val() : 1;
@@ -462,6 +460,8 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         // 내 데이터 구독 (users/{uid} 단일 노드)
+        // [최적화] Firebase에 데이터가 없으면 메모리에만 초기값 유지
+        // → 거래 발생 시점에 처음으로 Firebase에 write (미거래 유저 노드 생성 방지)
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
@@ -471,9 +471,10 @@ onAuthStateChanged(auth, async (user) => {
                     ...serverData
                 };
             } else {
-                const initialData = { cash: 1000000, stocks: {} };
-                set(userRef, initialData);
-                myData = initialData;
+                // Firebase에 쓰지 않고 메모리에만 초기값 유지
+                if (!myData || myData.cash === undefined) {
+                    myData = { cash: 1000000, stocks: {} };
+                }
             }
             updateUI(true);
         });
@@ -621,7 +622,7 @@ window.trade = async function (id, type, qty = 1) {
 
             let history = currentStock.history || [currentStock.price];
             history.push(newPrice);
-            if (history.length > 10) history.shift();
+            if (history.length > 20) history.shift();
 
             return {
                 ...currentStock,
