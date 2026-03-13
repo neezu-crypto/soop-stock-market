@@ -477,6 +477,11 @@ let myData = null; // 초기값을 null로 설정하여 로딩 상태 구분
 let userUID = null;
 let allStocks = [];
 let isTrading = false; // [추가] 중복 거래 방지 플래그
+let isInitialLoad = true;
+window.rankUpdateTimer = null; // 전역 타이머 관리
+let lastRankHTML = ""; // UI 리플로우 방지용
+let lastBannerDataString = "";
+let lastStocksMap = {}; // [추가] 개별 업데이트를 위한 이전 데이터 저장소
         
 // 오디오 객체 사전 로드 (함수 외부 또는 상단에 배치)
 const buySound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
@@ -492,20 +497,22 @@ let allUsers = {};
 // --- 유저 전체 데이터 리스너 (랭킹 산출용) ---
 onValue(ref(db, 'users/'), (snap) => {
     const data = snap.val();
-    if (data) {
-        allUsers = data;
-        console.log("전체 유저 데이터 로드 완료:", Object.keys(allUsers).length, "명");
-        
-        // 내 데이터(myData)를 기다리지 않고, 
-        // 주식 정보(allStocks)만 있다면 바로 랭킹을 그립니다.
+    allUsers = data || {};
+    
+    // 디바운스 처리: 데이터가 한꺼번에 들어올 때 CPU 부하 방지
+    clearTimeout(window.rankUpdateTimer);
+    
+    // [핵심] 첫 로딩 시에는 0초, 이후에는 5초마다 갱신
+    const delay = isInitialLoad ? 0 : 5000;
+    
+    window.rankUpdateTimer = setTimeout(() => {
+        // 주식 정보가 있을 때만 랭킹 렌더링
         if (allStocks && allStocks.length > 0) {
             renderRanking();
+            isInitialLoad = false;
         }
-    } else {
-        allUsers = {};
-    }
-    
-    // 내 보유량 UI 업데이트 시도
+    }, delay);
+
     updateUI(); 
 }, (error) => {
     console.error("유저 데이터 동기화 에러:", error);
@@ -515,59 +522,67 @@ onValue(ref(db, 'users/'), (snap) => {
 // 랭킹 집계 함수
 function renderRanking() {
     const rankDiv = document.getElementById('top-rankers');
-    // 데이터 로드 확인
     if (!rankDiv || !allStocks || allStocks.length === 0) return;
 
-    // 1. 모든 유저의 주식 보유량 합산 계산
     const stockOwnership = {}; 
 
-    // [중요] 현재 로그인한 나의 최신 데이터를 먼저 반영 (네트워크 지연 대비)
-    if (userUID && myData && myData.stocks) {
-        Object.entries(myData.stocks).forEach(([stockId, data]) => {
-            const qty = parseInt(data.qty) || 0;
-            if (qty > 0) stockOwnership[stockId] = qty;
-        });
-    }
-
-    // 2. 다른 모든 유저의 데이터 합산 (나 제외)
-    if (allUsers) {
-        Object.keys(allUsers).forEach(uid => {
-            if (uid === userUID) return; // 내 데이터는 위에서 이미 처리함
-            const user = allUsers[uid];
-            if (user && user.stocks) {
-                Object.entries(user.stocks).forEach(([stockId, data]) => {
-                    const qty = parseInt(data.qty) || 0;
-                    if (qty > 0) {
-                        stockOwnership[stockId] = (stockOwnership[stockId] || 0) + qty;
-                    }
-                });
+    // 1. 다른 모든 유저의 데이터 합산 (가장 빠른 순회 방식)
+    const uids = Object.keys(allUsers);
+    for (let i = 0; i < uids.length; i++) {
+        const uid = uids[i];
+        if (uid === userUID) continue; // 내 데이터는 아래에서 별도 처리
+        
+        const user = allUsers[uid];
+        if (user && user.stocks) {
+            for (const [stockId, data] of Object.entries(user.stocks)) {
+                const qty = parseInt(data.qty) || 0;
+                if (qty > 0) {
+                    stockOwnership[stockId] = (stockOwnership[stockId] || 0) + qty;
+                }
             }
-        });
+        }
     }
 
-    // 3. 보유량 기준으로 주식 데이터 매핑 및 정렬
+    // 2. [중요] 내 최신 데이터 반영 (네트워크 지연 보정)
+    if (userUID && myData && myData.stocks) {
+        for (const [stockId, data] of Object.entries(myData.stocks)) {
+            const qty = parseInt(data.qty) || 0;
+            if (qty > 0) {
+                stockOwnership[stockId] = (stockOwnership[stockId] || 0) + qty;
+            }
+        }
+    }
+
+    // 3. 정렬 및 상위 5개 추출
     const sorted = allStocks
         .map(s => ({
-            ...s,
+            name: s.name,
             totalQty: stockOwnership[s.id] || 0
         }))
         .filter(s => s.totalQty > 0)
-        .sort((a, b) => b.totalQty - a.totalQty) // 내림차순 정렬
+        .sort((a, b) => b.totalQty - a.totalQty)
         .slice(0, 5);
 
-    // 4. UI 렌더링
+    // 4. UI 렌더링 최적화
     if (sorted.length === 0) {
         rankDiv.innerHTML = `<span style="color:var(--text-sub); font-size:12px;">보유 데이터 없음</span>`;
+        lastRankHTML = "";
         return;
     }
 
-    rankDiv.innerHTML = sorted.map((s, i) => `
+    const newRankHTML = sorted.map((s, i) => `
         <div class="rank-item">
             <span class="rank-num">${i + 1}</span>
             <span class="rank-name">${s.name}</span>
             <span class="rank-vol">총 ${s.totalQty.toLocaleString()}주</span>
         </div>
     `).join('');
+
+    // 이전과 내용이 다를 때만 DOM을 건드려 렉 방지
+    if (lastRankHTML !== newRankHTML) {
+        rankDiv.innerHTML = newRankHTML;
+        lastRankHTML = newRankHTML;
+    }
 }
 
 // 내 보유주식 표시
@@ -845,96 +860,63 @@ window.trade = async function(id, type, qty = 1) {
 
 // 홍보 배너 렌더링 함수
 function renderBanners() {
-    console.log("--- [배너] 렌더링 프로세스 시작 ---"); 
-    
     const bannerList = document.getElementById('banner-list');
-    if (!bannerList) {
-        console.error("--- [배너 에러] 'banner-list' 엘리먼트가 HTML에 존재하지 않습니다. ---");
-        return;
-    }
+    if (!bannerList) return;
 
-    // 1. [수정] 기본 개발자 문의 배너 - 쪽지창 대신 모달 오픈 함수 연결
-    bannerList.innerHTML = `
+    console.log("--- [배너] 최적화 렌더링 시작 ---");
+
+    const now = new Date();
+    
+    // 1. 기본 개발자 문의 배너 (HTML 문자열 시작)
+    let finalHTML = `
         <div onclick="openPromoModal()" class="banner-item" style="cursor:pointer;">
             <div class="banner-circle">
-                <div class="banner-no-img">방송국 홍보 가능<br></div>
+                <div class="banner-no-img">방송국 홍보 가능</div>
             </div>
             <div class="banner-name">문의하기</div>
         </div>
     `;
 
-    const now = new Date(); // 현재 시간 기준
+    // 2. 홍보 배너 순회 및 문자열 합치기
+    allStocks.forEach((s) => {
+        if (!s.bannerImg) return;
 
-    // 2. 홍보 배너 생성 및 로그 출력
-    allStocks.forEach((s, index) => {
-        if (s.bannerImg) {
-            let dDayText = "AD"; 
+        // 기간 만료 체크
+        if (s.bannerEndDate) {
+            const endDate = new Date(s.bannerEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            if (endDate < now) return;
+        }
 
-            // 기간 만료 체크 및 D-Day 계산 로직
-            if (s.bannerEndDate) {
-                const endDate = new Date(s.bannerEndDate);
-                endDate.setHours(23, 59, 59, 999);
+        // D-Day 계산
+        let dDayText = "AD";
+        if (s.bannerEndDate) {
+            const diffDays = Math.ceil((new Date(s.bannerEndDate) - now) / (1000 * 60 * 60 * 24));
+            dDayText = diffDays <= 0 ? "오늘만료" : `D-${diffDays}`;
+        }
 
-                if (endDate < now) {
-                    console.log(`--- [배너 기간 만료] ${s.name} 스트리머의 광고가 종료되어 표시하지 않습니다. ---`);
-                    return; 
-                }
+        const link = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
+        let imgSrc = s.bannerImg.startsWith('images/') ? './' + s.bannerImg : s.bannerImg;
 
-                const diffTime = endDate - now;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                dDayText = diffDays === 0 ? "오늘만료" : `D-${diffDays}`;
-            }
-
-            console.log(`--- [배너 발견] ${index + 1}. 이름: ${s.name} | 종료일: ${s.bannerEndDate || '미설정'} ---`);
-
-            const a = document.createElement('a');
-            a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
-            a.target = "_blank";
-            a.className = "banner-item promo-active"; 
-            
-            const loaderId = `loader-${s.id}`;
-            const imgId = `img-${s.id}`;
-            
-            let imgSrc = s.bannerImg;
-            if (imgSrc.startsWith('images/')) {
-                imgSrc = './' + imgSrc;
-            }
-
-            a.innerHTML = `
+        // 매번 createElement 대신 HTML 구조를 바로 추가 (성능상 이점)
+        finalHTML += `
+            <a href="${link}" target="_blank" class="banner-item promo-active">
                 <div class="promo-badge">${dDayText}</div>
                 <div class="banner-circle">
-                    <span id="${loaderId}" class="banner-no-img" style="font-size: 9px; color: #94a3b8;">로딩중...</span>
-                    <img id="${imgId}" src="${imgSrc}" alt="${s.name}" 
+                    <span class="banner-no-img" style="font-size: 9px; color: #94a3b8;">로딩중...</span>
+                    <img src="${imgSrc}" alt="${s.name}" 
+                         onload="this.style.display='block'; this.previousElementSibling.style.display='none';" 
+                         onerror="this.style.display='none'; this.previousElementSibling.innerText='Error'; this.previousElementSibling.style.color='#ef4444';"
                          style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
                 </div>
                 <div class="banner-name">${s.name}</div>
-            `;
-            bannerList.appendChild(a);
-
-            const targetImg = document.getElementById(imgId);
-            const targetLoader = document.getElementById(loaderId);
-
-            if (targetImg) {
-                targetImg.onload = function() {
-                    if (targetLoader) targetLoader.style.display = 'none';
-                    targetImg.style.display = 'block';
-                    targetImg.classList.add('img-loaded'); 
-                };
-
-                if (targetImg.complete) {
-                    targetImg.onload();
-                }
-
-                targetImg.onerror = function() {
-                    if (targetLoader) {
-                        targetLoader.innerText = "Error";
-                        targetLoader.style.color = "#ef4444";
-                    }
-                };
-            }
-        }
+            </a>
+        `;
     });
-    console.log("--- [배너] 렌더링 프로세스 종료 ---");
+
+    // 3. 한 번에 DOM 업데이트 (깜빡임 감소 및 Reflow 방지)
+    bannerList.innerHTML = finalHTML;
+    console.log("--- [배너] 최적화 렌더링 종료 ---");
 }
         
 // --- 렌더링 로직 ---
@@ -949,73 +931,133 @@ function createSparkline(history, isUp) {
 
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
-    // myData가 없으면 에러가 날 수 있으므로 체크 추가
     if (!listDiv || !myData) return;
 
-    // 데이터가 비어있을 경우를 대비해 기본값(0, 빈 문자열 등) 처리 추가
-    const filtered = allStocks.filter(s => s.name && s.name.includes(filter))
-                              .sort((a,b) => (b.price || 0) - (a.price || 0))
-                              .slice(0, 100);
-    listDiv.innerHTML = "";
+    const filtered = allStocks
+        .filter(s => s.name && s.name.includes(filter))
+        .sort((a, b) => (b.price || 0) - (a.price || 0))
+        .slice(0, 100);
 
-    filtered.forEach((s) => {
-        const id = s.id; 
+    // 전체 리스트 생성 (각 카드에 고유 ID 부여)
+    listDiv.innerHTML = filtered.map(s => {
+        const id = s.id;
         const isUp = (s.change || 0) >= 0;
-        
-        // [핵심 수정] myData.stocks가 정의되지 않았을 경우 빈 객체{}를 사용하도록 방어
-        const userStocks = myData.stocks || {}; 
-        const userStock = userStocks[id] || { qty: 0, avg: 0 };
-        
+        return `
+            <div class="stock-card" id="stock-card-${id}">
+                <div class="info-group">
+                    <div class="stock-name">${s.name || '...'}</div>
+                    <div class="my-qty">보유 계산 중...</div>
+                </div>
+                <div class="chart-placeholder">${createSparkline(s.history || [s.price, s.price], isUp)}</div>
+                <div class="price-group">
+                    <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
+                    <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
+                </div>
+                <div class="trade-btns">
+                    <button class="btn btn-buy-multi" onclick="trade('${id}', 'buy', 10)">+10</button>
+                    <button class="btn btn-buy" onclick="trade('${id}', 'buy', 1)">매수</button>
+                    <div style="width: 1px; height: 20px; background: #334155; margin: 0 4px;"></div>
+                    <button class="btn btn-sell" onclick="trade('${id}', 'sell', 1)">매도</button>
+                    <button class="btn btn-sell-multi" onclick="trade('${id}', 'sell', 10)">-10</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // 생성된 카드들에 보유량 데이터 즉시 반영
+    filtered.forEach(s => {
+        const card = document.getElementById(`stock-card-${s.id}`);
+        if (card) updateMyProfitInCard(card, s);
+    });
+}
+
+function updateSingleStockUI(s) {
+    const card = document.getElementById(`stock-card-${s.id}`);
+    if (!card) return; // 화면에 없으면 무시 (검색 필터 등)
+
+    const isUp = (s.change || 0) >= 0;
+    const colorClass = isUp ? 'up' : 'down';
+
+    // 1. 가격 업데이트
+    const priceEl = card.querySelector('.current-price');
+    if (priceEl) {
+        priceEl.innerText = `${(s.price || 0).toLocaleString()}원`;
+        priceEl.className = `current-price ${colorClass}`;
+    }
+
+    // 2. 등락률 업데이트
+    const changeEl = card.querySelector('.price-change');
+    if (changeEl) {
+        changeEl.innerText = `${isUp ? '+' : ''}${s.change || 0}%`;
+        changeEl.className = `price-change ${colorClass}`;
+    }
+
+    // 3. 차트 업데이트
+    const chartEl = card.querySelector('.chart-placeholder');
+    if (chartEl) {
+        chartEl.innerHTML = createSparkline(s.history || [s.price, s.price], isUp);
+    }
+
+    // 4. 내 보유 주식 수익률 부분 업데이트
+    updateMyProfitInCard(card, s);
+}
+
+// 카드 내 수익률만 별도로 계산하여 업데이트
+function updateMyProfitInCard(card, s) {
+    const userStocks = myData?.stocks || {};
+    const userStock = userStocks[s.id] || { qty: 0, avg: 0 };
+    const qtyEl = card.querySelector('.my-qty');
+
+    if (qtyEl) {
         let myProfit = 0;
         let profitClass = 'steady';
         if (userStock.qty > 0 && userStock.avg > 0) {
             myProfit = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
             profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
         }
-
-        const card = document.createElement('div');
-card.className = 'stock-card';
-card.innerHTML = `
-    <div class="info-group">
-        <div class="stock-name">${s.name || '불러오는 중...'}</div>
-        <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
-    </div>
-    <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
-    <div class="price-group">
-        <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
-        <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
-    </div>
-    <div class="trade-btns">
-    <button class="btn btn-buy-multi" onclick="trade('${id}', 'buy', 10)" ${isTrading ? 'disabled' : ''}>+10</button>
-    <button class="btn btn-buy" onclick="trade('${id}', 'buy', 1)" ${isTrading ? 'disabled' : ''}>매수</button>
-    
-    <div style="width: 1px; height: 20px; background: #334155; margin: 0 4px;"></div> <button class="btn btn-sell" onclick="trade('${id}', 'sell', 1)" ${isTrading ? 'disabled' : ''}>매도</button>
-    <button class="btn btn-sell-multi" onclick="trade('${id}', 'sell', 10)" ${isTrading ? 'disabled' : ''}>-10</button>
-</div>
-`;
-listDiv.appendChild(card);
-    });
+        qtyEl.innerHTML = `보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>`;
+    }
 }
     
 // 주식 목록 실시간 리스너
 onValue(ref(db, 'stocks/'), (snap) => {
     const data = snap.val() || {};
-    allStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
-    updateUI();
+    const newStocksArray = Object.keys(data).map(key => ({ ...data[key], id: key }));
     
-    // [수정] DOM이 안정화된 후 배너를 그리도록 0.1초 지연
-    setTimeout(() => {
-        renderBanners();
-    }, 100);
+    // 1. 전체 데이터 갱신
+    allStocks = newStocksArray;
+
+    // 2. [핵심] 변동된 주식만 개별 갱신
+    newStocksArray.forEach(stock => {
+        const prev = lastStocksMap[stock.id];
+        // 처음 로드하거나, 가격 혹은 등락률이 변한 경우만 해당 엘리먼트 업데이트
+        if (!prev || prev.price !== stock.price || prev.change !== stock.change) {
+            updateSingleStockUI(stock);
+        }
+    });
+
+    // 3. 현재 상태를 복사하여 저장 (비교용)
+    lastStocksMap = JSON.parse(JSON.stringify(data));
+
+    // 4. 배너/UI 업데이트 로직 (기존 최적화 유지)
+    updateUI();
+    handleBannerOptimization(newStocksArray); 
 });
 
-// 2. [추가 필수] 전체 유저 보유량 변동 감시 (랭킹 전용)
-// 누군가 매수/매도하여 users 데이터가 바뀌면 랭킹을 즉시 다시 그립니다.
-onValue(ref(db, 'users/'), (snap) => {
-    allUsers = snap.val() || {}; // 전역 변수 allUsers 업데이트
-    console.log("유저 보유량 데이터 변경 감지 -> 랭킹 갱신");
-    renderRanking(); 
-});
+// 배너 최적화 로직 분리 (가독성용)
+function handleBannerOptimization(stocks) {
+    const currentBannerData = stocks
+        .filter(s => s.bannerImg)
+        .map(s => ({ id: s.id, img: s.bannerImg, end: s.bannerEndDate, link: s.link, name: s.name }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+    const currentBannerString = JSON.stringify(currentBannerData);
+    if (lastBannerDataString !== currentBannerString) {
+        lastBannerDataString = currentBannerString;
+        clearTimeout(window.bannerTimer);
+        window.bannerTimer = setTimeout(() => renderBanners(), 100);
+    }
+}
         
         // 검색창 이벤트 리스너 (캡슐화 끝 부분에 추가)
 document.getElementById('search-input')?.addEventListener('input', (e) => {
