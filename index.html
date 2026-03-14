@@ -33,9 +33,9 @@
             background: var(--card-bg); padding: 20px; border-radius: 16px;
             display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr; 
             align-items: center; gap: 10px; border: 1px solid #334155;
-            cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
+            cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
         }
-        .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); }
+        .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background:#2a3a50; }
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
         .trade-btns { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
@@ -359,8 +359,8 @@
                 <li>• 홍보용 배너 이미지 (사진 또는 GIF)</li>
             </ul>
             <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
-                💡 파일 용량이 크다면?<br>
-                <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="afdcc4c9dbc0cbd8c0ccc4dc9defc8c2cec6c381ccc0c2">[email&#160;protected]</a></span> 으로 발송
+            💡 파일 용량이 크다면?<br>
+                <span style="color:#38bdf8; font-weight:bold;">skftodwocks2@gmail.com</span> 으로 발송
             </p>
         </div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
@@ -520,6 +520,27 @@ const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/ref
 buySound.volume  = 0.2;
 sellSound.volume = 0.2;
 
+// 호버 사운드: 연속 재생이 겹쳐도 끊기지 않도록 Audio 풀 사용
+const HOVER_POOL_SIZE = 3;
+const hoverPool = Array.from({ length: HOVER_POOL_SIZE }, () => {
+    const a = new Audio("https://raw.githubusercontent.com/neezu-crypto/soop-stock-market/refs/heads/main/sound/scroll.mp3");
+    a.volume = 0.5;
+    return a;
+});
+let hoverPoolIdx  = 0;
+let lastHoverTime = 0;
+const HOVER_COOLDOWN_MS = 80; // 너무 빠른 연속 재생 방지
+
+function playHoverSound() {
+    const now = Date.now();
+    if (now - lastHoverTime < HOVER_COOLDOWN_MS) return;
+    lastHoverTime = now;
+    const sound = hoverPool[hoverPoolIdx % HOVER_POOL_SIZE];
+    hoverPoolIdx++;
+    sound.currentTime = 0;
+    sound.play().catch(() => {});
+}
+
 // ── 랭킹 디바운싱 상태 ──────────────────────────────────────
 const RANKING_DEBOUNCE_MS = 30000;
 let rankingDebounceTimer  = null;
@@ -646,11 +667,15 @@ onAuthStateChanged(auth, async (user) => {
         if (!myData) myData = { cash: 1000000, stocks: {} };
 
         try {
-            await runTransaction(countRef, (current) => Math.max(0, (current || 0) + 1));
-            onDisconnect(countRef).set(0);
-            const snap  = await get(countRef);
-            const count = snap.exists() ? snap.val() : 1;
-            const el    = document.getElementById('online-count');
+            // 유저별 전용 노드에 접속 표시 → 퇴장 시 자동 삭제
+            const myPresenceRef = ref(db, `presence/users/${userUID}`);
+            await set(myPresenceRef, true);
+            onDisconnect(myPresenceRef).remove();
+
+            // 접속 시 1회만 읽기 → 이후 갱신 없음 (데이터 절약)
+            const snap = await get(ref(db, 'presence/users'));
+            const count = snap.exists() ? Object.keys(snap.val()).length : 1;
+            const el = document.getElementById('online-count');
             if (el) el.innerText = count.toLocaleString();
         } catch (e) {
             const el = document.getElementById('online-count');
@@ -1233,6 +1258,9 @@ function createStockCard(s) {
         openChartModal(s.id);
     });
 
+    // 호버 사운드
+    card.addEventListener('mouseenter', () => playHoverSound());
+
     updateCardContent(card, s, (myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
     return card;
 }
@@ -1262,12 +1290,6 @@ function updateCardContent(card, s, userStock) {
             <button class="btn btn-sell-multi"  onclick="trade('${s.id}','sell',10)" ${isTrading?'disabled':''}>-10</button>
         </div>
     `;
-
-    // 이벤트 리스너 재연결 (innerHTML 교체 후)
-    card.addEventListener('click', (e) => {
-        if (e.target.closest('.btn')) return;
-        openChartModal(s.id);
-    });
 }
 
 // ── 주식 데이터 실시간 리스너 ────────────────────────────────
