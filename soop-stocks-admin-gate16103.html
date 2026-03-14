@@ -267,7 +267,7 @@
     <!-- 📈 주가 일괄 조정 -->
     <div class="container" style="display:block">
         <h1>📈 주가 일괄 조정 (% 단위)</h1>
-        <div class="info-box">입력한 수치만큼 전 종목 주가를 변동시킵니다.</div>
+        <div class="info-box">주가 상위 100위 이내 종목만 입력한 수치만큼 주가를 변동시킵니다.</div>
         <div class="batch-control">
             <input type="number" id="percent-input" placeholder="예: 10 또는 -5">
             <button class="btn-success" onclick="adjustAllPrices()">일괄 적용</button>
@@ -987,9 +987,16 @@
             const snapshot = await get(ref(db, 'stocks/'));
             const data = snapshot.val();
             if (!data) return;
+
+            // 주가 기준 내림차순 정렬 후 상위 100개만 추출
+            const top100 = Object.entries(data)
+                .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
+                .slice(0, 100)
+                .map(([id]) => id);
+
             const updates = {};
             const multiplier = 1 + (percent / 100);
-            Object.keys(data).forEach(id => {
+            top100.forEach(id => {
                 const oldPrice = data[id].price;
                 const newPrice = Math.round(oldPrice * multiplier);
                 let history = data[id].history || [oldPrice];
@@ -1000,7 +1007,7 @@
                 updates[`stocks/${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
             });
             await update(ref(db), updates);
-            alert(`🔥 전 종목 주가가 ${percent}% 조정되었습니다!`);
+            alert(`🔥 주가 상위 100개 종목이 ${percent}% 조정되었습니다!`);
             await loadStocksOnce();
         } catch (e) { alert("오류 발생: " + e.message); }
     };
