@@ -31,10 +31,15 @@
         #stock-list { display: grid; gap: 12px; }
         .stock-card {
             background: var(--card-bg); padding: 20px; border-radius: 16px;
-            display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr; 
+            display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+            grid-template-areas: "info price chart trade";
             align-items: center; gap: 10px; border: 1px solid #334155;
             cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
         }
+        .stock-card .info-group   { grid-area: info; }
+        .stock-card .price-group  { grid-area: price; }
+        .stock-card .chart-wrap   { grid-area: chart; }
+        .stock-card .trade-input-wrap { grid-area: trade; }
         .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background: #2a3a50; }
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
@@ -76,7 +81,18 @@
         .btn-buy  { background: #ef4444; color: white; padding: 8px 12px; }
         .btn-sell { background: #3b82f6; color: white; padding: 8px 12px; }
         @media (max-width: 600px) {
-            .stock-card { grid-template-columns: 1fr 1fr; }
+            /* 모바일 카드: 닉네임+주가(상단) → 스파크라인(중간) → 거래버튼(하단) */
+            .stock-card {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto;
+                grid-template-areas:
+                    "info  price"
+                    "chart chart"
+                    "trade trade";
+            }
+            .stock-card .price-group { text-align: right; }
+            .stock-card .chart-wrap  { display: flex; justify-content: center; }
+            .stock-card .chart-wrap .chart-container { width: 100%; height: 40px; }
             .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
         }
         .btn:disabled, .btn.disabled { background: #444 !important; opacity: 0.5; cursor: not-allowed; transform: none !important; }
@@ -213,7 +229,68 @@
         .my-stock-details { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sub); }
         .no-stock-msg { text-align: center; color: var(--text-sub); font-size: 12px; padding: 20px 0; }
         .my-stocks-guide { font-size: 13px; color: var(--text-sub); text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(51, 65, 85, 0.5); opacity: 0.8; pointer-events: none; }
-        @media (max-width: 1300px) { .my-stocks-container { display: none; } }
+
+        /* 모바일 슬라이드 패널 */
+        @media (max-width: 1300px) {
+            .my-stocks-container {
+                display: flex;
+                left: 0; top: 0;
+                transform: translateX(-100%);   /* 기본: 화면 밖으로 숨김 */
+                height: 100vh; max-height: 100vh;
+                width: 260px;
+                border-radius: 0 20px 20px 0;
+                border-left: none;
+                transition: transform 0.3s ease;
+                z-index: 2500;
+            }
+            .my-stocks-container.mobile-open {
+                transform: translateX(0);        /* 열렸을 때: 화면 안으로 */
+            }
+        }
+
+        /* 모바일 탭 버튼 (1300px 이하에서만 표시) */
+        #portfolio-tab {
+            display: none;
+        }
+        @media (max-width: 1300px) {
+            #portfolio-tab {
+                display: flex;
+                position: fixed;
+                left: 0; top: 50%;
+                transform: translateY(-50%);
+                z-index: 2400;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                background: var(--card-bg);
+                border: 1px solid var(--primary);
+                border-left: none;
+                border-radius: 0 10px 10px 0;
+                padding: 12px 6px;
+                cursor: pointer;
+                transition: background 0.2s;
+                box-shadow: 3px 0 12px rgba(0,0,0,0.3);
+            }
+            #portfolio-tab:hover { background: rgba(56,189,248,0.1); }
+            #portfolio-tab .tab-icon { font-size: 16px; }
+            #portfolio-tab .tab-label {
+                font-size: 10px; font-weight: 800;
+                color: var(--primary);
+                writing-mode: vertical-rl;
+                text-orientation: mixed;
+                letter-spacing: 1px;
+            }
+        }
+
+        /* 모바일 패널 열렸을 때 배경 딤처리 */
+        #portfolio-dim {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2450;
+        }
+        #portfolio-dim.active { display: block; }
 
         /* ══════════════════════════════════════════
            차트 모달 (신규)
@@ -531,7 +608,15 @@
 </div>
 
 <!-- ── 내 보유 주식 패널 ── -->
-<div class="my-stocks-container">
+<!-- 모바일 탭 버튼 -->
+<div id="portfolio-tab" onclick="togglePortfolio()">
+    <span class="tab-icon">📈</span>
+    <span class="tab-label">내 주식</span>
+</div>
+<!-- 배경 딤 -->
+<div id="portfolio-dim" onclick="closePortfolio()"></div>
+
+<div class="my-stocks-container" id="my-stocks-container">
     <div class="my-stocks-title">
         <span>내 보유 주식</span>
         <span id="total-assets" style="font-size: 14px; color: var(--text-sub); align-self: flex-end;">평가중...</span>
@@ -1585,16 +1670,13 @@ window.trade = async function (id, type, qty = 1) {
     }
 
     // ── 1억원 한도 사전 체크 ─────────────────────────────────
-    // 매도 시 수령 예정액이 1억을 초과하면 거래 전에 미리 안내
     if (type === 'sell') {
         const stock        = allStocks.find(s => s.id === id);
         const estSellPrice = stock ? Math.round(stock.price * (1 - 0.0005)) : 0;
         const estReceive   = Math.round(estSellPrice * qty * (1 - 0.003));
         if (estReceive > 100000000) {
             alert(`1회 최대 거래 금액(1억원)을 초과합니다.\n\n예상 수령액: ${estReceive.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
-            isTrading = false;
-            updateUI(true);
-            return;
+            return; // ← isTrading이 아직 false이므로 그냥 return
         }
     }
 
@@ -1605,53 +1687,55 @@ window.trade = async function (id, type, qty = 1) {
 
     const stockRef = ref(db, `stocks/${id}`);
     const userRef  = ref(db, `users/${userUID}`);
-    // 로그 스케일 impact — 대량 거래 시 주가 급변 억제
-    // qty=1: 0.1%  qty=10: 0.35%  qty=100: 0.66%
-    const impact = 0.001 * Math.log2(1 + qty);
-    const spread = 0.0005;
-    const fee    = 0.003;
+    const impact   = 0.001 * Math.log2(1 + qty);
+    const spread   = 0.0005;
+    const fee      = 0.003;
 
     let qtyDelta     = 0;
     let finalPrice   = 0;
 
+    // 버그2 수정 — 트랜잭션 재시도 시 중복 차감 방지
+    // myData를 트랜잭션 콜백 밖에서만 수정하고,
+    // 콜백 내부에서는 stocks 경로만 업데이트
+    let cashDelta    = 0;  // 트랜잭션 성공 후 적용할 현금 변동액
+    let userStockNew = null; // 트랜잭션 성공 후 적용할 보유 주식 정보
+
     try {
         await runTransaction(stockRef, (currentStock) => {
             if (!currentStock) return currentStock;
-            if (!myData) throw new Error("데이터 로딩 중");
 
+            // 콜백 내부에서는 myData 수정 없이 계산만 수행
             let finalTradePrice, newPrice;
+            const prevPrice = currentStock.price;
 
             if (type === 'buy') {
-                newPrice        = Math.round(currentStock.price * (1 + impact));
+                newPrice        = Math.round(prevPrice * (1 + impact));
                 finalTradePrice = Math.round(newPrice * (1 + spread));
                 const totalBuyPrice = finalTradePrice * qty;
-                if (myData.cash < totalBuyPrice) throw new Error("잔액부족");
+                if ((myData.cash || 0) < totalBuyPrice) throw new Error("잔액부족");
 
                 const userStock  = myData.stocks[id] || { qty: 0, avg: 0 };
                 const totalCost  = (userStock.qty * userStock.avg) + totalBuyPrice;
-                userStock.qty   += qty;
-                userStock.avg    = Math.round(totalCost / userStock.qty);
-                myData.cash     -= totalBuyPrice;
-                myData.stocks[id] = userStock;
-                qtyDelta   = qty;
-                finalPrice = finalTradePrice;
+                const newQty     = userStock.qty + qty;
+                cashDelta    = -totalBuyPrice;
+                userStockNew = { qty: newQty, avg: Math.round(totalCost / newQty) };
+                qtyDelta     = qty;
+                finalPrice   = finalTradePrice;
             } else {
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
                 if (userStock.qty < qty) throw new Error("보유부족");
 
-                newPrice        = Math.round(currentStock.price * (1 - impact));
+                newPrice        = Math.round(prevPrice * (1 - impact));
                 finalTradePrice = Math.round(newPrice * (1 - spread));
-                const totalSellAmount = Math.round((finalTradePrice * qty) * (1 - fee));
+                const totalSellAmount = Math.round(finalTradePrice * qty * (1 - fee));
 
-                myData.cash      += totalSellAmount;
-                userStock.qty    -= qty;
-                if (userStock.qty === 0) userStock.avg = 0;
-                myData.stocks[id] = userStock;
-                qtyDelta   = -qty;
-                finalPrice = finalTradePrice;
+                cashDelta    = totalSellAmount;
+                userStockNew = { qty: userStock.qty - qty, avg: userStock.qty - qty === 0 ? 0 : userStock.avg };
+                qtyDelta     = -qty;
+                finalPrice   = finalTradePrice;
             }
 
-            let history = currentStock.history || [currentStock.price];
+            let history = currentStock.history || [prevPrice];
             history.push(newPrice);
             if (history.length > 20) history.shift();
 
@@ -1660,9 +1744,14 @@ window.trade = async function (id, type, qty = 1) {
                 price:   newPrice,
                 history: history,
                 volume:  (currentStock.volume || 0) + qty,
-                change:  (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
+                // 버그3 수정 — 직전 가격(prevPrice) 대비 변동률
+                change:  (((newPrice - prevPrice) / prevPrice) * 100).toFixed(2)
             };
         });
+
+        // 트랜잭션 성공 후 myData에 한 번만 반영
+        myData.cash          = (myData.cash || 0) + cashDelta;
+        myData.stocks[id]    = userStockNew;
 
         await set(userRef, { ...myData, lastTradeTime: serverTimestamp() });
 
@@ -1690,6 +1779,33 @@ window.trade = async function (id, type, qty = 1) {
             updateUI(true);
         }, cooldownTime);
     }
+};
+
+// ── 모바일 보유 주식 패널 슬라이드 ──────────────────────────
+window.togglePortfolio = function() {
+    const panel = document.getElementById('my-stocks-container');
+    const dim   = document.getElementById('portfolio-dim');
+    const tab   = document.getElementById('portfolio-tab');
+    if (!panel) return;
+    const isOpen = panel.classList.contains('mobile-open');
+    if (isOpen) {
+        panel.classList.remove('mobile-open');
+        dim?.classList.remove('active');
+        if (tab) tab.style.left = '0';
+    } else {
+        panel.classList.add('mobile-open');
+        dim?.classList.add('active');
+        if (tab) tab.style.left = '260px'; // 패널 너비만큼 밀기
+    }
+};
+
+window.closePortfolio = function() {
+    const panel = document.getElementById('my-stocks-container');
+    const dim   = document.getElementById('portfolio-dim');
+    const tab   = document.getElementById('portfolio-tab');
+    panel?.classList.remove('mobile-open');
+    dim?.classList.remove('active');
+    if (tab) tab.style.left = '0';
 };
 
 // ── 모달 ─────────────────────────────────────────────────────
@@ -1821,20 +1937,23 @@ function updateCardContent(card, s, userStock) {
         myProfit    = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
         profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
     }
+
+    // 수량 입력값 보존 — 주가 변동으로 카드가 재렌더링돼도 입력값 유지
+    const prevQty = document.getElementById(`qty-${s.id}`)?.value || '1';
     card.innerHTML = `
         <div class="info-group">
             <div class="stock-name">${s.name}</div>
             <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
         </div>
-        <div>${createSparkline(s.history || [s.price, s.price], isUp)}</div>
         <div class="price-group">
             <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
             <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
         </div>
+        <div class="chart-wrap">${createSparkline(s.history || [s.price, s.price], isUp)}</div>
         <div class="trade-input-wrap">
             <div class="trade-qty-row">
                 <input type="number" class="trade-qty-input" id="qty-${s.id}"
-                    value="1" min="1" max="100"
+                    value="${prevQty}" min="1" max="100"
                     onclick="event.stopPropagation()"
                     oninput="clampQty(this)"
                     onblur="smartClampQty(this,'${s.id}',event.relatedTarget?.dataset?.tradeType||'buy')">
@@ -1865,7 +1984,14 @@ onValue(ref(db, 'stocks/'), (snap) => {
             const old = allStocks.find(os => os.id === ns.id);
             if (old && (old.price !== ns.price || old.change !== ns.change)) {
                 const card = stockElements[ns.id];
-                if (card) updateCardContent(card, ns, (myData?.stocks || {})[ns.id] || { qty: 0, avg: 0 });
+                if (!card) return;
+
+                // 수량 입력창에 포커스 중이면 카드 업데이트 건너뜀
+                // → 입력 중 포커스 이탈 및 값 초기화 방지
+                const qtyInput = document.getElementById(`qty-${ns.id}`);
+                if (qtyInput && document.activeElement === qtyInput) return;
+
+                updateCardContent(card, ns, (myData?.stocks || {})[ns.id] || { qty: 0, avg: 0 });
             }
         });
         allStocks = newStocks;
