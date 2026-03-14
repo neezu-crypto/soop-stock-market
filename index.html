@@ -988,13 +988,30 @@ let lastRankingWriteTime  = 0;
 // ── rankings/top5 구독 ──────────────────────────────────────
 
 // 이미 접속 중인 사용자를 위한 점검 시간 주기 체크 (30초마다)
-// 점검 시작 시각이 되면 즉시 오버레이 표시 + Firebase 구독 해제 불가하므로
-// 페이지 새로고침으로 완전 차단 처리
 setInterval(() => {
     if (isMaintenanceTime()) {
         location.reload();
     }
 }, 30000);
+
+// ── 관리자 점검 모드 실시간 구독 ────────────────────────────
+// siteConfig/maintenance = true 시 즉시 점검 오버레이 표시
+onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
+    const isOn    = snap.exists() ? snap.val() : false;
+    const overlay = document.getElementById('maintenance-overlay');
+    if (!overlay) return;
+    if (isOn) {
+        overlay.style.display = 'flex';
+        // 타이머 표시 (시간 기반 점검과 동일 UI 재사용)
+        const timerEl = document.getElementById('maintenance-timer');
+        if (timerEl) timerEl.innerText = '관리자 점검 중';
+    } else {
+        // 관리자가 점검 해제 → 시간 기반 점검 중이 아니면 오버레이 닫기
+        if (!isMaintenanceTime()) {
+            overlay.style.display = 'none';
+        }
+    }
+});
 
 onValue(ref(db, 'rankings/top5'), (snap) => {
     if (!snap.exists()) {
@@ -1662,6 +1679,13 @@ window.trade = async function (id, type, qty = 1) {
     }
     if (isTrading) return;
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
+
+    // 관리자 점검 모드 체크
+    const maintSnap = await get(ref(db, 'siteConfig/maintenance'));
+    if (maintSnap.exists() && maintSnap.val() === true) {
+        alert('🔧 현재 점검 중입니다. 잠시 후 다시 이용해주세요.');
+        return;
+    }
 
     // 서버 사이드 이중 검증 — 클라이언트 우회 방지
     if (qty < 1 || qty > 100 || !Number.isInteger(qty)) {
