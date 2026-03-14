@@ -200,6 +200,7 @@
         .chart-modal {
             background: #0f1e30;
             width: 95%; max-width: 860px;
+            max-height: 95vh;          /* 화면을 넘지 않도록 */
             border-radius: 20px;
             border: 1px solid var(--primary);
             box-shadow: 0 0 50px rgba(56,189,248,0.2);
@@ -288,10 +289,12 @@
         .chart-canvas-wrap {
             padding: 20px 24px 20px 20px;
             position: relative;
-            height: 320px;   /* min-height 대신 고정 height — 빈 데이터일 때도 팽창 없음 */
+            flex: 1;                   /* 남은 공간 채움 */
+            min-height: 180px;         /* 너무 작아지지 않도록 최소치 */
+            max-height: 220px;         /* 높이 제한 */
             box-sizing: content-box;
         }
-        #candleChart { width: 100% !important; height: 320px !important; }
+        #candleChart { width: 100% !important; height: 100% !important; }
 
         /* 캔버스 영역 내 마우스 커서 변경 */
         .chart-canvas-wrap canvas { cursor: crosshair; }
@@ -302,12 +305,12 @@
             font-size: 13px;
         }
 
-        /* 빈 데이터 메시지 — wrap과 동일한 높이로 고정 */
+        /* 빈 데이터 메시지 — wrap 기준으로 절대 배치 */
         .chart-empty {
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            height: 320px; color: var(--text-sub); font-size: 14px; gap: 10px;
-            position: absolute; top: 0; left: 0; right: 0; /* wrap 기준으로 절대 배치 */
+            position: absolute; inset: 0;  /* top/right/bottom/left 모두 0 */
+            color: var(--text-sub); font-size: 14px; gap: 10px;
         }
         .chart-empty .empty-icon { font-size: 40px; }
 
@@ -345,6 +348,86 @@
         .chart-modal-trade .modal-sell   { background: #3b82f6; color: white; }
         .chart-modal-trade .modal-sell10 { background: #1e3a8a; color: white; }
         .chart-modal-trade button:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+        /* 차트 모달 하단 광고 배너 — 원본 비율 720×150 */
+        #chart-ad-banner {
+            background: #0a1628;
+            border-top: 1px solid #1e3550;
+            width: 100%;
+            aspect-ratio: 720 / 150;   /* 원본 비율 고정 */
+            overflow: hidden;
+            position: relative;
+            flex-shrink: 0;
+        }
+        #chart-ad-banner a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+        #chart-ad-banner a:hover { opacity: 0.85; }
+        #chart-ad-banner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        #chart-ad-label {
+            position: absolute;
+            top: 4px; right: 8px;
+            background: rgba(0,0,0,0.55);
+            color: #94a3b8;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            pointer-events: none;
+        }
+        /* 광고 없을 때 모집 안내 */
+        #chart-ad-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: calc(100% - 32px);
+            position: absolute; inset: 6px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #94a3b8;                          /* 기본도 충분히 밝게 */
+            border: 1px dashed #38bdf8;              /* 기본부터 파란 점선 */
+            border-radius: 8px;
+            background: rgba(56,189,248,0.04);       /* 기본부터 은은한 파란 배경 */
+            transition: all 0.2s;
+            box-sizing: border-box;
+            animation: ad-pulse 2.5s ease-in-out infinite; /* 살짝 숨쉬는 효과 */
+        }
+        @keyframes ad-pulse {
+            0%, 100% { border-color: #38bdf8; background: rgba(56,189,248,0.04); }
+            50%       { border-color: #7dd3f8; background: rgba(56,189,248,0.09); }
+        }
+        #chart-ad-empty:hover {
+            animation: none;
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(56,189,248,0.12);
+        }
+        #chart-ad-empty-icon { font-size: 18px; }
+        #chart-ad-empty-cta {
+            font-weight: 800;
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            background: rgba(56,189,248,0.15);
+            color: var(--primary);
+            border: 1px solid rgba(56,189,248,0.3);
+        }
+        #chart-ad-empty:hover #chart-ad-empty-cta {
+            background: rgba(56,189,248,0.28);
+            border-color: var(--primary);
+        }
     </style>
 </head>
 <body>
@@ -474,6 +557,99 @@
             <button class="modal-buy"   id="cm-buy1"   onclick="tradeFromModal('buy',1)">매수</button>
             <button class="modal-sell"  id="cm-sell1"  onclick="tradeFromModal('sell',1)">매도</button>
             <button class="modal-sell10" id="cm-sell10" onclick="tradeFromModal('sell',10)">-10 매도</button>
+        </div>
+
+        <!-- 차트 모달 하단 광고 배너 -->
+        <div id="chart-ad-banner">
+            <a id="chart-ad-link" href="#" target="_blank" style="display:none;">
+                <img id="chart-ad-img" src="" alt="광고 배너">
+                <div id="chart-ad-label">AD</div>
+            </a>
+            <!-- 광고 없을 때 모집 안내 -->
+            <div id="chart-ad-empty" onclick="openChartAdModal()" style="cursor:pointer;">
+                <span id="chart-ad-empty-icon">📢</span>
+                <span>이 자리에 내 방송국을 홍보해보세요!</span>
+                <span id="chart-ad-empty-cta">문의하기 →</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     차트 하단 배너 광고 문의 모달
+══════════════════════════════════════════ -->
+<div id="chart-ad-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header">
+            <h2>📺 차트 하단 배너 광고</h2>
+        </div>
+
+        <!-- 배너 미리보기 영역 -->
+        <div style="margin-bottom:16px;">
+            <!-- 사이즈 태그 -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="background:rgba(56,189,248,0.12);color:var(--primary);font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid rgba(56,189,248,0.3);">🖼 720 × 150 px</span>
+                <span style="background:rgba(99,102,241,0.12);color:#a5b4fc;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid rgba(99,102,241,0.3);">✅ SOOP 방송국 하단 배너와 동일 사이즈</span>
+            </div>
+            <!-- 미리보기 박스 -->
+            <div style="background:#0a1628;border-radius:10px;overflow:hidden;border:1px dashed #38bdf8;position:relative;">
+                <div style="aspect-ratio:720/150;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+                    <span style="font-size:22px;">🖼</span>
+                    <span style="font-size:12px;color:#94a3b8;font-weight:700;">배너 이미지 · GIF 삽입 영역</span>
+                    <span style="font-size:11px;color:#475569;">720 × 150 px</span>
+                </div>
+                <div style="position:absolute;top:4px;right:6px;background:rgba(0,0,0,0.5);color:#94a3b8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">AD</div>
+            </div>
+            <!-- 안내 문구 -->
+            <div style="margin-top:8px;font-size:11px;color:#a9b5c6;text-align:center;">
+                💡 SOOP 방송국 하단 배너용으로 제작한 이미지를 그대로 사용할 수 있습니다
+            </div>
+        </div>
+
+        <!-- 혜택 안내 -->
+        <div style="background:rgba(239,68,68,0.08);padding:14px 16px;border-radius:10px;border:1px dashed #ef4444;margin-bottom:18px;text-align:left;">
+            <div style="font-size:12px;color:#ef4444;font-weight:800;margin-bottom:8px;">💎 차트 배너 광고 특징</div>
+            <ul style="list-style:none;padding:0;margin:0;font-size:13px;color:var(--text-main);line-height:2;">
+                <li>📊 차트창을 여는 모든 유저에게 단독 노출</li>
+                <li>🔗 클릭 시 원하는 링크로 즉시 이동</li>
+                <li>🖼 이미지 · GIF 모두 지원</li>
+            </ul>
+        </div>
+
+        <!-- 비용 안내 -->
+        <div style="background:rgba(56,189,248,0.07);padding:14px 16px;border-radius:10px;border:1px solid #1e3550;margin-bottom:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-size:13px;color:var(--text-sub);">광고 단가</span>
+                <span style="font-size:16px;font-weight:800;color:var(--primary);">🎁 별풍선 20개 <span style="font-size:12px;color:var(--text-sub);font-weight:400;">/ 1일</span></span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-sub);padding-top:8px;border-top:1px solid #1e3550;">
+                <span>무료 체험 없음 · 선불 결제</span>
+                <span>우측 배너와 별도 운영</span>
+            </div>
+        </div>
+
+        <!-- 문의 안내 -->
+        <div style="background:rgba(255,255,255,0.04);padding:14px;border-radius:8px;margin-bottom:20px;border-left:3px solid #38bdf8;text-align:left;">
+            <p style="font-size:13px;color:#38bdf8;font-weight:800;margin:0 0 8px 0;">📋 문의 시 필수 포함 내용</p>
+            <ul style="list-style:none;padding:0;margin:0;font-size:12px;color:var(--text-main);line-height:1.9;">
+                <li>• 닉네임 및 이동할 링크 URL</li>
+                <li>• 배너 이미지 (720×150px · 사진 또는 GIF)</li>
+                <li>• 원하는 광고 기간 (일수)</li>
+            </ul>
+            <p style="font-size:12px;color:var(--text-sub);margin:8px 0 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
+                💡 파일이 크다면 <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+            </p>
+        </div>
+
+        <div style="display:flex;gap:8px;">
+            <button onclick="closeChartAdModal()"
+                style="flex:1;background:#334155;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;">
+                닫기
+            </button>
+            <button onclick="goToChartAdMessage()"
+                style="flex:2;background:var(--primary);color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:800;font-size:14px;">
+                쪽지로 문의하기
+            </button>
         </div>
     </div>
 </div>
@@ -891,7 +1067,52 @@ window.openChartModal = function(stockId) {
     candleDataCache = [];
     if (candleChartInstance) { candleChartInstance.destroy(); candleChartInstance = null; }
     fetchCandles(stockId);
+
+    // 하단 광고 배너 1회 fetch
+    fetchChartBanner();
 };
+
+// ── 차트 모달 하단 광고 배너 1회 fetch ──────────────────────
+// Firebase: chartBanner/{ img, link, endDate }
+async function fetchChartBanner() {
+    const linkEl  = document.getElementById('chart-ad-link');
+    const imgEl   = document.getElementById('chart-ad-img');
+    const emptyEl = document.getElementById('chart-ad-empty');
+
+    // 초기화: 둘 다 숨기고 시작
+    if (linkEl)  linkEl.style.display  = 'none';
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    try {
+        const snap = await get(ref(db, 'chartBanner'));
+
+        // 데이터 없거나 만료 → 모집 안내 표시
+        if (!snap.exists() || !snap.val().img) {
+            if (emptyEl) emptyEl.style.display = 'flex';
+            return;
+        }
+
+        const data = snap.val();
+
+        if (data.endDate) {
+            const end = new Date(data.endDate);
+            end.setHours(23, 59, 59, 999);
+            if (end < new Date()) {
+                if (emptyEl) emptyEl.style.display = 'flex'; // 만료 → 모집 안내
+                return;
+            }
+        }
+
+        // 광고 있음 → 배너 이미지 표시
+        imgEl.src          = data.img;
+        linkEl.href        = data.link || '#';
+        linkEl.style.display = 'flex';
+
+    } catch (e) {
+        // fetch 실패 시 모집 안내 표시
+        if (emptyEl) emptyEl.style.display = 'flex';
+    }
+}
 
 function updateChartModalHeader(s) {
     const isUp = (s.change || 0) >= 0;
@@ -1232,11 +1453,20 @@ window.trade = async function (id, type, qty = 1) {
 };
 
 // ── 모달 ─────────────────────────────────────────────────────
-window.openPromoModal  = () => document.getElementById('promo-modal').classList.add('active');
-window.closePromoModal = () => document.getElementById('promo-modal').classList.remove('active');
-window.goToMessage     = () => {
+window.openPromoModal    = () => document.getElementById('promo-modal').classList.add('active');
+window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
+window.openChartAdModal  = () => {
+    closeChartModal();   // 차트창 먼저 닫기
+    document.getElementById('chart-ad-modal').classList.add('active');
+};
+window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
+window.goToMessage       = () => {
     window.open("https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2", "_blank");
     window.closePromoModal();
+};
+window.goToChartAdMessage = () => {
+    window.open("https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2", "_blank");
+    window.closeChartAdModal();
 };
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
@@ -1405,6 +1635,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
+        if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
     }
 });
 
