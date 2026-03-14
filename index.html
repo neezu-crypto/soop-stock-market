@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOOP STOCK - 거래소</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
     <style>
         :root {
             --bg-color: #0f172a; --card-bg: #1e293b; --primary: #38bdf8;
@@ -29,7 +33,9 @@
             background: var(--card-bg); padding: 20px; border-radius: 16px;
             display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr; 
             align-items: center; gap: 10px; border: 1px solid #334155;
+            cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
         }
+        .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); }
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
         .trade-btns { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
@@ -46,6 +52,8 @@
         .my-qty { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
         .up   { color: var(--up-color);   stroke: var(--up-color);   }
         .down { color: var(--down-color); stroke: var(--down-color); }
+
+        /* ── 인트로 오버레이 ── */
         #intro-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-color); display: flex; justify-content: center; align-items: center;
@@ -56,24 +64,15 @@
             background: var(--card-bg); border-radius: 24px; border: 1px solid var(--primary);
             box-shadow: 0 0 30px rgba(56, 189, 248, 0.2);
         }
-        .intro-logo {
-        margin-bottom: 20px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        }
-        .intro-logo img {
-        width: 60px;
-        height: 60px;
-        object-fit: contain;
-        border-radius: 12px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        }
+        .intro-logo { margin-bottom: 20px; display: flex; justify-content: center; align-items: center; }
+        .intro-logo img { width: 60px; height: 60px; object-fit: contain; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
         .intro-desc  { color: var(--text-sub); line-height: 1.6; margin-bottom: 25px; }
         .loader { width: 30px; height: 30px; border: 3px solid #334155; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .hidden { opacity: 0; pointer-events: none; }
+
+        /* ── 랭킹 바 ── */
         .ranking-bar {
             background: var(--card-bg); width: 100%; padding: 12px 20px; border-radius: 12px;
             margin-bottom: 20px; display: flex; align-items: center; border: 1px dashed #334155; overflow: hidden;
@@ -84,6 +83,8 @@
         .rank-num  { color: var(--primary); font-weight: 800; }
         .rank-name { color: var(--text-main); }
         .rank-vol  { color: var(--text-sub); font-size: 11px; }
+
+        /* ── 배너 ── */
         .banner-container { position: fixed; right: 80px; top: 60px; display: flex; flex-direction: column; gap: 20px; z-index: 1000; }
         .banner-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; cursor: pointer; transition: transform 0.2s; position: relative; }
         .banner-item:hover { transform: scale(1.1); }
@@ -95,6 +96,8 @@
         .banner-circle img { width: 100%; height: 100%; object-fit: cover; display: none; opacity: 0; transition: opacity 0.5s ease; border-radius: 50%; }
         .banner-no-img { font-size: 10px; color: var(--text-sub); line-height: 1.2; }
         .banner-name { margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--text-main); text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+
+        /* ── 프로모 모달 ── */
         .promo-modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
@@ -106,11 +109,7 @@
             border-radius: 24px; border: 1px solid var(--primary);
             padding: 30px; box-shadow: 0 0 40px rgba(56,189,248,0.3); text-align: center;
         }
-        .promo-modal-content button:hover {
-        filter: brightness(1.1);
-        transform: translateY(-1px);
-        transition: all 0.2s;
-        }
+        .promo-modal-content button:hover { filter: brightness(1.1); transform: translateY(-1px); transition: all 0.2s; }
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
         .promo-benefit-box { background: rgba(56,189,248,0.1); padding: 15px; border-radius: 12px; border: 1px dashed var(--primary); margin-bottom: 20px; }
         .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }
@@ -131,6 +130,8 @@
             border-radius: 10px; font-weight: 800; z-index: 10;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3); border: 1px solid #0f172a;
         }
+
+        /* ── 내 보유 주식 패널 ── */
         .my-stocks-container {
             position: fixed; left: 80px; top: 50%; transform: translateY(-50%);
             width: 220px; background: var(--card-bg); border-radius: 20px;
@@ -149,25 +150,169 @@
         .my-stock-profit { font-weight: 700; font-size: 12px; }
         .my-stock-details { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sub); }
         .no-stock-msg { text-align: center; color: var(--text-sub); font-size: 12px; padding: 20px 0; }
-        .my-stocks-guide {
-        font-size: 13px;
-        color: var(--text-sub);
-        text-align: center;
-        margin-top: 15px;
-        padding-top: 10px;
-        border-top: 1px solid rgba(51, 65, 85, 0.5);
-        opacity: 0.8;
-        pointer-events: none;
-        }
+        .my-stocks-guide { font-size: 13px; color: var(--text-sub); text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(51, 65, 85, 0.5); opacity: 0.8; pointer-events: none; }
         @media (max-width: 1300px) { .my-stocks-container { display: none; } }
+
+        /* ══════════════════════════════════════════
+           차트 모달 (신규)
+        ══════════════════════════════════════════ */
+        #chart-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.88);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 3000;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        #chart-modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .chart-modal {
+            background: #0f1e30;
+            width: 95%; max-width: 860px;
+            border-radius: 20px;
+            border: 1px solid var(--primary);
+            box-shadow: 0 0 50px rgba(56,189,248,0.2);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            transform: translateY(20px);
+            transition: transform 0.25s ease;
+        }
+        #chart-modal-overlay.active .chart-modal { transform: translateY(0); }
+
+        .chart-modal-header {
+            padding: 18px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #1e3550;
+            background: #0d1929;
+        }
+        .chart-modal-title {
+            display: flex; align-items: baseline; gap: 12px;
+        }
+        .chart-modal-title .stock-title-name {
+            font-size: 20px; font-weight: 800; color: var(--text-main);
+        }
+        .chart-modal-title .stock-title-price {
+            font-size: 22px; font-weight: 900;
+        }
+        .chart-modal-title .stock-title-change {
+            font-size: 14px; font-weight: 700; padding: 3px 8px;
+            border-radius: 6px;
+        }
+        .chart-modal-title .stock-title-change.up   { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .chart-modal-title .stock-title-change.down { background: rgba(59,130,246,0.15); color: #3b82f6; }
+
+        .chart-modal-close {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: #1e3550; border: none; color: var(--text-sub);
+            font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+        .chart-modal-close:hover { background: #ef4444; color: white; }
+
+        /* 기간 탭 */
+        .chart-timeframe-tabs {
+            display: flex; gap: 6px;
+            padding: 14px 24px;
+            border-bottom: 1px solid #1e3550;
+            background: #0d1929;
+        }
+        .tf-tab {
+            padding: 6px 16px; border-radius: 8px;
+            background: #1e293b; border: 1px solid #334155;
+            color: var(--text-sub); font-size: 13px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .tf-tab:hover { border-color: var(--primary); color: var(--primary); }
+        .tf-tab.active { background: var(--primary); color: #0f172a; border-color: var(--primary); }
+
+        /* 분봉 단위 선택 */
+        .chart-interval-tabs {
+            display: flex; gap: 6px;
+            padding: 12px 24px;
+            border-bottom: 1px solid #1e3550;
+            background: #0d1929;
+            flex-wrap: wrap;
+        }
+        .int-tab {
+            padding: 5px 12px; border-radius: 6px;
+            background: #1e293b; border: 1px solid #334155;
+            color: var(--text-sub); font-size: 12px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .int-tab:hover { border-color: #38bdf8; color: #38bdf8; }
+        .int-tab.active { background: rgba(56,189,248,0.15); color: var(--primary); border-color: var(--primary); }
+
+        /* 캔들 정보 툴팁 바 */
+        .chart-ohlc-bar {
+            display: flex; gap: 20px; flex-wrap: wrap;
+            padding: 10px 24px;
+            background: #0d1929;
+            font-size: 12px; color: var(--text-sub);
+            border-bottom: 1px solid #1e3550;
+            min-height: 36px;
+        }
+        .ohlc-item span { color: var(--text-main); font-weight: 700; }
+
+        /* 캔버스 영역 */
+        .chart-canvas-wrap {
+            padding: 20px 24px 20px 20px;
+            flex: 1;
+            min-height: 320px;
+            position: relative;
+        }
+        #candleChart { width: 100% !important; height: 320px !important; }
+
+        /* 차트 하단 정보 */
+        .chart-modal-footer {
+            padding: 12px 24px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-top: 1px solid #1e3550;
+            font-size: 12px; color: var(--text-sub);
+            background: #0d1929;
+        }
+        .chart-modal-footer .live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #22c55e;
+            display: inline-block; margin-right: 6px;
+            animation: pulse-dot 1.5s infinite;
+        }
+        @keyframes pulse-dot {
+            0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+        }
+
+        /* 거래 버튼 (모달 안) */
+        .chart-modal-trade {
+            padding: 14px 24px;
+            display: flex; gap: 10px;
+            border-top: 1px solid #1e3550;
+            background: #0d1929;
+        }
+        .chart-modal-trade button {
+            flex: 1; padding: 12px; border: none; border-radius: 10px;
+            font-weight: 800; font-size: 14px; cursor: pointer; transition: all 0.2s;
+        }
+        .chart-modal-trade .modal-buy    { background: #ef4444; color: white; }
+        .chart-modal-trade .modal-buy10  { background: #991b1b; color: white; }
+        .chart-modal-trade .modal-sell   { background: #3b82f6; color: white; }
+        .chart-modal-trade .modal-sell10 { background: #1e3a8a; color: white; }
+        .chart-modal-trade button:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+        /* 빈 데이터 메시지 */
+        .chart-empty {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 320px; color: var(--text-sub); font-size: 14px; gap: 10px;
+        }
+        .chart-empty .empty-icon { font-size: 40px; }
     </style>
 </head>
 <body>
 
+<!-- ── 인트로 오버레이 ── -->
 <div id="intro-overlay">
     <div class="intro-content">
         <div class="intro-logo">
-    <img src="https://stimg.sooplive.co.kr/LOGO/sk/skftodwocks2/skftodwocks2.jpg" alt="숲 주식 시장 로고">
+            <img src="https://stimg.sooplive.co.kr/LOGO/sk/skftodwocks2/skftodwocks2.jpg" alt="숲 주식 시장 로고">
         </div>
         <div class="intro-title">스트리머 주식시장</div>
         <div class="intro-desc">
@@ -182,6 +327,7 @@
     </div>
 </div>
 
+<!-- ── 내 보유 주식 패널 ── -->
 <div class="my-stocks-container">
     <div class="my-stocks-title">
         <span>내 보유 주식</span>
@@ -190,11 +336,10 @@
     <div id="my-stocks-list" class="my-stocks-list">
         <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
     </div>
-    <div class="my-stocks-guide">
-        💡 클릭 시 즉시 검색됩니다
-    </div>
+    <div class="my-stocks-guide">💡 클릭 시 즉시 검색됩니다</div>
 </div>
 
+<!-- ── 프로모 모달 ── -->
 <div id="promo-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
         <div class="promo-modal-header"><h2>📢 방송국 홍보 안내</h2></div>
@@ -215,32 +360,87 @@
             </ul>
             <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
                 💡 파일 용량이 크다면?<br>
-                <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+                <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="afdcc4c9dbc0cbd8c0ccc4dc9defc8c2cec6c381ccc0c2">[email&#160;protected]</a></span> 으로 발송
             </p>
         </div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
-    <button onclick="closePromoModal()" 
-            style="flex: 1; min-width: 80px; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">
-        닫기
-    </button>
-    
-    <button onclick="window.open('https://www.sooplive.co.kr/station/skftodwocks2', '_blank')" 
-            style="flex: 1.2; min-width: 90px; background: #6366f1; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">
-        개발자
-    </button>
-    
-    <button class="btn-confirm-contact" onclick="goToMessage()" 
-            style="flex: 2; min-width: 120px; font-weight:bold; font-size:14px;">
-        문의하기
-    </button>
-</div>
+            <button onclick="closePromoModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button onclick="window.open('https://www.sooplive.co.kr/station/skftodwocks2','_blank')" style="flex:1.2;min-width:90px;background:#6366f1;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">개발자</button>
+            <button class="btn-confirm-contact" onclick="goToMessage()" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">문의하기</button>
+        </div>
     </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     차트 상세 모달 (신규)
+══════════════════════════════════════════ -->
+<div id="chart-modal-overlay">
+    <div class="chart-modal">
+        <!-- 헤더 -->
+        <div class="chart-modal-header">
+            <div class="chart-modal-title">
+                <span class="stock-title-name" id="cm-name">-</span>
+                <span class="stock-title-price up"  id="cm-price">-</span>
+                <span class="stock-title-change up" id="cm-change">-</span>
+            </div>
+            <button class="chart-modal-close" id="chart-modal-close-btn">✕</button>
+        </div>
+
+        <!-- 기간 탭: 10분 / 30분 / 1시간 / 3시간 / 6시간 -->
+        <div class="chart-timeframe-tabs">
+            <span class="tf-tab active" data-minutes="10">10분</span>
+            <span class="tf-tab" data-minutes="30">30분</span>
+            <span class="tf-tab" data-minutes="60">1시간</span>
+            <span class="tf-tab" data-minutes="180">3시간</span>
+            <span class="tf-tab" data-minutes="360">6시간</span>
+        </div>
+
+        <!-- 분봉 단위 탭 -->
+        <div class="chart-interval-tabs">
+            <span style="font-size:12px;color:var(--text-sub);margin-right:4px;line-height:1.8;">분봉:</span>
+            <span class="int-tab active" data-interval="1">1분</span>
+            <span class="int-tab" data-interval="3">3분</span>
+            <span class="int-tab" data-interval="5">5분</span>
+            <span class="int-tab" data-interval="10">10분</span>
+            <span class="int-tab" data-interval="30">30분</span>
+        </div>
+
+        <!-- OHLCV 정보 바 -->
+        <div class="chart-ohlc-bar" id="cm-ohlc-bar">
+            <span>차트를 호버하면 캔들 정보가 표시됩니다</span>
+        </div>
+
+        <!-- 캔들 차트 -->
+        <div class="chart-canvas-wrap">
+            <canvas id="candleChart"></canvas>
+            <div class="chart-empty" id="chart-empty-msg" style="display:none;">
+                <div class="empty-icon">📊</div>
+                <div>거래 데이터가 아직 없습니다</div>
+                <div style="font-size:12px;">첫 거래가 발생하면 분봉 차트가 생성됩니다</div>
+            </div>
+        </div>
+
+        <!-- 하단 정보 -->
+        <div class="chart-modal-footer">
+            <div><span class="live-dot" style="background:#f59e0b;"></span>열람 시점 스냅샷</div>
+            <div id="cm-volume">거래량: -</div>
+            <div id="cm-data-range">데이터: -</div>
+        </div>
+
+        <!-- 거래 버튼 -->
+        <div class="chart-modal-trade">
+            <button class="modal-buy10" id="cm-buy10"  onclick="tradeFromModal('buy',10)">+10 매수</button>
+            <button class="modal-buy"   id="cm-buy1"   onclick="tradeFromModal('buy',1)">매수</button>
+            <button class="modal-sell"  id="cm-sell1"  onclick="tradeFromModal('sell',1)">매도</button>
+            <button class="modal-sell10" id="cm-sell10" onclick="tradeFromModal('sell',10)">-10 매도</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
     <div class="wallet-bar">
         <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
-        <!-- [추가] 우측: 초기자산 안내 + 동시접속자 수 -->
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
             <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
             <div style="font-size:12px;color:var(--text-sub);">
@@ -251,7 +451,7 @@
     <header>
         <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
         <p style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
-            찾고 있는 스트리머가 있다면 아래 검색창에서 이름을 검색해보세요.
+            종목 카드를 클릭하면 분봉 차트를 확인할 수 있습니다.
         </p>
         <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
@@ -268,7 +468,10 @@
     </div>
 </div>
 
-<script type="module">
+<!-- ══════════════════════════════════════════
+     Firebase + 앱 로직
+══════════════════════════════════════════ -->
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -297,6 +500,20 @@ let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
 
+// ══════════════════════════════════════════════════════════
+// 차트 모달 상태
+// ══════════════════════════════════════════════════════════
+let chartModalStockId    = null;   // 현재 열린 종목 ID
+let chartTimeframeMin    = 10;     // 보여줄 기간 (분)
+let chartIntervalMin     = 1;      // 분봉 단위 (분)
+let candleChartInstance  = null;   // Chart.js 인스턴스
+let candleDataCache      = [];     // Firebase에서 받은 원시 캔들 배열
+let candleUnsubscribe    = null;   // (미사용 — get() 1회 방식으로 전환)
+let chartIsLoading       = false;  // 중복 fetch 방지
+
+// 최대 보관 기간 (분). Firebase에 저장할 최대 캔들 수
+const MAX_CANDLE_MINUTES = 360;
+
 // ── 사운드 ──────────────────────────────────────────────────
 const buySound  = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
 const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/sell%20sound.mp3");
@@ -304,12 +521,10 @@ buySound.volume  = 0.2;
 sellSound.volume = 0.2;
 
 // ── 랭킹 디바운싱 상태 ──────────────────────────────────────
-// 30초에 최대 1번만 Firebase에 실제로 write합니다.
-// 그 사이에 발생한 모든 거래의 qtyDelta는 pendingDeltas에 누적됩니다.
 const RANKING_DEBOUNCE_MS = 30000;
-let rankingDebounceTimer  = null;  // 예약된 타이머
-let pendingDeltas         = {};    // { stockId: 누적 qtyDelta }
-let lastRankingWriteTime  = 0;     // 마지막 실제 write 시각
+let rankingDebounceTimer  = null;
+let pendingDeltas         = {};
+let lastRankingWriteTime  = 0;
 
 // ── rankings/top5 구독 ──────────────────────────────────────
 onValue(ref(db, 'rankings/top5'), (snap) => {
@@ -340,17 +555,13 @@ function renderRankingFromCache(items) {
 // ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
 document.getElementById('my-stocks-list').addEventListener('click', (e) => {
     const item = e.target.closest('.my-stock-item');
-    if (item) {
-        const stockName = item.getAttribute('data-name');
-        selectStockForSearch(stockName);
-    }
+    if (item) selectStockForSearch(item.getAttribute('data-name'));
 });
 
 // ── 내 보유 주식 패널 ────────────────────────────────────────
 function renderMyPortfolio() {
     const portfolioDiv       = document.getElementById('my-stocks-list');
     const totalAssetsDisplay = document.getElementById('total-assets');
-
     if (!portfolioDiv || !myData?.stocks) return;
 
     const userStocks = myData.stocks;
@@ -367,18 +578,14 @@ function renderMyPortfolio() {
     stockIds.forEach(id => {
         const stockData = allStocks.find(s => s.id === id);
         if (!stockData) return;
-
-        const info         = userStocks[id];
+        const info = userStocks[id];
         const currentPrice = stockData.price || 0;
-        totalStockValue   += currentPrice * info.qty;
-
-        const profit      = (((currentPrice - info.avg) / info.avg) * 100).toFixed(1);
+        totalStockValue += currentPrice * info.qty;
+        const profit = (((currentPrice - info.avg) / info.avg) * 100).toFixed(1);
         const profitClass = profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
-
         const item = document.createElement('div');
         item.className = 'my-stock-item';
         item.setAttribute('data-name', stockData.name);
-        item.style.cursor = 'pointer';
         item.innerHTML = `
             <div class="my-stock-info">
                 <span class="my-stock-name">${stockData.name}</span>
@@ -387,11 +594,9 @@ function renderMyPortfolio() {
             <div class="my-stock-details">
                 <span>${info.qty}주 보유</span>
                 <span>평균 ${info.avg.toLocaleString()}원</span>
-            </div>
-        `;
+            </div>`;
         portfolioDiv.appendChild(item);
     });
-
     if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
 }
 
@@ -409,18 +614,17 @@ function selectStockForSearch(stockName) {
 function updateUI(isFullRender = true) {
     const cashDisplay = document.getElementById('my-cash');
     const overlay     = document.getElementById('intro-overlay');
-
     if (myData) {
         if (cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
         renderMyPortfolio();
     }
-
     if (isFullRender && allStocks.length > 0) {
         renderStocks(document.getElementById('search-input')?.value || "");
         if (overlay && !overlay.classList.contains('hidden')) {
             setTimeout(() => overlay.classList.add('hidden'), 500);
         }
     }
+    // 모달은 열릴 때 스냅샷 가격을 표시하므로 실시간 갱신 없음
 }
 
 // ── 5초 로딩 타임아웃 ────────────────────────────────────────
@@ -437,44 +641,28 @@ setTimeout(() => {
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         userUID = user.uid;
-        const userRef    = ref(db, `users/${userUID}`);
-        const countRef   = ref(db, 'presence/count');
-
+        const userRef  = ref(db, `users/${userUID}`);
+        const countRef = ref(db, 'presence/count');
         if (!myData) myData = { cash: 1000000, stocks: {} };
 
-        // ── 동시접속자 카운터 ────────────────────────────────
-        // 접속 시 +1, 퇴장 시 Firebase 서버가 자동으로 -1 (onDisconnect)
-        // 카운터를 get() 1회만 읽어 화면에 표시 → 이후 갱신 없음 (구독 X)
         try {
             await runTransaction(countRef, (current) => Math.max(0, (current || 0) + 1));
-            onDisconnect(countRef).set(increment(-1));
-
+            onDisconnect(countRef).set(0);
             const snap  = await get(countRef);
             const count = snap.exists() ? snap.val() : 1;
             const el    = document.getElementById('online-count');
             if (el) el.innerText = count.toLocaleString();
         } catch (e) {
-            console.warn('[presence] 카운터 처리 실패 (무시):', e.message);
             const el = document.getElementById('online-count');
             if (el) el.innerText = '?';
         }
 
-        // 내 데이터 구독 (users/{uid} 단일 노드)
-        // [최적화] Firebase에 데이터가 없으면 메모리에만 초기값 유지
-        // → 거래 발생 시점에 처음으로 Firebase에 write (미거래 유저 노드 생성 방지)
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
-                myData = {
-                    cash:   serverData.cash   ?? 1000000,
-                    stocks: serverData.stocks || {},
-                    ...serverData
-                };
+                myData = { cash: serverData.cash ?? 1000000, stocks: serverData.stocks || {}, ...serverData };
             } else {
-                // Firebase에 쓰지 않고 메모리에만 초기값 유지
-                if (!myData || myData.cash === undefined) {
-                    myData = { cash: 1000000, stocks: {} };
-                }
+                if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
             }
             updateUI(true);
         });
@@ -483,81 +671,371 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// ── [핵심] 랭킹 디바운싱 업데이트 ──────────────────────────
-//
-// 동작 방식:
-//   1. 거래 발생 → scheduleRankingUpdate(stockId, qtyDelta) 호출
-//   2. pendingDeltas에 누적 (같은 종목 여러 번 거래해도 합산)
-//   3. 타이머가 없으면 30초 후 실행 예약
-//   4. 30초 뒤 flushRankingUpdate() 실행 → 누적분 한 번에 Firebase write
-//
-// 효과:
-//   - 1000명이 동시에 거래해도 30초에 write 1번
-//   - 1000개의 onValue 리스너가 30초에 1번만 깨어남
-//
+// ── 랭킹 디바운싱 ────────────────────────────────────────────
 function scheduleRankingUpdate(stockId, qtyDelta) {
     pendingDeltas[stockId] = (pendingDeltas[stockId] || 0) + qtyDelta;
-
     if (rankingDebounceTimer !== null) return;
-
     const elapsed  = Date.now() - lastRankingWriteTime;
     const waitTime = Math.max(0, RANKING_DEBOUNCE_MS - elapsed);
-
     rankingDebounceTimer = setTimeout(flushRankingUpdate, waitTime);
 }
 
 async function flushRankingUpdate() {
     rankingDebounceTimer = null;
-
     const deltas = { ...pendingDeltas };
     pendingDeltas = {};
-
     if (Object.keys(deltas).length === 0) return;
-
     try {
         const snap = await get(ref(db, 'rankings/top5'));
         if (!snap.exists()) return;
-
         const current = snap.val();
         const items   = current.items || [];
-
-        // top5 안에 있는 종목만 업데이트 (없는 종목은 순위 변동 없음)
         let changed = false;
         items.forEach(item => {
             if (deltas[item.id] !== undefined) {
                 item.totalQty = Math.max(0, item.totalQty + deltas[item.id]);
-
-                // 현재 주가도 최신으로 갱신
                 const stockData = allStocks.find(s => s.id === item.id);
                 if (stockData) item.price = stockData.price;
-
                 changed = true;
             }
         });
-
-        if (!changed) return; // top5와 무관한 거래였으면 write 스킵
-
-        // 재정렬 후 rank 번호 부여
+        if (!changed) return;
         items.sort((a, b) => b.totalQty - a.totalQty);
         items.forEach((item, i) => { item.rank = i + 1; });
-
         await set(ref(db, 'rankings/top5'), { savedAt: current.savedAt, items });
-
         lastRankingWriteTime = Date.now();
-        console.log('[rankings] 디바운싱 write 완료:', deltas);
-
     } catch (e) {
-        console.warn('[rankings] 업데이트 실패 (무시):', e.message);
-        // 실패한 delta는 다음 주기에 재시도하기 위해 pendingDeltas에 복원
         Object.entries(deltas).forEach(([id, delta]) => {
             pendingDeltas[id] = (pendingDeltas[id] || 0) + delta;
         });
-        // 실패 시 15초 후 재시도 (즉시 재시도하면 또 실패할 가능성이 높음)
-        if (rankingDebounceTimer === null) {
-            rankingDebounceTimer = setTimeout(flushRankingUpdate, 15000);
-        }
+        if (rankingDebounceTimer === null) rankingDebounceTimer = setTimeout(flushRankingUpdate, 15000);
     }
 }
+
+// ══════════════════════════════════════════════════════════════
+// 분봉 차트 로직
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 현재 분(분 단위 UNIX timestamp, 초 단위)을 반환
+ * 예: 14:37 → 14:37:00 의 UNIX 초
+ */
+function currentMinuteTs() {
+    return Math.floor(Date.now() / 60000) * 60;
+}
+
+/**
+ * 거래 발생 시 해당 종목의 분봉 업데이트
+ * candlesticks/{stockId}/{minuteTs} = { o, h, l, c, v, t }
+ */
+async function updateCandlestick(stockId, tradePrice, qty) {
+    const ts       = currentMinuteTs();
+    const candleRef = ref(db, `candlesticks/${stockId}/${ts}`);
+
+    await runTransaction(candleRef, (current) => {
+        if (!current) {
+            // 새 분봉 시작
+            return { o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, t: ts };
+        }
+        return {
+            ...current,
+            h: Math.max(current.h, tradePrice),
+            l: Math.min(current.l, tradePrice),
+            c: tradePrice,
+            v: current.v + qty,
+            t: ts
+        };
+    });
+
+    // 6시간(360분) 초과 구간 정리 (오래된 캔들 삭제)
+    pruneOldCandles(stockId);
+}
+
+/**
+ * 360분 이전 캔들 삭제
+ */
+async function pruneOldCandles(stockId) {
+    const cutoff  = (Math.floor(Date.now() / 60000) - MAX_CANDLE_MINUTES) * 60;
+    const oldRef  = ref(db, `candlesticks/${stockId}`);
+    try {
+        const snap = await get(oldRef);
+        if (!snap.exists()) return;
+        const data = snap.val();
+        const toDelete = Object.keys(data).filter(ts => parseInt(ts) < cutoff);
+        for (const ts of toDelete) {
+            await set(ref(db, `candlesticks/${stockId}/${ts}`), null);
+        }
+    } catch (e) {
+        // 정리 실패는 무시 (다음 거래 때 재시도)
+    }
+}
+
+/**
+ * n분봉으로 집계: 1분봉 배열 → n분봉 배열
+ * intervalMin: 1 | 3 | 5 | 10 | 30
+ */
+function aggregateCandles(rawCandles, intervalMin) {
+    if (intervalMin <= 1) return rawCandles;
+    const intervalSec = intervalMin * 60;
+    const buckets = {};
+    rawCandles.forEach(c => {
+        const bucketTs = Math.floor(c.t / intervalSec) * intervalSec;
+        if (!buckets[bucketTs]) {
+            buckets[bucketTs] = { o: c.o, h: c.h, l: c.l, c: c.c, v: c.v, t: bucketTs };
+        } else {
+            buckets[bucketTs].h  = Math.max(buckets[bucketTs].h, c.h);
+            buckets[bucketTs].l  = Math.min(buckets[bucketTs].l, c.l);
+            buckets[bucketTs].c  = c.c;
+            buckets[bucketTs].v += c.v;
+        }
+    });
+    return Object.values(buckets).sort((a, b) => a.t - b.t);
+}
+
+/**
+ * 기간 필터: 현재 시각 기준 timeframeMin 이내 캔들만 반환
+ */
+function filterByTimeframe(candles, timeframeMin) {
+    const cutoffSec = Math.floor(Date.now() / 1000) - timeframeMin * 60;
+    return candles.filter(c => c.t >= cutoffSec);
+}
+
+// ── 차트 모달 열기 ───────────────────────────────────────────
+window.openChartModal = function(stockId) {
+    const s = allStocks.find(x => x.id === stockId);
+    if (!s) return;
+
+    chartModalStockId = stockId;
+
+    const overlay = document.getElementById('chart-modal-overlay');
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    updateChartModalHeader(s);
+
+    // 탭 초기화
+    document.querySelectorAll('.tf-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.tf-tab[data-minutes="10"]').classList.add('active');
+    document.querySelectorAll('.int-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.int-tab[data-interval="1"]').classList.add('active');
+    chartTimeframeMin = 10;
+    chartIntervalMin  = 1;
+
+    // 캐시 초기화 후 1회 fetch
+    candleDataCache = [];
+    if (candleChartInstance) { candleChartInstance.destroy(); candleChartInstance = null; }
+    fetchCandles(stockId);
+};
+
+function updateChartModalHeader(s) {
+    const isUp = (s.change || 0) >= 0;
+    document.getElementById('cm-name').textContent   = s.name;
+    const priceEl = document.getElementById('cm-price');
+    priceEl.textContent  = `${(s.price || 0).toLocaleString()}원`;
+    priceEl.className    = `stock-title-price ${isUp ? 'up' : 'down'}`;
+    const changeEl = document.getElementById('cm-change');
+    changeEl.textContent = `${isUp ? '+' : ''}${s.change || 0}%`;
+    changeEl.className   = `stock-title-change ${isUp ? 'up' : 'down'}`;
+}
+
+// ── 차트 모달 닫기 ───────────────────────────────────────────
+function closeChartModal() {
+    document.getElementById('chart-modal-overlay').classList.remove('active');
+    document.body.style.overflow = '';
+    if (candleChartInstance) { candleChartInstance.destroy(); candleChartInstance = null; }
+    chartModalStockId = null;
+    candleDataCache   = [];
+    chartIsLoading    = false;
+}
+document.getElementById('chart-modal-close-btn').addEventListener('click', closeChartModal);
+document.getElementById('chart-modal-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('chart-modal-overlay')) closeChartModal();
+});
+
+// ── 기간 탭 ─────────────────────────────────────────────────
+document.querySelectorAll('.tf-tab').forEach(tab => {
+    tab.addEventListener('click', function () {
+        document.querySelectorAll('.tf-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        chartTimeframeMin = parseInt(this.dataset.minutes);
+        renderCandleChart();
+    });
+});
+
+// ── 분봉 단위 탭 ─────────────────────────────────────────────
+document.querySelectorAll('.int-tab').forEach(tab => {
+    tab.addEventListener('click', function () {
+        document.querySelectorAll('.int-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        chartIntervalMin = parseInt(this.dataset.interval);
+        renderCandleChart();
+    });
+});
+
+// ── Firebase 분봉 1회 읽기 (onValue 구독 없음) ──────────────
+// 모달을 열 때 단 1번만 get() 호출 → 이후 탭 전환은 캐시만 사용
+async function fetchCandles(stockId) {
+    if (chartIsLoading) return;
+    chartIsLoading = true;
+
+    // 로딩 표시
+    const emptyMsg = document.getElementById('chart-empty-msg');
+    const canvas   = document.getElementById('candleChart');
+    if (canvas)   canvas.style.display   = 'none';
+    if (emptyMsg) {
+        emptyMsg.style.display = 'flex';
+        emptyMsg.innerHTML = `<div class="empty-icon">⏳</div><div>데이터 불러오는 중...</div>`;
+    }
+
+    try {
+        const snap = await get(ref(db, `candlesticks/${stockId}`));
+        if (snap.exists()) {
+            const raw = snap.val();
+            candleDataCache = Object.values(raw)
+                .map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c, v: c.v || 0, t: c.t }))
+                .sort((a, b) => a.t - b.t);
+        } else {
+            candleDataCache = [];
+        }
+    } catch (e) {
+        console.warn('[candle] fetch 실패:', e.message);
+        candleDataCache = [];
+    } finally {
+        chartIsLoading = false;
+    }
+
+    // 모달이 닫혔으면 렌더 스킵
+    if (!chartModalStockId) return;
+
+    // 빈 데이터 메시지 원복 후 차트 렌더
+    if (emptyMsg) {
+        emptyMsg.innerHTML = `
+            <div class="empty-icon">📊</div>
+            <div>거래 데이터가 아직 없습니다</div>
+            <div style="font-size:12px;">첫 거래가 발생하면 분봉 차트가 생성됩니다</div>`;
+    }
+    renderCandleChart();
+}
+
+// ── 차트 렌더링 ──────────────────────────────────────────────
+function renderCandleChart() {
+    const canvas   = document.getElementById('candleChart');
+    const emptyMsg = document.getElementById('chart-empty-msg');
+    if (!canvas) return;
+
+    // 기간 + 분봉 필터링
+    const filtered    = filterByTimeframe(candleDataCache, chartTimeframeMin);
+    const aggregated  = aggregateCandles(filtered, chartIntervalMin);
+
+    // 거래량 합계
+    const totalVol = aggregated.reduce((sum, c) => sum + (c.v || 0), 0);
+    document.getElementById('cm-volume').textContent = `거래량: ${totalVol.toLocaleString()}주`;
+
+    // 데이터 범위 표시
+    if (aggregated.length >= 2) {
+        const from = new Date(aggregated[0].t * 1000);
+        const to   = new Date(aggregated[aggregated.length - 1].t * 1000);
+        const fmt  = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+        document.getElementById('cm-data-range').textContent = `${fmt(from)} ~ ${fmt(to)}`;
+    } else {
+        document.getElementById('cm-data-range').textContent = '데이터: -';
+    }
+
+    // 데이터 없음
+    if (aggregated.length === 0) {
+        canvas.style.display = 'none';
+        emptyMsg.style.display = 'flex';
+        if (candleChartInstance) { candleChartInstance.destroy(); candleChartInstance = null; }
+        return;
+    }
+    canvas.style.display = '';
+    emptyMsg.style.display = 'none';
+
+    // Chart.js 데이터 변환
+    const chartData = aggregated.map(c => ({
+        x: c.t * 1000,   // ms
+        o: c.o, h: c.h, l: c.l, c: c.c
+    }));
+
+    if (candleChartInstance) {
+        // 데이터만 교체 (부드럽게)
+        candleChartInstance.data.datasets[0].data = chartData;
+        candleChartInstance.update('none');
+        return;
+    }
+
+    // 최초 생성
+    candleChartInstance = new Chart(canvas, {
+        type: 'candlestick',
+        data: {
+            datasets: [{
+                label: '',
+                data: chartData,
+                color: {
+                    up:   '#ef4444',
+                    down: '#3b82f6',
+                    unchanged: '#94a3b8',
+                },
+                borderColor: {
+                    up:   '#ef4444',
+                    down: '#3b82f6',
+                    unchanged: '#94a3b8',
+                }
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    enabled: false,
+                    external: (ctx) => {
+                        const item = ctx.tooltip?.dataPoints?.[0]?.raw;
+                        if (!item) return;
+                        const t   = new Date(item.x);
+                        const fmt = `${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}`;
+                        const isUp = item.c >= item.o;
+                        document.getElementById('cm-ohlc-bar').innerHTML = `
+                            <span>⏰ <b>${fmt}</b></span>
+                            <span>시 <span style="color:${isUp?'#ef4444':'#3b82f6'}">${item.o.toLocaleString()}</span></span>
+                            <span>고 <span style="color:#ef4444">${item.h.toLocaleString()}</span></span>
+                            <span>저 <span style="color:#3b82f6">${item.l.toLocaleString()}</span></span>
+                            <span>종 <span style="color:${isUp?'#ef4444':'#3b82f6'};font-weight:800">${item.c.toLocaleString()}</span></span>
+                        `;
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: chartIntervalMin >= 30 ? 'hour' : 'minute',
+                        displayFormats: { minute: 'HH:mm', hour: 'HH:mm' }
+                    },
+                    grid:  { color: 'rgba(51,65,85,0.5)' },
+                    ticks: { color: '#94a3b8', maxTicksLimit: 8, font: { size: 11 } }
+                },
+                y: {
+                    position: 'right',
+                    grid:  { color: 'rgba(51,65,85,0.5)' },
+                    ticks: {
+                        color: '#94a3b8',
+                        font:  { size: 11 },
+                        callback: (v) => v.toLocaleString() + '원'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ── 모달 내 거래 ─────────────────────────────────────────────
+window.tradeFromModal = function(type, qty) {
+    if (!chartModalStockId) return;
+    window.trade(chartModalStockId, type, qty);
+};
 
 // ── 거래 함수 ────────────────────────────────────────────────
 window.trade = async function (id, type, qty = 1) {
@@ -583,7 +1061,8 @@ window.trade = async function (id, type, qty = 1) {
     const spread   = 0.0005;
     const fee      = 0.003;
 
-    let qtyDelta = 0;
+    let qtyDelta     = 0;
+    let finalPrice   = 0;
 
     try {
         await runTransaction(stockRef, (currentStock) => {
@@ -604,7 +1083,8 @@ window.trade = async function (id, type, qty = 1) {
                 userStock.avg    = Math.round(totalCost / userStock.qty);
                 myData.cash     -= totalBuyPrice;
                 myData.stocks[id] = userStock;
-                qtyDelta = qty;
+                qtyDelta   = qty;
+                finalPrice = finalTradePrice;
             } else {
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
                 if (userStock.qty < qty) throw new Error("보유부족");
@@ -617,7 +1097,8 @@ window.trade = async function (id, type, qty = 1) {
                 userStock.qty    -= qty;
                 if (userStock.qty === 0) userStock.avg = 0;
                 myData.stocks[id] = userStock;
-                qtyDelta = -qty;
+                qtyDelta   = -qty;
+                finalPrice = finalTradePrice;
             }
 
             let history = currentStock.history || [currentStock.price];
@@ -635,6 +1116,13 @@ window.trade = async function (id, type, qty = 1) {
 
         await set(userRef, { ...myData, lastTradeTime: serverTimestamp() });
 
+        // ── 분봉 업데이트 (신규) ──────────────────────────────
+        if (finalPrice > 0) {
+            updateCandlestick(id, finalPrice, qty).catch(e => {
+                console.warn('[candle] 분봉 업데이트 실패 (무시):', e.message);
+            });
+        }
+
         const sound = type === 'buy' ? buySound : sellSound;
         sound.currentTime = 0;
         sound.play().catch(() => {});
@@ -643,7 +1131,6 @@ window.trade = async function (id, type, qty = 1) {
         scheduleRankingUpdate(id, qtyDelta);
 
     } catch (error) {
-        console.error("거래 에러:", error);
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
         else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
         else alert("거래 중 오류가 발생했습니다.");
@@ -667,18 +1154,14 @@ window.goToMessage     = () => {
 function renderBanners() {
     const bannerList = document.getElementById('banner-list');
     if (!bannerList) return;
-
     bannerList.innerHTML = `
         <div onclick="openPromoModal()" class="banner-item" style="cursor:pointer;">
             <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
             <div class="banner-name">문의하기</div>
-        </div>
-    `;
-
+        </div>`;
     const now = new Date();
     allStocks.forEach(s => {
         if (!s.bannerImg) return;
-
         let dDayText = "AD";
         if (s.bannerEndDate) {
             const endDate = new Date(s.bannerEndDate);
@@ -687,39 +1170,27 @@ function renderBanners() {
             const diffDays = Math.ceil((endDate - now) / 86400000);
             dDayText = diffDays === 0 ? "오늘만료" : `D-${diffDays}`;
         }
-
-        const a      = document.createElement('a');
-        a.href       = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
-        a.target     = "_blank";
-        a.className  = "banner-item promo-active";
-
+        const a = document.createElement('a');
+        a.href  = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
+        a.target = "_blank";
+        a.className = "banner-item promo-active";
         const imgSrc   = s.bannerImg.startsWith('images/') ? './' + s.bannerImg : s.bannerImg;
         const loaderId = `loader-${s.id}`;
         const imgId    = `img-${s.id}`;
-
         a.innerHTML = `
             <div class="promo-badge">${dDayText}</div>
             <div class="banner-circle">
                 <span id="${loaderId}" class="banner-no-img" style="font-size:9px;color:#94a3b8;">로딩중...</span>
-                <img id="${imgId}" src="${imgSrc}" alt="${s.name}"
-                     style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                <img id="${imgId}" src="${imgSrc}" alt="${s.name}" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;">
             </div>
-            <div class="banner-name">${s.name}</div>
-        `;
+            <div class="banner-name">${s.name}</div>`;
         bannerList.appendChild(a);
-
-        const img    = document.getElementById(imgId);
+        const img = document.getElementById(imgId);
         const loader = document.getElementById(loaderId);
         if (img) {
-            img.onload = () => {
-                if (loader) loader.style.display = 'none';
-                img.style.display = 'block';
-                img.classList.add('img-loaded');
-            };
+            img.onload = () => { if(loader) loader.style.display='none'; img.style.display='block'; img.classList.add('img-loaded'); };
             if (img.complete) img.onload();
-            img.onerror = () => {
-                if (loader) { loader.innerText = "Error"; loader.style.color = "#ef4444"; }
-            };
+            img.onerror = () => { if(loader){loader.innerText="Error";loader.style.color="#ef4444";} };
         }
     });
 }
@@ -738,12 +1209,10 @@ function createSparkline(history, isUp) {
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
     if (!listDiv || !myData) return;
-
     const filtered = allStocks
         .filter(s => s.name && s.name.includes(filter))
         .sort((a, b) => (b.price || 0) - (a.price || 0))
         .slice(0, 100);
-
     listDiv.innerHTML = "";
     stockElements = {};
     filtered.forEach(s => {
@@ -757,6 +1226,13 @@ function createStockCard(s) {
     const card = document.createElement('div');
     card.className = 'stock-card';
     card.setAttribute('data-id', s.id);
+
+    // 카드 클릭 → 차트 모달 (버튼 클릭은 제외)
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.btn')) return;
+        openChartModal(s.id);
+    });
+
     updateCardContent(card, s, (myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
     return card;
 }
@@ -779,13 +1255,19 @@ function updateCardContent(card, s, userStock) {
             <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
         </div>
         <div class="trade-btns">
-            <button class="btn btn-buy-multi"  onclick="trade('${s.id}','buy',10)"   ${isTrading ? 'disabled' : ''}>+10</button>
-            <button class="btn btn-buy"         onclick="trade('${s.id}','buy',1)"    ${isTrading ? 'disabled' : ''}>매수</button>
+            <button class="btn btn-buy-multi"  onclick="trade('${s.id}','buy',10)"  ${isTrading?'disabled':''}>+10</button>
+            <button class="btn btn-buy"         onclick="trade('${s.id}','buy',1)"   ${isTrading?'disabled':''}>매수</button>
             <div style="width:1px;height:20px;background:#334155;margin:0 4px;"></div>
-            <button class="btn btn-sell"        onclick="trade('${s.id}','sell',1)"   ${isTrading ? 'disabled' : ''}>매도</button>
-            <button class="btn btn-sell-multi"  onclick="trade('${s.id}','sell',10)"  ${isTrading ? 'disabled' : ''}>-10</button>
+            <button class="btn btn-sell"        onclick="trade('${s.id}','sell',1)"  ${isTrading?'disabled':''}>매도</button>
+            <button class="btn btn-sell-multi"  onclick="trade('${s.id}','sell',10)" ${isTrading?'disabled':''}>-10</button>
         </div>
     `;
+
+    // 이벤트 리스너 재연결 (innerHTML 교체 후)
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.btn')) return;
+        openChartModal(s.id);
+    });
 }
 
 // ── 주식 데이터 실시간 리스너 ────────────────────────────────
@@ -816,6 +1298,14 @@ onValue(ref(db, 'stocks/'), (snap) => {
 
 // ── 검색창 ───────────────────────────────────────────────────
 document.getElementById('search-input')?.addEventListener('input', () => updateUI(true));
+
+// ── ESC 키로 모달 닫기 ───────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
+        if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
+    }
+});
 
 })();
 </script>
