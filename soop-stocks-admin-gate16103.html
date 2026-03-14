@@ -66,6 +66,39 @@
         }
         .chart-banner-info-row span { color: #94a3b8; }
         .chart-banner-info-row b   { color: #f8fafc; }
+
+        /* 점검 모드 토글 스위치 */
+        .toggle-wrap {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #0f172a; padding: 14px 18px; border-radius: 10px;
+            border: 1px solid #334155; margin-bottom: 12px;
+        }
+        .toggle-label { font-size: 14px; font-weight: 700; color: #f8fafc; }
+        .toggle-sub   { font-size: 12px; color: #64748b; margin-top: 3px; }
+        .toggle-switch {
+            position: relative; width: 52px; height: 28px; flex-shrink: 0;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; inset: 0;
+            background: #334155; border-radius: 28px;
+            cursor: pointer; transition: 0.3s;
+        }
+        .toggle-slider:before {
+            content: ""; position: absolute;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: white; left: 4px; top: 4px;
+            transition: 0.3s;
+        }
+        .toggle-switch input:checked + .toggle-slider { background: #ef4444; }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(24px); }
+        .maintenance-status {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 700;
+        }
+        .maintenance-status .dot {
+            width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -80,7 +113,28 @@
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
 
-    <!-- 🏆 랭킹 TOP5 관리 -->
+    <!-- 🔴 점검 모드 관리 -->
+    <div class="container" style="display:block; border-color: #ef4444;">
+        <h1>🔴 점검 모드 관리</h1>
+        <div class="info-box" style="color:#fca5a5;">
+            토글을 켜면 메인 페이지 접속자 전원에게 즉시 점검 오버레이가 표시되고 거래가 차단됩니다.<br>
+            <span style="color:#38bdf8;">Firebase DB의 siteConfig/maintenance 값을 변경합니다.</span>
+        </div>
+        <div class="toggle-wrap">
+            <div>
+                <div class="toggle-label">점검 모드</div>
+                <div class="toggle-sub">ON 시 모든 유저 거래 즉시 차단</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="maintenance-toggle" onchange="toggleMaintenance(this.checked)">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="maintenance-status" id="maintenance-status">
+            <span class="dot" style="background:#334155;"></span>
+            <span style="color:#64748b;">상태 불러오는 중...</span>
+        </div>
+    </div>
     <div class="container" style="display:block; border-color: #a855f7;">
         <h1>🏆 랭킹 TOP5 관리</h1>
         <div class="info-box">
@@ -146,7 +200,7 @@
         <div class="info-box">
             차트창 하단에 단독 노출되는 광고 배너를 설정합니다.<br>
             <span style="color:#38bdf8;">배너 사이즈: 720 × 150px · 이미지 및 GIF 지원</span><br>
-            <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 무료 체험 없음 · 별풍선 30개/일</span>
+            <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 무료 체험 없음 · 별풍선 50개/일</span>
         </div>
 
         <!-- 현재 등록 상태 -->
@@ -238,6 +292,20 @@
         <div style="display:flex; gap:10px;">
             <button class="btn-success" style="flex:1;" onclick="previewInactiveUsers()">🔍 미거래 유저 집계</button>
             <button class="btn-primary" style="flex:2; margin-top:0; background:#f97316; color:white;" onclick="cleanupInactiveUsers()">🗑 미거래 유저 삭제</button>
+        </div>
+    </div>
+
+    <!-- 🟢 접속자 노드 정리 -->
+    <div class="container" style="display:block; border-color: #22c55e;">
+        <h1>🟢 접속자 노드 정리</h1>
+        <div class="info-box">
+            비정상 종료로 남은 좀비 presence 노드를 삭제합니다.<br>
+            <span style="color:#38bdf8;">30분 이상 된 노드를 만료로 판단하여 제거합니다.</span>
+        </div>
+        <div id="presence-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-success" style="flex:1;" onclick="previewPresence()">🔍 노드 현황 확인</button>
+            <button class="btn-primary" style="flex:2; margin-top:0; background:#22c55e; color:#0f172a;" onclick="cleanupPresence()">🧹 만료 노드 삭제</button>
         </div>
     </div>
 
@@ -469,6 +537,53 @@
     window.login  = () => signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
     window.logout = () => signOut(auth);
 
+    // ── 점검 모드 ────────────────────────────────────────────
+    async function loadMaintenanceStatus() {
+        const toggle   = document.getElementById('maintenance-toggle');
+        const statusEl = document.getElementById('maintenance-status');
+        try {
+            const snap = await get(ref(db, 'siteConfig/maintenance'));
+            const isOn = snap.exists() ? snap.val() : false;
+            toggle.checked = isOn;
+            renderMaintenanceStatus(isOn);
+        } catch (e) {
+            if (statusEl) statusEl.innerHTML = `<span class="dot" style="background:#ef4444;"></span><span style="color:#ef4444;">불러오기 실패</span>`;
+        }
+    }
+
+    function renderMaintenanceStatus(isOn) {
+        const statusEl = document.getElementById('maintenance-status');
+        if (!statusEl) return;
+        if (isOn) {
+            statusEl.innerHTML = `
+                <span class="dot" style="background:#ef4444; box-shadow:0 0 6px #ef4444;"></span>
+                <span style="color:#ef4444;">점검 모드 ON — 모든 유저 거래 차단 중</span>`;
+        } else {
+            statusEl.innerHTML = `
+                <span class="dot" style="background:#22c55e;"></span>
+                <span style="color:#22c55e;">정상 운영 중</span>`;
+        }
+    }
+
+    window.toggleMaintenance = async function(isOn) {
+        const toggle = document.getElementById('maintenance-toggle');
+        const msg = isOn
+            ? '⚠️ 점검 모드를 켜시겠습니까?\n\n모든 유저에게 즉시 점검 오버레이가 표시되고 거래가 차단됩니다.'
+            : '✅ 점검 모드를 끄시겠습니까?\n\n모든 유저가 즉시 정상 이용 가능해집니다.';
+        if (!confirm(msg)) {
+            toggle.checked = !isOn; // 취소 시 토글 원복
+            return;
+        }
+        try {
+            await set(ref(db, 'siteConfig/maintenance'), isOn);
+            renderMaintenanceStatus(isOn);
+            alert(isOn ? '🔴 점검 모드가 활성화되었습니다.' : '🟢 점검 모드가 해제되었습니다.');
+        } catch (e) {
+            alert('변경 실패: ' + e.message);
+            toggle.checked = !isOn; // 실패 시 토글 원복
+        }
+    };
+
     onAuthStateChanged(auth, async (user) => {
         if (user && user.email === ADMIN_EMAIL) {
             document.getElementById('login-section').style.display = 'none';
@@ -477,6 +592,7 @@
             await loadStocksOnce();
             await loadRankingStatus();
             await loadChartBannerStatus();
+            await loadMaintenanceStatus();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -582,6 +698,49 @@
         });
         return inactive;
     }
+
+    window.previewPresence = async function() {
+        const statusEl = document.getElementById('presence-status');
+        statusEl.innerText = '확인 중...';
+        try {
+            const snap = await get(ref(db, 'presence/users'));
+            if (!snap.exists()) { statusEl.innerText = '노드 없음'; return; }
+            const now    = Date.now();
+            const cutoff = 30 * 60 * 1000;
+            const all    = Object.values(snap.val());
+            const valid  = all.filter(v => v && v.connectedAt && (now - v.connectedAt) < cutoff).length;
+            const zombie = all.length - valid;
+            statusEl.innerText = `전체 ${all.length}개 노드 중 유효 ${valid}개 · 만료(좀비) ${zombie}개`;
+        } catch(e) {
+            statusEl.innerText = '확인 실패: ' + e.message;
+        }
+    };
+
+    window.cleanupPresence = async function() {
+        const statusEl = document.getElementById('presence-status');
+        statusEl.innerText = '확인 중...';
+        try {
+            const snap = await get(ref(db, 'presence/users'));
+            if (!snap.exists()) { statusEl.innerText = '삭제할 노드 없음'; return; }
+            const now    = Date.now();
+            const cutoff = 30 * 60 * 1000;
+            const data   = snap.val();
+            const updates = {};
+            let count = 0;
+            Object.entries(data).forEach(([uid, v]) => {
+                if (!v || !v.connectedAt || (now - v.connectedAt) >= cutoff) {
+                    updates[uid] = null;  // presence/users 기준 상대 경로
+                    count++;
+                }
+            });
+            if (count === 0) { statusEl.innerText = '만료 노드 없음'; return; }
+            if (!confirm(`만료 노드 ${count}개를 삭제하시겠습니까?`)) return;
+            await update(ref(db, 'presence/users'), updates);  // 루트 대신 presence/users 경로
+            statusEl.innerText = `✅ ${count}개 만료 노드 삭제 완료`;
+        } catch(e) {
+            statusEl.innerText = '삭제 실패: ' + e.message;
+        }
+    };
 
     window.previewInactiveUsers = async function() {
         const statusEl = document.getElementById('cleanup-status');
