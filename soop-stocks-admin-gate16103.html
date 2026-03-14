@@ -741,6 +741,8 @@
             statusEl.innerText = '삭제 실패: ' + e.message;
         }
     };
+
+    window.previewInactiveUsers = async function() {
         const statusEl = document.getElementById('cleanup-status');
         statusEl.innerText = '집계 중...';
         try {
