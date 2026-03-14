@@ -460,21 +460,24 @@
 </head>
 <body>
 
-<!-- ── 정기점검 오버레이 ── -->
 <div id="maintenance-overlay" style="display:none;">
     <div class="maintenance-content">
-        <div class="maintenance-icon">🔧</div>
-        <div class="maintenance-title">정기 점검 중입니다</div>
+        <div class="maintenance-icon">🔔</div>
+        <div class="maintenance-title">주식 시장 오픈 준비 중</div>
         <div class="maintenance-desc">
-            더 나은 서비스를 위해 정기 점검을 진행하고 있습니다.<br>
-            점검 시간 동안 거래가 중단됩니다.
+            현재는 원활한 거래를 위한 <b>장 시작 준비 시간</b>입니다.<br>
+            잠시 후 스트리머 주식시장이 개장됩니다.
         </div>
-        <div class="maintenance-time-badge">⏰ 04:00 ~ 09:00</div>
-        <div class="maintenance-desc" style="margin-bottom:0;">
-            점검 종료 후 자동으로 재개됩니다.
+        
+        <div class="maintenance-time-badge">🕒 시장 운영 시간: 09:00 ~ 익일 04:00</div>
+        
+        <div class="maintenance-desc" style="margin-bottom:0; font-size: 13px; color: #94a3b8;">
+            준비 시간 동안에는 거래가 제한되며,<br>
+            개장과 동시에 실시간 차트가 활성화됩니다.
         </div>
-        <div class="maintenance-countdown">
-            오픈까지 <span id="maintenance-timer">-</span> 남았습니다
+
+        <div class="maintenance-countdown" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+            장 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
         </div>
     </div>
 </div>
@@ -748,8 +751,8 @@ import { getAuth, signInAnonymously, onAuthStateChanged }
 // 정기점검 (매일 04:00 ~ 09:00)
 // Firebase 초기화 전에 먼저 체크 → 점검 중이면 연결 자체 차단
 // ══════════════════════════════════════════════════════════
-const MAINTENANCE_START = 4;  // 시작 시각 (시)
-const MAINTENANCE_END   = 9;  // 종료 시각 (시)
+const MAINTENANCE_START = 4;  // 장 마감시간 (시)
+const MAINTENANCE_END   = 9;  // 장 오픈시간 (시)
 
 function isMaintenanceTime() {
     const h = new Date().getHours();
