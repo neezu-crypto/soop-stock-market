@@ -601,7 +601,7 @@
                 <div style="position:absolute;top:4px;right:6px;background:rgba(0,0,0,0.5);color:#94a3b8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">AD</div>
             </div>
             <!-- 안내 문구 -->
-            <div style="margin-top:8px;font-size:11px;color:#a9b5c6;text-align:center;">
+            <div style="margin-top:8px;font-size:11px;color:#475569;text-align:center;">
                 💡 SOOP 방송국 하단 배너용으로 제작한 이미지를 그대로 사용할 수 있습니다
             </div>
         </div>
@@ -637,7 +637,7 @@
                 <li>• 원하는 광고 기간 (일수)</li>
             </ul>
             <p style="font-size:12px;color:var(--text-sub);margin:8px 0 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
-                💡 파일이 크다면 <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+                💡 파일이 크다면 <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="1e6d75786a717a69717d756d2c5e79737f7772307d7173">[email&#160;protected]</a></span> 으로 발송
             </p>
         </div>
 
@@ -688,7 +688,7 @@
 <!-- ══════════════════════════════════════════
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -927,25 +927,50 @@ async function flushRankingUpdate() {
     const deltas = { ...pendingDeltas };
     pendingDeltas = {};
     if (Object.keys(deltas).length === 0) return;
+
     try {
-        const snap = await get(ref(db, 'rankings/top5'));
-        if (!snap.exists()) return;
-        const current = snap.val();
+        const snap    = await get(ref(db, 'rankings/top5'));
+        const current = snap.exists() ? snap.val() : { items: [] };
         const items   = current.items || [];
-        let changed = false;
-        items.forEach(item => {
-            if (deltas[item.id] !== undefined) {
-                item.totalQty = Math.max(0, item.totalQty + deltas[item.id]);
-                const stockData = allStocks.find(s => s.id === item.id);
-                if (stockData) item.price = stockData.price;
-                changed = true;
+
+        // top5를 id → item 맵으로 변환
+        const itemMap = {};
+        items.forEach(item => { itemMap[item.id] = item; });
+
+        // delta 종목 반영 — Firebase 추가 읽기 없이 allStocks 캐시 사용
+        Object.entries(deltas).forEach(([id, delta]) => {
+            const stockData = allStocks.find(s => s.id === id);
+            if (!stockData) return;
+
+            if (itemMap[id]) {
+                // 이미 top5에 있으면 delta만 가산
+                itemMap[id].totalQty = Math.max(0, itemMap[id].totalQty + delta);
+                itemMap[id].price    = stockData.price;
+                itemMap[id].name     = stockData.name;
+            } else {
+                // top5 밖 신규 진입 후보 — allStocks 캐시의 volume 기준
+                itemMap[id] = {
+                    id,
+                    name:     stockData.name,
+                    price:    stockData.price,
+                    totalQty: stockData.volume || Math.max(0, delta)
+                };
             }
         });
-        if (!changed) return;
-        items.sort((a, b) => b.totalQty - a.totalQty);
-        items.forEach((item, i) => { item.rank = i + 1; });
-        await set(ref(db, 'rankings/top5'), { savedAt: current.savedAt, items });
+
+        // 전체 후보 정렬 후 상위 5개 추출
+        const newTop5 = Object.values(itemMap)
+            .sort((a, b) => b.totalQty - a.totalQty)
+            .slice(0, 5);
+        newTop5.forEach((item, i) => { item.rank = i + 1; });
+
+        await set(ref(db, 'rankings/top5'), {
+            savedAt: current.savedAt || Date.now(),
+            items:   newTop5
+        });
+
         lastRankingWriteTime = Date.now();
+
     } catch (e) {
         Object.entries(deltas).forEach(([id, delta]) => {
             pendingDeltas[id] = (pendingDeltas[id] || 0) + delta;
