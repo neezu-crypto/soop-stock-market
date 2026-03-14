@@ -85,7 +85,47 @@
         .rank-vol  { color: var(--text-sub); font-size: 11px; }
 
         /* ── 배너 ── */
-        .banner-container { position: fixed; right: 80px; top: 60px; display: flex; flex-direction: column; gap: 20px; z-index: 1000; }
+        .banner-container { 
+    position: fixed; 
+    right: 80px; 
+    top: 60px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 20px; 
+    z-index: 1000; 
+    
+    /* 스크롤 관련 추가 */
+    max-height: calc(100vh - 120px); /* 화면 전체 높이에서 여백 제외 */
+    overflow-y: auto;                /* 세로 스크롤 활성화 */
+    padding: 10px;                   /* 그림자 잘림 방지 */
+    scrollbar-width: none;           /* Firefox 스크롤바 숨김 */
+    -ms-overflow-style: none;        /* IE 스크롤바 숨김 */
+}
+        /* Chrome, Safari 스크롤바 숨김 (디자인 일관성) */
+.banner-container::-webkit-scrollbar {
+    display: none;
+}
+ /* 모바일 대응 (반응형 지점 수정) */
+@media (max-width: 1400px) { 
+    .banner-container { 
+        right: 20px; 
+        max-height: calc(100vh - 150px); /* 모바일은 조금 더 여유 있게 */
+    } 
+}
+        /* 모바일 전용 미세 조정 */
+@media (max-width: 600px) {
+    .banner-container {
+        top: 85px; /* 상단 지갑 바와의 간격 조정 */
+        gap: 15px; /* 모바일에서는 간격 조금 축소 */
+    }
+    .banner-circle {
+        width: 75px;  /* 모바일에서 살짝 크기 조절 (선택사항) */
+        height: 75px;
+    }
+    .banner-name {
+        font-size: 11px;
+    }
+}
         .banner-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; cursor: pointer; transition: transform 0.2s; position: relative; }
         .banner-item:hover { transform: scale(1.1); }
         .banner-circle {
@@ -1175,33 +1215,50 @@ window.goToMessage     = () => {
     window.closePromoModal();
 };
 
-// ── 배너 렌더링 ──────────────────────────────────────────────
+// ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────────────────────────────
 function renderBanners() {
     const bannerList = document.getElementById('banner-list');
     if (!bannerList) return;
+
+    const now = new Date();
+
+    // 1. 배너가 있는 항목만 필터링 및 남은 기간 계산
+    let activeBanners = allStocks
+        .filter(s => s.bannerImg)
+        .map(s => {
+            let diffDays = Infinity; // 종료일 없는 경우(AD)를 가장 위로 보낼 수도 있음
+            if (s.bannerEndDate) {
+                const endDate = new Date(s.bannerEndDate);
+                endDate.setHours(23, 59, 59, 999);
+                diffDays = Math.ceil((endDate - now) / 86400000);
+            }
+            return { ...s, diffDays };
+        })
+        .filter(s => s.diffDays >= 0); // 기간 지난 배너 제외
+
+    // 2. 남은 기간(diffDays)이 큰 순서대로 정렬 (내림차순)
+    activeBanners.sort((a, b) => b.diffDays - a.diffDays);
+
+    // 3. HTML 생성 (기본 문의하기 버튼 상단 고정 또는 하단 배치 선택 가능)
+    // 여기서는 '문의하기'를 항상 최상단에 두거나 리스트 상단에 오게 설정
     bannerList.innerHTML = `
-        <div onclick="openPromoModal()" class="banner-item" style="cursor:pointer;">
+        <div onclick="openPromoModal()" class="banner-item" style="cursor:pointer; margin-bottom: 5px;">
             <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
             <div class="banner-name">문의하기</div>
         </div>`;
-    const now = new Date();
-    allStocks.forEach(s => {
-        if (!s.bannerImg) return;
-        let dDayText = "AD";
-        if (s.bannerEndDate) {
-            const endDate = new Date(s.bannerEndDate);
-            endDate.setHours(23, 59, 59, 999);
-            if (endDate < now) return;
-            const diffDays = Math.ceil((endDate - now) / 86400000);
-            dDayText = diffDays === 0 ? "오늘만료" : `D-${diffDays}`;
-        }
+
+    activeBanners.forEach(s => {
+        const dDayText = s.diffDays === Infinity ? "AD" : (s.diffDays === 0 ? "오늘만료" : `D-${s.diffDays}`);
+        
         const a = document.createElement('a');
-        a.href  = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
+        a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
         a.target = "_blank";
         a.className = "banner-item promo-active";
-        const imgSrc   = s.bannerImg.startsWith('images/') ? './' + s.bannerImg : s.bannerImg;
+        
+        const imgSrc = s.bannerImg.startsWith('images/') ? './' + s.bannerImg : s.bannerImg;
         const loaderId = `loader-${s.id}`;
-        const imgId    = `img-${s.id}`;
+        const imgId = `img-${s.id}`;
+
         a.innerHTML = `
             <div class="promo-badge">${dDayText}</div>
             <div class="banner-circle">
@@ -1209,14 +1266,25 @@ function renderBanners() {
                 <img id="${imgId}" src="${imgSrc}" alt="${s.name}" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;">
             </div>
             <div class="banner-name">${s.name}</div>`;
+        
         bannerList.appendChild(a);
-        const img = document.getElementById(imgId);
-        const loader = document.getElementById(loaderId);
-        if (img) {
-            img.onload = () => { if(loader) loader.style.display='none'; img.style.display='block'; img.classList.add('img-loaded'); };
-            if (img.complete) img.onload();
-            img.onerror = () => { if(loader){loader.innerText="Error";loader.style.color="#ef4444";} };
-        }
+
+        // 이미지 로드 처리
+        setTimeout(() => {
+            const img = document.getElementById(imgId);
+            const loader = document.getElementById(loaderId);
+            if (img) {
+                img.onload = () => { 
+                    if(loader) loader.style.display='none'; 
+                    img.style.display='block'; 
+                    img.classList.add('img-loaded'); 
+                };
+                if (img.complete) img.onload();
+                img.onerror = () => { 
+                    if(loader){loader.innerText="Error"; loader.style.color="#ef4444";} 
+                };
+            }
+        }, 0);
     });
 }
 
