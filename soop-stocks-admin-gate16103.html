@@ -324,9 +324,23 @@
     <div class="container" style="display:block; border-color: #38bdf8;">
         <h1>📺 방송국 배너 관리</h1>
         <div class="info-box">
-            닉네임이 일치하는 종목에 배너와 <b>노출 기간</b>을 설정합니다.<br>
-            <span style="color: #38bdf8;">* 입력한 일수(Day)만큼 노출 후 자동으로 사라집니다.</span>
+            닉네임이 일치하는 종목에 배너를 설정합니다.<br>
+            <span style="color:#38bdf8;">유료: 기간 설정 필수 · 무료: 기간 없이 AD 표시 · 유료가 항상 상단 노출</span>
         </div>
+
+        <!-- 유료/무료 탭 -->
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <button id="tab-paid" onclick="switchBannerTab('paid')"
+                style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">
+                💰 유료 홍보
+            </button>
+            <button id="tab-free" onclick="switchBannerTab('free')"
+                style="flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">
+                🎁 무료 홍보
+            </button>
+        </div>
+
+        <!-- 공통 입력 필드 -->
         <div style="flex-direction: column; gap: 10px; display: flex;">
             <input type="text" id="banner-nickname" placeholder="대상 스트리머 닉네임 (정확히 입력)"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
@@ -334,13 +348,26 @@
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
             <input type="text" id="banner-link-url" placeholder="클릭 시 이동할 링크 (미입력 시 기본 방송국)"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-            <div style="display: flex; align-items: center; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #475569;">
-                <label for="banner-days" style="font-size: 13px; color: #94a3b8; white-space: nowrap;">노출 기간 설정:</label>
+
+            <!-- 유료 전용: 기간 입력 -->
+            <div id="banner-days-wrap" style="display:flex; align-items:center; gap:10px; background:#0f172a; padding:10px; border-radius:8px; border:1px solid #475569;">
+                <label id="banner-days-label" style="font-size:13px; color:#94a3b8; white-space:nowrap;">💰 유료 노출 기간:</label>
                 <input type="number" id="banner-days" placeholder="예: 7" min="1" max="365"
-                    style="flex: 1; background: transparent; border: none; color: #38bdf8; font-size: 15px; outline: none;">
-                <span style="color: #94a3b8; font-size: 13px; margin-left: 5px;">일 동안</span>
+                    style="flex:1; background:transparent; border:none; color:#38bdf8; font-size:15px; outline:none;">
+                <span id="banner-days-suffix" style="color:#94a3b8; font-size:13px;">일 동안 (별풍선 20개/일)</span>
             </div>
-            <button class="btn-primary" onclick="window.addBannerToStock()">배너 및 노출 기간 적용</button>
+
+            <!-- 무료 전용: 안내 -->
+            <div id="banner-free-notice" style="display:none; background:rgba(34,197,94,0.08); border:1px solid #22c55e; border-radius:8px; padding:12px; font-size:13px; color:#86efac;">
+                🎁 무료 홍보는 기간 내 배너 하단에 <b>AD</b> 뱃지로 표시됩니다.<br>
+                유료 홍보자가 있으면 자동으로 아래로 내려갑니다.
+            </div>
+
+            <div id="banner-enddate-preview" style="font-size:12px; color:#64748b; text-align:right; margin-top:-4px;"></div>
+
+            <button class="btn-primary" id="banner-submit-btn" onclick="window.addBannerToStock()">
+                💰 유료 배너 등록
+            </button>
         </div>
     </div>
 
@@ -978,15 +1005,78 @@
         } catch (e) { alert("오류 발생: " + e.message); }
     };
 
+    // ── 배너 탭 전환 ─────────────────────────────────────────
+    let bannerMode = 'paid'; // 'paid' | 'free'
+
+    window.switchBannerTab = function(mode) {
+        bannerMode = mode;
+        const paidBtn    = document.getElementById('tab-paid');
+        const freeBtn    = document.getElementById('tab-free');
+        const freeNotice = document.getElementById('banner-free-notice');
+        const submitBtn  = document.getElementById('banner-submit-btn');
+        const daysLabel  = document.getElementById('banner-days-label');
+        const daysSuffix = document.getElementById('banner-days-suffix');
+
+        if (mode === 'paid') {
+            paidBtn.style.background = '#38bdf8';
+            paidBtn.style.color      = '#0f172a';
+            paidBtn.style.border     = 'none';
+            freeBtn.style.background = '#1e293b';
+            freeBtn.style.color      = '#94a3b8';
+            freeBtn.style.border     = '1px solid #334155';
+            freeNotice.style.display = 'none';
+            daysLabel.innerText      = '💰 유료 노출 기간:';
+            daysSuffix.innerText     = '일 동안 (별풍선 20개/일)';
+            submitBtn.innerText      = '💰 유료 배너 등록';
+            submitBtn.style.background = '#38bdf8';
+            submitBtn.style.color      = '#0f172a';
+        } else {
+            freeBtn.style.background = '#22c55e';
+            freeBtn.style.color      = '#0f172a';
+            freeBtn.style.border     = 'none';
+            paidBtn.style.background = '#1e293b';
+            paidBtn.style.color      = '#94a3b8';
+            paidBtn.style.border     = '1px solid #334155';
+            freeNotice.style.display = 'block';
+            daysLabel.innerText      = '🎁 무료 노출 기간:';
+            daysSuffix.innerText     = '일 동안';
+            submitBtn.innerText      = '🎁 무료 배너 등록';
+            submitBtn.style.background = '#22c55e';
+            submitBtn.style.color      = '#0f172a';
+        }
+        document.getElementById('banner-enddate-preview').innerText = '';
+    };
+
+    // 기간 입력 시 종료일 미리보기
+    document.getElementById('banner-days')?.addEventListener('input', function() {
+        const days = parseInt(this.value);
+        const el   = document.getElementById('banner-enddate-preview');
+        if (!isNaN(days) && days > 0) {
+            const end = new Date();
+            end.setDate(end.getDate() + days);
+            el.innerText = `📅 종료일: ${end.toISOString().split('T')[0]}`;
+        } else {
+            el.innerText = '';
+        }
+    });
+
     window.addBannerToStock = async function() {
         const targetNickname = document.getElementById('banner-nickname').value.trim();
         const imgUrl         = document.getElementById('banner-img-url').value.trim();
         const linkUrl        = document.getElementById('banner-link-url').value.trim();
         const daysInput      = document.getElementById('banner-days').value;
-        if (!targetNickname || !imgUrl || !daysInput) return alert("닉네임, 이미지 주소, 노출 기간(일)은 필수 입력 항목입니다.");
+
+        if (!targetNickname || !imgUrl) return alert("닉네임과 이미지 주소는 필수입니다.");
+        if (!daysInput) return alert("노출 기간(일)을 입력해주세요.");
+
+        // 유료/무료 모두 기간 저장 — 유료는 bannerEndDate 있음, 무료도 동일하게 저장
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + parseInt(daysInput));
         const endDateStr = endDate.toISOString().split('T')[0];
+
+        const modeLabel = bannerMode === 'paid' ? `유료 (${daysInput}일 · 종료일: ${endDateStr})` : `무료 (${daysInput}일 · 종료일: ${endDateStr})`;
+        if (!confirm(`${targetNickname} 종목에 ${modeLabel} 배너를 등록하시겠습니까?`)) return;
+
         try {
             const snapshot = await get(ref(db, 'stocks/'));
             const data = snapshot.val();
@@ -994,16 +1084,21 @@
             let targetId = null;
             Object.entries(data).forEach(([id, stock]) => { if (stock.name === targetNickname) targetId = id; });
             if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
+
             const updates = {};
             updates[`stocks/${targetId}/bannerImg`]     = imgUrl;
+            updates[`stocks/${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
             updates[`stocks/${targetId}/bannerEndDate`] = endDateStr;
-            updates[`stocks/${targetId}/link`] = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
+            updates[`stocks/${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
+
             await update(ref(db), updates);
-            alert(`✅ ${targetNickname} 종목에 배너가 적용되었습니다!\n📅 종료일: ${endDateStr}`);
-            document.getElementById('banner-nickname').value = "";
-            document.getElementById('banner-img-url').value  = "";
-            document.getElementById('banner-link-url').value = "";
-            document.getElementById('banner-days').value     = "";
+            alert(`✅ ${targetNickname} 종목에 ${bannerMode === 'paid' ? '유료' : '무료'} 배너가 등록되었습니다!${endDateStr ? '\n📅 종료일: ' + endDateStr : ''}`);
+
+            document.getElementById('banner-nickname').value = '';
+            document.getElementById('banner-img-url').value  = '';
+            document.getElementById('banner-link-url').value = '';
+            document.getElementById('banner-days').value     = '';
+            document.getElementById('banner-enddate-preview').innerText = '';
         } catch (e) {
             alert("배너 추가 중 오류 발생: " + e.message);
         }
