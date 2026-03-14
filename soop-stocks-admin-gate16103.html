@@ -295,6 +295,20 @@
         </div>
     </div>
 
+    <!-- 🟢 접속자 노드 정리 -->
+    <div class="container" style="display:block; border-color: #22c55e;">
+        <h1>🟢 접속자 노드 정리</h1>
+        <div class="info-box">
+            비정상 종료로 남은 좀비 presence 노드를 삭제합니다.<br>
+            <span style="color:#38bdf8;">30분 이상 된 노드를 만료로 판단하여 제거합니다.</span>
+        </div>
+        <div id="presence-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-success" style="flex:1;" onclick="previewPresence()">🔍 노드 현황 확인</button>
+            <button class="btn-primary" style="flex:2; margin-top:0; background:#22c55e; color:#0f172a;" onclick="cleanupPresence()">🧹 만료 노드 삭제</button>
+        </div>
+    </div>
+
     <!-- 🚀 스트리머 상장 및 삭제 -->
     <div class="container" style="display:block">
         <h1>🚀 스트리머 상장 및 삭제</h1>
@@ -685,7 +699,48 @@
         return inactive;
     }
 
-    window.previewInactiveUsers = async function() {
+    window.previewPresence = async function() {
+        const statusEl = document.getElementById('presence-status');
+        statusEl.innerText = '확인 중...';
+        try {
+            const snap = await get(ref(db, 'presence/users'));
+            if (!snap.exists()) { statusEl.innerText = '노드 없음'; return; }
+            const now    = Date.now();
+            const cutoff = 30 * 60 * 1000;
+            const all    = Object.values(snap.val());
+            const valid  = all.filter(v => v && v.connectedAt && (now - v.connectedAt) < cutoff).length;
+            const zombie = all.length - valid;
+            statusEl.innerText = `전체 ${all.length}개 노드 중 유효 ${valid}개 · 만료(좀비) ${zombie}개`;
+        } catch(e) {
+            statusEl.innerText = '확인 실패: ' + e.message;
+        }
+    };
+
+    window.cleanupPresence = async function() {
+        const statusEl = document.getElementById('presence-status');
+        statusEl.innerText = '확인 중...';
+        try {
+            const snap = await get(ref(db, 'presence/users'));
+            if (!snap.exists()) { statusEl.innerText = '삭제할 노드 없음'; return; }
+            const now    = Date.now();
+            const cutoff = 30 * 60 * 1000;
+            const data   = snap.val();
+            const updates = {};
+            let count = 0;
+            Object.entries(data).forEach(([uid, v]) => {
+                if (!v || !v.connectedAt || (now - v.connectedAt) >= cutoff) {
+                    updates[`presence/users/${uid}`] = null;
+                    count++;
+                }
+            });
+            if (count === 0) { statusEl.innerText = '만료 노드 없음'; return; }
+            if (!confirm(`만료 노드 ${count}개를 삭제하시겠습니까?`)) return;
+            await update(ref(db), updates);
+            statusEl.innerText = `✅ ${count}개 만료 노드 삭제 완료`;
+        } catch(e) {
+            statusEl.innerText = '삭제 실패: ' + e.message;
+        }
+    };
         const statusEl = document.getElementById('cleanup-status');
         statusEl.innerText = '집계 중...';
         try {
