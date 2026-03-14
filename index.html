@@ -1881,8 +1881,13 @@ function renderBanners() {
         })
         .filter(s => s.diffDays >= 0); // 기간 지난 배너 제외
 
-    // 2. 남은 기간(diffDays)이 큰 순서대로 정렬 (내림차순)
-    activeBanners.sort((a, b) => b.diffDays - a.diffDays);
+    // 2. 유료(bannerIsPaid) 우선, 각 그룹 내에서 남은 기간 내림차순 정렬
+    activeBanners.sort((a, b) => {
+        const aPaid = a.bannerIsPaid === true;
+        const bPaid = b.bannerIsPaid === true;
+        if (aPaid !== bPaid) return bPaid - aPaid; // 유료 먼저
+        return b.diffDays - a.diffDays;            // 같은 그룹 내 남은 기간 내림차순
+    });
 
     // 3. 문의하기 버튼 항상 최상단 고정
     bannerList.innerHTML = `
