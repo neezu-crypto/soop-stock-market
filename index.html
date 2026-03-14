@@ -856,6 +856,16 @@ let pendingDeltas         = {};
 let lastRankingWriteTime  = 0;
 
 // ── rankings/top5 구독 ──────────────────────────────────────
+
+// 이미 접속 중인 사용자를 위한 점검 시간 주기 체크 (30초마다)
+// 점검 시작 시각이 되면 즉시 오버레이 표시 + Firebase 구독 해제 불가하므로
+// 페이지 새로고침으로 완전 차단 처리
+setInterval(() => {
+    if (isMaintenanceTime()) {
+        location.reload();
+    }
+}, 30000);
+
 onValue(ref(db, 'rankings/top5'), (snap) => {
     if (!snap.exists()) {
         const rankDiv = document.getElementById('top-rankers');
