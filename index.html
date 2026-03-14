@@ -300,6 +300,17 @@
             min-height: 320px;
             position: relative;
         }
+
+        /* 캔버스 영역 내 마우스 커서 변경 */
+        .chart-canvas-wrap canvas {
+    cursor: crosshair;
+}
+        /* 십자선 가이드를 위한 스타일 (선택 사항: 더 얇고 점선으로 표현하고 싶을 때) */
+.chart-ohlc-bar span b {
+    color: var(--primary);
+    font-size: 13px;
+}
+        
         #candleChart { width: 100% !important; height: 320px !important; }
 
         /* 차트 하단 정보 */
@@ -984,13 +995,13 @@ async function fetchCandles(stockId) {
 
 // ── 차트 렌더링 ──────────────────────────────────────────────
 function renderCandleChart() {
-    const canvas   = document.getElementById('candleChart');
+    const canvas = document.getElementById('candleChart');
     const emptyMsg = document.getElementById('chart-empty-msg');
     if (!canvas) return;
 
     // 기간 + 분봉 필터링
-    const filtered    = filterByTimeframe(candleDataCache, chartTimeframeMin);
-    const aggregated  = aggregateCandles(filtered, chartIntervalMin);
+    const filtered = filterByTimeframe(candleDataCache, chartTimeframeMin);
+    const aggregated = aggregateCandles(filtered, chartIntervalMin);
 
     // 거래량 합계
     const totalVol = aggregated.reduce((sum, c) => sum + (c.v || 0), 0);
@@ -999,8 +1010,8 @@ function renderCandleChart() {
     // 데이터 범위 표시
     if (aggregated.length >= 2) {
         const from = new Date(aggregated[0].t * 1000);
-        const to   = new Date(aggregated[aggregated.length - 1].t * 1000);
-        const fmt  = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const to = new Date(aggregated[aggregated.length - 1].t * 1000);
+        const fmt = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
         document.getElementById('cm-data-range').textContent = `${fmt(from)} ~ ${fmt(to)}`;
     } else {
         document.getElementById('cm-data-range').textContent = '데이터: -';
@@ -1023,7 +1034,6 @@ function renderCandleChart() {
     }));
 
     if (candleChartInstance) {
-        // 데이터만 교체 (부드럽게)
         candleChartInstance.data.datasets[0].data = chartData;
         candleChartInstance.update('none');
         return;
@@ -1036,38 +1046,38 @@ function renderCandleChart() {
             datasets: [{
                 label: '',
                 data: chartData,
-                color: {
-                    up:   '#ef4444',
-                    down: '#3b82f6',
-                    unchanged: '#94a3b8',
-                },
-                borderColor: {
-                    up:   '#ef4444',
-                    down: '#3b82f6',
-                    unchanged: '#94a3b8',
-                }
+                color: { up: '#ef4444', down: '#3b82f6', unchanged: '#94a3b8' },
+                borderColor: { up: '#ef4444', down: '#3b82f6', unchanged: '#94a3b8' }
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             animation: false,
+            // 호버 시 인근 데이터 포인트를 잡도록 설정 (트레이딩뷰 스타일)
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    enabled: false,
+                    enabled: false, // 기본 툴팁은 숨기고 상단 OHLC 바만 사용
                     external: (ctx) => {
                         const item = ctx.tooltip?.dataPoints?.[0]?.raw;
                         if (!item) return;
-                        const t   = new Date(item.x);
-                        const fmt = `${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}`;
+                        
+                        const t = new Date(item.x);
+                        const fmt = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}`;
                         const isUp = item.c >= item.o;
+                        const color = isUp ? '#ef4444' : '#3b82f6';
+                        
                         document.getElementById('cm-ohlc-bar').innerHTML = `
                             <span>⏰ <b>${fmt}</b></span>
-                            <span>시 <span style="color:${isUp?'#ef4444':'#3b82f6'}">${item.o.toLocaleString()}</span></span>
-                            <span>고 <span style="color:#ef4444">${item.h.toLocaleString()}</span></span>
-                            <span>저 <span style="color:#3b82f6">${item.l.toLocaleString()}</span></span>
-                            <span>종 <span style="color:${isUp?'#ef4444':'#3b82f6'};font-weight:800">${item.c.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">시 <span style="color:${color}">${item.o.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">고 <span style="color:#ef4444">${item.h.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">저 <span style="color:#3b82f6">${item.l.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">종 <span style="color:${color};font-weight:800">${item.c.toLocaleString()}</span></span>
                         `;
                     }
                 }
@@ -1079,20 +1089,50 @@ function renderCandleChart() {
                         unit: chartIntervalMin >= 30 ? 'hour' : 'minute',
                         displayFormats: { minute: 'HH:mm', hour: 'HH:mm' }
                     },
-                    grid:  { color: 'rgba(51,65,85,0.5)' },
+                    grid: { color: 'rgba(51,65,85,0.3)', drawTicks: false },
                     ticks: { color: '#94a3b8', maxTicksLimit: 8, font: { size: 11 } }
                 },
                 y: {
                     position: 'right',
-                    grid:  { color: 'rgba(51,65,85,0.5)' },
+                    grid: { color: 'rgba(51,65,85,0.3)', drawTicks: false },
                     ticks: {
                         color: '#94a3b8',
-                        font:  { size: 11 },
+                        font: { size: 11 },
                         callback: (v) => v.toLocaleString() + '원'
                     }
                 }
             }
-        }
+        },
+        // ── 십자선 가이드라인 플러그인 ──
+        plugins: [{
+            id: 'crosshair',
+            afterDraw: (chart) => {
+                if (chart.tooltip?._active?.length) {
+                    const { ctx, chartArea: { top, bottom, left, right } } = chart;
+                    const activePoint = chart.tooltip._active[0];
+                    const x = activePoint.element.x;
+                    const y = activePoint.element.y;
+
+                    ctx.save();
+                    ctx.setLineDash([3, 3]); // 점선
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(148, 163, 184, 0.8)'; // 가이드라인 색상
+
+                    // 세로선
+                    ctx.beginPath();
+                    ctx.moveTo(x, top);
+                    ctx.lineTo(x, bottom);
+                    ctx.stroke();
+
+                    // 가로선
+                    ctx.beginPath();
+                    ctx.moveTo(left, y);
+                    ctx.lineTo(right, y);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        }]
     });
 }
 
