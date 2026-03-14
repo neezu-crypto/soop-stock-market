@@ -428,9 +428,56 @@
             background: rgba(56,189,248,0.28);
             border-color: var(--primary);
         }
+
+        /* ── 정기점검 오버레이 ── */
+        #maintenance-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 9999;
+        }
+        .maintenance-content {
+            text-align: center; max-width: 420px; padding: 50px 40px;
+            background: #1e293b; border-radius: 24px;
+            border: 1px solid #334155;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+        }
+        .maintenance-icon { font-size: 52px; margin-bottom: 20px; }
+        .maintenance-title { font-size: 22px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
+        .maintenance-desc  { color: #94a3b8; font-size: 14px; line-height: 1.8; margin-bottom: 24px; }
+        .maintenance-time-badge {
+            display: inline-block;
+            background: rgba(56,189,248,0.1);
+            border: 1px solid rgba(56,189,248,0.3);
+            color: #38bdf8; font-size: 15px; font-weight: 800;
+            padding: 10px 24px; border-radius: 12px; margin-bottom: 20px;
+        }
+        .maintenance-countdown {
+            font-size: 13px; color: #64748b; margin-top: 16px;
+        }
+        .maintenance-countdown span { color: #38bdf8; font-weight: 700; }
     </style>
 </head>
 <body>
+
+<!-- ── 정기점검 오버레이 ── -->
+<div id="maintenance-overlay" style="display:none;">
+    <div class="maintenance-content">
+        <div class="maintenance-icon">🔧</div>
+        <div class="maintenance-title">정기 점검 중입니다</div>
+        <div class="maintenance-desc">
+            더 나은 서비스를 위해 정기 점검을 진행하고 있습니다.<br>
+            점검 시간 동안 거래가 중단됩니다.
+        </div>
+        <div class="maintenance-time-badge">⏰ 04:00 ~ 09:00</div>
+        <div class="maintenance-desc" style="margin-bottom:0;">
+            점검 종료 후 자동으로 재개됩니다.
+        </div>
+        <div class="maintenance-countdown">
+            오픈까지 <span id="maintenance-timer">-</span> 남았습니다
+        </div>
+    </div>
+</div>
 
 <!-- ── 인트로 오버레이 ── -->
 <div id="intro-overlay">
@@ -484,7 +531,7 @@
             </ul>
             <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
                 💡 파일 용량이 크다면?<br>
-                <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+                <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ee9d85889a818a99818d859ddcae89838f8782c08d8183">[email&#160;protected]</a></span> 으로 발송
             </p>
         </div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
@@ -637,7 +684,7 @@
                 <li>• 원하는 광고 기간 (일수)</li>
             </ul>
             <p style="font-size:12px;color:var(--text-sub);margin:8px 0 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
-                💡 파일이 크다면 <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+                💡 파일이 크다면 <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ccbfa7aab8a3a8bba3afa7bffe8caba1ada5a0e2afa3a1">[email&#160;protected]</a></span> 으로 발송
             </p>
         </div>
 
@@ -688,7 +735,7 @@
 <!-- ══════════════════════════════════════════
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -697,6 +744,50 @@ import { getAuth, signInAnonymously, onAuthStateChanged }
 
 (function () {
 
+// ══════════════════════════════════════════════════════════
+// 정기점검 (매일 04:00 ~ 09:00)
+// Firebase 초기화 전에 먼저 체크 → 점검 중이면 연결 자체 차단
+// ══════════════════════════════════════════════════════════
+const MAINTENANCE_START = 4;  // 시작 시각 (시)
+const MAINTENANCE_END   = 9;  // 종료 시각 (시)
+
+function isMaintenanceTime() {
+    const h = new Date().getHours();
+    return h >= MAINTENANCE_START && h < MAINTENANCE_END;
+}
+
+function getTimeUntilOpen() {
+    const now  = new Date();
+    const open = new Date();
+    open.setHours(MAINTENANCE_END, 0, 0, 0);
+    if (now >= open) open.setDate(open.getDate() + 1);
+    const diffMs  = open - now;
+    const hours   = Math.floor(diffMs / 3600000);
+    const minutes = Math.floor((diffMs % 3600000) / 60000);
+    const seconds = Math.floor((diffMs % 60000) / 1000);
+    return `${hours > 0 ? hours + '시간 ' : ''}${minutes}분 ${seconds}초`;
+}
+
+// 점검 시간이면 Firebase 초기화 없이 오버레이만 표시하고 종료
+if (isMaintenanceTime()) {
+    const overlay = document.getElementById('maintenance-overlay');
+    if (overlay) overlay.style.display = 'flex';
+    const timerEl = document.getElementById('maintenance-timer');
+    if (timerEl) timerEl.innerText = getTimeUntilOpen();
+
+    const tick = setInterval(() => {
+        if (!isMaintenanceTime()) {
+            clearInterval(tick);
+            location.reload(); // 점검 종료 시 자동 새로고침
+            return;
+        }
+        if (timerEl) timerEl.innerText = getTimeUntilOpen();
+    }, 1000);
+
+    return; // ← IIFE 여기서 종료, Firebase 초기화 실행 안 됨
+}
+
+// ── 점검 시간 외 → Firebase 정상 초기화 ─────────────────
 const firebaseConfig = {
     apiKey:      "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
     authDomain:  "soop-stock-market.firebaseapp.com",
