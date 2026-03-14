@@ -1136,16 +1136,24 @@ onAuthStateChanged(auth, async (user) => {
         if (!myData) myData = { cash: 1000000, stocks: {} };
 
         try {
-            // 유저별 전용 노드에 접속 표시 → 퇴장 시 자동 삭제
+            // 유저별 전용 노드에 접속 시각(타임스탬프) 저장 → 퇴장 시 자동 삭제
             const myPresenceRef = ref(db, `presence/users/${userUID}`);
-            await set(myPresenceRef, true);
+            await set(myPresenceRef, { connectedAt: Date.now() });
             onDisconnect(myPresenceRef).remove();
 
-            // 접속 시 1회만 읽기 → 이후 갱신 없음 (데이터 절약)
+            // 접속 시 1회만 읽기 — 30분(1800초) 이내 접속자만 유효로 집계
+            // onDisconnect 미실행으로 쌓인 좀비 노드 필터링
             const snap = await get(ref(db, 'presence/users'));
-            const count = snap.exists() ? Object.keys(snap.val()).length : 1;
+            let count = 0;
+            if (snap.exists()) {
+                const now    = Date.now();
+                const cutoff = 30 * 60 * 1000; // 30분
+                Object.values(snap.val()).forEach(v => {
+                    if (v && v.connectedAt && (now - v.connectedAt) < cutoff) count++;
+                });
+            }
             const el = document.getElementById('online-count');
-            if (el) el.innerText = count.toLocaleString();
+            if (el) el.innerText = Math.max(1, count).toLocaleString();
         } catch (e) {
             const el = document.getElementById('online-count');
             if (el) el.innerText = '?';
