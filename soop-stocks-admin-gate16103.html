@@ -16,6 +16,7 @@
         button { cursor: pointer; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; transition: 0.2s; }
         .btn-primary { background: #38bdf8; color: #0f172a; width: 100%; margin-top: 15px; font-size: 15px; }
         .btn-success { background: #22c55e; color: white; }
+        .btn-danger  { background: #ef4444; color: white; }
         .btn-google { background: white; color: #334155; display: flex; align-items: center; gap: 10px; font-size: 16px; }
         button:hover { opacity: 0.8; transform: translateY(-1px); }
         #admin-info { margin-bottom: 20px; font-size: 14px; color: #94a3b8; }
@@ -32,9 +33,39 @@
         .status-chip.saved   { background: #166534; color: #86efac; }
         .status-chip.unsaved { background: #7c2d12; color: #fca5a5; }
         .status-chip.loading { background: #1e3a5f; color: #93c5fd; }
+        .status-chip.active  { background: #14532d; color: #4ade80; }
+        .status-chip.expired { background: #450a0a; color: #fca5a5; }
+        .status-chip.none    { background: #1e293b; color: #64748b; border: 1px solid #334155; }
         .data-status-bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 15px; font-size: 13px; }
         .data-status-bar span { color: #94a3b8; }
         .data-status-bar b { color: #38bdf8; }
+
+        /* 차트 배너 미리보기 */
+        .chart-banner-preview {
+            width: 100%;
+            aspect-ratio: 720 / 150;
+            background: #0a1628;
+            border: 1px dashed #334155;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 10px 0;
+            position: relative;
+        }
+        .chart-banner-preview img {
+            width: 100%; height: 100%; object-fit: cover; display: none;
+        }
+        .chart-banner-preview .preview-empty {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; color: #475569; gap: 6px;
+        }
+        .chart-banner-info-row {
+            display: flex; justify-content: space-between; align-items: center;
+            background: #0f172a; padding: 10px 14px; border-radius: 8px;
+            border: 1px solid #334155; margin-bottom: 12px; font-size: 13px;
+        }
+        .chart-banner-info-row span { color: #94a3b8; }
+        .chart-banner-info-row b   { color: #f8fafc; }
     </style>
 </head>
 <body>
@@ -109,6 +140,76 @@
         </div>
     </div>
 
+    <!-- 📺 차트 하단 배너 관리 (신규) -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>📺 차트 하단 배너 관리</h1>
+        <div class="info-box">
+            차트창 하단에 단독 노출되는 광고 배너를 설정합니다.<br>
+            <span style="color:#38bdf8;">배너 사이즈: 720 × 150px · 이미지 및 GIF 지원</span><br>
+            <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 무료 체험 없음 · 별풍선 30개/일</span>
+        </div>
+
+        <!-- 현재 등록 상태 -->
+        <div class="chart-banner-info-row">
+            <span>현재 배너 상태:</span>
+            <span id="chart-banner-status" class="status-chip loading">불러오는 중...</span>
+        </div>
+        <div id="chart-banner-current" style="display:none; margin-bottom:15px;">
+            <div class="chart-banner-info-row">
+                <span>광고주</span>
+                <b id="cb-current-name">-</b>
+            </div>
+            <div class="chart-banner-info-row">
+                <span>이동 링크</span>
+                <b id="cb-current-link" style="font-size:12px; word-break:break-all;">-</b>
+            </div>
+            <div class="chart-banner-info-row">
+                <span>종료일</span>
+                <b id="cb-current-enddate">-</b>
+            </div>
+            <!-- 현재 배너 미리보기 -->
+            <div class="chart-banner-preview">
+                <img id="cb-current-img" src="" alt="현재 배너">
+                <div class="preview-empty" id="cb-current-empty">
+                    <span>🖼</span><span>이미지 없음</span>
+                </div>
+            </div>
+            <button class="btn-danger" style="width:100%; margin-top:5px;" onclick="deleteChartBanner()">🗑 현재 배너 삭제</button>
+        </div>
+
+        <!-- 신규 등록 폼 -->
+        <div style="border-top: 1px solid #334155; padding-top: 15px; display:flex; flex-direction:column; gap:10px;">
+            <div style="font-size:13px; color:#38bdf8; font-weight:700;">새 배너 등록</div>
+
+            <input type="text" id="cb-name" placeholder="광고주 닉네임 (관리용)"
+                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+
+            <input type="text" id="cb-img" placeholder="배너 이미지 URL (720×150px · GIF 가능)"
+                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+
+            <!-- 이미지 입력 시 미리보기 -->
+            <div class="chart-banner-preview" id="cb-preview-wrap">
+                <img id="cb-preview-img" src="" alt="미리보기">
+                <div class="preview-empty" id="cb-preview-empty">
+                    <span>🖼</span><span>이미지 URL 입력 시 미리보기</span>
+                </div>
+            </div>
+
+            <input type="text" id="cb-link" placeholder="클릭 시 이동할 링크 URL"
+                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+
+            <div style="display:flex; align-items:center; gap:10px; background:#0f172a; padding:10px; border-radius:8px; border:1px solid #475569;">
+                <label style="font-size:13px; color:#94a3b8; white-space:nowrap;">노출 기간:</label>
+                <input type="number" id="cb-days" placeholder="예: 7" min="1" max="365"
+                    style="flex:1; background:transparent; border:none; color:#38bdf8; font-size:15px; outline:none; padding:0;">
+                <span style="color:#94a3b8; font-size:13px;">일</span>
+            </div>
+            <div style="font-size:12px; color:#64748b; text-align:right; margin-top:-6px;" id="cb-enddate-preview"></div>
+
+            <button class="btn-primary" onclick="saveChartBanner()" style="margin-top:5px;">📺 차트 배너 등록 / 교체</button>
+        </div>
+    </div>
+
     <!-- 📈 주가 일괄 조정 -->
     <div class="container" style="display:block">
         <h1>📈 주가 일괄 조정 (% 단위)</h1>
@@ -130,7 +231,7 @@
     <div class="container" style="display:block; border-color: #f97316;">
         <h1>🗑 미거래 유저 데이터 정리</h1>
         <div class="info-box" style="color: #fed7aa;">
-            한 번도 거래하지 않은 유저(잔고 1,000,000원 & 보유 주식 없음)의 데이터를 삭제합니다.<br>
+            한 번도 거래하지 않은 유저(잔고 1,000,000원 &amp; 보유 주식 없음)의 데이터를 삭제합니다.<br>
             <span style="color:#38bdf8;">Firebase 저장 용량과 랭킹 집계 속도를 개선합니다.</span>
         </div>
         <div id="cleanup-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
@@ -180,7 +281,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -196,14 +297,7 @@
     const provider = new GoogleAuthProvider();
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
-    // ── 데이터 상태 ─────────────────────────────────────────
     let allStocksData = {};
-
-    // [핵심 최적화]
-    // 기존: onValue(stocks/) → 거래 발생마다 실시간 수신 + DOM 재렌더링 → 모바일 렉
-    //       auto-rank-update 체크 시 매 변경마다 users/ 전체 읽기 → 트래픽 폭발
-    // 변경: get() 1회 읽기 → 수동 새로고침 버튼으로만 갱신
-    //       onValue 구독 완전 제거 → Firebase 연결 비용 0
 
     async function loadStocksOnce() {
         const statusEl = document.getElementById('stocks-load-status');
@@ -216,13 +310,10 @@
             renderAdminStockList();
         } catch (e) {
             if (statusEl) statusEl.innerText = '로드 실패';
-            console.error(e);
         }
     }
 
-    window.reloadStocks = async function() {
-        await loadStocksOnce();
-    };
+    window.reloadStocks = async function() { await loadStocksOnce(); };
 
     async function loadRankingStatus() {
         const statusEl = document.getElementById('ranking-status');
@@ -244,6 +335,136 @@
         }
     }
 
+    // ══════════════════════════════════════════════════════
+    // 차트 하단 배너 관리
+    // ══════════════════════════════════════════════════════
+
+    async function loadChartBannerStatus() {
+        const statusEl  = document.getElementById('chart-banner-status');
+        const currentEl = document.getElementById('chart-banner-current');
+        try {
+            const snap = await get(ref(db, 'chartBanner'));
+            if (!snap.exists() || !snap.val().img) {
+                statusEl.className  = 'status-chip none';
+                statusEl.innerText  = '등록 없음';
+                currentEl.style.display = 'none';
+                return;
+            }
+            const data = snap.val();
+
+            // 만료 여부 확인
+            let isExpired = false;
+            if (data.endDate) {
+                const end = new Date(data.endDate);
+                end.setHours(23, 59, 59, 999);
+                isExpired = end < new Date();
+            }
+
+            statusEl.className = isExpired ? 'status-chip expired' : 'status-chip active';
+            statusEl.innerText = isExpired
+                ? `⚠️ 만료됨 (${data.endDate})`
+                : `✅ 노출 중 (${data.endDate || '기간 없음'} 까지)`;
+
+            // 현재 배너 정보 표시
+            document.getElementById('cb-current-name').innerText    = data.name    || '-';
+            document.getElementById('cb-current-link').innerText    = data.link    || '-';
+            document.getElementById('cb-current-enddate').innerText = data.endDate || '무기한';
+
+            const imgEl    = document.getElementById('cb-current-img');
+            const emptyEl  = document.getElementById('cb-current-empty');
+            if (data.img) {
+                imgEl.src             = data.img;
+                imgEl.style.display   = 'block';
+                emptyEl.style.display = 'none';
+            }
+            currentEl.style.display = 'block';
+
+        } catch (e) {
+            statusEl.className = 'status-chip unsaved';
+            statusEl.innerText = '불러오기 실패';
+        }
+    }
+
+    window.saveChartBanner = async function() {
+        const name    = document.getElementById('cb-name').value.trim();
+        const img     = document.getElementById('cb-img').value.trim();
+        const link    = document.getElementById('cb-link').value.trim();
+        const days    = parseInt(document.getElementById('cb-days').value);
+
+        if (!img)          return alert('배너 이미지 URL을 입력해주세요.');
+        if (!link)         return alert('이동 링크를 입력해주세요.');
+        if (isNaN(days) || days < 1) return alert('노출 기간(일)을 올바르게 입력해주세요.');
+
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + days);
+        const endDateStr = endDate.toISOString().split('T')[0];
+
+        const payload = { name, img, link, endDate: endDateStr };
+
+        if (!confirm(`차트 하단 배너를 등록하시겠습니까?\n\n광고주: ${name || '(없음)'}\n링크: ${link}\n종료일: ${endDateStr}`)) return;
+
+        try {
+            await set(ref(db, 'chartBanner'), payload);
+            alert(`✅ 차트 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
+            // 입력 초기화
+            document.getElementById('cb-name').value  = '';
+            document.getElementById('cb-img').value   = '';
+            document.getElementById('cb-link').value  = '';
+            document.getElementById('cb-days').value  = '';
+            document.getElementById('cb-preview-img').style.display = 'none';
+            document.getElementById('cb-preview-empty').style.display = 'flex';
+            document.getElementById('cb-enddate-preview').innerText = '';
+            await loadChartBannerStatus();
+        } catch (e) {
+            alert('저장 실패: ' + e.message);
+        }
+    };
+
+    window.deleteChartBanner = async function() {
+        if (!confirm('현재 차트 배너를 삭제하시겠습니까?\n삭제 시 즉시 모집 안내로 교체됩니다.')) return;
+        try {
+            await remove(ref(db, 'chartBanner'));
+            alert('✅ 차트 배너가 삭제되었습니다.');
+            await loadChartBannerStatus();
+        } catch (e) {
+            alert('삭제 실패: ' + e.message);
+        }
+    };
+
+    // 이미지 URL 입력 시 실시간 미리보기
+    document.getElementById('cb-img')?.addEventListener('input', function() {
+        const url      = this.value.trim();
+        const imgEl    = document.getElementById('cb-preview-img');
+        const emptyEl  = document.getElementById('cb-preview-empty');
+        if (url) {
+            imgEl.src             = url;
+            imgEl.style.display   = 'block';
+            emptyEl.style.display = 'none';
+            imgEl.onerror = () => {
+                imgEl.style.display   = 'none';
+                emptyEl.style.display = 'flex';
+                emptyEl.innerHTML     = '<span>⚠️</span><span>이미지를 불러올 수 없습니다</span>';
+            };
+        } else {
+            imgEl.style.display   = 'none';
+            emptyEl.style.display = 'flex';
+            emptyEl.innerHTML     = '<span>🖼</span><span>이미지 URL 입력 시 미리보기</span>';
+        }
+    });
+
+    // 노출 기간 입력 시 종료일 미리보기
+    document.getElementById('cb-days')?.addEventListener('input', function() {
+        const days    = parseInt(this.value);
+        const previewEl = document.getElementById('cb-enddate-preview');
+        if (!isNaN(days) && days > 0) {
+            const end = new Date();
+            end.setDate(end.getDate() + days);
+            previewEl.innerText = `📅 종료일: ${end.toISOString().split('T')[0]}`;
+        } else {
+            previewEl.innerText = '';
+        }
+    });
+
     // ── 인증 ────────────────────────────────────────────────
     window.login  = () => signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
     window.logout = () => signOut(auth);
@@ -255,6 +476,7 @@
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
             await loadStocksOnce();
             await loadRankingStatus();
+            await loadChartBannerStatus();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -297,7 +519,6 @@
             statusEl.className = 'status-chip unsaved';
             statusEl.innerText = '⚠️ 미리보기 (아직 저장 안 됨)';
         } catch(e) {
-            console.error(e);
             alert("집계 중 오류: " + e.message);
             statusEl.className = 'status-chip unsaved';
             statusEl.innerText = '오류 발생';
@@ -324,7 +545,6 @@
             }
             await loadRankingStatus();
         } catch(e) {
-            console.error(e);
             if (!silent) alert("저장 중 오류: " + e.message);
             statusEl.className = 'status-chip unsaved';
             statusEl.innerText = '저장 실패';
@@ -379,12 +599,8 @@
         statusEl.innerText = '집계 중...';
         try {
             const inactive = await getInactiveUsers();
-            if (inactive.length === 0) {
-                statusEl.innerText = '삭제할 미거래 유저가 없습니다.';
-                return;
-            }
+            if (inactive.length === 0) { statusEl.innerText = '삭제할 미거래 유저가 없습니다.'; return; }
             if (!confirm(`미거래 유저 ${inactive.length.toLocaleString()}명을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
-            // 500개씩 나눠서 삭제 (Firebase 일괄 업데이트 제한 대응)
             const BATCH = 500;
             let deleted = 0;
             for (let i = 0; i < inactive.length; i += BATCH) {
