@@ -33,9 +33,9 @@
             background: var(--card-bg); padding: 20px; border-radius: 16px;
             display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr; 
             align-items: center; gap: 10px; border: 1px solid #334155;
-            cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background: #2a3a50; }
+        .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); }
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
         .trade-btns { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
@@ -667,12 +667,17 @@ onAuthStateChanged(auth, async (user) => {
         if (!myData) myData = { cash: 1000000, stocks: {} };
 
         try {
-            await runTransaction(countRef, (current) => Math.max(0, (current || 0) + 1));
-            onDisconnect(countRef).set(0);
-            const snap  = await get(countRef);
-            const count = snap.exists() ? snap.val() : 1;
-            const el    = document.getElementById('online-count');
-            if (el) el.innerText = count.toLocaleString();
+            // 유저별 전용 노드에 접속 표시 → 퇴장 시 자동 삭제
+            const myPresenceRef = ref(db, `presence/users/${userUID}`);
+            await set(myPresenceRef, true);
+            onDisconnect(myPresenceRef).remove();
+
+            // 전체 presence/users 구독 → 키 개수 = 현재 접속자 수
+            onValue(ref(db, 'presence/users'), (snap) => {
+                const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+                const el = document.getElementById('online-count');
+                if (el) el.innerText = count.toLocaleString();
+            });
         } catch (e) {
             const el = document.getElementById('online-count');
             if (el) el.innerText = '?';
