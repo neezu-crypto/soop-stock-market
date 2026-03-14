@@ -729,13 +729,13 @@
             let count = 0;
             Object.entries(data).forEach(([uid, v]) => {
                 if (!v || !v.connectedAt || (now - v.connectedAt) >= cutoff) {
-                    updates[`presence/users/${uid}`] = null;
+                    updates[uid] = null;  // presence/users 기준 상대 경로
                     count++;
                 }
             });
             if (count === 0) { statusEl.innerText = '만료 노드 없음'; return; }
             if (!confirm(`만료 노드 ${count}개를 삭제하시겠습니까?`)) return;
-            await update(ref(db), updates);
+            await update(ref(db, 'presence/users'), updates);  // 루트 대신 presence/users 경로
             statusEl.innerText = `✅ ${count}개 만료 노드 삭제 완료`;
         } catch(e) {
             statusEl.innerText = '삭제 실패: ' + e.message;
