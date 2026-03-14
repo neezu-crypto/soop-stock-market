@@ -85,7 +85,39 @@
         .rank-vol  { color: var(--text-sub); font-size: 11px; }
 
         /* ── 배너 ── */
-        .banner-container { position: fixed; right: 80px; top: 60px; display: flex; flex-direction: column; gap: 20px; z-index: 1000; }
+        .banner-container { 
+    position: fixed; 
+    right: 80px; 
+    top: 60px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 20px; 
+    z-index: 1000; 
+    
+    /* 스크롤 관련 추가 */
+    max-height: calc(100vh - 120px); /* 화면 전체 높이에서 여백 제외 */
+    overflow-y: auto;                /* 세로 스크롤 활성화 */
+    padding: 10px;                   /* 그림자 잘림 방지 */
+    scrollbar-width: none;           /* Firefox 스크롤바 숨김 */
+    -ms-overflow-style: none;        /* IE 스크롤바 숨김 */
+}
+        /* Chrome, Safari 스크롤바 숨김 (디자인 일관성) */
+.banner-container::-webkit-scrollbar {
+    display: none;
+}
+ /* 모바일 대응 (반응형 지점 수정) */
+@media (max-width: 1400px) { 
+    .banner-container { 
+        right: 20px; 
+        max-height: calc(100vh - 150px); /* 모바일은 조금 더 여유 있게 */
+    } 
+}
+        /* 모바일 전용 미세 조정 */
+@media (max-width: 600px) {
+    .banner-container {
+        top: 80px; /* 지갑 바 아래로 위치 조정 */
+    }
+}
         .banner-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; cursor: pointer; transition: transform 0.2s; position: relative; }
         .banner-item:hover { transform: scale(1.1); }
         .banner-circle {
