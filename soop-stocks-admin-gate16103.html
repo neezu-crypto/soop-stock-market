@@ -368,6 +368,19 @@
         </div>
     </div>
 
+    <!-- 🔄 배너 데이터 마이그레이션 -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <h1>🔄 배너 데이터 마이그레이션</h1>
+        <div class="info-box">
+            기존 <b>stocks/</b>에 저장된 배너 데이터를 <b>stocksBanner/</b> 경로로 복사합니다.<br>
+            <span style="color:#38bdf8;">최초 1회 실행 후 이후 배너 등록/수정은 자동으로 양쪽에 저장됩니다.</span>
+        </div>
+        <div id="migration-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <button class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="runBannerMigration()">
+            🔄 배너 데이터 복사 실행
+        </button>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -759,14 +772,25 @@
         const newLink   = document.getElementById('edit-stock-link').value.trim();
         const newDate   = document.getElementById('edit-stock-date').value.trim();
         if (isNaN(newPrice)) return alert("가격은 숫자여야 합니다.");
-        const updates = {};
-        updates[`${stockId}/price`]         = newPrice;
-        updates[`${stockId}/bannerImg`]     = newBanner;
-        updates[`${stockId}/link`]          = newLink;
-        updates[`${stockId}/bannerEndDate`] = newDate;
-        updates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
+
+        // stocks/ 업데이트 (가격 포함)
+        const stocksUpdates = {};
+        stocksUpdates[`${stockId}/price`]         = newPrice;
+        stocksUpdates[`${stockId}/bannerImg`]     = newBanner;
+        stocksUpdates[`${stockId}/link`]          = newLink;
+        stocksUpdates[`${stockId}/bannerEndDate`] = newDate;
+        stocksUpdates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
+
+        // stocksBanner/ 동시 쓰기 (배너 데이터만 분리 경로에도 저장)
+        const bannerUpdates = {};
+        bannerUpdates[`${stockId}/bannerImg`]     = newBanner;
+        bannerUpdates[`${stockId}/link`]          = newLink;
+        bannerUpdates[`${stockId}/bannerEndDate`] = newDate;
+        bannerUpdates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
+
         try {
-            await update(ref(db, 'stocks/'), updates);
+            await update(ref(db, 'stocks/'), stocksUpdates);
+            await update(ref(db, 'stocksBanner/'), bannerUpdates);
             alert(`✅ 종목 정보가 수정되었습니다!\n홍보 유형: ${editBannerIsPaid ? '💰 유료' : '🎁 무료'}`);
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-search-name').value = "";
@@ -1143,16 +1167,58 @@
             let targetId = null;
             Object.entries(data).forEach(([id, stock]) => { if (stock.name === targetNickname) targetId = id; });
             if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
-            const updates = {};
-            updates[`${targetId}/bannerImg`]     = imgUrl;
-            updates[`${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
-            updates[`${targetId}/bannerEndDate`] = endDateStr;
-            updates[`${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
-            await update(ref(db, 'stocks/'), updates);
+            const stocksUpdates = {};
+            stocksUpdates[`${targetId}/bannerImg`]     = imgUrl;
+            stocksUpdates[`${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
+            stocksUpdates[`${targetId}/bannerEndDate`] = endDateStr;
+            stocksUpdates[`${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
+
+            const bannerUpdates = {};
+            bannerUpdates[`${targetId}/bannerImg`]     = imgUrl;
+            bannerUpdates[`${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
+            bannerUpdates[`${targetId}/bannerEndDate`] = endDateStr;
+            bannerUpdates[`${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
+
+            await update(ref(db, 'stocks/'), stocksUpdates);
+            await update(ref(db, 'stocksBanner/'), bannerUpdates);
             alert(`✅ ${targetNickname} 종목에 ${bannerMode === 'paid' ? '유료' : '무료'} 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
             ['banner-nickname','banner-img-url','banner-link-url','banner-days'].forEach(id => { document.getElementById(id).value = ''; });
             document.getElementById('banner-enddate-preview').innerText = '';
         } catch (e) { alert("배너 추가 중 오류 발생: " + e.message); }
+    };
+    // ── 배너 마이그레이션: stocks/ → stocksBanner/ ───────────
+    window.runBannerMigration = async function() {
+        const statusEl = document.getElementById('migration-status');
+        if (!confirm('stocks/의 배너 데이터를 stocksBanner/로 복사합니다.\n계속하시겠습니까?')) return;
+        statusEl.style.color = '#f59e0b';
+        statusEl.innerText   = '⏳ 데이터 읽는 중...';
+        try {
+            const snap = await get(ref(db, 'stocks/'));
+            if (!snap.exists()) { statusEl.innerText = '❌ stocks/ 데이터 없음'; return; }
+            const data    = snap.val();
+            const updates = {};
+            let count     = 0;
+            Object.entries(data).forEach(([id, stock]) => {
+                if (!stock.bannerImg) return;
+                updates[`${id}/bannerImg`]     = stock.bannerImg;
+                updates[`${id}/link`]          = stock.link || `https://www.sooplive.co.kr/station/${id}`;
+                updates[`${id}/bannerEndDate`] = stock.bannerEndDate || '';
+                updates[`${id}/bannerIsPaid`]  = stock.bannerIsPaid !== false;
+                count++;
+            });
+            if (count === 0) {
+                statusEl.style.color = '#94a3b8';
+                statusEl.innerText   = '✅ 복사할 배너 데이터가 없습니다.';
+                return;
+            }
+            statusEl.innerText = `⏳ ${count}개 종목 복사 중...`;
+            await update(ref(db, 'stocksBanner/'), updates);
+            statusEl.style.color = '#22c55e';
+            statusEl.innerText   = `✅ 완료! ${count}개 종목의 배너 데이터가 stocksBanner/로 복사됐습니다.`;
+        } catch (e) {
+            statusEl.style.color = '#ef4444';
+            statusEl.innerText   = '❌ 오류: ' + e.message;
+        }
     };
 </script>
 </body>
