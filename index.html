@@ -937,12 +937,14 @@ const auth = getAuth(app);
 let myData           = null;
 let userUID          = null;
 let allStocks        = [];
+let allHistories     = {}; // stocksMeta/{id}/history 캐시
+let allBanners       = {}; // stocksBanner/{id} 캐시
 let isTrading        = false;
 let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
-let siteConfig       = {};         // siteConfig 캐시 (maintenance + marketHours)
-let marketCheckTimer = null;       // 1분 주기 시장 상태 체크 타이머
+let siteConfig       = {};
+let marketCheckTimer = null;
 
 // ══════════════════════════════════════════════════════════
 // 차트 모달 상태
@@ -1810,6 +1812,7 @@ window.trade = async function (id, type, qty = 1) {
     // 콜백 내부에서는 stocks 경로만 업데이트
     let cashDelta    = 0;  // 트랜잭션 성공 후 적용할 현금 변동액
     let userStockNew = null; // 트랜잭션 성공 후 적용할 보유 주식 정보
+    let historyToWrite = null; // 트랜잭션 후 stocksMeta/에 저장할 history
 
     try {
         let abortReason = null; // 트랜잭션 중단 사유
@@ -1860,6 +1863,8 @@ window.trade = async function (id, type, qty = 1) {
             history.push(newPrice);
             if (history.length > 20) history.shift();
 
+            historyToWrite = history; // stocksMeta/에 저장할 history
+
             return {
                 ...currentStock,
                 price:   newPrice,
@@ -1885,6 +1890,12 @@ window.trade = async function (id, type, qty = 1) {
             [`stocks/${id}`]: userStockNew,
             lastTradeTime:    serverTimestamp()
         });
+
+        // history → stocksMeta/ 별도 저장 (stocks/ 전송량 감소)
+        if (historyToWrite) {
+            allHistories[id] = historyToWrite;
+            set(ref(db, `stocksMeta/${id}/history`), historyToWrite).catch(() => {});
+        }
 
         // ── 분봉 업데이트 ─────────────────────────────────────
         if (finalPrice > 0) {
@@ -1963,19 +1974,20 @@ function renderBanners() {
     if (!bannerList) return;
     const now = new Date();
 
-    // 1. 배너가 있는 항목만 필터링 및 남은 기간 계산
-    let activeBanners = allStocks
-        .filter(s => s.bannerImg)
-        .map(s => {
+    // stocksBanner 캐시 기반으로 배너 목록 구성
+    let activeBanners = Object.entries(allBanners)
+        .map(([id, banner]) => {
+            const stock = allStocks.find(s => s.id === id);
+            if (!stock || !banner.bannerImg) return null;
             let diffDays = Infinity;
-            if (s.bannerEndDate) {
-                const endDate = new Date(s.bannerEndDate);
+            if (banner.bannerEndDate) {
+                const endDate = new Date(banner.bannerEndDate);
                 endDate.setHours(23, 59, 59, 999);
                 diffDays = Math.ceil((endDate - now) / 86400000);
             }
-            return { ...s, diffDays };
+            return { ...stock, ...banner, id, diffDays };
         })
-        .filter(s => s.diffDays >= 0); // 기간 지난 배너 제외
+        .filter(s => s && s.diffDays >= 0);
 
     // 2. 유료(bannerIsPaid) 우선, 각 그룹 내에서 남은 기간 내림차순 정렬
     activeBanners.sort((a, b) => {
@@ -2109,9 +2121,24 @@ function updateCardContent(card, s, userStock) {
 }
 
 // ── 주식 데이터 실시간 리스너 ────────────────────────────────
+// ── 주식 데이터 실시간 리스너 ────────────────────────────────
+// stocks/ — price, change, name, volume 핵심 데이터만 수신
+// history는 stocksMeta/, 배너는 stocksBanner/ 캐시에서 병합
 onValue(ref(db, 'stocks/'), (snap) => {
     const data      = snap.val() || {};
-    const newStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
+    const newStocks = Object.keys(data).map(key => {
+        const s = { ...data[key], id: key };
+        // history: stocksMeta 캐시 우선, 없으면 stocks/ 값 사용
+        s.history = allHistories[key] || s.history || [s.price, s.price];
+        // 배너: stocksBanner 캐시 우선
+        if (allBanners[key]) {
+            s.bannerImg     = allBanners[key].bannerImg;
+            s.bannerEndDate = allBanners[key].bannerEndDate;
+            s.bannerIsPaid  = allBanners[key].bannerIsPaid;
+            s.link          = allBanners[key].link;
+        }
+        return s;
+    });
 
     if (allStocks.length === 0) {
         allStocks = newStocks;
@@ -2122,12 +2149,8 @@ onValue(ref(db, 'stocks/'), (snap) => {
             if (old && (old.price !== ns.price || old.change !== ns.change)) {
                 const card = stockElements[ns.id];
                 if (!card) return;
-
-                // 수량 입력창에 포커스 중이면 카드 업데이트 건너뜀
-                // → 입력 중 포커스 이탈 및 값 초기화 방지
                 const qtyInput = document.getElementById(`qty-${ns.id}`);
                 if (qtyInput && document.activeElement === qtyInput) return;
-
                 updateCardContent(card, ns, (myData?.stocks || {})[ns.id] || { qty: 0, avg: 0 });
             }
         });
@@ -2140,6 +2163,36 @@ onValue(ref(db, 'stocks/'), (snap) => {
         setTimeout(() => { renderBanners(); isBannerRendered = true; }, 100);
     }
 });
+
+// ── stocksMeta/ — history 별도 실시간 구독 ───────────────────
+onValue(ref(db, 'stocksMeta/'), (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.val();
+    Object.entries(data).forEach(([id, meta]) => {
+        if (meta?.history) {
+            allHistories[id] = meta.history;
+            const stock = allStocks.find(s => s.id === id);
+            if (stock) stock.history = meta.history;
+        }
+    });
+});
+
+// ── stocksBanner/ — 배너 최초 1회 로드 ───────────────────────
+get(ref(db, 'stocksBanner/')).then(snap => {
+    if (!snap.exists()) return;
+    const data = snap.val();
+    Object.entries(data).forEach(([id, banner]) => {
+        allBanners[id] = banner;
+        const stock = allStocks.find(s => s.id === id);
+        if (stock) {
+            stock.bannerImg     = banner.bannerImg;
+            stock.bannerEndDate = banner.bannerEndDate;
+            stock.bannerIsPaid  = banner.bannerIsPaid;
+            stock.link          = banner.link;
+        }
+    });
+    if (allStocks.length > 0) { renderBanners(); isBannerRendered = true; }
+}).catch(() => {});
 
 // ── 검색창 ───────────────────────────────────────────────────
 document.getElementById('search-input')?.addEventListener('input', () => updateUI(true));
