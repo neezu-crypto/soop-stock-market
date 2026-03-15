@@ -2056,7 +2056,7 @@ window.trade = async function (id, type, qty = 1) {
     const stockRef = ref(db, `stocks/${id}`);
     const userRef  = ref(db, `users/${userUID}`);
     const impact   = 0.0005 * Math.log2(1 + qty);
-    const spread   = 0.0005;
+    const spread   = 0.001;
     const fee      = 0.003;
 
     let qtyDelta     = 0;
