@@ -1013,9 +1013,42 @@ const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const auth = getAuth(app);
 
-// ── siteConfig 상태 변수 ─────────────────────────────────────
+// ── siteConfig 상태 변수 (async 블록보다 먼저 선언) ─────────
 let siteConfig      = {};
 let siteConfigReady = false;
+
+// ── 관리자 점검 모드 + 시장 운영 시간 즉시 체크 ─────────────
+// onValue는 비동기라 첫 로드 시 오버레이가 늦게 뜨는 문제 발생
+// get()으로 즉시 1회 읽어서 마감/점검 여부를 먼저 확인
+// → siteConfig 수신 전에 인트로가 종료돼 거래화면이 노출되는 것 방지
+(async () => {
+    try {
+        const snap   = await get(ref(db, 'siteConfig/'));
+        siteConfig   = snap.val() || {};
+        siteConfigReady = true;
+
+        const overlay = document.getElementById('maintenance-overlay');
+        const timerEl = document.getElementById('maintenance-timer');
+        const title   = overlay?.querySelector('.maintenance-title');
+        const desc    = overlay?.querySelector('.maintenance-desc');
+        const badge   = overlay?.querySelector('.maintenance-time-badge');
+
+        if (siteConfig.maintenance === true) {
+            if (overlay) overlay.style.display = 'flex';
+            if (timerEl) timerEl.innerText = '관리자 점검 중';
+            if (title)   title.innerText   = '서버 점검 중';
+            if (desc)    desc.innerHTML    = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
+            if (badge)   badge.innerHTML   = '🔧 관리자 점검 중';
+        } else {
+            applyMarketState();
+        }
+        // siteConfig 수신 완료 → 인트로 대기 중이었으면 즉시 updateUI 재시도
+        if (allStocks.length > 0) updateUI(true);
+    } catch(e) {
+        siteConfigReady = true;
+        if (allStocks.length > 0) updateUI(true);
+    }
+})();
 
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
@@ -1111,15 +1144,9 @@ setInterval(() => {
 
 // ── 관리자 점검 모드 실시간 구독 ────────────────────────────
 // ── siteConfig 통합 구독 (maintenance + marketHours) ────────
-// 첫 번째 콜백 수신 시 siteConfigReady = true → 인트로 종료 허용
 onValue(ref(db, 'siteConfig/'), (snap) => {
     siteConfig = snap.val() || {};
     applyMarketState();
-    if (!siteConfigReady) {
-        siteConfigReady = true;
-        // siteConfig 수신 완료 → stocks도 이미 로드됐으면 인트로 종료 시도
-        if (allStocks.length > 0) updateUI(true);
-    }
 });
 
 function isMarketOpen() {
@@ -1316,18 +1343,16 @@ function updateUI(isFullRender = true) {
     if (isFullRender && allStocks.length > 0) {
         renderStocks(document.getElementById('search-input')?.value || "");
         if (overlay && !overlay.classList.contains('hidden')) {
-            // siteConfig 수신 완료 전까지 인트로 유지
+            // siteConfig 수신 완료 전까지 인트로 유지 → 마감 화면 노출 방지
             if (!siteConfigReady) return;
-            // 마감/점검 중이면 인트로 유지 (maintenance-overlay가 표시 중)
-            const maintOverlay = document.getElementById('maintenance-overlay');
-            if (maintOverlay && maintOverlay.style.display === 'flex') return;
             setTimeout(() => {
                 overlay.classList.add('hidden');
+                // 인트로 종료 후 익명 유저에게만 계정 안내창 표시
                 if (!accountWarnShown && auth.currentUser?.isAnonymous) {
                     accountWarnShown = true;
                     setTimeout(() => {
                         document.getElementById('account-warn-overlay')?.classList.add('active');
-                    }, 600);
+                    }, 600); // 인트로 페이드아웃 후 표시
                 }
             }, 500);
         }
