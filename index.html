@@ -1245,36 +1245,69 @@ async function flushRankingUpdate() {
 
 /**
  * 현재 분(분 단위 UNIX timestamp, 초 단위)을 반환
- * 예: 14:37 → 14:37:00 의 UNIX 초
  */
 function currentMinuteTs() {
     return Math.floor(Date.now() / 60000) * 60;
 }
 
+// ── 분봉 로컬 버퍼 ───────────────────────────────────────────
+// 같은 분(minute) 내 거래를 메모리에서 합산 후 Firebase에 1회만 write
+// { stockId: { ts, o, h, l, c, v, timer } }
+const candleBuffer = {};
+
 /**
- * 거래 발생 시 해당 종목의 분봉 업데이트
- * candlesticks/{stockId}/{minuteTs} = { o, h, l, c, v, t }
+ * 거래 발생 시 분봉 버퍼에 누적 → 1초 디바운스 후 Firebase write
+ * 같은 분 내 10번 거래해도 Firebase write는 1회
  */
 async function updateCandlestick(stockId, tradePrice, qty) {
-    const ts       = currentMinuteTs();
-    const candleRef = ref(db, `candlesticks/${stockId}/${ts}`);
+    const ts  = currentMinuteTs();
+    const buf = candleBuffer[stockId];
 
-    await runTransaction(candleRef, (current) => {
-        if (!current) {
-            // 새 분봉 시작
-            return { o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, t: ts };
-        }
-        return {
-            ...current,
-            h: Math.max(current.h, tradePrice),
-            l: Math.min(current.l, tradePrice),
-            c: tradePrice,
-            v: current.v + qty,
-            t: ts
-        };
-    });
+    if (buf && buf.ts === ts) {
+        // 같은 분 — 로컬 버퍼에만 합산
+        buf.h  = Math.max(buf.h, tradePrice);
+        buf.l  = Math.min(buf.l, tradePrice);
+        buf.c  = tradePrice;
+        buf.v += qty;
+    } else {
+        // 새 분봉 시작 — 버퍼 초기화
+        if (buf?.timer) clearTimeout(buf.timer);
+        candleBuffer[stockId] = { ts, o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty };
+    }
 
-    // 6시간(360분) 초과 구간 정리 (오래된 캔들 삭제)
+    // 기존 타이머 취소 후 1초 뒤 write 예약 (디바운스)
+    if (candleBuffer[stockId].timer) clearTimeout(candleBuffer[stockId].timer);
+    candleBuffer[stockId].timer = setTimeout(() => flushCandlestick(stockId), 1000);
+}
+
+/**
+ * 버퍼 내용을 Firebase에 실제로 write
+ */
+async function flushCandlestick(stockId) {
+    const buf = candleBuffer[stockId];
+    if (!buf) return;
+
+    const candleRef = ref(db, `candlesticks/${stockId}/${buf.ts}`);
+    try {
+        await runTransaction(candleRef, (current) => {
+            if (!current) {
+                return { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts };
+            }
+            return {
+                ...current,
+                h: Math.max(current.h, buf.h),
+                l: Math.min(current.l, buf.l),
+                c: buf.c,
+                v: current.v + buf.v,
+                t: buf.ts
+            };
+        });
+        // write 성공 후 버퍼 볼륨 초기화 (다음 거래가 오면 새로 누적)
+        buf.v = 0;
+    } catch (e) {
+        console.warn('[candle] flush 실패 (무시):', e.message);
+    }
+
     pruneOldCandles(stockId);
 }
 
@@ -1789,7 +1822,12 @@ window.trade = async function (id, type, qty = 1) {
         myData.cash          = (myData.cash || 0) + cashDelta;
         myData.stocks[id]    = userStockNew;
 
-        await set(userRef, { ...myData, lastTradeTime: serverTimestamp() });
+        // ① set() → update() 교체 — 변경된 필드만 전송 (데이터 절약)
+        await update(userRef, {
+            cash:                    myData.cash,
+            [`stocks/${id}`]:        userStockNew,
+            lastTradeTime:           serverTimestamp()
+        });
 
         // ── 분봉 업데이트 (신규) ──────────────────────────────
         if (finalPrice > 0) {
