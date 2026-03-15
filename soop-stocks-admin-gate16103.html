@@ -39,66 +39,23 @@
         .data-status-bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 15px; font-size: 13px; }
         .data-status-bar span { color: #94a3b8; }
         .data-status-bar b { color: #38bdf8; }
-
-        /* 차트 배너 미리보기 */
-        .chart-banner-preview {
-            width: 100%;
-            aspect-ratio: 720 / 150;
-            background: #0a1628;
-            border: 1px dashed #334155;
-            border-radius: 8px;
-            overflow: hidden;
-            margin: 10px 0;
-            position: relative;
-        }
-        .chart-banner-preview img {
-            width: 100%; height: 100%; object-fit: cover; display: none;
-        }
-        .chart-banner-preview .preview-empty {
-            position: absolute; inset: 0;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; color: #475569; gap: 6px;
-        }
-        .chart-banner-info-row {
-            display: flex; justify-content: space-between; align-items: center;
-            background: #0f172a; padding: 10px 14px; border-radius: 8px;
-            border: 1px solid #334155; margin-bottom: 12px; font-size: 13px;
-        }
+        .chart-banner-preview { width: 100%; aspect-ratio: 720 / 150; background: #0a1628; border: 1px dashed #334155; border-radius: 8px; overflow: hidden; margin: 10px 0; position: relative; }
+        .chart-banner-preview img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .chart-banner-preview .preview-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #475569; gap: 6px; }
+        .chart-banner-info-row { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 12px; font-size: 13px; }
         .chart-banner-info-row span { color: #94a3b8; }
         .chart-banner-info-row b   { color: #f8fafc; }
-
-        /* 점검 모드 토글 스위치 */
-        .toggle-wrap {
-            display: flex; align-items: center; justify-content: space-between;
-            background: #0f172a; padding: 14px 18px; border-radius: 10px;
-            border: 1px solid #334155; margin-bottom: 12px;
-        }
+        .toggle-wrap { display: flex; align-items: center; justify-content: space-between; background: #0f172a; padding: 14px 18px; border-radius: 10px; border: 1px solid #334155; margin-bottom: 12px; }
         .toggle-label { font-size: 14px; font-weight: 700; color: #f8fafc; }
         .toggle-sub   { font-size: 12px; color: #64748b; margin-top: 3px; }
-        .toggle-switch {
-            position: relative; width: 52px; height: 28px; flex-shrink: 0;
-        }
+        .toggle-switch { position: relative; width: 52px; height: 28px; flex-shrink: 0; }
         .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider {
-            position: absolute; inset: 0;
-            background: #334155; border-radius: 28px;
-            cursor: pointer; transition: 0.3s;
-        }
-        .toggle-slider:before {
-            content: ""; position: absolute;
-            width: 20px; height: 20px; border-radius: 50%;
-            background: white; left: 4px; top: 4px;
-            transition: 0.3s;
-        }
+        .toggle-slider { position: absolute; inset: 0; background: #334155; border-radius: 28px; cursor: pointer; transition: 0.3s; }
+        .toggle-slider:before { content: ""; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: white; left: 4px; top: 4px; transition: 0.3s; }
         .toggle-switch input:checked + .toggle-slider { background: #ef4444; }
         .toggle-switch input:checked + .toggle-slider:before { transform: translateX(24px); }
-        .maintenance-status {
-            display: flex; align-items: center; gap: 8px;
-            font-size: 13px; font-weight: 700;
-        }
-        .maintenance-status .dot {
-            width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-        }
+        .maintenance-status { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+        .maintenance-status .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -135,6 +92,8 @@
             <span style="color:#64748b;">상태 불러오는 중...</span>
         </div>
     </div>
+
+    <!-- 🏆 랭킹 TOP5 관리 -->
     <div class="container" style="display:block; border-color: #a855f7;">
         <h1>🏆 랭킹 TOP5 관리</h1>
         <div class="info-box">
@@ -193,19 +152,15 @@
             <label style="font-size: 13px; color: #38bdf8;">홍보 유형</label>
             <div style="display:flex; gap:8px;">
                 <button id="edit-tab-paid" onclick="switchEditBannerType('paid')"
-                    style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">
-                    💰 유료
-                </button>
+                    style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">💰 유료</button>
                 <button id="edit-tab-free" onclick="switchEditBannerType('free')"
-                    style="flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">
-                    🎁 무료
-                </button>
+                    style="flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">🎁 무료</button>
             </div>
             <button class="btn-primary" style="background: #f59e0b; color: #0f172a;" onclick="updateStockData()">정보 최종 수정하기</button>
         </div>
     </div>
 
-    <!-- 📺 차트 하단 배너 관리 (신규) -->
+    <!-- 📺 차트 하단 배너 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
         <h1>📺 차트 하단 배너 관리</h1>
         <div class="info-box">
@@ -213,56 +168,32 @@
             <span style="color:#38bdf8;">배너 사이즈: 720 × 150px · 이미지 및 GIF 지원</span><br>
             <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 무료 체험 없음 · 별풍선 50개/일</span>
         </div>
-
-        <!-- 현재 등록 상태 -->
         <div class="chart-banner-info-row">
             <span>현재 배너 상태:</span>
             <span id="chart-banner-status" class="status-chip loading">불러오는 중...</span>
         </div>
         <div id="chart-banner-current" style="display:none; margin-bottom:15px;">
-            <div class="chart-banner-info-row">
-                <span>광고주</span>
-                <b id="cb-current-name">-</b>
-            </div>
-            <div class="chart-banner-info-row">
-                <span>이동 링크</span>
-                <b id="cb-current-link" style="font-size:12px; word-break:break-all;">-</b>
-            </div>
-            <div class="chart-banner-info-row">
-                <span>종료일</span>
-                <b id="cb-current-enddate">-</b>
-            </div>
-            <!-- 현재 배너 미리보기 -->
+            <div class="chart-banner-info-row"><span>광고주</span><b id="cb-current-name">-</b></div>
+            <div class="chart-banner-info-row"><span>이동 링크</span><b id="cb-current-link" style="font-size:12px; word-break:break-all;">-</b></div>
+            <div class="chart-banner-info-row"><span>종료일</span><b id="cb-current-enddate">-</b></div>
             <div class="chart-banner-preview">
                 <img id="cb-current-img" src="" alt="현재 배너">
-                <div class="preview-empty" id="cb-current-empty">
-                    <span>🖼</span><span>이미지 없음</span>
-                </div>
+                <div class="preview-empty" id="cb-current-empty"><span>🖼</span><span>이미지 없음</span></div>
             </div>
             <button class="btn-danger" style="width:100%; margin-top:5px;" onclick="deleteChartBanner()">🗑 현재 배너 삭제</button>
         </div>
-
-        <!-- 신규 등록 폼 -->
         <div style="border-top: 1px solid #334155; padding-top: 15px; display:flex; flex-direction:column; gap:10px;">
             <div style="font-size:13px; color:#38bdf8; font-weight:700;">새 배너 등록</div>
-
             <input type="text" id="cb-name" placeholder="광고주 닉네임 (관리용)"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-
             <input type="text" id="cb-img" placeholder="배너 이미지 URL (720×150px · GIF 가능)"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-
-            <!-- 이미지 입력 시 미리보기 -->
             <div class="chart-banner-preview" id="cb-preview-wrap">
                 <img id="cb-preview-img" src="" alt="미리보기">
-                <div class="preview-empty" id="cb-preview-empty">
-                    <span>🖼</span><span>이미지 URL 입력 시 미리보기</span>
-                </div>
+                <div class="preview-empty" id="cb-preview-empty"><span>🖼</span><span>이미지 URL 입력 시 미리보기</span></div>
             </div>
-
             <input type="text" id="cb-link" placeholder="클릭 시 이동할 링크 URL"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-
             <div style="display:flex; align-items:center; gap:10px; background:#0f172a; padding:10px; border-radius:8px; border:1px solid #475569;">
                 <label style="font-size:13px; color:#94a3b8; white-space:nowrap;">노출 기간:</label>
                 <input type="number" id="cb-days" placeholder="예: 7" min="1" max="365"
@@ -270,7 +201,6 @@
                 <span style="color:#94a3b8; font-size:13px;">일</span>
             </div>
             <div style="font-size:12px; color:#64748b; text-align:right; margin-top:-6px;" id="cb-enddate-preview"></div>
-
             <button class="btn-primary" onclick="saveChartBanner()" style="margin-top:5px;">📺 차트 배너 등록 / 교체</button>
         </div>
     </div>
@@ -294,12 +224,10 @@
             <span style="color:#38bdf8;">※ 주가 상위 100위 이내 종목만 적용됩니다.</span><br>
             <span style="color:#ef4444;">⚠️ 전체 유저 데이터를 수정하므로 신중하게 실행하세요.</span>
         </div>
-
-        <!-- 비율 선택 -->
         <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-            <button onclick="selectSplitRatio(2)"  id="split-btn-2"  style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">2:1</button>
-            <button onclick="selectSplitRatio(5)"  id="split-btn-5"  style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">5:1</button>
-            <button onclick="selectSplitRatio(10)" id="split-btn-10" style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">10:1</button>
+            <button onclick="selectSplitRatio(2)"  id="split-btn-2"      style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">2:1</button>
+            <button onclick="selectSplitRatio(5)"  id="split-btn-5"      style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">5:1</button>
+            <button onclick="selectSplitRatio(10)" id="split-btn-10"     style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">10:1</button>
             <button onclick="selectSplitRatio(0)"  id="split-btn-custom" style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">직접입력</button>
         </div>
         <div id="split-custom-wrap" style="display:none; margin-bottom:14px;">
@@ -309,8 +237,6 @@
                 <span style="color:#94a3b8; font-size:13px; white-space:nowrap;">: 1 분할</span>
             </div>
         </div>
-
-        <!-- 미리보기 -->
         <div id="split-preview" style="display:none; background:#0f172a; border-radius:10px; padding:14px; margin-bottom:14px; border:1px solid #a855f7;">
             <div style="font-size:13px; color:#a855f7; font-weight:700; margin-bottom:10px;">📊 분할 미리보기</div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px;">
@@ -324,7 +250,6 @@
                 <div id="preview-qty-after" style="color:#a855f7; font-weight:700; text-align:right;">-</div>
             </div>
         </div>
-
         <div id="split-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
         <div style="display:flex; gap:10px;">
             <button class="btn-success" style="flex:1;" onclick="previewSplit()">🔍 미리보기</button>
@@ -385,20 +310,12 @@
             닉네임이 일치하는 종목에 배너를 설정합니다.<br>
             <span style="color:#38bdf8;">유료: 기간 설정 필수 · 무료: 기간 없이 AD 표시 · 유료가 항상 상단 노출</span>
         </div>
-
-        <!-- 유료/무료 탭 -->
         <div style="display:flex; gap:8px; margin-bottom:16px;">
             <button id="tab-paid" onclick="switchBannerTab('paid')"
-                style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">
-                💰 유료 홍보
-            </button>
+                style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">💰 유료 홍보</button>
             <button id="tab-free" onclick="switchBannerTab('free')"
-                style="flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">
-                🎁 무료 홍보
-            </button>
+                style="flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">🎁 무료 홍보</button>
         </div>
-
-        <!-- 공통 입력 필드 -->
         <div style="flex-direction: column; gap: 10px; display: flex;">
             <input type="text" id="banner-nickname" placeholder="대상 스트리머 닉네임 (정확히 입력)"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
@@ -406,26 +323,18 @@
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
             <input type="text" id="banner-link-url" placeholder="클릭 시 이동할 링크 (미입력 시 기본 방송국)"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-
-            <!-- 유료 전용: 기간 입력 -->
             <div id="banner-days-wrap" style="display:flex; align-items:center; gap:10px; background:#0f172a; padding:10px; border-radius:8px; border:1px solid #475569;">
                 <label id="banner-days-label" style="font-size:13px; color:#94a3b8; white-space:nowrap;">💰 유료 노출 기간:</label>
                 <input type="number" id="banner-days" placeholder="예: 7" min="1" max="365"
                     style="flex:1; background:transparent; border:none; color:#38bdf8; font-size:15px; outline:none;">
                 <span id="banner-days-suffix" style="color:#94a3b8; font-size:13px;">일 동안 (별풍선 20개/일)</span>
             </div>
-
-            <!-- 무료 전용: 안내 -->
             <div id="banner-free-notice" style="display:none; background:rgba(34,197,94,0.08); border:1px solid #22c55e; border-radius:8px; padding:12px; font-size:13px; color:#86efac;">
                 🎁 무료 홍보는 기간 내 배너 하단에 <b>AD</b> 뱃지로 표시됩니다.<br>
                 유료 홍보자가 있으면 자동으로 아래로 내려갑니다.
             </div>
-
             <div id="banner-enddate-preview" style="font-size:12px; color:#64748b; text-align:right; margin-top:-4px;"></div>
-
-            <button class="btn-primary" id="banner-submit-btn" onclick="window.addBannerToStock()">
-                💰 유료 배너 등록
-            </button>
+            <button class="btn-primary" id="banner-submit-btn" onclick="window.addBannerToStock()">💰 유료 배너 등록</button>
         </div>
     </div>
 
@@ -445,13 +354,14 @@
         appId: "1:997788925900:web:cb613d438efec019a3a769"
     };
     const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    const db  = getDatabase(app);
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
     let allStocksData = {};
 
+    // ── 종목 데이터 로드 ─────────────────────────────────────
     async function loadStocksOnce() {
         const statusEl = document.getElementById('stocks-load-status');
         if (statusEl) statusEl.innerText = '로딩 중...';
@@ -465,7 +375,6 @@
             if (statusEl) statusEl.innerText = '로드 실패';
         }
     }
-
     window.reloadStocks = async function() { await loadStocksOnce(); };
 
     async function loadRankingStatus() {
@@ -474,8 +383,7 @@
         try {
             const snap = await get(ref(db, 'rankings/top5'));
             if (snap.exists()) {
-                const data = snap.val();
-                const savedAt = data.savedAt ? new Date(data.savedAt).toLocaleString('ko-KR') : '시각 불명';
+                const savedAt = snap.val().savedAt ? new Date(snap.val().savedAt).toLocaleString('ko-KR') : '시각 불명';
                 statusEl.className = 'status-chip saved';
                 statusEl.innerText = `✅ 저장됨 (${savedAt})`;
             } else {
@@ -488,50 +396,36 @@
         }
     }
 
-    // ══════════════════════════════════════════════════════
-    // 차트 하단 배너 관리
-    // ══════════════════════════════════════════════════════
-
+    // ── 차트 하단 배너 ───────────────────────────────────────
     async function loadChartBannerStatus() {
         const statusEl  = document.getElementById('chart-banner-status');
         const currentEl = document.getElementById('chart-banner-current');
         try {
             const snap = await get(ref(db, 'chartBanner'));
             if (!snap.exists() || !snap.val().img) {
-                statusEl.className  = 'status-chip none';
-                statusEl.innerText  = '등록 없음';
+                statusEl.className = 'status-chip none';
+                statusEl.innerText = '등록 없음';
                 currentEl.style.display = 'none';
                 return;
             }
             const data = snap.val();
-
-            // 만료 여부 확인
             let isExpired = false;
             if (data.endDate) {
                 const end = new Date(data.endDate);
                 end.setHours(23, 59, 59, 999);
                 isExpired = end < new Date();
             }
-
             statusEl.className = isExpired ? 'status-chip expired' : 'status-chip active';
             statusEl.innerText = isExpired
                 ? `⚠️ 만료됨 (${data.endDate})`
                 : `✅ 노출 중 (${data.endDate || '기간 없음'} 까지)`;
-
-            // 현재 배너 정보 표시
             document.getElementById('cb-current-name').innerText    = data.name    || '-';
             document.getElementById('cb-current-link').innerText    = data.link    || '-';
             document.getElementById('cb-current-enddate').innerText = data.endDate || '무기한';
-
-            const imgEl    = document.getElementById('cb-current-img');
-            const emptyEl  = document.getElementById('cb-current-empty');
-            if (data.img) {
-                imgEl.src             = data.img;
-                imgEl.style.display   = 'block';
-                emptyEl.style.display = 'none';
-            }
+            const imgEl   = document.getElementById('cb-current-img');
+            const emptyEl = document.getElementById('cb-current-empty');
+            if (data.img) { imgEl.src = data.img; imgEl.style.display = 'block'; emptyEl.style.display = 'none'; }
             currentEl.style.display = 'block';
-
         } catch (e) {
             statusEl.className = 'status-chip unsaved';
             statusEl.innerText = '불러오기 실패';
@@ -539,83 +433,57 @@
     }
 
     window.saveChartBanner = async function() {
-        const name    = document.getElementById('cb-name').value.trim();
-        const img     = document.getElementById('cb-img').value.trim();
-        const link    = document.getElementById('cb-link').value.trim();
-        const days    = parseInt(document.getElementById('cb-days').value);
-
-        if (!img)          return alert('배너 이미지 URL을 입력해주세요.');
-        if (!link)         return alert('이동 링크를 입력해주세요.');
+        const name  = document.getElementById('cb-name').value.trim();
+        const img   = document.getElementById('cb-img').value.trim();
+        const link  = document.getElementById('cb-link').value.trim();
+        const days  = parseInt(document.getElementById('cb-days').value);
+        if (!img)                    return alert('배너 이미지 URL을 입력해주세요.');
+        if (!link)                   return alert('이동 링크를 입력해주세요.');
         if (isNaN(days) || days < 1) return alert('노출 기간(일)을 올바르게 입력해주세요.');
-
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + days);
         const endDateStr = endDate.toISOString().split('T')[0];
-
-        const payload = { name, img, link, endDate: endDateStr };
-
         if (!confirm(`차트 하단 배너를 등록하시겠습니까?\n\n광고주: ${name || '(없음)'}\n링크: ${link}\n종료일: ${endDateStr}`)) return;
-
         try {
-            await set(ref(db, 'chartBanner'), payload);
+            await set(ref(db, 'chartBanner'), { name, img, link, endDate: endDateStr });
             alert(`✅ 차트 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
-            // 입력 초기화
-            document.getElementById('cb-name').value  = '';
-            document.getElementById('cb-img').value   = '';
-            document.getElementById('cb-link').value  = '';
-            document.getElementById('cb-days').value  = '';
-            document.getElementById('cb-preview-img').style.display = 'none';
+            ['cb-name','cb-img','cb-link','cb-days'].forEach(id => { document.getElementById(id).value = ''; });
+            document.getElementById('cb-preview-img').style.display   = 'none';
             document.getElementById('cb-preview-empty').style.display = 'flex';
-            document.getElementById('cb-enddate-preview').innerText = '';
+            document.getElementById('cb-enddate-preview').innerText   = '';
             await loadChartBannerStatus();
-        } catch (e) {
-            alert('저장 실패: ' + e.message);
-        }
+        } catch (e) { alert('저장 실패: ' + e.message); }
     };
 
     window.deleteChartBanner = async function() {
-        if (!confirm('현재 차트 배너를 삭제하시겠습니까?\n삭제 시 즉시 모집 안내로 교체됩니다.')) return;
+        if (!confirm('현재 차트 배너를 삭제하시겠습니까?')) return;
         try {
             await remove(ref(db, 'chartBanner'));
             alert('✅ 차트 배너가 삭제되었습니다.');
             await loadChartBannerStatus();
-        } catch (e) {
-            alert('삭제 실패: ' + e.message);
-        }
+        } catch (e) { alert('삭제 실패: ' + e.message); }
     };
 
-    // 이미지 URL 입력 시 실시간 미리보기
     document.getElementById('cb-img')?.addEventListener('input', function() {
-        const url      = this.value.trim();
-        const imgEl    = document.getElementById('cb-preview-img');
-        const emptyEl  = document.getElementById('cb-preview-empty');
+        const url = this.value.trim();
+        const imgEl   = document.getElementById('cb-preview-img');
+        const emptyEl = document.getElementById('cb-preview-empty');
         if (url) {
-            imgEl.src             = url;
-            imgEl.style.display   = 'block';
-            emptyEl.style.display = 'none';
-            imgEl.onerror = () => {
-                imgEl.style.display   = 'none';
-                emptyEl.style.display = 'flex';
-                emptyEl.innerHTML     = '<span>⚠️</span><span>이미지를 불러올 수 없습니다</span>';
-            };
+            imgEl.src = url; imgEl.style.display = 'block'; emptyEl.style.display = 'none';
+            imgEl.onerror = () => { imgEl.style.display = 'none'; emptyEl.style.display = 'flex'; emptyEl.innerHTML = '<span>⚠️</span><span>이미지를 불러올 수 없습니다</span>'; };
         } else {
-            imgEl.style.display   = 'none';
-            emptyEl.style.display = 'flex';
-            emptyEl.innerHTML     = '<span>🖼</span><span>이미지 URL 입력 시 미리보기</span>';
+            imgEl.style.display = 'none'; emptyEl.style.display = 'flex';
+            emptyEl.innerHTML = '<span>🖼</span><span>이미지 URL 입력 시 미리보기</span>';
         }
     });
 
-    // 노출 기간 입력 시 종료일 미리보기
     document.getElementById('cb-days')?.addEventListener('input', function() {
-        const days    = parseInt(this.value);
+        const days = parseInt(this.value);
         const previewEl = document.getElementById('cb-enddate-preview');
         if (!isNaN(days) && days > 0) {
-            const end = new Date();
-            end.setDate(end.getDate() + days);
+            const end = new Date(); end.setDate(end.getDate() + days);
             previewEl.innerText = `📅 종료일: ${end.toISOString().split('T')[0]}`;
-        } else {
-            previewEl.innerText = '';
-        }
+        } else { previewEl.innerText = ''; }
     });
 
     // ── 인증 ────────────────────────────────────────────────
@@ -639,15 +507,9 @@
     function renderMaintenanceStatus(isOn) {
         const statusEl = document.getElementById('maintenance-status');
         if (!statusEl) return;
-        if (isOn) {
-            statusEl.innerHTML = `
-                <span class="dot" style="background:#ef4444; box-shadow:0 0 6px #ef4444;"></span>
-                <span style="color:#ef4444;">점검 모드 ON — 모든 유저 거래 차단 중</span>`;
-        } else {
-            statusEl.innerHTML = `
-                <span class="dot" style="background:#22c55e;"></span>
-                <span style="color:#22c55e;">정상 운영 중</span>`;
-        }
+        statusEl.innerHTML = isOn
+            ? `<span class="dot" style="background:#ef4444; box-shadow:0 0 6px #ef4444;"></span><span style="color:#ef4444;">점검 모드 ON — 모든 유저 거래 차단 중</span>`
+            : `<span class="dot" style="background:#22c55e;"></span><span style="color:#22c55e;">정상 운영 중</span>`;
     }
 
     window.toggleMaintenance = async function(isOn) {
@@ -655,17 +517,14 @@
         const msg = isOn
             ? '⚠️ 점검 모드를 켜시겠습니까?\n\n모든 유저에게 즉시 점검 오버레이가 표시되고 거래가 차단됩니다.'
             : '✅ 점검 모드를 끄시겠습니까?\n\n모든 유저가 즉시 정상 이용 가능해집니다.';
-        if (!confirm(msg)) {
-            toggle.checked = !isOn; // 취소 시 토글 원복
-            return;
-        }
+        if (!confirm(msg)) { toggle.checked = !isOn; return; }
         try {
             await set(ref(db, 'siteConfig/maintenance'), isOn);
             renderMaintenanceStatus(isOn);
             alert(isOn ? '🔴 점검 모드가 활성화되었습니다.' : '🟢 점검 모드가 해제되었습니다.');
         } catch (e) {
             alert('변경 실패: ' + e.message);
-            toggle.checked = !isOn; // 실패 시 토글 원복
+            toggle.checked = !isOn;
         }
     };
 
@@ -687,10 +546,7 @@
 
     // ── 랭킹 TOP5 ───────────────────────────────────────────
     async function calcTop5() {
-        const [usersSnap, stocksSnap] = await Promise.all([
-            get(ref(db, 'users/')),
-            get(ref(db, 'stocks/'))
-        ]);
+        const [usersSnap, stocksSnap] = await Promise.all([get(ref(db, 'users/')), get(ref(db, 'stocks/'))]);
         const usersData  = usersSnap.val()  || {};
         const stocksData = stocksSnap.val() || {};
         const ownership  = {};
@@ -702,72 +558,47 @@
             });
         });
         return Object.entries(ownership)
-            .map(([id, totalQty]) => {
-                const stock = stocksData[id] || {};
-                return { id, name: stock.name || id, price: stock.price || 0, totalQty };
-            })
-            .sort((a, b) => b.totalQty - a.totalQty)
-            .slice(0, 5);
+            .map(([id, totalQty]) => { const s = stocksData[id] || {}; return { id, name: s.name || id, price: s.price || 0, totalQty }; })
+            .sort((a, b) => b.totalQty - a.totalQty).slice(0, 5);
     }
 
     window.previewRankings = async function() {
         const statusEl = document.getElementById('ranking-status');
-        statusEl.className = 'status-chip loading';
-        statusEl.innerText = '집계 중...';
+        statusEl.className = 'status-chip loading'; statusEl.innerText = '집계 중...';
         try {
             const top5 = await calcTop5();
             renderPreviewTable(top5);
-            statusEl.className = 'status-chip unsaved';
-            statusEl.innerText = '⚠️ 미리보기 (아직 저장 안 됨)';
-        } catch(e) {
-            alert("집계 중 오류: " + e.message);
-            statusEl.className = 'status-chip unsaved';
-            statusEl.innerText = '오류 발생';
-        }
+            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '⚠️ 미리보기 (아직 저장 안 됨)';
+        } catch(e) { alert("집계 중 오류: " + e.message); statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생'; }
     };
 
     window.saveRankingsToFirebase = async function(silent = false) {
         const statusEl = document.getElementById('ranking-status');
-        statusEl.className = 'status-chip loading';
-        statusEl.innerText = '저장 중...';
+        statusEl.className = 'status-chip loading'; statusEl.innerText = '저장 중...';
         try {
             const top5 = await calcTop5();
-            const payload = {
+            await set(ref(db, 'rankings/top5'), {
                 savedAt: new Date().toISOString(),
-                items: top5.map((s, i) => ({
-                    rank: i + 1, id: s.id, name: s.name, price: s.price, totalQty: s.totalQty
-                }))
-            };
-            await set(ref(db, 'rankings/top5'), payload);
+                items: top5.map((s, i) => ({ rank: i + 1, id: s.id, name: s.name, price: s.price, totalQty: s.totalQty }))
+            });
             renderPreviewTable(top5);
-            if (!silent) {
-                alert(`✅ /rankings/top5 저장 완료!\n\n` +
-                      top5.map((s, i) => `${i+1}위 ${s.name} (${s.totalQty.toLocaleString()}주)`).join('\n'));
-            }
+            if (!silent) alert(`✅ /rankings/top5 저장 완료!\n\n` + top5.map((s, i) => `${i+1}위 ${s.name} (${s.totalQty.toLocaleString()}주)`).join('\n'));
             await loadRankingStatus();
         } catch(e) {
             if (!silent) alert("저장 중 오류: " + e.message);
-            statusEl.className = 'status-chip unsaved';
-            statusEl.innerText = '저장 실패';
+            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '저장 실패';
         }
     };
 
     function renderPreviewTable(top5) {
-        const tbody     = document.getElementById('ranking-preview-body');
-        const tableWrap = document.getElementById('ranking-preview-table');
-        if (!tbody || !tableWrap) return;
+        const tbody = document.getElementById('ranking-preview-body');
+        const wrap  = document.getElementById('ranking-preview-table');
+        if (!tbody || !wrap) return;
         const badgeClass = ['gold', 'silver', 'bronze', '', ''];
         tbody.innerHTML = top5.length === 0
             ? `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">보유 데이터 없음</td></tr>`
-            : top5.map((s, i) => `
-                <tr>
-                    <td><span class="rank-badge ${badgeClass[i]}">${i + 1}</span></td>
-                    <td style="font-weight:700;">${s.name}</td>
-                    <td style="color:#38bdf8;">${s.totalQty.toLocaleString()}주</td>
-                    <td style="color:#94a3b8;">${s.price.toLocaleString()}원</td>
-                </tr>
-            `).join('');
-        tableWrap.style.display = 'block';
+            : top5.map((s, i) => `<tr><td><span class="rank-badge ${badgeClass[i]}">${i+1}</span></td><td style="font-weight:700;">${s.name}</td><td style="color:#38bdf8;">${s.totalQty.toLocaleString()}주</td><td style="color:#94a3b8;">${s.price.toLocaleString()}원</td></tr>`).join('');
+        wrap.style.display = 'block';
     }
 
     // ── 미거래 유저 정리 ─────────────────────────────────────
@@ -784,6 +615,38 @@
         return inactive;
     }
 
+    window.previewInactiveUsers = async function() {
+        const statusEl = document.getElementById('cleanup-status');
+        statusEl.innerText = '집계 중...';
+        try {
+            const inactive = await getInactiveUsers();
+            statusEl.innerText = `미거래 유저 ${inactive.length.toLocaleString()}명 발견`;
+        } catch(e) { statusEl.innerText = '집계 실패: ' + e.message; }
+    };
+
+    window.cleanupInactiveUsers = async function() {
+        const statusEl = document.getElementById('cleanup-status');
+        statusEl.innerText = '집계 중...';
+        try {
+            const inactive = await getInactiveUsers();
+            if (inactive.length === 0) { statusEl.innerText = '삭제할 미거래 유저가 없습니다.'; return; }
+            if (!confirm(`미거래 유저 ${inactive.length.toLocaleString()}명을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+            const BATCH = 500;
+            let deleted = 0;
+            for (let i = 0; i < inactive.length; i += BATCH) {
+                const batch = inactive.slice(i, i + BATCH);
+                // [수정] users/ 경로 기준 상대 경로로 update
+                const updates = {};
+                batch.forEach(uid => { updates[uid] = null; });
+                await update(ref(db, 'users/'), updates);
+                deleted += batch.length;
+                statusEl.innerText = `삭제 중... (${deleted}/${inactive.length})`;
+            }
+            statusEl.innerText = `✅ ${inactive.length.toLocaleString()}명 삭제 완료`;
+        } catch(e) { statusEl.innerText = '삭제 실패: ' + e.message; }
+    };
+
+    // ── 접속자 노드 정리 ─────────────────────────────────────
     window.previewPresence = async function() {
         const statusEl = document.getElementById('presence-status');
         statusEl.innerText = '확인 중...';
@@ -794,11 +657,8 @@
             const cutoff = 30 * 60 * 1000;
             const all    = Object.values(snap.val());
             const valid  = all.filter(v => v && v.connectedAt && (now - v.connectedAt) < cutoff).length;
-            const zombie = all.length - valid;
-            statusEl.innerText = `전체 ${all.length}개 노드 중 유효 ${valid}개 · 만료(좀비) ${zombie}개`;
-        } catch(e) {
-            statusEl.innerText = '확인 실패: ' + e.message;
-        }
+            statusEl.innerText = `전체 ${all.length}개 노드 중 유효 ${valid}개 · 만료(좀비) ${all.length - valid}개`;
+        } catch(e) { statusEl.innerText = '확인 실패: ' + e.message; }
     };
 
     window.cleanupPresence = async function() {
@@ -813,52 +673,14 @@
             const updates = {};
             let count = 0;
             Object.entries(data).forEach(([uid, v]) => {
-                if (!v || !v.connectedAt || (now - v.connectedAt) >= cutoff) {
-                    updates[uid] = null;  // presence/users 기준 상대 경로
-                    count++;
-                }
+                if (!v || !v.connectedAt || (now - v.connectedAt) >= cutoff) { updates[uid] = null; count++; }
             });
             if (count === 0) { statusEl.innerText = '만료 노드 없음'; return; }
             if (!confirm(`만료 노드 ${count}개를 삭제하시겠습니까?`)) return;
-            await update(ref(db, 'presence/users'), updates);  // 루트 대신 presence/users 경로
+            // [수정] presence/users/ 경로 기준 상대 경로로 update
+            await update(ref(db, 'presence/users/'), updates);
             statusEl.innerText = `✅ ${count}개 만료 노드 삭제 완료`;
-        } catch(e) {
-            statusEl.innerText = '삭제 실패: ' + e.message;
-        }
-    };
-
-    window.previewInactiveUsers = async function() {
-        const statusEl = document.getElementById('cleanup-status');
-        statusEl.innerText = '집계 중...';
-        try {
-            const inactive = await getInactiveUsers();
-            statusEl.innerText = `미거래 유저 ${inactive.length.toLocaleString()}명 발견`;
-        } catch(e) {
-            statusEl.innerText = '집계 실패: ' + e.message;
-        }
-    };
-
-    window.cleanupInactiveUsers = async function() {
-        const statusEl = document.getElementById('cleanup-status');
-        statusEl.innerText = '집계 중...';
-        try {
-            const inactive = await getInactiveUsers();
-            if (inactive.length === 0) { statusEl.innerText = '삭제할 미거래 유저가 없습니다.'; return; }
-            if (!confirm(`미거래 유저 ${inactive.length.toLocaleString()}명을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
-            const BATCH = 500;
-            let deleted = 0;
-            for (let i = 0; i < inactive.length; i += BATCH) {
-                const batch   = inactive.slice(i, i + BATCH);
-                const updates = {};
-                batch.forEach(uid => { updates[`users/${uid}`] = null; });
-                await update(ref(db), updates);
-                deleted += batch.length;
-                statusEl.innerText = `삭제 중... (${deleted}/${inactive.length})`;
-            }
-            statusEl.innerText = `✅ ${inactive.length.toLocaleString()}명 삭제 완료`;
-        } catch(e) {
-            statusEl.innerText = '삭제 실패: ' + e.message;
-        }
+        } catch(e) { statusEl.innerText = '삭제 실패: ' + e.message; }
     };
 
     // ── 종목 관리 ────────────────────────────────────────────
@@ -889,32 +711,30 @@
         let history = oldStock.history || [oldStock.price];
         history.push(newPrice);
         if (history.length > 10) history.shift();
+        // [수정] stocks/ 경로 기준 상대 경로로 update
         const updates = {};
-        updates[`stocks/${id}/price`]   = newPrice;
-        updates[`stocks/${id}/history`] = history;
-        updates[`stocks/${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
+        updates[`${id}/price`]   = newPrice;
+        updates[`${id}/history`] = history;
+        updates[`${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
         try {
-            await update(ref(db), updates);
+            await update(ref(db, 'stocks/'), updates);
             allStocksData[id].price = newPrice;
             alert(`✅ ${oldStock.name}의 가격이 ${newPrice.toLocaleString()}원으로 수정되었습니다.`);
-        } catch (e) {
-            alert("수정 실패: 권한을 확인하세요.");
-        }
+        } catch (e) { alert("수정 실패: 권한을 확인하세요."); }
     };
 
     // ── 종목 상세 수정 유료/무료 탭 ──────────────────────────
     let editBannerIsPaid = true;
-
     window.switchEditBannerType = function(type) {
         editBannerIsPaid = type === 'paid';
         const paidBtn = document.getElementById('edit-tab-paid');
         const freeBtn = document.getElementById('edit-tab-free');
         if (editBannerIsPaid) {
-            paidBtn.style.background = '#38bdf8'; paidBtn.style.color = '#0f172a'; paidBtn.style.border = 'none';
-            freeBtn.style.background = '#1e293b'; freeBtn.style.color = '#94a3b8'; freeBtn.style.border = '1px solid #334155';
+            paidBtn.style.cssText = "flex:1; background:#38bdf8; color:#0f172a; border:none; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;";
+            freeBtn.style.cssText = "flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;";
         } else {
-            freeBtn.style.background = '#22c55e'; freeBtn.style.color = '#0f172a'; freeBtn.style.border = 'none';
-            paidBtn.style.background = '#1e293b'; paidBtn.style.color = '#94a3b8'; paidBtn.style.border = '1px solid #334155';
+            freeBtn.style.cssText = "flex:1; background:#22c55e; color:#0f172a; border:none; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;";
+            paidBtn.style.cssText = "flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;";
         }
     };
 
@@ -926,22 +746,17 @@
             const data = snapshot.val();
             if (!data) return alert("데이터가 없습니다.");
             let targetId = null, targetData = null;
-            Object.entries(data).forEach(([id, stock]) => {
-                if (stock.name === searchName) { targetId = id; targetData = stock; }
-            });
+            Object.entries(data).forEach(([id, stock]) => { if (stock.name === searchName) { targetId = id; targetData = stock; } });
             if (!targetId) return alert("해당 종목을 찾을 수 없습니다.");
             document.getElementById('edit-stock-id').innerText  = targetId;
             document.getElementById('edit-stock-price').value   = targetData.price || 0;
             document.getElementById('edit-stock-banner').value  = targetData.bannerImg || "";
             document.getElementById('edit-stock-link').value    = targetData.link || "";
             document.getElementById('edit-stock-date').value    = targetData.bannerEndDate || "";
-            // 기존 유료/무료 상태 불러오기
             switchEditBannerType(targetData.bannerIsPaid === false ? 'free' : 'paid');
             document.getElementById('edit-form').style.display = 'flex';
             alert(`✅ '${searchName}' 데이터를 불러왔습니다.`);
-        } catch (e) {
-            alert("불러오기 실패: " + e.message);
-        }
+        } catch (e) { alert("불러오기 실패: " + e.message); }
     };
 
     window.updateStockData = async function() {
@@ -952,20 +767,19 @@
         const newLink   = document.getElementById('edit-stock-link').value.trim();
         const newDate   = document.getElementById('edit-stock-date').value.trim();
         if (isNaN(newPrice)) return alert("가격은 숫자여야 합니다.");
+        // [수정] stocks/ 경로 기준 상대 경로로 update
+        const updates = {};
+        updates[`${stockId}/price`]         = newPrice;
+        updates[`${stockId}/bannerImg`]     = newBanner;
+        updates[`${stockId}/link`]          = newLink;
+        updates[`${stockId}/bannerEndDate`] = newDate;
+        updates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
         try {
-            const updates = {};
-            updates[`stocks/${stockId}/price`]         = newPrice;
-            updates[`stocks/${stockId}/bannerImg`]     = newBanner;
-            updates[`stocks/${stockId}/link`]          = newLink;
-            updates[`stocks/${stockId}/bannerEndDate`] = newDate;
-            updates[`stocks/${stockId}/bannerIsPaid`]  = editBannerIsPaid;
-            await update(ref(db), updates);
+            await update(ref(db, 'stocks/'), updates);
             alert(`✅ 종목 정보가 수정되었습니다!\n홍보 유형: ${editBannerIsPaid ? '💰 유료' : '🎁 무료'}`);
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-search-name').value = "";
-        } catch (e) {
-            alert("수정 실패: " + e.message);
-        }
+        } catch (e) { alert("수정 실패: " + e.message); }
     };
 
     document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
@@ -987,11 +801,11 @@
             }).sort((a, b) => a.id.localeCompare(b.id));
             for (let i = 0; i < stockList.length; i++) {
                 const master = stockList[i];
-                if (deleteUpdates[`stocks/${master.id}`] === null) continue;
+                if (deleteUpdates[master.id] === null) continue;
                 if (master.pureName.length < 2) continue;
                 for (let j = i + 1; j < stockList.length; j++) {
                     const target = stockList[j];
-                    if (deleteUpdates[`stocks/${target.id}`] === null) continue;
+                    if (deleteUpdates[target.id] === null) continue;
                     let isMatch = false;
                     if (master.pureName === target.pureName) isMatch = true;
                     else if (target.originalName.includes(master.originalName)) {
@@ -1001,17 +815,16 @@
                     if (isMatch && master.pureName !== target.pureName) {
                         if (master.originalName.includes('BJ') && target.originalName.includes('BJ')) isMatch = false;
                     }
-                    if (isMatch) { deleteUpdates[`stocks/${target.id}`] = null; duplicateFoundCount++; }
+                    if (isMatch) { deleteUpdates[target.id] = null; duplicateFoundCount++; }
                 }
             }
             if (duplicateFoundCount === 0) return alert("✅ 중복이 없습니다.");
             if (confirm(`${duplicateFoundCount}개의 중복 종목을 삭제하시겠습니까?`)) {
-                await update(ref(db), deleteUpdates);
+                // [수정] stocks/ 경로 기준 상대 경로로 update
+                await update(ref(db, 'stocks/'), deleteUpdates);
                 alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
             }
-        } catch (e) {
-            alert("오류 발생: " + e.message);
-        }
+        } catch (e) { alert("오류 발생: " + e.message); }
     };
 
     window.uploadStocks = async function() {
@@ -1019,9 +832,7 @@
         if (!text.trim()) return alert("이름을 입력해주세요.");
         const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
         const stocks = {};
-        uniqueNames.forEach((name, i) => {
-            stocks[`id_${Date.now()}_${i}`] = { name, price: 10000, change: 0, history: [10000, 10000] };
-        });
+        uniqueNames.forEach((name, i) => { stocks[`id_${Date.now()}_${i}`] = { name, price: 10000, change: 0, history: [10000, 10000] }; });
         if (confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
             try {
                 await update(ref(db, 'stocks/'), stocks);
@@ -1043,42 +854,36 @@
             const deleteUpdates = {};
             let foundCount = 0;
             Object.entries(data).forEach(([id, stock]) => {
-                if (namesToDelete.includes(stock.name)) { deleteUpdates[`stocks/${id}`] = null; foundCount++; }
+                if (namesToDelete.includes(stock.name)) { deleteUpdates[id] = null; foundCount++; }
             });
             if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
             if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
-                await update(ref(db), deleteUpdates);
+                // [수정] stocks/ 경로 기준 상대 경로로 update
+                await update(ref(db, 'stocks/'), deleteUpdates);
                 alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
             }
-        } catch (e) {
-            alert("삭제 중 오류 발생: " + e.message);
-        }
+        } catch (e) { alert("삭제 중 오류 발생: " + e.message); }
     };
 
     // ── 액면분할 ─────────────────────────────────────────────
     let splitRatio = 2;
 
     window.selectSplitRatio = function(ratio) {
-        const btns = ['2','5','10','custom'];
-        btns.forEach(v => {
+        ['2','5','10','custom'].forEach(v => {
             const btn = document.getElementById(`split-btn-${v}`);
             if (btn) { btn.style.background = '#1e293b'; btn.style.color = '#94a3b8'; btn.style.border = '1px solid #334155'; }
         });
         const customWrap = document.getElementById('split-custom-wrap');
         if (ratio === 0) {
-            document.getElementById('split-btn-custom').style.background = '#a855f7';
-            document.getElementById('split-btn-custom').style.color = 'white';
-            document.getElementById('split-btn-custom').style.border = 'none';
-            customWrap.style.display = 'block';
-            splitRatio = 0;
+            const btn = document.getElementById('split-btn-custom');
+            btn.style.background = '#a855f7'; btn.style.color = 'white'; btn.style.border = 'none';
+            customWrap.style.display = 'block'; splitRatio = 0;
         } else {
-            document.getElementById(`split-btn-${ratio}`).style.background = '#a855f7';
-            document.getElementById(`split-btn-${ratio}`).style.color = 'white';
-            document.getElementById(`split-btn-${ratio}`).style.border = 'none';
-            customWrap.style.display = 'none';
-            splitRatio = ratio;
+            const btn = document.getElementById(`split-btn-${ratio}`);
+            btn.style.background = '#a855f7'; btn.style.color = 'white'; btn.style.border = 'none';
+            customWrap.style.display = 'none'; splitRatio = ratio;
         }
         document.getElementById('split-preview').style.display = 'none';
     };
@@ -1095,33 +900,25 @@
         const ratio    = getSelectedRatio();
         const statusEl = document.getElementById('split-status');
         if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
-
         statusEl.innerText = '데이터 조회 중...';
         try {
             const snap = await get(ref(db, 'stocks/'));
             const data = snap.val() || {};
-
-            // 주가 1위 종목 찾기
             const top1 = Object.values(data).sort((a, b) => (b.price || 0) - (a.price || 0))[0];
             if (!top1) { statusEl.innerText = '종목 데이터 없음'; return; }
-
             document.getElementById('preview-top1').innerText       = `${(top1.price || 0).toLocaleString()}원`;
             document.getElementById('preview-top1-after').innerText = `${Math.round((top1.price || 0) / ratio).toLocaleString()}원`;
             document.getElementById('preview-qty').innerText        = `10주 보유`;
             document.getElementById('preview-qty-after').innerText  = `${10 * ratio}주 보유`;
             document.getElementById('split-preview').style.display  = 'block';
-
             statusEl.innerText = `${ratio}:1 분할 시 주가 1/${ratio}, 보유량 ×${ratio}`;
-        } catch(e) {
-            statusEl.innerText = '조회 실패: ' + e.message;
-        }
+        } catch(e) { statusEl.innerText = '조회 실패: ' + e.message; }
     };
 
     window.executeSplit = async function() {
         const ratio    = getSelectedRatio();
         const statusEl = document.getElementById('split-status');
         if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
-
         if (!confirm(
             `⚠️ ${ratio}:1 액면분할을 실행하시겠습니까?\n\n` +
             `· 주가 상위 100개 종목 주가 → 1/${ratio}\n` +
@@ -1132,80 +929,75 @@
         )) return;
 
         try {
-            // ── 0단계: 점검 모드 ON ───────────────────────────
+            // ── 0단계: 점검 모드 ON ──────────────────────────
             statusEl.innerText = '🔴 점검 모드 활성화 중...';
             await set(ref(db, 'siteConfig/maintenance'), true);
-            // 점검 모드 반영 대기 (유저들 거래 차단 확인)
             await new Promise(r => setTimeout(r, 2000));
 
-            // ── 1단계: stocks/ 주가 분할 (top100만 적용) ──────
+            // ── 1단계: stocks/ 주가 분할 ─────────────────────
             statusEl.innerText = '종목 주가 조정 중...';
             const stocksSnap = await get(ref(db, 'stocks/'));
             const stocksData = stocksSnap.val() || {};
 
-            // 주가 내림차순 정렬 후 상위 100개 ID만 추출
             const top100Ids = new Set(
                 Object.entries(stocksData)
                     .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
-                    .slice(0, 100)
-                    .map(([id]) => id)
+                    .slice(0, 100).map(([id]) => id)
             );
 
+            // [수정] stocks/ 경로 기준 상대 경로로 update
             const stockUpdates = {};
             Object.entries(stocksData).forEach(([id, s]) => {
-                if (!top100Ids.has(id)) return; // top100 외 종목 제외
+                if (!top100Ids.has(id)) return;
                 const newPrice = Math.max(1, Math.round((s.price || 0) / ratio));
                 const history  = (s.history || [s.price]).map(p => Math.max(1, Math.round(p / ratio)));
-                stockUpdates[`stocks/${id}/price`]   = newPrice;
-                stockUpdates[`stocks/${id}/history`] = history;
-                stockUpdates[`stocks/${id}/change`]  = s.change || 0;
+                stockUpdates[`${id}/price`]   = newPrice;
+                stockUpdates[`${id}/history`] = history;
+                stockUpdates[`${id}/change`]  = s.change || 0;
             });
-            await update(ref(db), stockUpdates);
+            await update(ref(db, 'stocks/'), stockUpdates);
             statusEl.innerText = `종목 주가 조정 완료 (${top100Ids.size}개) → 유저 데이터 조정 중...`;
 
-            // ── 2단계: users/ 보유량·평균단가 분할 (top100만) ─
+            // ── 2단계: users/ 보유량·평균단가 분할 ───────────
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
-            const BATCH = 100;
-            const userIds = Object.keys(usersData);
-            let processed = 0;
+            const BATCH     = 100;
+            const userIds   = Object.keys(usersData);
+            let processed   = 0;
 
             for (let i = 0; i < userIds.length; i += BATCH) {
                 const batch   = userIds.slice(i, i + BATCH);
+                // [수정] users/ 경로 기준 상대 경로로 update
                 const updates = {};
                 batch.forEach(uid => {
                     const user = usersData[uid];
                     if (!user?.stocks) return;
                     Object.entries(user.stocks).forEach(([stockId, info]) => {
-                        if (!info || !info.qty) return;
-                        if (!top100Ids.has(stockId)) return; // top100 외 종목 제외
-                        updates[`users/${uid}/stocks/${stockId}/qty`] = info.qty * ratio;
-                        updates[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.round((info.avg || 0) / ratio));
+                        if (!info || !info.qty || !top100Ids.has(stockId)) return;
+                        updates[`${uid}/stocks/${stockId}/qty`] = info.qty * ratio;
+                        updates[`${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.round((info.avg || 0) / ratio));
                     });
                 });
-                if (Object.keys(updates).length > 0) await update(ref(db), updates);
+                if (Object.keys(updates).length > 0) await update(ref(db, 'users/'), updates);
                 processed += batch.length;
                 statusEl.innerText = `유저 데이터 조정 중... (${processed}/${userIds.length}명)`;
             }
 
-            // ── 3단계: 점검 모드 OFF ──────────────────────────
+            // ── 3단계: 점검 모드 OFF ─────────────────────────
             statusEl.innerText = '🟢 점검 모드 해제 중...';
             await set(ref(db, 'siteConfig/maintenance'), false);
-
             statusEl.innerText = `✅ ${ratio}:1 액면분할 완료! (top100 종목 ${top100Ids.size}개, 유저 ${userIds.length}명 처리)`;
-
-            // 점검 모드 토글 UI 갱신
             await loadMaintenanceStatus();
             await loadStocksOnce();
 
         } catch(e) {
-            // 오류 발생 시에도 점검 모드 해제 시도
             try { await set(ref(db, 'siteConfig/maintenance'), false); } catch(_) {}
             statusEl.innerText = '❌ 실패: ' + e.message;
             alert('액면분할 중 오류 발생: ' + e.message);
         }
     };
 
+    // ── 주가 일괄 조정 ───────────────────────────────────────
     window.adjustAllPrices = async function() {
         const percent = parseFloat(document.getElementById('percent-input').value);
         if (isNaN(percent)) return alert("숫자를 입력해주세요.");
@@ -1213,34 +1005,30 @@
             const snapshot = await get(ref(db, 'stocks/'));
             const data = snapshot.val();
             if (!data) return;
-
-            // 주가 기준 내림차순 정렬 후 상위 100개만 추출
             const top100 = Object.entries(data)
                 .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
-                .slice(0, 100)
-                .map(([id]) => id);
-
-            const updates = {};
+                .slice(0, 100).map(([id]) => id);
             const multiplier = 1 + (percent / 100);
+            // [수정] stocks/ 경로 기준 상대 경로로 update
+            const updates = {};
             top100.forEach(id => {
                 const oldPrice = data[id].price;
                 const newPrice = Math.round(oldPrice * multiplier);
                 let history = data[id].history || [oldPrice];
                 history.push(newPrice);
                 if (history.length > 10) history.shift();
-                updates[`stocks/${id}/price`]   = newPrice;
-                updates[`stocks/${id}/history`] = history;
-                updates[`stocks/${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
+                updates[`${id}/price`]   = newPrice;
+                updates[`${id}/history`] = history;
+                updates[`${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
             });
-            await update(ref(db), updates);
+            await update(ref(db, 'stocks/'), updates);
             alert(`🔥 주가 상위 100개 종목이 ${percent}% 조정되었습니다!`);
             await loadStocksOnce();
         } catch (e) { alert("오류 발생: " + e.message); }
     };
 
     // ── 배너 탭 전환 ─────────────────────────────────────────
-    let bannerMode = 'paid'; // 'paid' | 'free'
-
+    let bannerMode = 'paid';
     window.switchBannerTab = function(mode) {
         bannerMode = mode;
         const paidBtn    = document.getElementById('tab-paid');
@@ -1249,48 +1037,33 @@
         const submitBtn  = document.getElementById('banner-submit-btn');
         const daysLabel  = document.getElementById('banner-days-label');
         const daysSuffix = document.getElementById('banner-days-suffix');
-
         if (mode === 'paid') {
-            paidBtn.style.background = '#38bdf8';
-            paidBtn.style.color      = '#0f172a';
-            paidBtn.style.border     = 'none';
-            freeBtn.style.background = '#1e293b';
-            freeBtn.style.color      = '#94a3b8';
-            freeBtn.style.border     = '1px solid #334155';
+            paidBtn.style.cssText = "flex:1; background:#38bdf8; color:#0f172a; border:none; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;";
+            freeBtn.style.cssText = "flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;";
             freeNotice.style.display = 'none';
-            daysLabel.innerText      = '💰 유료 노출 기간:';
-            daysSuffix.innerText     = '일 동안 (별풍선 20개/일)';
-            submitBtn.innerText      = '💰 유료 배너 등록';
-            submitBtn.style.background = '#38bdf8';
-            submitBtn.style.color      = '#0f172a';
+            daysLabel.innerText  = '💰 유료 노출 기간:';
+            daysSuffix.innerText = '일 동안 (별풍선 20개/일)';
+            submitBtn.innerText  = '💰 유료 배너 등록';
+            submitBtn.style.background = '#38bdf8'; submitBtn.style.color = '#0f172a';
         } else {
-            freeBtn.style.background = '#22c55e';
-            freeBtn.style.color      = '#0f172a';
-            freeBtn.style.border     = 'none';
-            paidBtn.style.background = '#1e293b';
-            paidBtn.style.color      = '#94a3b8';
-            paidBtn.style.border     = '1px solid #334155';
+            freeBtn.style.cssText = "flex:1; background:#22c55e; color:#0f172a; border:none; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;";
+            paidBtn.style.cssText = "flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;";
             freeNotice.style.display = 'block';
-            daysLabel.innerText      = '🎁 무료 노출 기간:';
-            daysSuffix.innerText     = '일 동안';
-            submitBtn.innerText      = '🎁 무료 배너 등록';
-            submitBtn.style.background = '#22c55e';
-            submitBtn.style.color      = '#0f172a';
+            daysLabel.innerText  = '🎁 무료 노출 기간:';
+            daysSuffix.innerText = '일 동안';
+            submitBtn.innerText  = '🎁 무료 배너 등록';
+            submitBtn.style.background = '#22c55e'; submitBtn.style.color = '#0f172a';
         }
         document.getElementById('banner-enddate-preview').innerText = '';
     };
 
-    // 기간 입력 시 종료일 미리보기
     document.getElementById('banner-days')?.addEventListener('input', function() {
         const days = parseInt(this.value);
         const el   = document.getElementById('banner-enddate-preview');
         if (!isNaN(days) && days > 0) {
-            const end = new Date();
-            end.setDate(end.getDate() + days);
+            const end = new Date(); end.setDate(end.getDate() + days);
             el.innerText = `📅 종료일: ${end.toISOString().split('T')[0]}`;
-        } else {
-            el.innerText = '';
-        }
+        } else { el.innerText = ''; }
     });
 
     window.addBannerToStock = async function() {
@@ -1298,18 +1071,13 @@
         const imgUrl         = document.getElementById('banner-img-url').value.trim();
         const linkUrl        = document.getElementById('banner-link-url').value.trim();
         const daysInput      = document.getElementById('banner-days').value;
-
         if (!targetNickname || !imgUrl) return alert("닉네임과 이미지 주소는 필수입니다.");
         if (!daysInput) return alert("노출 기간(일)을 입력해주세요.");
-
-        // 유료/무료 모두 기간 저장 — 유료는 bannerEndDate 있음, 무료도 동일하게 저장
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + parseInt(daysInput));
         const endDateStr = endDate.toISOString().split('T')[0];
-
         const modeLabel = bannerMode === 'paid' ? `유료 (${daysInput}일 · 종료일: ${endDateStr})` : `무료 (${daysInput}일 · 종료일: ${endDateStr})`;
         if (!confirm(`${targetNickname} 종목에 ${modeLabel} 배너를 등록하시겠습니까?`)) return;
-
         try {
             const snapshot = await get(ref(db, 'stocks/'));
             const data = snapshot.val();
@@ -1317,24 +1085,17 @@
             let targetId = null;
             Object.entries(data).forEach(([id, stock]) => { if (stock.name === targetNickname) targetId = id; });
             if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
-
+            // [수정] stocks/ 경로 기준 상대 경로로 update
             const updates = {};
-            updates[`stocks/${targetId}/bannerImg`]     = imgUrl;
-            updates[`stocks/${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
-            updates[`stocks/${targetId}/bannerEndDate`] = endDateStr;
-            updates[`stocks/${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
-
-            await update(ref(db), updates);
-            alert(`✅ ${targetNickname} 종목에 ${bannerMode === 'paid' ? '유료' : '무료'} 배너가 등록되었습니다!${endDateStr ? '\n📅 종료일: ' + endDateStr : ''}`);
-
-            document.getElementById('banner-nickname').value = '';
-            document.getElementById('banner-img-url').value  = '';
-            document.getElementById('banner-link-url').value = '';
-            document.getElementById('banner-days').value     = '';
+            updates[`${targetId}/bannerImg`]     = imgUrl;
+            updates[`${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
+            updates[`${targetId}/bannerEndDate`] = endDateStr;
+            updates[`${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
+            await update(ref(db, 'stocks/'), updates);
+            alert(`✅ ${targetNickname} 종목에 ${bannerMode === 'paid' ? '유료' : '무료'} 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
+            ['banner-nickname','banner-img-url','banner-link-url','banner-days'].forEach(id => { document.getElementById(id).value = ''; });
             document.getElementById('banner-enddate-preview').innerText = '';
-        } catch (e) {
-            alert("배너 추가 중 오류 발생: " + e.message);
-        }
+        } catch (e) { alert("배너 추가 중 오류 발생: " + e.message); }
     };
 </script>
 </body>
