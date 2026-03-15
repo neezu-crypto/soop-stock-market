@@ -278,20 +278,6 @@
         </div>
     </div>
 
-    <!-- 🟢 접속자 노드 정리 -->
-    <div class="container" style="display:block; border-color: #22c55e;">
-        <h1>🟢 접속자 노드 정리</h1>
-        <div class="info-box">
-            비정상 종료로 남은 좀비 presence 노드를 삭제합니다.<br>
-            <span style="color:#38bdf8;">30분 이상 된 노드를 만료로 판단하여 제거합니다.</span>
-        </div>
-        <div id="presence-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn-success" style="flex:1;" onclick="previewPresence()">🔍 노드 현황 확인</button>
-            <button class="btn-primary" style="flex:2; margin-top:0; background:#22c55e; color:#0f172a;" onclick="cleanupPresence()">🧹 만료 노드 삭제</button>
-        </div>
-    </div>
-
     <!-- 🚀 스트리머 상장 및 삭제 -->
     <div class="container" style="display:block">
         <h1>🚀 스트리머 상장 및 삭제</h1>
@@ -635,7 +621,6 @@
             let deleted = 0;
             for (let i = 0; i < inactive.length; i += BATCH) {
                 const batch = inactive.slice(i, i + BATCH);
-                // [수정] users/ 경로 기준 상대 경로로 update
                 const updates = {};
                 batch.forEach(uid => { updates[uid] = null; });
                 await update(ref(db, 'users/'), updates);
@@ -643,43 +628,6 @@
                 statusEl.innerText = `삭제 중... (${deleted}/${inactive.length})`;
             }
             statusEl.innerText = `✅ ${inactive.length.toLocaleString()}명 삭제 완료`;
-        } catch(e) { statusEl.innerText = '삭제 실패: ' + e.message; }
-    };
-
-    // ── 접속자 노드 정리 ─────────────────────────────────────
-    window.previewPresence = async function() {
-        const statusEl = document.getElementById('presence-status');
-        statusEl.innerText = '확인 중...';
-        try {
-            const snap = await get(ref(db, 'presence/users'));
-            if (!snap.exists()) { statusEl.innerText = '노드 없음'; return; }
-            const now    = Date.now();
-            const cutoff = 30 * 60 * 1000;
-            const all    = Object.values(snap.val());
-            const valid  = all.filter(v => v && v.connectedAt && (now - v.connectedAt) < cutoff).length;
-            statusEl.innerText = `전체 ${all.length}개 노드 중 유효 ${valid}개 · 만료(좀비) ${all.length - valid}개`;
-        } catch(e) { statusEl.innerText = '확인 실패: ' + e.message; }
-    };
-
-    window.cleanupPresence = async function() {
-        const statusEl = document.getElementById('presence-status');
-        statusEl.innerText = '확인 중...';
-        try {
-            const snap = await get(ref(db, 'presence/users'));
-            if (!snap.exists()) { statusEl.innerText = '삭제할 노드 없음'; return; }
-            const now    = Date.now();
-            const cutoff = 30 * 60 * 1000;
-            const data   = snap.val();
-            const updates = {};
-            let count = 0;
-            Object.entries(data).forEach(([uid, v]) => {
-                if (!v || !v.connectedAt || (now - v.connectedAt) >= cutoff) { updates[uid] = null; count++; }
-            });
-            if (count === 0) { statusEl.innerText = '만료 노드 없음'; return; }
-            if (!confirm(`만료 노드 ${count}개를 삭제하시겠습니까?`)) return;
-            // [수정] presence/users/ 경로 기준 상대 경로로 update
-            await update(ref(db, 'presence/users/'), updates);
-            statusEl.innerText = `✅ ${count}개 만료 노드 삭제 완료`;
         } catch(e) { statusEl.innerText = '삭제 실패: ' + e.message; }
     };
 
@@ -711,7 +659,6 @@
         let history = oldStock.history || [oldStock.price];
         history.push(newPrice);
         if (history.length > 10) history.shift();
-        // [수정] stocks/ 경로 기준 상대 경로로 update
         const updates = {};
         updates[`${id}/price`]   = newPrice;
         updates[`${id}/history`] = history;
@@ -767,7 +714,6 @@
         const newLink   = document.getElementById('edit-stock-link').value.trim();
         const newDate   = document.getElementById('edit-stock-date').value.trim();
         if (isNaN(newPrice)) return alert("가격은 숫자여야 합니다.");
-        // [수정] stocks/ 경로 기준 상대 경로로 update
         const updates = {};
         updates[`${stockId}/price`]         = newPrice;
         updates[`${stockId}/bannerImg`]     = newBanner;
@@ -820,7 +766,6 @@
             }
             if (duplicateFoundCount === 0) return alert("✅ 중복이 없습니다.");
             if (confirm(`${duplicateFoundCount}개의 중복 종목을 삭제하시겠습니까?`)) {
-                // [수정] stocks/ 경로 기준 상대 경로로 update
                 await update(ref(db, 'stocks/'), deleteUpdates);
                 alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
             }
@@ -858,7 +803,6 @@
             });
             if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
             if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
-                // [수정] stocks/ 경로 기준 상대 경로로 update
                 await update(ref(db, 'stocks/'), deleteUpdates);
                 alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
@@ -929,23 +873,18 @@
         )) return;
 
         try {
-            // ── 0단계: 점검 모드 ON ──────────────────────────
             statusEl.innerText = '🔴 점검 모드 활성화 중...';
             await set(ref(db, 'siteConfig/maintenance'), true);
             await new Promise(r => setTimeout(r, 2000));
 
-            // ── 1단계: stocks/ 주가 분할 ─────────────────────
             statusEl.innerText = '종목 주가 조정 중...';
             const stocksSnap = await get(ref(db, 'stocks/'));
             const stocksData = stocksSnap.val() || {};
-
             const top100Ids = new Set(
                 Object.entries(stocksData)
                     .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
                     .slice(0, 100).map(([id]) => id)
             );
-
-            // [수정] stocks/ 경로 기준 상대 경로로 update
             const stockUpdates = {};
             Object.entries(stocksData).forEach(([id, s]) => {
                 if (!top100Ids.has(id)) return;
@@ -958,16 +897,13 @@
             await update(ref(db, 'stocks/'), stockUpdates);
             statusEl.innerText = `종목 주가 조정 완료 (${top100Ids.size}개) → 유저 데이터 조정 중...`;
 
-            // ── 2단계: users/ 보유량·평균단가 분할 ───────────
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
             const BATCH     = 100;
             const userIds   = Object.keys(usersData);
             let processed   = 0;
-
             for (let i = 0; i < userIds.length; i += BATCH) {
                 const batch   = userIds.slice(i, i + BATCH);
-                // [수정] users/ 경로 기준 상대 경로로 update
                 const updates = {};
                 batch.forEach(uid => {
                     const user = usersData[uid];
@@ -983,7 +919,6 @@
                 statusEl.innerText = `유저 데이터 조정 중... (${processed}/${userIds.length}명)`;
             }
 
-            // ── 3단계: 점검 모드 OFF ─────────────────────────
             statusEl.innerText = '🟢 점검 모드 해제 중...';
             await set(ref(db, 'siteConfig/maintenance'), false);
             statusEl.innerText = `✅ ${ratio}:1 액면분할 완료! (top100 종목 ${top100Ids.size}개, 유저 ${userIds.length}명 처리)`;
@@ -1009,7 +944,6 @@
                 .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
                 .slice(0, 100).map(([id]) => id);
             const multiplier = 1 + (percent / 100);
-            // [수정] stocks/ 경로 기준 상대 경로로 update
             const updates = {};
             top100.forEach(id => {
                 const oldPrice = data[id].price;
@@ -1085,7 +1019,6 @@
             let targetId = null;
             Object.entries(data).forEach(([id, stock]) => { if (stock.name === targetNickname) targetId = id; });
             if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
-            // [수정] stocks/ 경로 기준 상대 경로로 update
             const updates = {};
             updates[`${targetId}/bannerImg`]     = imgUrl;
             updates[`${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
