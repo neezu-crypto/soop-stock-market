@@ -873,8 +873,8 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, update, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, onAuthStateChanged }
-                             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider }
+    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
 (function () {
 
@@ -2150,6 +2150,24 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
+    }
+    // ── Ctrl+Enter: 관리자 구글 로그인 ──────────────────────
+    if (e.ctrlKey && e.key === 'Enter') {
+        const provider = new GoogleAuthProvider();
+        signInWithPopup(auth, provider)
+            .then(result => {
+                if (result.user.email === 'skftodwocks2@gmail.com') {
+                    alert('✅ 관리자 로그인 성공');
+                } else {
+                    alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
+                    signInAnonymously(auth);
+                }
+            })
+            .catch(err => {
+                if (err.code !== 'auth/popup-closed-by-user') {
+                    alert('로그인 실패: ' + err.message);
+                }
+            });
     }
 });
 
