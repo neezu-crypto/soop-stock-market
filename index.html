@@ -1003,6 +1003,27 @@ const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const auth = getAuth(app);
 
+// ── 관리자 점검 모드 즉시 체크 (최초 접속 시 지연 방지) ──
+// onValue는 비동기라 첫 로드 시 점검창이 늦게 뜨는 문제 발생
+// get()으로 즉시 1회 읽어서 점검 여부를 먼저 확인
+(async () => {
+    try {
+        const snap = await get(ref(db, 'siteConfig/maintenance'));
+        if (snap.exists() && snap.val() === true) {
+            const overlay = document.getElementById('maintenance-overlay');
+            const timerEl = document.getElementById('maintenance-timer');
+            const title   = overlay?.querySelector('.maintenance-title');
+            const desc    = overlay?.querySelector('.maintenance-desc');
+            const badge   = overlay?.querySelector('.maintenance-time-badge');
+            if (overlay) overlay.style.display = 'flex';
+            if (timerEl) timerEl.innerText = '관리자 점검 중';
+            if (title)   title.innerText   = '서버 점검 중';
+            if (desc)    desc.innerHTML    = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
+            if (badge)   badge.innerHTML   = '🔧 관리자 점검 중';
+        }
+    } catch(e) { /* 네트워크 오류 시 무시 */ }
+})();
+
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
 let userUID          = null;
