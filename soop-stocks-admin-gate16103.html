@@ -285,6 +285,52 @@
         </div>
     </div>
 
+    <!-- ✂️ 액면분할 -->
+    <div class="container" style="display:block; border-color: #a855f7;">
+        <h1>✂️ 액면분할</h1>
+        <div class="info-box">
+            주가를 낮추고 유저 보유량을 비례해서 늘립니다.<br>
+            <span style="color:#a855f7;">유저 손익 변화 없이 주가만 낮아집니다.</span><br>
+            <span style="color:#ef4444;">⚠️ 전체 유저 데이터를 수정하므로 신중하게 실행하세요.</span>
+        </div>
+
+        <!-- 비율 선택 -->
+        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <button onclick="selectSplitRatio(2)"  id="split-btn-2"  style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">2:1</button>
+            <button onclick="selectSplitRatio(5)"  id="split-btn-5"  style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">5:1</button>
+            <button onclick="selectSplitRatio(10)" id="split-btn-10" style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">10:1</button>
+            <button onclick="selectSplitRatio(0)"  id="split-btn-custom" style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">직접입력</button>
+        </div>
+        <div id="split-custom-wrap" style="display:none; margin-bottom:14px;">
+            <div class="batch-control" style="margin-top:0;">
+                <input type="number" id="split-custom-ratio" placeholder="분할 비율 (예: 3)" min="2" max="100"
+                    style="background:#0f172a; border:1px solid #475569; color:#a855f7;">
+                <span style="color:#94a3b8; font-size:13px; white-space:nowrap;">: 1 분할</span>
+            </div>
+        </div>
+
+        <!-- 미리보기 -->
+        <div id="split-preview" style="display:none; background:#0f172a; border-radius:10px; padding:14px; margin-bottom:14px; border:1px solid #a855f7;">
+            <div style="font-size:13px; color:#a855f7; font-weight:700; margin-bottom:10px;">📊 분할 미리보기</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px;">
+                <div style="color:#94a3b8;">1위 주가</div>
+                <div id="preview-top1" style="color:#f8fafc; font-weight:700; text-align:right;">-</div>
+                <div style="color:#94a3b8;">→ 분할 후</div>
+                <div id="preview-top1-after" style="color:#a855f7; font-weight:700; text-align:right;">-</div>
+                <div style="color:#94a3b8; border-top:1px solid #334155; padding-top:8px;">보유 10주 유저</div>
+                <div id="preview-qty" style="color:#f8fafc; font-weight:700; text-align:right; border-top:1px solid #334155; padding-top:8px;">-</div>
+                <div style="color:#94a3b8;">→ 분할 후</div>
+                <div id="preview-qty-after" style="color:#a855f7; font-weight:700; text-align:right;">-</div>
+            </div>
+        </div>
+
+        <div id="split-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-success" style="flex:1;" onclick="previewSplit()">🔍 미리보기</button>
+            <button class="btn-primary" style="flex:2; margin-top:0; background:#a855f7; color:white;" onclick="executeSplit()">✂️ 액면분할 실행</button>
+        </div>
+    </div>
+
     <!-- 🧹 데이터 무결성 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
         <h1>🧹 데이터 무결성 관리</h1>
@@ -1007,6 +1053,128 @@
             }
         } catch (e) {
             alert("삭제 중 오류 발생: " + e.message);
+        }
+    };
+
+    // ── 액면분할 ─────────────────────────────────────────────
+    let splitRatio = 2;
+
+    window.selectSplitRatio = function(ratio) {
+        const btns = ['2','5','10','custom'];
+        btns.forEach(v => {
+            const btn = document.getElementById(`split-btn-${v}`);
+            if (btn) { btn.style.background = '#1e293b'; btn.style.color = '#94a3b8'; btn.style.border = '1px solid #334155'; }
+        });
+        const customWrap = document.getElementById('split-custom-wrap');
+        if (ratio === 0) {
+            document.getElementById('split-btn-custom').style.background = '#a855f7';
+            document.getElementById('split-btn-custom').style.color = 'white';
+            document.getElementById('split-btn-custom').style.border = 'none';
+            customWrap.style.display = 'block';
+            splitRatio = 0;
+        } else {
+            document.getElementById(`split-btn-${ratio}`).style.background = '#a855f7';
+            document.getElementById(`split-btn-${ratio}`).style.color = 'white';
+            document.getElementById(`split-btn-${ratio}`).style.border = 'none';
+            customWrap.style.display = 'none';
+            splitRatio = ratio;
+        }
+        document.getElementById('split-preview').style.display = 'none';
+    };
+
+    function getSelectedRatio() {
+        if (splitRatio === 0) {
+            const v = parseInt(document.getElementById('split-custom-ratio').value);
+            return isNaN(v) || v < 2 ? null : v;
+        }
+        return splitRatio;
+    }
+
+    window.previewSplit = async function() {
+        const ratio    = getSelectedRatio();
+        const statusEl = document.getElementById('split-status');
+        if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
+
+        statusEl.innerText = '데이터 조회 중...';
+        try {
+            const snap = await get(ref(db, 'stocks/'));
+            const data = snap.val() || {};
+
+            // 주가 1위 종목 찾기
+            const top1 = Object.values(data).sort((a, b) => (b.price || 0) - (a.price || 0))[0];
+            if (!top1) { statusEl.innerText = '종목 데이터 없음'; return; }
+
+            document.getElementById('preview-top1').innerText       = `${(top1.price || 0).toLocaleString()}원`;
+            document.getElementById('preview-top1-after').innerText = `${Math.round((top1.price || 0) / ratio).toLocaleString()}원`;
+            document.getElementById('preview-qty').innerText        = `10주 보유`;
+            document.getElementById('preview-qty-after').innerText  = `${10 * ratio}주 보유`;
+            document.getElementById('split-preview').style.display  = 'block';
+
+            statusEl.innerText = `${ratio}:1 분할 시 주가 1/${ratio}, 보유량 ×${ratio}`;
+        } catch(e) {
+            statusEl.innerText = '조회 실패: ' + e.message;
+        }
+    };
+
+    window.executeSplit = async function() {
+        const ratio    = getSelectedRatio();
+        const statusEl = document.getElementById('split-status');
+        if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
+
+        if (!confirm(
+            `⚠️ ${ratio}:1 액면분할을 실행하시겠습니까?\n\n` +
+            `· 전체 종목 주가 → 1/${ratio}\n` +
+            `· 전체 유저 보유량 → ×${ratio}\n` +
+            `· 전체 유저 평균단가 → 1/${ratio}\n\n` +
+            `유저 손익은 변하지 않으나 users/ 전체를 수정합니다.\n이 작업은 되돌릴 수 없습니다.`
+        )) return;
+
+        statusEl.innerText = '종목 주가 조정 중...';
+        try {
+            // ── 1단계: stocks/ 주가 분할 ──────────────────────
+            const stocksSnap = await get(ref(db, 'stocks/'));
+            const stocksData = stocksSnap.val() || {};
+            const stockUpdates = {};
+            Object.entries(stocksData).forEach(([id, s]) => {
+                const newPrice = Math.max(1, Math.round((s.price || 0) / ratio));
+                const history  = (s.history || [s.price]).map(p => Math.max(1, Math.round(p / ratio)));
+                stockUpdates[`stocks/${id}/price`]   = newPrice;
+                stockUpdates[`stocks/${id}/history`] = history;
+                stockUpdates[`stocks/${id}/change`]  = s.change || 0;
+            });
+            await update(ref(db), stockUpdates);
+            statusEl.innerText = `종목 주가 조정 완료 → 유저 데이터 조정 중...`;
+
+            // ── 2단계: users/ 보유량·평균단가 분할 ────────────
+            const usersSnap = await get(ref(db, 'users/'));
+            const usersData = usersSnap.val() || {};
+            const BATCH = 100; // 한 번에 100명씩 처리
+            const userIds = Object.keys(usersData);
+            let processed = 0;
+
+            for (let i = 0; i < userIds.length; i += BATCH) {
+                const batch   = userIds.slice(i, i + BATCH);
+                const updates = {};
+                batch.forEach(uid => {
+                    const user = usersData[uid];
+                    if (!user?.stocks) return;
+                    Object.entries(user.stocks).forEach(([stockId, info]) => {
+                        if (!info || !info.qty) return;
+                        updates[`users/${uid}/stocks/${stockId}/qty`] = info.qty * ratio;
+                        updates[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.round((info.avg || 0) / ratio));
+                    });
+                });
+                if (Object.keys(updates).length > 0) await update(ref(db), updates);
+                processed += batch.length;
+                statusEl.innerText = `유저 데이터 조정 중... (${processed}/${userIds.length}명)`;
+            }
+
+            statusEl.innerText = `✅ ${ratio}:1 액면분할 완료! (종목 ${Object.keys(stocksData).length}개, 유저 ${userIds.length}명 처리)`;
+            await loadStocksOnce();
+
+        } catch(e) {
+            statusEl.innerText = '실패: ' + e.message;
+            alert('액면분할 중 오류 발생: ' + e.message);
         }
     };
 
