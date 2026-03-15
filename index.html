@@ -1013,17 +1013,18 @@ const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const auth = getAuth(app);
 
+// ── siteConfig 상태 변수 (async 블록보다 먼저 선언) ─────────
+let siteConfig      = {};
+let siteConfigReady = false;
+
 // ── 관리자 점검 모드 + 시장 운영 시간 즉시 체크 ─────────────
 // onValue는 비동기라 첫 로드 시 오버레이가 늦게 뜨는 문제 발생
 // get()으로 즉시 1회 읽어서 마감/점검 여부를 먼저 확인
 // → siteConfig 수신 전에 인트로가 종료돼 거래화면이 노출되는 것 방지
-let siteConfigReady = false; // siteConfig 수신 완료 여부
-
 (async () => {
     try {
-        const snap = await get(ref(db, 'siteConfig/'));
-        const config = snap.val() || {};
-        siteConfig = config;
+        const snap   = await get(ref(db, 'siteConfig/'));
+        siteConfig   = snap.val() || {};
         siteConfigReady = true;
 
         const overlay = document.getElementById('maintenance-overlay');
@@ -1032,18 +1033,20 @@ let siteConfigReady = false; // siteConfig 수신 완료 여부
         const desc    = overlay?.querySelector('.maintenance-desc');
         const badge   = overlay?.querySelector('.maintenance-time-badge');
 
-        if (config.maintenance === true) {
+        if (siteConfig.maintenance === true) {
             if (overlay) overlay.style.display = 'flex';
             if (timerEl) timerEl.innerText = '관리자 점검 중';
             if (title)   title.innerText   = '서버 점검 중';
             if (desc)    desc.innerHTML    = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
             if (badge)   badge.innerHTML   = '🔧 관리자 점검 중';
         } else {
-            // 마감 시간 체크
             applyMarketState();
         }
+        // siteConfig 수신 완료 → 인트로 대기 중이었으면 즉시 updateUI 재시도
+        if (allStocks.length > 0) updateUI(true);
     } catch(e) {
-        siteConfigReady = true; // 오류 시에도 인트로 진행 허용
+        siteConfigReady = true;
+        if (allStocks.length > 0) updateUI(true);
     }
 })();
 
@@ -1057,7 +1060,6 @@ let isTrading        = false;
 let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
-let siteConfig       = {};
 let marketCheckTimer = null;
 
 // ══════════════════════════════════════════════════════════
@@ -1231,7 +1233,8 @@ function applyMarketState() {
             timerEl.innerText = `${h > 0 ? h + '시간 ' : ''}${m}분 후 (${mh.open} KST)`;
         }
     } else {
-        if (!isMaintenanceTime()) overlay.style.display = 'none';
+        // 마감/점검 아닌 경우 — 점검 오버레이만 숨김 (인트로 오버레이 건드리지 않음)
+        overlay.style.display = 'none';
     }
 
     // ── 시장 모드 안내 배너 업데이트 ────────────────────────
