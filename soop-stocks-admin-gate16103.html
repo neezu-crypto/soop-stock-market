@@ -97,7 +97,8 @@
     <div class="container" style="display:block; border-color: #f59e0b;">
         <h1>🕐 시장 운영 시간 관리</h1>
         <div class="info-box">
-            설정한 시간 외에는 메인 페이지에 마감 오버레이가 표시되고 거래가 차단됩니다.<br>
+            <b>전체 오픈 시간</b> — 거래 가능, 비실시간(30초 폴링) 모드<br>
+            <b>정규장 시간</b> — 전체 오픈 시간 내에서 실시간 거래 모드<br>
             <span style="color:#38bdf8;">기준 시각: 한국 표준시 (KST) · 매일 동일하게 적용됩니다.</span>
         </div>
 
@@ -105,7 +106,7 @@
         <div class="toggle-wrap">
             <div>
                 <div class="toggle-label">시장 시간 제한</div>
-                <div class="toggle-sub">OFF 시 24시간 거래 허용</div>
+                <div class="toggle-sub">OFF 시 24시간 실시간 거래 허용</div>
             </div>
             <label class="toggle-switch">
                 <input type="checkbox" id="market-hours-toggle" onchange="toggleMarketHours(this.checked)">
@@ -113,21 +114,46 @@
             </label>
         </div>
 
-        <!-- 시간 입력 — 토글 상태와 무관하게 항상 표시 -->
-        <div id="market-hours-form" style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
-            <div style="display:flex; gap:12px; align-items:center;">
-                <div style="flex:1;">
-                    <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">오픈 시각</div>
-                    <input type="time" id="market-open" value="09:00"
-                        style="width:100%; background:#0f172a; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:16px; outline:none;">
-                </div>
-                <div style="font-size:20px; color:#334155; margin-top:18px;">→</div>
-                <div style="flex:1;">
-                    <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">마감 시각</div>
-                    <input type="time" id="market-close" value="23:00"
-                        style="width:100%; background:#0f172a; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:16px; outline:none;">
+        <!-- 시간 입력 -->
+        <div id="market-hours-form" style="display:flex; flex-direction:column; gap:14px; margin-top:8px;">
+
+            <!-- 전체 오픈 시간 -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="font-size:13px; color:#f59e0b; font-weight:800; margin-bottom:10px;">🕐 전체 오픈 시간 (비실시간 거래)</div>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <div style="flex:1;">
+                        <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">오픈</div>
+                        <input type="time" id="market-open" value="18:00"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
+                    </div>
+                    <div style="font-size:18px; color:#334155; margin-top:18px;">→</div>
+                    <div style="flex:1;">
+                        <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">마감</div>
+                        <input type="time" id="market-close" value="06:00"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
+                    </div>
                 </div>
             </div>
+
+            <!-- 정규장 시간 -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="font-size:13px; color:#38bdf8; font-weight:800; margin-bottom:10px;">⚡ 정규장 시간 (실시간 거래)</div>
+                <div style="font-size:12px; color:#64748b; margin-bottom:10px;">전체 오픈 시간 내에서 실시간으로 주가가 반영되는 시간입니다.</div>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <div style="flex:1;">
+                        <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">정규장 시작</div>
+                        <input type="time" id="regular-open" value="20:00"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
+                    </div>
+                    <div style="font-size:18px; color:#334155; margin-top:18px;">→</div>
+                    <div style="flex:1;">
+                        <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">정규장 종료</div>
+                        <input type="time" id="regular-close" value="24:00"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
+                    </div>
+                </div>
+            </div>
+
             <button class="btn-primary" style="background:#f59e0b; color:#0f172a; margin-top:4px;" onclick="saveMarketHours()">
                 💾 시장 시간 저장
             </button>
@@ -1038,56 +1064,73 @@
             const snap = await get(ref(db, 'siteConfig/marketHours'));
             if (!snap.exists()) {
                 toggle.checked     = false;
-                statusEl.innerText = '설정 없음 (24시간 거래 허용)';
+                statusEl.innerText = '설정 없음 (24시간 실시간 거래 허용)';
                 return;
             }
             const data = snap.val();
             toggle.checked = !!data.enabled;
-            document.getElementById('market-open').value  = data.open  || '09:00';
-            document.getElementById('market-close').value = data.close || '23:00';
+            document.getElementById('market-open').value    = data.open         || '18:00';
+            document.getElementById('market-close').value   = data.close        || '06:00';
+            document.getElementById('regular-open').value   = data.regularOpen  || '20:00';
+            document.getElementById('regular-close').value  = data.regularClose || '24:00';
             renderMarketHoursStatus(data);
         } catch (e) {
             if (statusEl) statusEl.innerText = '불러오기 실패';
         }
     }
 
+    function isInRange(nowMins, openMins, closeMins) {
+        if (openMins < closeMins) return nowMins >= openMins && nowMins < closeMins;
+        return nowMins >= openMins || nowMins < closeMins; // 자정 넘김
+    }
+
     function renderMarketHoursStatus(data) {
         const statusEl = document.getElementById('market-hours-status');
         if (!statusEl) return;
         if (!data.enabled) {
-            statusEl.innerHTML = `<span style="color:#22c55e;">● 24시간 거래 허용 중</span>`;
+            statusEl.innerHTML = `<span style="color:#22c55e;">● 24시간 실시간 거래 허용 중</span>`;
             return;
         }
-        // 현재 KST 시각 기준으로 오픈 여부 판단 (자정 넘김 지원)
         const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
         const nowMins = now.getHours() * 60 + now.getMinutes();
-        const [oh, om] = (data.open  || '09:00').split(':').map(Number);
-        const [ch, cm] = (data.close || '23:00').split(':').map(Number);
-        const openMins  = oh * 60 + om;
-        const closeMins = ch * 60 + cm;
-        // 자정 넘김 여부에 따라 다르게 판단
-        const isOpen = openMins < closeMins
-            ? nowMins >= openMins && nowMins < closeMins
-            : nowMins >= openMins || nowMins < closeMins;
-        const isOvernight = openMins >= closeMins;
-        const timeLabel = isOvernight
-            ? `${data.open} ~ 익일 ${data.close} KST`
-            : `${data.open} ~ ${data.close} KST`;
-        statusEl.innerHTML = isOpen
-            ? `<span style="color:#22c55e;">● 시장 오픈 중</span> <span style="color:#94a3b8; font-size:12px;">${timeLabel}</span>`
-            : `<span style="color:#ef4444;">● 시장 마감 중</span> <span style="color:#94a3b8; font-size:12px;">${timeLabel}</span>`;
+
+        const [oh,  om]  = (data.open         || '18:00').split(':').map(Number);
+        const [ch,  cm]  = (data.close        || '06:00').split(':').map(Number);
+        const [roh, rom] = (data.regularOpen  || '20:00').split(':').map(Number);
+        const [rch, rcm] = (data.regularClose || '24:00').split(':').map(Number);
+
+        const openMins    = oh  * 60 + om;
+        const closeMins   = ch  * 60 + cm;
+        const rOpenMins   = roh * 60 + rom;
+        const rCloseMins  = rch * 60 + rcm;
+
+        const marketOpen   = isInRange(nowMins, openMins,  closeMins);
+        const regularOpen  = isInRange(nowMins, rOpenMins, rCloseMins);
+
+        const overnightTotal   = openMins  >= closeMins;
+        const overnightRegular = rOpenMins >= rCloseMins;
+        const totalLabel   = overnightTotal   ? `${data.open} ~ 익일 ${data.close}` : `${data.open} ~ ${data.close}`;
+        const regularLabel = overnightRegular ? `${data.regularOpen} ~ 익일 ${data.regularClose}` : `${data.regularOpen} ~ ${data.regularClose}`;
+
+        if (!marketOpen) {
+            statusEl.innerHTML = `<span style="color:#ef4444;">● 시장 마감 중</span> <span style="color:#64748b; font-size:12px;">전체: ${totalLabel} KST</span>`;
+        } else if (regularOpen) {
+            statusEl.innerHTML = `<span style="color:#38bdf8;">⚡ 정규장 진행 중</span> <span style="color:#64748b; font-size:12px;">정규장: ${regularLabel} KST</span>`;
+        } else {
+            statusEl.innerHTML = `<span style="color:#22c55e;">● 시장 오픈 중 (비실시간)</span> <span style="color:#64748b; font-size:12px;">정규장: ${regularLabel} KST</span>`;
+        }
     }
 
     window.toggleMarketHours = async function(enabled) {
         const toggle = document.getElementById('market-hours-toggle');
         try {
             const snap    = await get(ref(db, 'siteConfig/marketHours'));
-            const current = snap.exists() ? snap.val() : { open: '09:00', close: '23:00' };
+            const current = snap.exists() ? snap.val() : { open: '18:00', close: '06:00', regularOpen: '20:00', regularClose: '24:00' };
             await set(ref(db, 'siteConfig/marketHours'), { ...current, enabled });
             renderMarketHoursStatus({ ...current, enabled });
             alert(enabled
-                ? `✅ 시장 시간 제한이 활성화되었습니다.\n오픈: ${current.open} ~ 마감: ${current.close} KST`
-                : '✅ 시장 시간 제한이 해제되었습니다. (24시간 거래 허용)');
+                ? `✅ 시장 시간 제한이 활성화되었습니다.`
+                : '✅ 시장 시간 제한이 해제되었습니다. (24시간 실시간 거래 허용)');
         } catch (e) {
             alert('변경 실패: ' + e.message);
             toggle.checked = !enabled;
@@ -1095,23 +1138,35 @@
     };
 
     window.saveMarketHours = async function() {
-        const open  = document.getElementById('market-open').value;
-        const close = document.getElementById('market-close').value;
-        if (!open || !close) return alert('오픈/마감 시각을 모두 입력해주세요.');
-        if (open === close)  return alert('오픈 시각과 마감 시각이 같습니다.');
+        const open         = document.getElementById('market-open').value;
+        const close        = document.getElementById('market-close').value;
+        const regularOpen  = document.getElementById('regular-open').value;
+        const regularClose = document.getElementById('regular-close').value;
 
-        // 자정을 넘기는 케이스 안내 (예: 21:00 → 04:00)
-        const isOvernight = open > close;
-        const confirmMsg  = isOvernight
-            ? `시장 운영 시간을 저장하시겠습니까?\n\n오픈: ${open} KST\n마감: ${close} KST (익일)\n\n※ 자정을 넘기는 운영 시간입니다.`
-            : `시장 운영 시간을 저장하시겠습니까?\n\n오픈: ${open} KST\n마감: ${close} KST`;
+        if (!open || !close || !regularOpen || !regularClose)
+            return alert('모든 시각을 입력해주세요.');
+        if (open === close)
+            return alert('전체 오픈/마감 시각이 같습니다.');
+        if (regularOpen === regularClose)
+            return alert('정규장 시작/종료 시각이 같습니다.');
+
+        const overnightTotal   = open > close;
+        const overnightRegular = regularOpen > regularClose;
+
+        const confirmMsg =
+            `시장 운영 시간을 저장하시겠습니까?\n\n` +
+            `📌 전체 오픈: ${open} ~ ${overnightTotal ? '익일 ' : ''}${close} KST\n` +
+            `⚡ 정규장:   ${regularOpen} ~ ${overnightRegular ? '익일 ' : ''}${regularClose} KST`;
         if (!confirm(confirmMsg)) return;
+
         try {
             const snap    = await get(ref(db, 'siteConfig/marketHours'));
             const current = snap.exists() ? snap.val() : {};
-            await set(ref(db, 'siteConfig/marketHours'), { ...current, open, close });
-            renderMarketHoursStatus({ ...current, open, close });
-            alert(`✅ 시장 운영 시간이 저장되었습니다!\n오픈: ${open} KST ~ 마감: ${close} KST`);
+            await set(ref(db, 'siteConfig/marketHours'), {
+                ...current, open, close, regularOpen, regularClose
+            });
+            renderMarketHoursStatus({ ...current, open, close, regularOpen, regularClose });
+            alert(`✅ 시장 운영 시간이 저장되었습니다!`);
         } catch (e) {
             alert('저장 실패: ' + e.message);
         }
