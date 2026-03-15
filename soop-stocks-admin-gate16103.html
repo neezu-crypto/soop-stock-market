@@ -1126,12 +1126,19 @@
             `· 전체 종목 주가 → 1/${ratio}\n` +
             `· 전체 유저 보유량 → ×${ratio}\n` +
             `· 전체 유저 평균단가 → 1/${ratio}\n\n` +
-            `유저 손익은 변하지 않으나 users/ 전체를 수정합니다.\n이 작업은 되돌릴 수 없습니다.`
+            `※ 실행 중 자동으로 점검 모드가 켜지고\n  완료 후 자동으로 해제됩니다.\n\n` +
+            `이 작업은 되돌릴 수 없습니다.`
         )) return;
 
-        statusEl.innerText = '종목 주가 조정 중...';
         try {
+            // ── 0단계: 점검 모드 ON ───────────────────────────
+            statusEl.innerText = '🔴 점검 모드 활성화 중...';
+            await set(ref(db, 'siteConfig/maintenance'), true);
+            // 점검 모드 반영 대기 (유저들 거래 차단 확인)
+            await new Promise(r => setTimeout(r, 2000));
+
             // ── 1단계: stocks/ 주가 분할 ──────────────────────
+            statusEl.innerText = '종목 주가 조정 중...';
             const stocksSnap = await get(ref(db, 'stocks/'));
             const stocksData = stocksSnap.val() || {};
             const stockUpdates = {};
@@ -1143,12 +1150,12 @@
                 stockUpdates[`stocks/${id}/change`]  = s.change || 0;
             });
             await update(ref(db), stockUpdates);
-            statusEl.innerText = `종목 주가 조정 완료 → 유저 데이터 조정 중...`;
+            statusEl.innerText = '종목 주가 조정 완료 → 유저 데이터 조정 중...';
 
             // ── 2단계: users/ 보유량·평균단가 분할 ────────────
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
-            const BATCH = 100; // 한 번에 100명씩 처리
+            const BATCH = 100;
             const userIds = Object.keys(usersData);
             let processed = 0;
 
@@ -1169,11 +1176,20 @@
                 statusEl.innerText = `유저 데이터 조정 중... (${processed}/${userIds.length}명)`;
             }
 
+            // ── 3단계: 점검 모드 OFF ──────────────────────────
+            statusEl.innerText = '🟢 점검 모드 해제 중...';
+            await set(ref(db, 'siteConfig/maintenance'), false);
+
             statusEl.innerText = `✅ ${ratio}:1 액면분할 완료! (종목 ${Object.keys(stocksData).length}개, 유저 ${userIds.length}명 처리)`;
+
+            // 점검 모드 토글 UI 갱신
+            await loadMaintenanceStatus();
             await loadStocksOnce();
 
         } catch(e) {
-            statusEl.innerText = '실패: ' + e.message;
+            // 오류 발생 시에도 점검 모드 해제 시도
+            try { await set(ref(db, 'siteConfig/maintenance'), false); } catch(_) {}
+            statusEl.innerText = '❌ 실패: ' + e.message;
             alert('액면분할 중 오류 발생: ' + e.message);
         }
     };
