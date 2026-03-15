@@ -652,7 +652,7 @@
             </ul>
             <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
                 💡 파일 용량이 크다면?<br>
-                <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+                <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d2a1b9b4a6bdb6a5bdb1b9a1e092b5bfb3bbbefcb1bdbf">[email&#160;protected]</a></span> 으로 발송
             </p>
         </div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
@@ -814,7 +814,7 @@
                 <li>• 원하는 광고 기간 (일수)</li>
             </ul>
             <p style="font-size:12px;color:var(--text-sub);margin:8px 0 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
-                💡 파일이 크다면 <span style="color:#94a3b8;">skftodwocks2@gmail.com</span> 으로 발송
+                💡 파일이 크다면 <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2f5c44495b404b58404c445c1d6f48424e4643014c4042">[email&#160;protected]</a></span> 으로 발송
             </p>
         </div>
 
@@ -869,7 +869,7 @@
 <!-- ══════════════════════════════════════════
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
-<script type="module">
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, update, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
@@ -1162,7 +1162,13 @@ onAuthStateChanged(auth, async (user) => {
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
-                myData = { cash: serverData.cash ?? 1000000, stocks: serverData.stocks || {}, ...serverData };
+                // ...serverData를 앞에 두고 cash/stocks를 뒤에서 보정
+                // → serverData에 cash/stocks가 있으면 그대로, 없으면 기본값 적용
+                myData = {
+                    ...serverData,
+                    cash:   serverData.cash   ?? 1000000,
+                    stocks: serverData.stocks || {}
+                };
             } else {
                 if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
             }
@@ -1835,12 +1841,13 @@ window.trade = async function (id, type, qty = 1) {
             };
         });
 
-        // 트랜잭션 중단 사유 처리
-        if (abortReason === "잔액부족") { alert("잔액이 부족합니다!"); return; }
-        if (abortReason === "보유부족") { alert("보유 주식이 부족합니다!"); return; }
-        if (!userStockNew) return; // 트랜잭션 데이터 없음 (중단됨)
+        // 트랜잭션 중단 사유 처리 — throw로 finally 블록 항상 실행 보장
+        if (abortReason === "잔액부족") throw new Error("잔액부족");
+        if (abortReason === "보유부족") throw new Error("보유부족");
+        if (!userStockNew) throw new Error("트랜잭션중단");
 
         // 트랜잭션 성공 후 myData에 한 번만 반영
+        if (!myData.stocks) myData.stocks = {};
         myData.cash          = (myData.cash || 0) + cashDelta;
         myData.stocks[id]    = userStockNew;
 
@@ -1866,7 +1873,10 @@ window.trade = async function (id, type, qty = 1) {
         scheduleRankingUpdate(id, qtyDelta);
 
     } catch (error) {
-        alert("거래 중 오류가 발생했습니다.\n\n[디버그] " + error.message);
+        if (error.message === "잔액부족") alert("잔액이 부족합니다!");
+        else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
+        else if (error.message === "트랜잭션중단") { /* 정상 중단 — 알림 없음 */ }
+        else alert("거래 중 오류가 발생했습니다.\n\n[디버그] " + error.message);
     } finally {
         setTimeout(() => {
             isTrading = false;
