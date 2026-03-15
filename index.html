@@ -564,9 +564,79 @@
             font-size: 13px; color: #64748b; margin-top: 16px;
         }
         .maintenance-countdown span { color: #38bdf8; font-weight: 700; }
+
+        /* ── 계정 초기화 안내 모달 ── */
+        #account-warn-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.75);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 4000;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #account-warn-overlay.active {
+            opacity: 1; pointer-events: auto;
+        }
+        .account-warn-box {
+            background: #1e293b; border-radius: 20px;
+            border: 1px solid #334155;
+            padding: 28px 28px 24px;
+            width: 90%; max-width: 380px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .account-warn-icon { font-size: 36px; margin-bottom: 12px; text-align: center; }
+        .account-warn-title {
+            font-size: 17px; font-weight: 800; color: #f8fafc;
+            margin-bottom: 12px; text-align: center;
+        }
+        .account-warn-desc {
+            font-size: 13px; color: #94a3b8; line-height: 1.8;
+            margin-bottom: 20px; text-align: center;
+        }
+        .account-warn-desc b { color: #fbbf24; }
+        .account-warn-desc .safe { color: #4ade80; }
+        .btn-google-login {
+            width: 100%; display: flex; align-items: center; justify-content: center;
+            gap: 10px; background: white; color: #1e293b;
+            border: none; border-radius: 10px; padding: 12px;
+            font-size: 14px; font-weight: 800; cursor: pointer;
+            margin-bottom: 10px; transition: opacity 0.2s;
+        }
+        .btn-google-login:hover { opacity: 0.88; }
+        .btn-skip-login {
+            width: 100%; background: transparent; color: #f8fafc;
+            border: 1px solid #334155; border-radius: 10px;
+            padding: 10px; font-size: 13px; cursor: pointer;
+            transition: color 0.2s;
+        }
+        .btn-skip-login:hover { color: #94a3b8; }
     </style>
 </head>
 <body>
+
+<!-- ── 계정 초기화 안내 모달 ── -->
+<div id="account-warn-overlay">
+    <div class="account-warn-box">
+        <div class="account-warn-icon">⚠️</div>
+        <div class="account-warn-title">계정 데이터 보호 안내</div>
+        <div class="account-warn-desc">
+            <span style="display:inline-block; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-size:12px; font-weight:700; padding:5px 12px; border-radius:8px; margin-bottom:12px;">
+                🚨 현재 컴퓨터 재부팅 시 계정이 초기화되는 버그가 발생 중입니다.
+            </span><br>
+            현재 계정은 <b>브라우저 캐시 기반</b>으로 운영됩니다.<br>
+            컴퓨터 재부팅, 브라우저 캐시 삭제 시<br>
+            <b>보유 자산과 주식이 초기화</b>될 수 있습니다.<br><br>
+            <span class="safe">✅ 구글 로그인 시 데이터가 영구 보존됩니다.</span>
+        </div>
+        <button class="btn-google-login" onclick="loginWithGoogle()">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18">
+            구글 계정으로 데이터 보호하기
+        </button>
+        <button class="btn-skip-login" onclick="closeAccountWarn()">
+            괜찮아요, 익명으로 계속할게요
+        </button>
+    </div>
+</div>
 
 <!-- ── 정기점검 오버레이 ── -->
 <div id="maintenance-overlay" style="display:none;">
@@ -652,7 +722,7 @@
             </ul>
             <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
                 💡 파일 용량이 크다면?<br>
-                <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d2a1b9b4a6bdb6a5bdb1b9a1e092b5bfb3bbbefcb1bdbf">skftodwocks2&#64;gmail.com</a></span> 으로 발송
+                <span style="color:#94a3b8;">skftodwocks2&#64;gmail.com</span> 으로 발송
             </p>
         </div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
@@ -814,7 +884,7 @@
                 <li>• 원하는 광고 기간 (일수)</li>
             </ul>
             <p style="font-size:12px;color:var(--text-sub);margin:8px 0 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
-                💡 파일이 크다면 <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2f5c44495b404b58404c445c1d6f48424e4643014c4042">skftodwocks2&#64;gmail.com</a></span> 으로 발송
+                💡 파일이 크다면 <span style="color:#94a3b8;">skftodwocks2&#64;gmail.com</span> 으로 발송
             </p>
         </div>
 
@@ -869,12 +939,12 @@
 <!-- ══════════════════════════════════════════
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
+<script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, update, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, onAuthStateChanged }
-                             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider }
+    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
 (function () {
 
@@ -933,14 +1003,39 @@ const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const auth = getAuth(app);
 
+// ── 관리자 점검 모드 즉시 체크 (최초 접속 시 지연 방지) ──
+// onValue는 비동기라 첫 로드 시 점검창이 늦게 뜨는 문제 발생
+// get()으로 즉시 1회 읽어서 점검 여부를 먼저 확인
+(async () => {
+    try {
+        const snap = await get(ref(db, 'siteConfig/maintenance'));
+        if (snap.exists() && snap.val() === true) {
+            const overlay = document.getElementById('maintenance-overlay');
+            const timerEl = document.getElementById('maintenance-timer');
+            const title   = overlay?.querySelector('.maintenance-title');
+            const desc    = overlay?.querySelector('.maintenance-desc');
+            const badge   = overlay?.querySelector('.maintenance-time-badge');
+            if (overlay) overlay.style.display = 'flex';
+            if (timerEl) timerEl.innerText = '관리자 점검 중';
+            if (title)   title.innerText   = '서버 점검 중';
+            if (desc)    desc.innerHTML    = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
+            if (badge)   badge.innerHTML   = '🔧 관리자 점검 중';
+        }
+    } catch(e) { /* 네트워크 오류 시 무시 */ }
+})();
+
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
 let userUID          = null;
 let allStocks        = [];
+let allHistories     = {}; // stocksMeta/{id}/history 캐시
+let allBanners       = {}; // stocksBanner/{id} 캐시
 let isTrading        = false;
 let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
+let siteConfig       = {};
+let marketCheckTimer = null;
 
 // ══════════════════════════════════════════════════════════
 // 차트 모달 상태
@@ -990,33 +1085,6 @@ let pendingDeltas         = {};
 let lastRankingWriteTime  = 0;
 
 // ── rankings/top5 구독 ──────────────────────────────────────
-
-// 이미 접속 중인 사용자를 위한 점검 시간 주기 체크 (30초마다)
-setInterval(() => {
-    if (isMaintenanceTime()) {
-        location.reload();
-    }
-}, 30000);
-
-// ── 관리자 점검 모드 실시간 구독 ────────────────────────────
-// siteConfig/maintenance = true 시 즉시 점검 오버레이 표시
-onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
-    const isOn    = snap.exists() ? snap.val() : false;
-    const overlay = document.getElementById('maintenance-overlay');
-    if (!overlay) return;
-    if (isOn) {
-        overlay.style.display = 'flex';
-        // 타이머 표시 (시간 기반 점검과 동일 UI 재사용)
-        const timerEl = document.getElementById('maintenance-timer');
-        if (timerEl) timerEl.innerText = '관리자 점검 중';
-    } else {
-        // 관리자가 점검 해제 → 시간 기반 점검 중이 아니면 오버레이 닫기
-        if (!isMaintenanceTime()) {
-            overlay.style.display = 'none';
-        }
-    }
-});
-
 onValue(ref(db, 'rankings/top5'), (snap) => {
     if (!snap.exists()) {
         const rankDiv = document.getElementById('top-rankers');
@@ -1035,11 +1103,84 @@ function renderRankingFromCache(items) {
     }
     rankDiv.innerHTML = items.map(s => `
         <div class="rank-item">
-            <span class="rank-num">${s.rank}</span>
+            <span class="rank-num">${s.rank}위</span>
             <span class="rank-name">${s.name}</span>
-            <span class="rank-vol">총 ${s.totalQty.toLocaleString()}주</span>
+            <span class="rank-qty">총 ${s.totalQty?.toLocaleString() || 0}주</span>
         </div>
     `).join('');
+}
+
+// 이미 접속 중인 사용자를 위한 점검 시간 주기 체크 (30초마다)
+setInterval(() => {
+    if (isMaintenanceTime()) {
+        location.reload();
+    }
+}, 30000);
+
+// ── 관리자 점검 모드 실시간 구독 ────────────────────────────
+// ── siteConfig 통합 구독 (maintenance + marketHours) ────────
+onValue(ref(db, 'siteConfig/'), (snap) => {
+    siteConfig = snap.val() || {};
+    applyMarketState();
+});
+
+function isMarketOpen() {
+    const mh = siteConfig.marketHours;
+    if (!mh || !mh.enabled) return true;
+    const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const [oh, om] = (mh.open  || '00:00').split(':').map(Number);
+    const [ch, cm] = (mh.close || '23:59').split(':').map(Number);
+    const openMins  = oh * 60 + om;
+    const closeMins = ch * 60 + cm;
+    if (openMins < closeMins) return nowMins >= openMins && nowMins < closeMins;
+    return nowMins >= openMins || nowMins < closeMins;
+}
+
+function applyMarketState() {
+    const overlay = document.getElementById('maintenance-overlay');
+    const timerEl = document.getElementById('maintenance-timer');
+    if (!overlay) return;
+
+    const maintenance = !!siteConfig.maintenance;
+    const mh          = siteConfig.marketHours;
+    const marketOpen  = isMarketOpen();
+
+    if (maintenance) {
+        overlay.style.display = 'flex';
+        if (timerEl) timerEl.innerText = '관리자 점검 중';
+        const title = overlay.querySelector('.maintenance-title');
+        const desc  = overlay.querySelector('.maintenance-desc');
+        const badge = overlay.querySelector('.maintenance-time-badge');
+        if (title) title.innerText = '서버 점검 중';
+        if (desc)  desc.innerHTML  = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
+        if (badge) badge.innerHTML = '🔧 관리자 점검 중';
+
+    } else if (mh && mh.enabled && !marketOpen) {
+        overlay.style.display = 'flex';
+        const title = overlay.querySelector('.maintenance-title');
+        const desc  = overlay.querySelector('.maintenance-desc');
+        const badge = overlay.querySelector('.maintenance-time-badge');
+        if (title) title.innerText = '시장 마감 중';
+        if (desc)  desc.innerHTML  = '현재는 거래 시간이 아닙니다.<br>운영 시간에 다시 방문해 주세요.';
+        if (badge) badge.innerHTML = `🕐 시장 운영 시간: ${mh.open} ~ ${mh.close} KST`;
+        if (timerEl) {
+            const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+            const nowMins = now.getHours() * 60 + now.getMinutes();
+            const [oh, om] = (mh.open || '09:00').split(':').map(Number);
+            const openMins = oh * 60 + om;
+            let diff = openMins - nowMins;
+            if (diff <= 0) diff += 1440;
+            const h = Math.floor(diff / 60);
+            const m = diff % 60;
+            timerEl.innerText = `${h > 0 ? h + '시간 ' : ''}${m}분 후 (${mh.open} KST)`;
+        }
+    } else {
+        if (!isMaintenanceTime()) overlay.style.display = 'none';
+    }
+
+    if (marketCheckTimer) clearTimeout(marketCheckTimer);
+    marketCheckTimer = setTimeout(applyMarketState, 60000);
 }
 
 // ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
@@ -1101,6 +1242,8 @@ function selectStockForSearch(stockName) {
 }
 
 // ── UI 갱신 ──────────────────────────────────────────────────
+let accountWarnShown = false; // 안내창 1회만 표시
+
 function updateUI(isFullRender = true) {
     const cashDisplay = document.getElementById('my-cash');
     const overlay     = document.getElementById('intro-overlay');
@@ -1111,11 +1254,49 @@ function updateUI(isFullRender = true) {
     if (isFullRender && allStocks.length > 0) {
         renderStocks(document.getElementById('search-input')?.value || "");
         if (overlay && !overlay.classList.contains('hidden')) {
-            setTimeout(() => overlay.classList.add('hidden'), 500);
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                // 인트로 종료 후 익명 유저에게만 계정 안내창 표시
+                if (!accountWarnShown && auth.currentUser?.isAnonymous) {
+                    accountWarnShown = true;
+                    setTimeout(() => {
+                        document.getElementById('account-warn-overlay')?.classList.add('active');
+                    }, 600); // 인트로 페이드아웃 후 표시
+                }
+            }, 500);
         }
     }
-    // 모달은 열릴 때 스냅샷 가격을 표시하므로 실시간 갱신 없음
 }
+
+// ── 계정 안내 모달 ───────────────────────────────────────────
+window.closeAccountWarn = function() {
+    document.getElementById('account-warn-overlay')?.classList.remove('active');
+};
+
+window.loginWithGoogle = async function() {
+    try {
+        const provider = new GoogleAuthProvider();
+        const user     = auth.currentUser;
+
+        if (user?.isAnonymous) {
+            // 익명 계정에 구글 계정 연결 — UID 유지, 데이터 그대로 보존
+            await linkWithPopup(user, provider);
+            document.getElementById('account-warn-overlay')?.classList.remove('active');
+            alert('✅ 구글 계정이 연결됐습니다!\n\n이제 브라우저 캐시가 삭제되어도\n구글 로그인으로 데이터를 복원할 수 있습니다.');
+        } else {
+            // 이미 구글 로그인 상태
+            document.getElementById('account-warn-overlay')?.classList.remove('active');
+            alert('이미 구글 계정으로 로그인되어 있습니다.');
+        }
+    } catch (err) {
+        if (err.code === 'auth/popup-closed-by-user') return;
+        if (err.code === 'auth/credential-already-in-use') {
+            alert('⚠️ 이미 다른 계정에 연결된 구글 계정입니다.\n다른 구글 계정으로 시도해주세요.');
+        } else {
+            alert('연결 실패: ' + err.message);
+        }
+    }
+};
 
 // ── 5초 로딩 타임아웃 ────────────────────────────────────────
 setTimeout(() => {
@@ -1739,10 +1920,14 @@ window.trade = async function (id, type, qty = 1) {
     if (isTrading) return;
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
 
-    // 관리자 점검 모드 체크
-    const maintSnap = await get(ref(db, 'siteConfig/maintenance'));
-    if (maintSnap.exists() && maintSnap.val() === true) {
+    // 점검 모드 + 시장 마감 체크 (캐시 사용 — 추가 Firebase 읽기 없음)
+    if (siteConfig.maintenance === true) {
         alert('🔧 현재 점검 중입니다. 잠시 후 다시 이용해주세요.');
+        return;
+    }
+    if (!isMarketOpen()) {
+        const mh = siteConfig.marketHours;
+        alert(`🕐 현재 시장 마감 시간입니다.\n운영 시간: ${mh?.open || '--:--'} ~ ${mh?.close || '--:--'} KST`);
         return;
     }
 
@@ -1782,6 +1967,7 @@ window.trade = async function (id, type, qty = 1) {
     // 콜백 내부에서는 stocks 경로만 업데이트
     let cashDelta    = 0;  // 트랜잭션 성공 후 적용할 현금 변동액
     let userStockNew = null; // 트랜잭션 성공 후 적용할 보유 주식 정보
+    let historyToWrite = null; // 트랜잭션 후 stocksMeta/에 저장할 history
 
     try {
         let abortReason = null; // 트랜잭션 중단 사유
@@ -1832,6 +2018,8 @@ window.trade = async function (id, type, qty = 1) {
             history.push(newPrice);
             if (history.length > 20) history.shift();
 
+            historyToWrite = history; // stocksMeta/에 저장할 history
+
             return {
                 ...currentStock,
                 price:   newPrice,
@@ -1858,6 +2046,12 @@ window.trade = async function (id, type, qty = 1) {
             lastTradeTime:    serverTimestamp()
         });
 
+        // history → stocksMeta/ 별도 저장 (stocks/ 전송량 감소)
+        if (historyToWrite) {
+            allHistories[id] = historyToWrite;
+            set(ref(db, `stocksMeta/${id}/history`), historyToWrite).catch(() => {});
+        }
+
         // ── 분봉 업데이트 ─────────────────────────────────────
         if (finalPrice > 0) {
             updateCandlestick(id, finalPrice, qty).catch(e => {
@@ -1876,7 +2070,7 @@ window.trade = async function (id, type, qty = 1) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
         else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
         else if (error.message === "트랜잭션중단") { /* 정상 중단 — 알림 없음 */ }
-        else alert("거래 중 오류가 발생했습니다.\n\n[디버그] " + error.message);
+        else alert("거래 중 오류가 발생했습니다.");
     } finally {
         setTimeout(() => {
             isTrading = false;
@@ -1935,19 +2129,20 @@ function renderBanners() {
     if (!bannerList) return;
     const now = new Date();
 
-    // 1. 배너가 있는 항목만 필터링 및 남은 기간 계산
-    let activeBanners = allStocks
-        .filter(s => s.bannerImg)
-        .map(s => {
+    // stocksBanner 캐시 기반으로 배너 목록 구성
+    let activeBanners = Object.entries(allBanners)
+        .map(([id, banner]) => {
+            const stock = allStocks.find(s => s.id === id);
+            if (!stock || !banner.bannerImg) return null;
             let diffDays = Infinity;
-            if (s.bannerEndDate) {
-                const endDate = new Date(s.bannerEndDate);
+            if (banner.bannerEndDate) {
+                const endDate = new Date(banner.bannerEndDate);
                 endDate.setHours(23, 59, 59, 999);
                 diffDays = Math.ceil((endDate - now) / 86400000);
             }
-            return { ...s, diffDays };
+            return { ...stock, ...banner, id, diffDays };
         })
-        .filter(s => s.diffDays >= 0); // 기간 지난 배너 제외
+        .filter(s => s && s.diffDays >= 0);
 
     // 2. 유료(bannerIsPaid) 우선, 각 그룹 내에서 남은 기간 내림차순 정렬
     activeBanners.sort((a, b) => {
@@ -2081,9 +2276,24 @@ function updateCardContent(card, s, userStock) {
 }
 
 // ── 주식 데이터 실시간 리스너 ────────────────────────────────
+// ── 주식 데이터 실시간 리스너 ────────────────────────────────
+// stocks/ — price, change, name, volume 핵심 데이터만 수신
+// history는 stocksMeta/, 배너는 stocksBanner/ 캐시에서 병합
 onValue(ref(db, 'stocks/'), (snap) => {
     const data      = snap.val() || {};
-    const newStocks = Object.keys(data).map(key => ({ ...data[key], id: key }));
+    const newStocks = Object.keys(data).map(key => {
+        const s = { ...data[key], id: key };
+        // history: stocksMeta 캐시 우선, 없으면 stocks/ 값 사용
+        s.history = allHistories[key] || s.history || [s.price, s.price];
+        // 배너: stocksBanner 캐시 우선
+        if (allBanners[key]) {
+            s.bannerImg     = allBanners[key].bannerImg;
+            s.bannerEndDate = allBanners[key].bannerEndDate;
+            s.bannerIsPaid  = allBanners[key].bannerIsPaid;
+            s.link          = allBanners[key].link;
+        }
+        return s;
+    });
 
     if (allStocks.length === 0) {
         allStocks = newStocks;
@@ -2094,12 +2304,8 @@ onValue(ref(db, 'stocks/'), (snap) => {
             if (old && (old.price !== ns.price || old.change !== ns.change)) {
                 const card = stockElements[ns.id];
                 if (!card) return;
-
-                // 수량 입력창에 포커스 중이면 카드 업데이트 건너뜀
-                // → 입력 중 포커스 이탈 및 값 초기화 방지
                 const qtyInput = document.getElementById(`qty-${ns.id}`);
                 if (qtyInput && document.activeElement === qtyInput) return;
-
                 updateCardContent(card, ns, (myData?.stocks || {})[ns.id] || { qty: 0, avg: 0 });
             }
         });
@@ -2108,10 +2314,43 @@ onValue(ref(db, 'stocks/'), (snap) => {
 
     updateUI(false);
 
-    if (!isBannerRendered && allStocks.length > 0) {
+    if (!isBannerRendered && allStocks.length > 0 && Object.keys(allBanners).length > 0) {
         setTimeout(() => { renderBanners(); isBannerRendered = true; }, 100);
     }
 });
+
+// ── stocksMeta/ — history 별도 실시간 구독 ───────────────────
+onValue(ref(db, 'stocksMeta/'), (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.val();
+    Object.entries(data).forEach(([id, meta]) => {
+        if (meta?.history) {
+            allHistories[id] = meta.history;
+            const stock = allStocks.find(s => s.id === id);
+            if (stock) stock.history = meta.history;
+        }
+    });
+});
+
+// ── stocksBanner/ — 배너 최초 1회 로드 ───────────────────────
+get(ref(db, 'stocksBanner/')).then(snap => {
+    if (!snap.exists()) return;
+    const data = snap.val();
+    Object.entries(data).forEach(([id, banner]) => {
+        allBanners[id] = banner;
+        const stock = allStocks.find(s => s.id === id);
+        if (stock) {
+            stock.bannerImg     = banner.bannerImg;
+            stock.bannerEndDate = banner.bannerEndDate;
+            stock.bannerIsPaid  = banner.bannerIsPaid;
+            stock.link          = banner.link;
+        }
+    });
+    // stocksBanner 로드 완료 시 항상 재렌더링 (isBannerRendered 무관)
+    // → stocks/ onValue보다 늦게 도착해도 배너가 정상 표시됨
+    renderBanners();
+    isBannerRendered = true;
+}).catch(() => {});
 
 // ── 검색창 ───────────────────────────────────────────────────
 document.getElementById('search-input')?.addEventListener('input', () => updateUI(true));
@@ -2122,6 +2361,24 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
+    }
+    // ── Ctrl+Enter: 관리자 구글 로그인 ──────────────────────
+    if (e.ctrlKey && e.key === 'Enter') {
+        const provider = new GoogleAuthProvider();
+        signInWithPopup(auth, provider)
+            .then(result => {
+                if (result.user.email === 'skftodwocks2@gmail.com') {
+                    alert('✅ 관리자 로그인 성공');
+                } else {
+                    alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
+                    signInAnonymously(auth);
+                }
+            })
+            .catch(err => {
+                if (err.code !== 'auth/popup-closed-by-user') {
+                    alert('로그인 실패: ' + err.message);
+                }
+            });
     }
 });
 

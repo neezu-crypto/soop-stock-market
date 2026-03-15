@@ -93,6 +93,50 @@
         </div>
     </div>
 
+    <!-- 🕐 시장 운영 시간 관리 -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <h1>🕐 시장 운영 시간 관리</h1>
+        <div class="info-box">
+            설정한 시간 외에는 메인 페이지에 마감 오버레이가 표시되고 거래가 차단됩니다.<br>
+            <span style="color:#38bdf8;">기준 시각: 한국 표준시 (KST) · 매일 동일하게 적용됩니다.</span>
+        </div>
+
+        <!-- 활성화 토글 -->
+        <div class="toggle-wrap">
+            <div>
+                <div class="toggle-label">시장 시간 제한</div>
+                <div class="toggle-sub">OFF 시 24시간 거래 허용</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="market-hours-toggle" onchange="toggleMarketHours(this.checked)">
+                <span class="toggle-slider" style="--checked-color:#f59e0b;"></span>
+            </label>
+        </div>
+
+        <!-- 시간 입력 — 토글 상태와 무관하게 항상 표시 -->
+        <div id="market-hours-form" style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
+            <div style="display:flex; gap:12px; align-items:center;">
+                <div style="flex:1;">
+                    <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">오픈 시각</div>
+                    <input type="time" id="market-open" value="09:00"
+                        style="width:100%; background:#0f172a; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:16px; outline:none;">
+                </div>
+                <div style="font-size:20px; color:#334155; margin-top:18px;">→</div>
+                <div style="flex:1;">
+                    <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">마감 시각</div>
+                    <input type="time" id="market-close" value="23:00"
+                        style="width:100%; background:#0f172a; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:16px; outline:none;">
+                </div>
+            </div>
+            <button class="btn-primary" style="background:#f59e0b; color:#0f172a; margin-top:4px;" onclick="saveMarketHours()">
+                💾 시장 시간 저장
+            </button>
+        </div>
+
+        <!-- 현재 상태 -->
+        <div id="market-hours-status" style="font-size:13px; color:#94a3b8; margin-top:10px;"></div>
+    </div>
+
     <!-- 🏆 랭킹 TOP5 관리 -->
     <div class="container" style="display:block; border-color: #a855f7;">
         <h1>🏆 랭킹 TOP5 관리</h1>
@@ -278,20 +322,6 @@
         </div>
     </div>
 
-    <!-- 🟢 접속자 노드 정리 -->
-    <div class="container" style="display:block; border-color: #22c55e;">
-        <h1>🟢 접속자 노드 정리</h1>
-        <div class="info-box">
-            비정상 종료로 남은 좀비 presence 노드를 삭제합니다.<br>
-            <span style="color:#38bdf8;">30분 이상 된 노드를 만료로 판단하여 제거합니다.</span>
-        </div>
-        <div id="presence-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn-success" style="flex:1;" onclick="previewPresence()">🔍 노드 현황 확인</button>
-            <button class="btn-primary" style="flex:2; margin-top:0; background:#22c55e; color:#0f172a;" onclick="cleanupPresence()">🧹 만료 노드 삭제</button>
-        </div>
-    </div>
-
     <!-- 🚀 스트리머 상장 및 삭제 -->
     <div class="container" style="display:block">
         <h1>🚀 스트리머 상장 및 삭제</h1>
@@ -336,6 +366,19 @@
             <div id="banner-enddate-preview" style="font-size:12px; color:#64748b; text-align:right; margin-top:-4px;"></div>
             <button class="btn-primary" id="banner-submit-btn" onclick="window.addBannerToStock()">💰 유료 배너 등록</button>
         </div>
+    </div>
+
+    <!-- 🔄 배너 데이터 마이그레이션 -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <h1>🔄 배너 데이터 마이그레이션</h1>
+        <div class="info-box">
+            기존 <b>stocks/</b>에 저장된 배너 데이터를 <b>stocksBanner/</b> 경로로 복사합니다.<br>
+            <span style="color:#38bdf8;">최초 1회 실행 후 이후 배너 등록/수정은 자동으로 양쪽에 저장됩니다.</span>
+        </div>
+        <div id="migration-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <button class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="runBannerMigration()">
+            🔄 배너 데이터 복사 실행
+        </button>
     </div>
 
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
@@ -537,6 +580,7 @@
             await loadRankingStatus();
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
+            await loadMarketHours();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -635,7 +679,6 @@
             let deleted = 0;
             for (let i = 0; i < inactive.length; i += BATCH) {
                 const batch = inactive.slice(i, i + BATCH);
-                // [수정] users/ 경로 기준 상대 경로로 update
                 const updates = {};
                 batch.forEach(uid => { updates[uid] = null; });
                 await update(ref(db, 'users/'), updates);
@@ -643,43 +686,6 @@
                 statusEl.innerText = `삭제 중... (${deleted}/${inactive.length})`;
             }
             statusEl.innerText = `✅ ${inactive.length.toLocaleString()}명 삭제 완료`;
-        } catch(e) { statusEl.innerText = '삭제 실패: ' + e.message; }
-    };
-
-    // ── 접속자 노드 정리 ─────────────────────────────────────
-    window.previewPresence = async function() {
-        const statusEl = document.getElementById('presence-status');
-        statusEl.innerText = '확인 중...';
-        try {
-            const snap = await get(ref(db, 'presence/users'));
-            if (!snap.exists()) { statusEl.innerText = '노드 없음'; return; }
-            const now    = Date.now();
-            const cutoff = 30 * 60 * 1000;
-            const all    = Object.values(snap.val());
-            const valid  = all.filter(v => v && v.connectedAt && (now - v.connectedAt) < cutoff).length;
-            statusEl.innerText = `전체 ${all.length}개 노드 중 유효 ${valid}개 · 만료(좀비) ${all.length - valid}개`;
-        } catch(e) { statusEl.innerText = '확인 실패: ' + e.message; }
-    };
-
-    window.cleanupPresence = async function() {
-        const statusEl = document.getElementById('presence-status');
-        statusEl.innerText = '확인 중...';
-        try {
-            const snap = await get(ref(db, 'presence/users'));
-            if (!snap.exists()) { statusEl.innerText = '삭제할 노드 없음'; return; }
-            const now    = Date.now();
-            const cutoff = 30 * 60 * 1000;
-            const data   = snap.val();
-            const updates = {};
-            let count = 0;
-            Object.entries(data).forEach(([uid, v]) => {
-                if (!v || !v.connectedAt || (now - v.connectedAt) >= cutoff) { updates[uid] = null; count++; }
-            });
-            if (count === 0) { statusEl.innerText = '만료 노드 없음'; return; }
-            if (!confirm(`만료 노드 ${count}개를 삭제하시겠습니까?`)) return;
-            // [수정] presence/users/ 경로 기준 상대 경로로 update
-            await update(ref(db, 'presence/users/'), updates);
-            statusEl.innerText = `✅ ${count}개 만료 노드 삭제 완료`;
         } catch(e) { statusEl.innerText = '삭제 실패: ' + e.message; }
     };
 
@@ -711,7 +717,6 @@
         let history = oldStock.history || [oldStock.price];
         history.push(newPrice);
         if (history.length > 10) history.shift();
-        // [수정] stocks/ 경로 기준 상대 경로로 update
         const updates = {};
         updates[`${id}/price`]   = newPrice;
         updates[`${id}/history`] = history;
@@ -767,15 +772,25 @@
         const newLink   = document.getElementById('edit-stock-link').value.trim();
         const newDate   = document.getElementById('edit-stock-date').value.trim();
         if (isNaN(newPrice)) return alert("가격은 숫자여야 합니다.");
-        // [수정] stocks/ 경로 기준 상대 경로로 update
-        const updates = {};
-        updates[`${stockId}/price`]         = newPrice;
-        updates[`${stockId}/bannerImg`]     = newBanner;
-        updates[`${stockId}/link`]          = newLink;
-        updates[`${stockId}/bannerEndDate`] = newDate;
-        updates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
+
+        // stocks/ 업데이트 (가격 포함)
+        const stocksUpdates = {};
+        stocksUpdates[`${stockId}/price`]         = newPrice;
+        stocksUpdates[`${stockId}/bannerImg`]     = newBanner;
+        stocksUpdates[`${stockId}/link`]          = newLink;
+        stocksUpdates[`${stockId}/bannerEndDate`] = newDate;
+        stocksUpdates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
+
+        // stocksBanner/ 동시 쓰기 (배너 데이터만 분리 경로에도 저장)
+        const bannerUpdates = {};
+        bannerUpdates[`${stockId}/bannerImg`]     = newBanner;
+        bannerUpdates[`${stockId}/link`]          = newLink;
+        bannerUpdates[`${stockId}/bannerEndDate`] = newDate;
+        bannerUpdates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
+
         try {
-            await update(ref(db, 'stocks/'), updates);
+            await update(ref(db, 'stocks/'), stocksUpdates);
+            await update(ref(db, 'stocksBanner/'), bannerUpdates);
             alert(`✅ 종목 정보가 수정되었습니다!\n홍보 유형: ${editBannerIsPaid ? '💰 유료' : '🎁 무료'}`);
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-search-name').value = "";
@@ -820,7 +835,6 @@
             }
             if (duplicateFoundCount === 0) return alert("✅ 중복이 없습니다.");
             if (confirm(`${duplicateFoundCount}개의 중복 종목을 삭제하시겠습니까?`)) {
-                // [수정] stocks/ 경로 기준 상대 경로로 update
                 await update(ref(db, 'stocks/'), deleteUpdates);
                 alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
             }
@@ -858,7 +872,6 @@
             });
             if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
             if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
-                // [수정] stocks/ 경로 기준 상대 경로로 update
                 await update(ref(db, 'stocks/'), deleteUpdates);
                 alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
@@ -929,23 +942,18 @@
         )) return;
 
         try {
-            // ── 0단계: 점검 모드 ON ──────────────────────────
             statusEl.innerText = '🔴 점검 모드 활성화 중...';
             await set(ref(db, 'siteConfig/maintenance'), true);
             await new Promise(r => setTimeout(r, 2000));
 
-            // ── 1단계: stocks/ 주가 분할 ─────────────────────
             statusEl.innerText = '종목 주가 조정 중...';
             const stocksSnap = await get(ref(db, 'stocks/'));
             const stocksData = stocksSnap.val() || {};
-
             const top100Ids = new Set(
                 Object.entries(stocksData)
                     .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
                     .slice(0, 100).map(([id]) => id)
             );
-
-            // [수정] stocks/ 경로 기준 상대 경로로 update
             const stockUpdates = {};
             Object.entries(stocksData).forEach(([id, s]) => {
                 if (!top100Ids.has(id)) return;
@@ -958,16 +966,13 @@
             await update(ref(db, 'stocks/'), stockUpdates);
             statusEl.innerText = `종목 주가 조정 완료 (${top100Ids.size}개) → 유저 데이터 조정 중...`;
 
-            // ── 2단계: users/ 보유량·평균단가 분할 ───────────
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
             const BATCH     = 100;
             const userIds   = Object.keys(usersData);
             let processed   = 0;
-
             for (let i = 0; i < userIds.length; i += BATCH) {
                 const batch   = userIds.slice(i, i + BATCH);
-                // [수정] users/ 경로 기준 상대 경로로 update
                 const updates = {};
                 batch.forEach(uid => {
                     const user = usersData[uid];
@@ -983,7 +988,6 @@
                 statusEl.innerText = `유저 데이터 조정 중... (${processed}/${userIds.length}명)`;
             }
 
-            // ── 3단계: 점검 모드 OFF ─────────────────────────
             statusEl.innerText = '🟢 점검 모드 해제 중...';
             await set(ref(db, 'siteConfig/maintenance'), false);
             statusEl.innerText = `✅ ${ratio}:1 액면분할 완료! (top100 종목 ${top100Ids.size}개, 유저 ${userIds.length}명 처리)`;
@@ -1009,7 +1013,6 @@
                 .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
                 .slice(0, 100).map(([id]) => id);
             const multiplier = 1 + (percent / 100);
-            // [수정] stocks/ 경로 기준 상대 경로로 update
             const updates = {};
             top100.forEach(id => {
                 const oldPrice = data[id].price;
@@ -1025,6 +1028,93 @@
             alert(`🔥 주가 상위 100개 종목이 ${percent}% 조정되었습니다!`);
             await loadStocksOnce();
         } catch (e) { alert("오류 발생: " + e.message); }
+    };
+
+    // ── 시장 운영 시간 ───────────────────────────────────────
+    async function loadMarketHours() {
+        const toggle   = document.getElementById('market-hours-toggle');
+        const statusEl = document.getElementById('market-hours-status');
+        try {
+            const snap = await get(ref(db, 'siteConfig/marketHours'));
+            if (!snap.exists()) {
+                toggle.checked     = false;
+                statusEl.innerText = '설정 없음 (24시간 거래 허용)';
+                return;
+            }
+            const data = snap.val();
+            toggle.checked = !!data.enabled;
+            document.getElementById('market-open').value  = data.open  || '09:00';
+            document.getElementById('market-close').value = data.close || '23:00';
+            renderMarketHoursStatus(data);
+        } catch (e) {
+            if (statusEl) statusEl.innerText = '불러오기 실패';
+        }
+    }
+
+    function renderMarketHoursStatus(data) {
+        const statusEl = document.getElementById('market-hours-status');
+        if (!statusEl) return;
+        if (!data.enabled) {
+            statusEl.innerHTML = `<span style="color:#22c55e;">● 24시간 거래 허용 중</span>`;
+            return;
+        }
+        // 현재 KST 시각 기준으로 오픈 여부 판단 (자정 넘김 지원)
+        const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const [oh, om] = (data.open  || '09:00').split(':').map(Number);
+        const [ch, cm] = (data.close || '23:00').split(':').map(Number);
+        const openMins  = oh * 60 + om;
+        const closeMins = ch * 60 + cm;
+        // 자정 넘김 여부에 따라 다르게 판단
+        const isOpen = openMins < closeMins
+            ? nowMins >= openMins && nowMins < closeMins
+            : nowMins >= openMins || nowMins < closeMins;
+        const isOvernight = openMins >= closeMins;
+        const timeLabel = isOvernight
+            ? `${data.open} ~ 익일 ${data.close} KST`
+            : `${data.open} ~ ${data.close} KST`;
+        statusEl.innerHTML = isOpen
+            ? `<span style="color:#22c55e;">● 시장 오픈 중</span> <span style="color:#94a3b8; font-size:12px;">${timeLabel}</span>`
+            : `<span style="color:#ef4444;">● 시장 마감 중</span> <span style="color:#94a3b8; font-size:12px;">${timeLabel}</span>`;
+    }
+
+    window.toggleMarketHours = async function(enabled) {
+        const toggle = document.getElementById('market-hours-toggle');
+        try {
+            const snap    = await get(ref(db, 'siteConfig/marketHours'));
+            const current = snap.exists() ? snap.val() : { open: '09:00', close: '23:00' };
+            await set(ref(db, 'siteConfig/marketHours'), { ...current, enabled });
+            renderMarketHoursStatus({ ...current, enabled });
+            alert(enabled
+                ? `✅ 시장 시간 제한이 활성화되었습니다.\n오픈: ${current.open} ~ 마감: ${current.close} KST`
+                : '✅ 시장 시간 제한이 해제되었습니다. (24시간 거래 허용)');
+        } catch (e) {
+            alert('변경 실패: ' + e.message);
+            toggle.checked = !enabled;
+        }
+    };
+
+    window.saveMarketHours = async function() {
+        const open  = document.getElementById('market-open').value;
+        const close = document.getElementById('market-close').value;
+        if (!open || !close) return alert('오픈/마감 시각을 모두 입력해주세요.');
+        if (open === close)  return alert('오픈 시각과 마감 시각이 같습니다.');
+
+        // 자정을 넘기는 케이스 안내 (예: 21:00 → 04:00)
+        const isOvernight = open > close;
+        const confirmMsg  = isOvernight
+            ? `시장 운영 시간을 저장하시겠습니까?\n\n오픈: ${open} KST\n마감: ${close} KST (익일)\n\n※ 자정을 넘기는 운영 시간입니다.`
+            : `시장 운영 시간을 저장하시겠습니까?\n\n오픈: ${open} KST\n마감: ${close} KST`;
+        if (!confirm(confirmMsg)) return;
+        try {
+            const snap    = await get(ref(db, 'siteConfig/marketHours'));
+            const current = snap.exists() ? snap.val() : {};
+            await set(ref(db, 'siteConfig/marketHours'), { ...current, open, close });
+            renderMarketHoursStatus({ ...current, open, close });
+            alert(`✅ 시장 운영 시간이 저장되었습니다!\n오픈: ${open} KST ~ 마감: ${close} KST`);
+        } catch (e) {
+            alert('저장 실패: ' + e.message);
+        }
     };
 
     // ── 배너 탭 전환 ─────────────────────────────────────────
@@ -1085,17 +1175,58 @@
             let targetId = null;
             Object.entries(data).forEach(([id, stock]) => { if (stock.name === targetNickname) targetId = id; });
             if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
-            // [수정] stocks/ 경로 기준 상대 경로로 update
-            const updates = {};
-            updates[`${targetId}/bannerImg`]     = imgUrl;
-            updates[`${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
-            updates[`${targetId}/bannerEndDate`] = endDateStr;
-            updates[`${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
-            await update(ref(db, 'stocks/'), updates);
+            const stocksUpdates = {};
+            stocksUpdates[`${targetId}/bannerImg`]     = imgUrl;
+            stocksUpdates[`${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
+            stocksUpdates[`${targetId}/bannerEndDate`] = endDateStr;
+            stocksUpdates[`${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
+
+            const bannerUpdates = {};
+            bannerUpdates[`${targetId}/bannerImg`]     = imgUrl;
+            bannerUpdates[`${targetId}/link`]          = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
+            bannerUpdates[`${targetId}/bannerEndDate`] = endDateStr;
+            bannerUpdates[`${targetId}/bannerIsPaid`]  = bannerMode === 'paid';
+
+            await update(ref(db, 'stocks/'), stocksUpdates);
+            await update(ref(db, 'stocksBanner/'), bannerUpdates);
             alert(`✅ ${targetNickname} 종목에 ${bannerMode === 'paid' ? '유료' : '무료'} 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
             ['banner-nickname','banner-img-url','banner-link-url','banner-days'].forEach(id => { document.getElementById(id).value = ''; });
             document.getElementById('banner-enddate-preview').innerText = '';
         } catch (e) { alert("배너 추가 중 오류 발생: " + e.message); }
+    };
+    // ── 배너 마이그레이션: stocks/ → stocksBanner/ ───────────
+    window.runBannerMigration = async function() {
+        const statusEl = document.getElementById('migration-status');
+        if (!confirm('stocks/의 배너 데이터를 stocksBanner/로 복사합니다.\n계속하시겠습니까?')) return;
+        statusEl.style.color = '#f59e0b';
+        statusEl.innerText   = '⏳ 데이터 읽는 중...';
+        try {
+            const snap = await get(ref(db, 'stocks/'));
+            if (!snap.exists()) { statusEl.innerText = '❌ stocks/ 데이터 없음'; return; }
+            const data    = snap.val();
+            const updates = {};
+            let count     = 0;
+            Object.entries(data).forEach(([id, stock]) => {
+                if (!stock.bannerImg) return;
+                updates[`${id}/bannerImg`]     = stock.bannerImg;
+                updates[`${id}/link`]          = stock.link || `https://www.sooplive.co.kr/station/${id}`;
+                updates[`${id}/bannerEndDate`] = stock.bannerEndDate || '';
+                updates[`${id}/bannerIsPaid`]  = stock.bannerIsPaid !== false;
+                count++;
+            });
+            if (count === 0) {
+                statusEl.style.color = '#94a3b8';
+                statusEl.innerText   = '✅ 복사할 배너 데이터가 없습니다.';
+                return;
+            }
+            statusEl.innerText = `⏳ ${count}개 종목 복사 중...`;
+            await update(ref(db, 'stocksBanner/'), updates);
+            statusEl.style.color = '#22c55e';
+            statusEl.innerText   = `✅ 완료! ${count}개 종목의 배너 데이터가 stocksBanner/로 복사됐습니다.`;
+        } catch (e) {
+            statusEl.style.color = '#ef4444';
+            statusEl.innerText   = '❌ 오류: ' + e.message;
+        }
     };
 </script>
 </body>
