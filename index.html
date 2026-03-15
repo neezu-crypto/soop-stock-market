@@ -564,9 +564,79 @@
             font-size: 13px; color: #64748b; margin-top: 16px;
         }
         .maintenance-countdown span { color: #38bdf8; font-weight: 700; }
+
+        /* ── 계정 초기화 안내 모달 ── */
+        #account-warn-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.75);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 4000;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #account-warn-overlay.active {
+            opacity: 1; pointer-events: auto;
+        }
+        .account-warn-box {
+            background: #1e293b; border-radius: 20px;
+            border: 1px solid #334155;
+            padding: 28px 28px 24px;
+            width: 90%; max-width: 380px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .account-warn-icon { font-size: 36px; margin-bottom: 12px; text-align: center; }
+        .account-warn-title {
+            font-size: 17px; font-weight: 800; color: #f8fafc;
+            margin-bottom: 12px; text-align: center;
+        }
+        .account-warn-desc {
+            font-size: 13px; color: #94a3b8; line-height: 1.8;
+            margin-bottom: 20px; text-align: center;
+        }
+        .account-warn-desc b { color: #fbbf24; }
+        .account-warn-desc .safe { color: #4ade80; }
+        .btn-google-login {
+            width: 100%; display: flex; align-items: center; justify-content: center;
+            gap: 10px; background: white; color: #1e293b;
+            border: none; border-radius: 10px; padding: 12px;
+            font-size: 14px; font-weight: 800; cursor: pointer;
+            margin-bottom: 10px; transition: opacity 0.2s;
+        }
+        .btn-google-login:hover { opacity: 0.88; }
+        .btn-skip-login {
+            width: 100%; background: transparent; color: #f8fafc;
+            border: 1px solid #334155; border-radius: 10px;
+            padding: 10px; font-size: 13px; cursor: pointer;
+            transition: color 0.2s;
+        }
+        .btn-skip-login:hover { color: #94a3b8; }
     </style>
 </head>
 <body>
+
+<!-- ── 계정 초기화 안내 모달 ── -->
+<div id="account-warn-overlay">
+    <div class="account-warn-box">
+        <div class="account-warn-icon">⚠️</div>
+        <div class="account-warn-title">계정 데이터 보호 안내</div>
+        <div class="account-warn-desc">
+            <span style="display:inline-block; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-size:12px; font-weight:700; padding:5px 12px; border-radius:8px; margin-bottom:12px;">
+                🚨 현재 컴퓨터 재부팅 시 계정이 초기화되는 버그가 발생 중입니다.
+            </span><br>
+            현재 계정은 <b>브라우저 캐시 기반</b>으로 운영됩니다.<br>
+            컴퓨터 재부팅, 브라우저 캐시 삭제 시<br>
+            <b>보유 자산과 주식이 초기화</b>될 수 있습니다.<br><br>
+            <span class="safe">✅ 구글 로그인 시 데이터가 영구 보존됩니다.</span>
+        </div>
+        <button class="btn-google-login" onclick="loginWithGoogle()">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18">
+            구글 계정으로 데이터 보호하기
+        </button>
+        <button class="btn-skip-login" onclick="closeAccountWarn()">
+            괜찮아요, 익명으로 계속할게요
+        </button>
+    </div>
+</div>
 
 <!-- ── 정기점검 오버레이 ── -->
 <div id="maintenance-overlay" style="display:none;">
@@ -652,7 +722,7 @@
             </ul>
             <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
                 💡 파일 용량이 크다면?<br>
-                <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d2a1b9b4a6bdb6a5bdb1b9a1e092b5bfb3bbbefcb1bdbf">skftodwocks2&#64;gmail.com</a></span> 으로 발송
+                <span style="color:#94a3b8;">skftodwocks2&#64;gmail.com</span> 으로 발송
             </p>
         </div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
@@ -814,7 +884,7 @@
                 <li>• 원하는 광고 기간 (일수)</li>
             </ul>
             <p style="font-size:12px;color:var(--text-sub);margin:8px 0 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
-                💡 파일이 크다면 <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2f5c44495b404b58404c445c1d6f48424e4643014c4042">skftodwocks2&#64;gmail.com</a></span> 으로 발송
+                💡 파일이 크다면 <span style="color:#94a3b8;">skftodwocks2&#64;gmail.com</span> 으로 발송
             </p>
         </div>
 
@@ -869,11 +939,11 @@
 <!-- ══════════════════════════════════════════
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
+<script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, update, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider }
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider }
     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
 (function () {
@@ -1151,6 +1221,8 @@ function selectStockForSearch(stockName) {
 }
 
 // ── UI 갱신 ──────────────────────────────────────────────────
+let accountWarnShown = false; // 안내창 1회만 표시
+
 function updateUI(isFullRender = true) {
     const cashDisplay = document.getElementById('my-cash');
     const overlay     = document.getElementById('intro-overlay');
@@ -1161,11 +1233,49 @@ function updateUI(isFullRender = true) {
     if (isFullRender && allStocks.length > 0) {
         renderStocks(document.getElementById('search-input')?.value || "");
         if (overlay && !overlay.classList.contains('hidden')) {
-            setTimeout(() => overlay.classList.add('hidden'), 500);
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                // 인트로 종료 후 익명 유저에게만 계정 안내창 표시
+                if (!accountWarnShown && auth.currentUser?.isAnonymous) {
+                    accountWarnShown = true;
+                    setTimeout(() => {
+                        document.getElementById('account-warn-overlay')?.classList.add('active');
+                    }, 600); // 인트로 페이드아웃 후 표시
+                }
+            }, 500);
         }
     }
-    // 모달은 열릴 때 스냅샷 가격을 표시하므로 실시간 갱신 없음
 }
+
+// ── 계정 안내 모달 ───────────────────────────────────────────
+window.closeAccountWarn = function() {
+    document.getElementById('account-warn-overlay')?.classList.remove('active');
+};
+
+window.loginWithGoogle = async function() {
+    try {
+        const provider = new GoogleAuthProvider();
+        const user     = auth.currentUser;
+
+        if (user?.isAnonymous) {
+            // 익명 계정에 구글 계정 연결 — UID 유지, 데이터 그대로 보존
+            await linkWithPopup(user, provider);
+            document.getElementById('account-warn-overlay')?.classList.remove('active');
+            alert('✅ 구글 계정이 연결됐습니다!\n\n이제 브라우저 캐시가 삭제되어도\n구글 로그인으로 데이터를 복원할 수 있습니다.');
+        } else {
+            // 이미 구글 로그인 상태
+            document.getElementById('account-warn-overlay')?.classList.remove('active');
+            alert('이미 구글 계정으로 로그인되어 있습니다.');
+        }
+    } catch (err) {
+        if (err.code === 'auth/popup-closed-by-user') return;
+        if (err.code === 'auth/credential-already-in-use') {
+            alert('⚠️ 이미 다른 계정에 연결된 구글 계정입니다.\n다른 구글 계정으로 시도해주세요.');
+        } else {
+            alert('연결 실패: ' + err.message);
+        }
+    }
+};
 
 // ── 5초 로딩 타임아웃 ────────────────────────────────────────
 setTimeout(() => {
@@ -1939,7 +2049,7 @@ window.trade = async function (id, type, qty = 1) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
         else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
         else if (error.message === "트랜잭션중단") { /* 정상 중단 — 알림 없음 */ }
-        else alert("거래 중 오류가 발생했습니다.\n\n[디버그] " + error.message);
+        else alert("거래 중 오류가 발생했습니다.");
     } finally {
         setTimeout(() => {
             isTrading = false;
