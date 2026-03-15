@@ -113,8 +113,8 @@
             </label>
         </div>
 
-        <!-- 시간 입력 -->
-        <div id="market-hours-form" style="display:none; flex-direction:column; gap:10px; margin-top:4px;">
+        <!-- 시간 입력 — 토글 상태와 무관하게 항상 표시 -->
+        <div id="market-hours-form" style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
             <div style="display:flex; gap:12px; align-items:center;">
                 <div style="flex:1;">
                     <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">오픈 시각</div>
@@ -1033,13 +1033,11 @@
     // ── 시장 운영 시간 ───────────────────────────────────────
     async function loadMarketHours() {
         const toggle   = document.getElementById('market-hours-toggle');
-        const form     = document.getElementById('market-hours-form');
         const statusEl = document.getElementById('market-hours-status');
         try {
             const snap = await get(ref(db, 'siteConfig/marketHours'));
             if (!snap.exists()) {
                 toggle.checked     = false;
-                form.style.display = 'none';
                 statusEl.innerText = '설정 없음 (24시간 거래 허용)';
                 return;
             }
@@ -1047,7 +1045,6 @@
             toggle.checked = !!data.enabled;
             document.getElementById('market-open').value  = data.open  || '09:00';
             document.getElementById('market-close').value = data.close || '23:00';
-            form.style.display = data.enabled ? 'flex' : 'none';
             renderMarketHoursStatus(data);
         } catch (e) {
             if (statusEl) statusEl.innerText = '불러오기 실패';
@@ -1076,12 +1073,10 @@
 
     window.toggleMarketHours = async function(enabled) {
         const toggle = document.getElementById('market-hours-toggle');
-        const form   = document.getElementById('market-hours-form');
         try {
             const snap    = await get(ref(db, 'siteConfig/marketHours'));
             const current = snap.exists() ? snap.val() : { open: '09:00', close: '23:00' };
             await set(ref(db, 'siteConfig/marketHours'), { ...current, enabled });
-            form.style.display = enabled ? 'flex' : 'none';
             renderMarketHoursStatus({ ...current, enabled });
             alert(enabled
                 ? `✅ 시장 시간 제한이 활성화되었습니다.\n오픈: ${current.open} ~ 마감: ${current.close} KST`
