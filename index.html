@@ -1013,25 +1013,38 @@ const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const auth = getAuth(app);
 
-// ── 관리자 점검 모드 즉시 체크 (최초 접속 시 지연 방지) ──
-// onValue는 비동기라 첫 로드 시 점검창이 늦게 뜨는 문제 발생
-// get()으로 즉시 1회 읽어서 점검 여부를 먼저 확인
+// ── 관리자 점검 모드 + 시장 운영 시간 즉시 체크 ─────────────
+// onValue는 비동기라 첫 로드 시 오버레이가 늦게 뜨는 문제 발생
+// get()으로 즉시 1회 읽어서 마감/점검 여부를 먼저 확인
+// → siteConfig 수신 전에 인트로가 종료돼 거래화면이 노출되는 것 방지
+let siteConfigReady = false; // siteConfig 수신 완료 여부
+
 (async () => {
     try {
-        const snap = await get(ref(db, 'siteConfig/maintenance'));
-        if (snap.exists() && snap.val() === true) {
-            const overlay = document.getElementById('maintenance-overlay');
-            const timerEl = document.getElementById('maintenance-timer');
-            const title   = overlay?.querySelector('.maintenance-title');
-            const desc    = overlay?.querySelector('.maintenance-desc');
-            const badge   = overlay?.querySelector('.maintenance-time-badge');
+        const snap = await get(ref(db, 'siteConfig/'));
+        const config = snap.val() || {};
+        siteConfig = config;
+        siteConfigReady = true;
+
+        const overlay = document.getElementById('maintenance-overlay');
+        const timerEl = document.getElementById('maintenance-timer');
+        const title   = overlay?.querySelector('.maintenance-title');
+        const desc    = overlay?.querySelector('.maintenance-desc');
+        const badge   = overlay?.querySelector('.maintenance-time-badge');
+
+        if (config.maintenance === true) {
             if (overlay) overlay.style.display = 'flex';
             if (timerEl) timerEl.innerText = '관리자 점검 중';
             if (title)   title.innerText   = '서버 점검 중';
             if (desc)    desc.innerHTML    = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
             if (badge)   badge.innerHTML   = '🔧 관리자 점검 중';
+        } else {
+            // 마감 시간 체크
+            applyMarketState();
         }
-    } catch(e) { /* 네트워크 오류 시 무시 */ }
+    } catch(e) {
+        siteConfigReady = true; // 오류 시에도 인트로 진행 허용
+    }
 })();
 
 // ── 상태 ────────────────────────────────────────────────────
@@ -1327,6 +1340,8 @@ function updateUI(isFullRender = true) {
     if (isFullRender && allStocks.length > 0) {
         renderStocks(document.getElementById('search-input')?.value || "");
         if (overlay && !overlay.classList.contains('hidden')) {
+            // siteConfig 수신 완료 전까지 인트로 유지 → 마감 화면 노출 방지
+            if (!siteConfigReady) return;
             setTimeout(() => {
                 overlay.classList.add('hidden');
                 // 인트로 종료 후 익명 유저에게만 계정 안내창 표시
