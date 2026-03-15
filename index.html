@@ -652,7 +652,7 @@
             </ul>
             <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
                 💡 파일 용량이 크다면?<br>
-                <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ee9d85889a818a99818d859ddcae89838f8782c08d8183">[email&#160;protected]</a></span> 으로 발송
+                <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d2a1b9b4a6bdb6a5bdb1b9a1e092b5bfb3bbbefcb1bdbf">skftodwocks2&#64;gmail.com</a></span> 으로 발송
             </p>
         </div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
@@ -814,7 +814,7 @@
                 <li>• 원하는 광고 기간 (일수)</li>
             </ul>
             <p style="font-size:12px;color:var(--text-sub);margin:8px 0 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
-                💡 파일이 크다면 <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ccbfa7aab8a3a8bba3afa7bffe8caba1ada5a0e2afa3a1">[email&#160;protected]</a></span> 으로 발송
+                💡 파일이 크다면 <span style="color:#94a3b8;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2f5c44495b404b58404c445c1d6f48424e4643014c4042">skftodwocks2&#64;gmail.com</a></span> 으로 발송
             </p>
         </div>
 
@@ -869,9 +869,9 @@
 <!-- ══════════════════════════════════════════
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
+import { getDatabase, ref, onValue, runTransaction, get, set, update, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
@@ -1162,7 +1162,13 @@ onAuthStateChanged(auth, async (user) => {
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
-                myData = { cash: serverData.cash ?? 1000000, stocks: serverData.stocks || {}, ...serverData };
+                // ...serverData를 앞에 두고 cash/stocks를 뒤에서 보정
+                // → serverData에 cash/stocks가 있으면 그대로, 없으면 기본값 적용
+                myData = {
+                    ...serverData,
+                    cash:   serverData.cash   ?? 1000000,
+                    stocks: serverData.stocks || {}
+                };
             } else {
                 if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
             }
@@ -1245,36 +1251,69 @@ async function flushRankingUpdate() {
 
 /**
  * 현재 분(분 단위 UNIX timestamp, 초 단위)을 반환
- * 예: 14:37 → 14:37:00 의 UNIX 초
  */
 function currentMinuteTs() {
     return Math.floor(Date.now() / 60000) * 60;
 }
 
+// ── 분봉 로컬 버퍼 ───────────────────────────────────────────
+// 같은 분(minute) 내 거래를 메모리에서 합산 후 Firebase에 1회만 write
+// { stockId: { ts, o, h, l, c, v, timer } }
+const candleBuffer = {};
+
 /**
- * 거래 발생 시 해당 종목의 분봉 업데이트
- * candlesticks/{stockId}/{minuteTs} = { o, h, l, c, v, t }
+ * 거래 발생 시 분봉 버퍼에 누적 → 1초 디바운스 후 Firebase write
+ * 같은 분 내 10번 거래해도 Firebase write는 1회
  */
 async function updateCandlestick(stockId, tradePrice, qty) {
-    const ts       = currentMinuteTs();
-    const candleRef = ref(db, `candlesticks/${stockId}/${ts}`);
+    const ts  = currentMinuteTs();
+    const buf = candleBuffer[stockId];
 
-    await runTransaction(candleRef, (current) => {
-        if (!current) {
-            // 새 분봉 시작
-            return { o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, t: ts };
-        }
-        return {
-            ...current,
-            h: Math.max(current.h, tradePrice),
-            l: Math.min(current.l, tradePrice),
-            c: tradePrice,
-            v: current.v + qty,
-            t: ts
-        };
-    });
+    if (buf && buf.ts === ts) {
+        // 같은 분 — 로컬 버퍼에만 합산
+        buf.h  = Math.max(buf.h, tradePrice);
+        buf.l  = Math.min(buf.l, tradePrice);
+        buf.c  = tradePrice;
+        buf.v += qty;
+    } else {
+        // 새 분봉 시작 — 버퍼 초기화
+        if (buf?.timer) clearTimeout(buf.timer);
+        candleBuffer[stockId] = { ts, o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty };
+    }
 
-    // 6시간(360분) 초과 구간 정리 (오래된 캔들 삭제)
+    // 기존 타이머 취소 후 1초 뒤 write 예약 (디바운스)
+    if (candleBuffer[stockId].timer) clearTimeout(candleBuffer[stockId].timer);
+    candleBuffer[stockId].timer = setTimeout(() => flushCandlestick(stockId), 1000);
+}
+
+/**
+ * 버퍼 내용을 Firebase에 실제로 write
+ */
+async function flushCandlestick(stockId) {
+    const buf = candleBuffer[stockId];
+    if (!buf) return;
+
+    const candleRef = ref(db, `candlesticks/${stockId}/${buf.ts}`);
+    try {
+        await runTransaction(candleRef, (current) => {
+            if (!current) {
+                return { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts };
+            }
+            return {
+                ...current,
+                h: Math.max(current.h, buf.h),
+                l: Math.min(current.l, buf.l),
+                c: buf.c,
+                v: current.v + buf.v,
+                t: buf.ts
+            };
+        });
+        // write 성공 후 버퍼 볼륨 초기화 (다음 거래가 오면 새로 누적)
+        buf.v = 0;
+    } catch (e) {
+        console.warn('[candle] flush 실패 (무시):', e.message);
+    }
+
     pruneOldCandles(stockId);
 }
 
@@ -1681,6 +1720,14 @@ window.smartClampQty = function(el, stockId, type) {
 
 // ── 거래 함수 ────────────────────────────────────────────────
 window.trade = async function (id, type, qty = 1) {
+
+    // 공지 종목 거래 차단
+    const stockInfo = allStocks.find(s => s.id === id);
+    if (stockInfo?.name?.includes('[공지]')) {
+        alert('📢 공지 종목은 거래할 수 없습니다.');
+        return;
+    }
+
     const currentTime  = Date.now();
     const cooldownTime = 1000;
 
@@ -1723,7 +1770,7 @@ window.trade = async function (id, type, qty = 1) {
 
     const stockRef = ref(db, `stocks/${id}`);
     const userRef  = ref(db, `users/${userUID}`);
-    const impact   = 0.001 * Math.log2(1 + qty);
+    const impact   = 0.0005 * Math.log2(1 + qty);
     const spread   = 0.0005;
     const fee      = 0.003;
 
@@ -1737,10 +1784,12 @@ window.trade = async function (id, type, qty = 1) {
     let userStockNew = null; // 트랜잭션 성공 후 적용할 보유 주식 정보
 
     try {
+        let abortReason = null; // 트랜잭션 중단 사유
+
         await runTransaction(stockRef, (currentStock) => {
             if (!currentStock) return currentStock;
 
-            // 콜백 내부에서는 myData 수정 없이 계산만 수행
+            abortReason = null;
             let finalTradePrice, newPrice;
             const prevPrice = currentStock.price;
 
@@ -1748,7 +1797,11 @@ window.trade = async function (id, type, qty = 1) {
                 newPrice        = Math.round(prevPrice * (1 + impact));
                 finalTradePrice = Math.round(newPrice * (1 + spread));
                 const totalBuyPrice = finalTradePrice * qty;
-                if ((myData.cash || 0) < totalBuyPrice) throw new Error("잔액부족");
+
+                if ((myData.cash || 0) < totalBuyPrice) {
+                    abortReason = "잔액부족";
+                    return; // undefined 반환 → 트랜잭션 중단
+                }
 
                 const userStock  = myData.stocks[id] || { qty: 0, avg: 0 };
                 const totalCost  = (userStock.qty * userStock.avg) + totalBuyPrice;
@@ -1759,7 +1812,11 @@ window.trade = async function (id, type, qty = 1) {
                 finalPrice   = finalTradePrice;
             } else {
                 const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                if (userStock.qty < qty) throw new Error("보유부족");
+
+                if (userStock.qty < qty) {
+                    abortReason = "보유부족";
+                    return; // undefined 반환 → 트랜잭션 중단
+                }
 
                 newPrice        = Math.round(prevPrice * (1 - impact));
                 finalTradePrice = Math.round(newPrice * (1 - spread));
@@ -1780,18 +1837,28 @@ window.trade = async function (id, type, qty = 1) {
                 price:   newPrice,
                 history: history,
                 volume:  (currentStock.volume || 0) + qty,
-                // 버그3 수정 — 직전 가격(prevPrice) 대비 변동률
                 change:  (((newPrice - prevPrice) / prevPrice) * 100).toFixed(2)
             };
         });
 
+        // 트랜잭션 중단 사유 처리 — throw로 finally 블록 항상 실행 보장
+        if (abortReason === "잔액부족") throw new Error("잔액부족");
+        if (abortReason === "보유부족") throw new Error("보유부족");
+        if (!userStockNew) throw new Error("트랜잭션중단");
+
         // 트랜잭션 성공 후 myData에 한 번만 반영
+        if (!myData.stocks) myData.stocks = {};
         myData.cash          = (myData.cash || 0) + cashDelta;
         myData.stocks[id]    = userStockNew;
 
-        await set(userRef, { ...myData, lastTradeTime: serverTimestamp() });
+        // update() — 변경된 필드만 전송 (데이터 절약)
+        await update(userRef, {
+            cash:             myData.cash,
+            [`stocks/${id}`]: userStockNew,
+            lastTradeTime:    serverTimestamp()
+        });
 
-        // ── 분봉 업데이트 (신규) ──────────────────────────────
+        // ── 분봉 업데이트 ─────────────────────────────────────
         if (finalPrice > 0) {
             updateCandlestick(id, finalPrice, qty).catch(e => {
                 console.warn('[candle] 분봉 업데이트 실패 (무시):', e.message);
@@ -1808,7 +1875,8 @@ window.trade = async function (id, type, qty = 1) {
     } catch (error) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
         else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
-        else alert("거래 중 오류가 발생했습니다.");
+        else if (error.message === "트랜잭션중단") { /* 정상 중단 — 알림 없음 */ }
+        else alert("거래 중 오류가 발생했습니다.\n\n[디버그] " + error.message);
     } finally {
         setTimeout(() => {
             isTrading = false;
@@ -1881,8 +1949,13 @@ function renderBanners() {
         })
         .filter(s => s.diffDays >= 0); // 기간 지난 배너 제외
 
-    // 2. 남은 기간(diffDays)이 큰 순서대로 정렬 (내림차순)
-    activeBanners.sort((a, b) => b.diffDays - a.diffDays);
+    // 2. 유료(bannerIsPaid) 우선, 각 그룹 내에서 남은 기간 내림차순 정렬
+    activeBanners.sort((a, b) => {
+        const aPaid = a.bannerIsPaid === true;
+        const bPaid = b.bannerIsPaid === true;
+        if (aPaid !== bPaid) return bPaid - aPaid; // 유료 먼저
+        return b.diffDays - a.diffDays;            // 같은 그룹 내 남은 기간 내림차순
+    });
 
     // 3. 문의하기 버튼 항상 최상단 고정
     bannerList.innerHTML = `
