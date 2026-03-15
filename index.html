@@ -2314,7 +2314,7 @@ onValue(ref(db, 'stocks/'), (snap) => {
 
     updateUI(false);
 
-    if (!isBannerRendered && allStocks.length > 0) {
+    if (!isBannerRendered && allStocks.length > 0 && Object.keys(allBanners).length > 0) {
         setTimeout(() => { renderBanners(); isBannerRendered = true; }, 100);
     }
 });
@@ -2346,7 +2346,10 @@ get(ref(db, 'stocksBanner/')).then(snap => {
             stock.link          = banner.link;
         }
     });
-    if (allStocks.length > 0) { renderBanners(); isBannerRendered = true; }
+    // stocksBanner 로드 완료 시 항상 재렌더링 (isBannerRendered 무관)
+    // → stocks/ onValue보다 늦게 도착해도 배너가 정상 표시됨
+    renderBanners();
+    isBannerRendered = true;
 }).catch(() => {});
 
 // ── 검색창 ───────────────────────────────────────────────────
