@@ -994,6 +994,30 @@ let pendingDeltas         = {};
 let lastRankingWriteTime  = 0;
 
 // ── rankings/top5 구독 ──────────────────────────────────────
+onValue(ref(db, 'rankings/top5'), (snap) => {
+    if (!snap.exists()) {
+        const rankDiv = document.getElementById('top-rankers');
+        if (rankDiv) rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">집계 데이터 없음</span>`;
+        return;
+    }
+    renderRankingFromCache(snap.val().items || []);
+});
+
+function renderRankingFromCache(items) {
+    const rankDiv = document.getElementById('top-rankers');
+    if (!rankDiv) return;
+    if (items.length === 0) {
+        rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">보유 데이터 없음</span>`;
+        return;
+    }
+    rankDiv.innerHTML = items.map(s => `
+        <div class="rank-item">
+            <span class="rank-num">${s.rank}위</span>
+            <span class="rank-name">${s.name}</span>
+            <span class="rank-qty">총 ${s.totalQty?.toLocaleString() || 0}주</span>
+        </div>
+    `).join('');
+}
 
 // 이미 접속 중인 사용자를 위한 점검 시간 주기 체크 (30초마다)
 setInterval(() => {
