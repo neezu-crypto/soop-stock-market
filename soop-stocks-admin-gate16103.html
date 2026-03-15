@@ -291,6 +291,7 @@
         <div class="info-box">
             주가를 낮추고 유저 보유량을 비례해서 늘립니다.<br>
             <span style="color:#a855f7;">유저 손익 변화 없이 주가만 낮아집니다.</span><br>
+            <span style="color:#38bdf8;">※ 주가 상위 100위 이내 종목만 적용됩니다.</span><br>
             <span style="color:#ef4444;">⚠️ 전체 유저 데이터를 수정하므로 신중하게 실행하세요.</span>
         </div>
 
@@ -1137,12 +1138,22 @@
             // 점검 모드 반영 대기 (유저들 거래 차단 확인)
             await new Promise(r => setTimeout(r, 2000));
 
-            // ── 1단계: stocks/ 주가 분할 ──────────────────────
+            // ── 1단계: stocks/ 주가 분할 (top100만 적용) ──────
             statusEl.innerText = '종목 주가 조정 중...';
             const stocksSnap = await get(ref(db, 'stocks/'));
             const stocksData = stocksSnap.val() || {};
+
+            // 주가 내림차순 정렬 후 상위 100개 ID만 추출
+            const top100Ids = new Set(
+                Object.entries(stocksData)
+                    .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
+                    .slice(0, 100)
+                    .map(([id]) => id)
+            );
+
             const stockUpdates = {};
             Object.entries(stocksData).forEach(([id, s]) => {
+                if (!top100Ids.has(id)) return; // top100 외 종목 제외
                 const newPrice = Math.max(1, Math.round((s.price || 0) / ratio));
                 const history  = (s.history || [s.price]).map(p => Math.max(1, Math.round(p / ratio)));
                 stockUpdates[`stocks/${id}/price`]   = newPrice;
@@ -1150,9 +1161,9 @@
                 stockUpdates[`stocks/${id}/change`]  = s.change || 0;
             });
             await update(ref(db), stockUpdates);
-            statusEl.innerText = '종목 주가 조정 완료 → 유저 데이터 조정 중...';
+            statusEl.innerText = `종목 주가 조정 완료 (${top100Ids.size}개) → 유저 데이터 조정 중...`;
 
-            // ── 2단계: users/ 보유량·평균단가 분할 ────────────
+            // ── 2단계: users/ 보유량·평균단가 분할 (top100만) ─
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
             const BATCH = 100;
@@ -1167,6 +1178,7 @@
                     if (!user?.stocks) return;
                     Object.entries(user.stocks).forEach(([stockId, info]) => {
                         if (!info || !info.qty) return;
+                        if (!top100Ids.has(stockId)) return; // top100 외 종목 제외
                         updates[`users/${uid}/stocks/${stockId}/qty`] = info.qty * ratio;
                         updates[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.round((info.avg || 0) / ratio));
                     });
@@ -1180,7 +1192,7 @@
             statusEl.innerText = '🟢 점검 모드 해제 중...';
             await set(ref(db, 'siteConfig/maintenance'), false);
 
-            statusEl.innerText = `✅ ${ratio}:1 액면분할 완료! (종목 ${Object.keys(stocksData).length}개, 유저 ${userIds.length}명 처리)`;
+            statusEl.innerText = `✅ ${ratio}:1 액면분할 완료! (top100 종목 ${top100Ids.size}개, 유저 ${userIds.length}명 처리)`;
 
             // 점검 모드 토글 UI 갱신
             await loadMaintenanceStatus();
