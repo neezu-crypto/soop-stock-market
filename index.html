@@ -2146,6 +2146,9 @@ window.smartClampQty = function(el, stockId, type) {
 // ── 거래 함수 ────────────────────────────────────────────────
 window.trade = async function (id, type, qty = 1) {
 
+	// 0. 관리자 여부 확인 (Firebase Auth 기준)
+    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+
     // 공지 종목 거래 차단
     const stockInfo = allStocks.find(s => s.id === id);
     if (stockInfo?.name?.includes('[공지]')) {
@@ -2160,13 +2163,14 @@ window.trade = async function (id, type, qty = 1) {
     // 서킷 브레이크 발동 
     const cb = circuitBreakerState[id];
 
-    if (cb && cb.frozenUntil > currentTime) {
+    if (cb && cb.frozenUntil > currentTime && !isAdmin) {
         const remain = Math.ceil((cb.frozenUntil - currentTime) / 1000);
         alert(`🚫 서킷브레이커 발동 중! (${remain}초 후 해제)`);
         return;
     }
 
-    if (currentTime - lastTradeTime < cooldownTime) {
+    // 3. 매매 쿨타임 제한 (관리자는 무시)
+    if (!isAdmin && (currentTime - lastTradeTime < cooldownTime)) {
         const remaining = Math.ceil((cooldownTime - (currentTime - lastTradeTime)) / 1000);
         alert(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
         return;
@@ -2174,12 +2178,13 @@ window.trade = async function (id, type, qty = 1) {
     if (isTrading) return;
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
 
-    // 점검 모드 + 시장 마감 체크 (캐시 사용 — 추가 Firebase 읽기 없음)
-    if (siteConfig.maintenance === true) {
+    // 4. 점검 모드 + 시장 마감 체크 (관리자는 무시)
+    if (siteConfig.maintenance === true && !isAdmin) {
         alert('🔧 현재 점검 중입니다. 잠시 후 다시 이용해주세요.');
         return;
     }
-    if (!isMarketOpen()) {
+	
+    if (!isMarketOpen() && !isAdmin) {
         const mh = siteConfig.marketHours;
         alert(`🕐 현재 시장 마감 시간입니다.\n운영 시간: ${mh?.open || '--:--'} ~ ${mh?.close || '--:--'} KST`);
         return;
