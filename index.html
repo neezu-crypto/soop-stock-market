@@ -903,6 +903,31 @@
 
 <!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
+
+<!-- ── 로그아웃 버튼 ── -->
+    <div style="display:flex; justify-content:flex-end; margin-bottom: 8px; padding: 0 4px;">
+        <button onclick="logout()" style="
+            background: rgba(239, 68, 68, 0.1); 
+            color: #ef4444; 
+            border: 1px solid rgba(239, 68, 68, 0.3); 
+            padding: 5px 12px; 
+            border-radius: 6px; 
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent; /* 모바일 터치 시 잔상 방지 */
+        " onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'" 
+           onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'">
+            <span>로그아웃</span>
+            <span style="font-size: 10px;">➔</span>
+        </button>
+    </div>
+
+<!-- ── 지갑 영역 ── -->
     <div class="wallet-bar">
         <div style="display:flex; align-items:center; gap:12px;">
             <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
@@ -912,7 +937,7 @@
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
             <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
             <div style="font-size:12px;color:var(--text-sub);">
-                🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
+                🟢 실시간 접속 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>
             </div>
         </div>
     </div>
@@ -1042,6 +1067,13 @@ let stockElements    = {};
 let lastTradeTime    = 0;
 let marketCheckTimer = null;
 
+// ── 서킷브레이커(CB) 및 거래량 상태 ──────────────────────────
+// 종목별 서킷브레이커 상태 관리 (동결 시간, 마지막 발동 시각, 예약 타이머)
+const circuitBreakerState = {}; 
+
+// 종목별 최근 거래량 추적 (서버 연동 전 개인 브라우저 체킹용)
+const stockTradeTracker = {};
+
 // ══════════════════════════════════════════════════════════
 // 차트 모달 상태
 // ══════════════════════════════════════════════════════════
@@ -1125,11 +1157,14 @@ setInterval(() => {
 // ── siteConfig 실시간 구독 ───────────────────────────────────
 onValue(ref(db, 'siteConfig/'), (snap) => {
     siteConfig = snap.val() || {};
-    applyMarketState();
-    if (!siteConfigReady) {
-        siteConfigReady = true;
-        tryCloseIntro();
-    }
+    siteConfigReady = true;
+
+    console.log("⚙️ 설정 변경 감지, 현재 시간 기준 모드 재설정");
+    
+    // 설정이 바뀔 때마다 현재 시간이 정규장인지 체크하여 
+    // 리스너를 새로 붙이거나 떼는 작업을 강제로 수행
+    applyMarketState(); 
+    tryCloseIntro();
 });
 
 function isMarketOpen() {
@@ -1170,68 +1205,78 @@ function applyMarketState() {
     const mh          = siteConfig.marketHours;
     const marketOpen  = isMarketOpen();
 
-    // 관리자는 마감/점검 오버레이 표시 안 함
+    // ── 1. 관리자 계정: 모든 제한 우회 ────────────────────────
     if (isAdmin) {
         overlay.style.display = 'none';
+        // 관리자는 항상 실시간 데이터를 수신하도록 설정
+        startStocksRealtime(); 
+        
         if (marketCheckTimer) clearTimeout(marketCheckTimer);
         marketCheckTimer = setTimeout(applyMarketState, 60000);
         return;
     }
 
-    if (maintenance) {
-        overlay.style.display = 'flex';
-        setTimeout(() => overlay.focus(), 100);
-        if (timerEl) timerEl.innerText = '관리자 점검 중';
-        const title = overlay.querySelector('.maintenance-title');
-        const desc  = overlay.querySelector('.maintenance-desc');
-        const badge = overlay.querySelector('.maintenance-time-badge');
-        if (title) title.innerText = '서버 점검 중';
-        if (desc)  desc.innerHTML  = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
-        if (badge) badge.innerHTML = '🔧 관리자 점검 중';
+    // ── 2. 점검 중 또는 시장 마감 상태 ────────────────────────
+    if (maintenance || (mh && mh.enabled && !marketOpen)) {
+        // [핵심] 시장이 닫혔으므로 모든 데이터 구독(실시간/폴링)을 즉시 중단
+        stopAllStocksSubscriptions();
 
-    } else if (mh && mh.enabled && !marketOpen) {
         overlay.style.display = 'flex';
         setTimeout(() => overlay.focus(), 100);
+        
         const title = overlay.querySelector('.maintenance-title');
         const desc  = overlay.querySelector('.maintenance-desc');
         const badge = overlay.querySelector('.maintenance-time-badge');
 
-        // 자정 넘김 여부 처리
-        const overnightTotal   = mh.open > mh.close;
-        const overnightRegular = mh.regularOpen && mh.regularClose && mh.regularOpen > mh.regularClose;
-        const totalLabel   = overnightTotal
-            ? `${mh.open} ~ 익일 ${mh.close}`
-            : `${mh.open} ~ ${mh.close}`;
-        const regularLabel = (mh.regularOpen && mh.regularClose)
-            ? (overnightRegular ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}` : `${mh.regularOpen} ~ ${mh.regularClose}`)
-            : null;
+        if (maintenance) {
+            // 점검 중 UI
+            if (timerEl) timerEl.innerText = '관리자 점검 중';
+            if (title) title.innerText = '서버 점검 중';
+            if (desc)  desc.innerHTML  = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
+            if (badge) badge.innerHTML = '🔧 관리자 점검 중';
+        } else {
+            // 시장 마감 UI
+            const overnightTotal   = mh.open > mh.close;
+            const overnightRegular = mh.regularOpen && mh.regularClose && mh.regularOpen > mh.regularClose;
+            const totalLabel   = overnightTotal ? `${mh.open} ~ 익일 ${mh.close}` : `${mh.open} ~ ${mh.close}`;
+            const regularLabel = (mh.regularOpen && mh.regularClose)
+                ? (overnightRegular ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}` : `${mh.regularOpen} ~ ${mh.regularClose}`)
+                : null;
 
-        if (title) title.innerText = '시장 마감 중';
-        if (desc) desc.innerHTML =
-            `현재는 거래 시간이 아닙니다.<br>운영 시간에 다시 방문해 주세요.<br><br>` +
-            `<span style="color:#94a3b8; font-size:13px;">` +
-            `📌 전체 오픈: <b style="color:#f8fafc;">${totalLabel} KST</b><br>` +
-            (regularLabel ? `⚡ 정규장: <b style="color:#38bdf8;">${regularLabel} KST</b>` : '') +
-            `</span>`;
-        if (badge) badge.innerHTML = `🕐 시장 운영 시간: ${totalLabel} KST`;
+            if (title) title.innerText = '시장 마감 중';
+            if (desc) desc.innerHTML =
+                `현재는 거래 시간이 아닙니다.<br>운영 시간에 다시 방문해 주세요.<br><br>` +
+                `<span style="color:#94a3b8; font-size:13px;">` +
+                `📌 전체 오픈: <b style="color:#f8fafc;">${totalLabel} KST</b><br>` +
+                (regularLabel ? `⚡ 정규장: <b style="color:#38bdf8;">${regularLabel} KST</b>` : '') +
+                `</span>`;
+            if (badge) badge.innerHTML = `🕐 시장 운영 시간: ${totalLabel} KST`;
 
-        if (timerEl) {
-            const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
-            const nowMins = now.getHours() * 60 + now.getMinutes();
-            const [oh, om] = (mh.open || '18:00').split(':').map(Number);
-            const openMins = oh * 60 + om;
-            let diff = openMins - nowMins;
-            if (diff <= 0) diff += 1440;
-            const h = Math.floor(diff / 60);
-            const m = diff % 60;
-            timerEl.innerText = `${h > 0 ? h + '시간 ' : ''}${m}분 후 (${mh.open} KST)`;
+            if (timerEl) {
+                const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+                const nowMins = now.getHours() * 60 + now.getMinutes();
+                const [oh, om] = (mh.open || '18:00').split(':').map(Number);
+                const openMins = oh * 60 + om;
+                let diff = openMins - nowMins;
+                if (diff <= 0) diff += 1440;
+                const h = Math.floor(diff / 60);
+                const m = diff % 60;
+                timerEl.innerText = `${h > 0 ? h + '시간 ' : ''}${m}분 후 (${mh.open} KST)`;
+            }
         }
     } else {
-        // 마감/점검 아닌 경우 — 점검 오버레이만 숨김 (인트로 오버레이 건드리지 않음)
+        // ── 3. 시장 운영 중: 모드별 데이터 구독 제어 ────────────────
         overlay.style.display = 'none';
+
+        // [핵심] 정규장 여부에 따라 실시간/폴링 모드를 강제로 전환
+        if (isRegularMarket()) {
+            startStocksRealtime(); // 실시간 구독 시작 (함수 내부에서 기존 것 삭제 후 시작)
+        } else {
+            startStocksPolling();  // 30초 폴링 시작 (함수 내부에서 실시간 구독 삭제)
+        }
     }
 
-    // ── 시장 모드 안내 배너 업데이트 ────────────────────────
+    // ── 4. 시장 모드 안내 배너 UI 업데이트 ────────────────────────
     const modeBanner = document.getElementById('market-mode-banner');
     if (modeBanner) {
         if (!mh || !mh.enabled || !marketOpen) {
@@ -1241,6 +1286,7 @@ function applyMarketState() {
             const rLabel = overnightR
                 ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}`
                 : `${mh.regularOpen} ~ ${mh.regularClose}`;
+            
             modeBanner.style.display = 'block';
             modeBanner.style.background = 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(56,189,248,0.05))';
             modeBanner.style.border = '1px solid rgba(56,189,248,0.4)';
@@ -1255,6 +1301,7 @@ function applyMarketState() {
             const rLabel = (mh.regularOpen && mh.regularClose)
                 ? (overnightR ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}` : `${mh.regularOpen} ~ ${mh.regularClose}`)
                 : null;
+            
             modeBanner.style.display = 'block';
             modeBanner.style.background = 'linear-gradient(135deg, rgba(251,191,36,0.12), rgba(251,191,36,0.04))';
             modeBanner.style.border = '1px solid rgba(251,191,36,0.35)';
@@ -1265,6 +1312,7 @@ function applyMarketState() {
         }
     }
 
+    // 1분마다 상태 재검토 (시간 경과에 따른 자동 모드 전환용)
     if (marketCheckTimer) clearTimeout(marketCheckTimer);
     marketCheckTimer = setTimeout(applyMarketState, 60000);
 }
@@ -1394,25 +1442,19 @@ window.closeAccountWarn = function() {
 window.loginWithGoogle = async function() {
     try {
         const provider = new GoogleAuthProvider();
-        const user     = auth.currentUser;
-
-        if (user?.isAnonymous) {
-            // 익명 계정에 구글 계정 연결 — UID 유지, 데이터 그대로 보존
-            await linkWithPopup(user, provider);
-            document.getElementById('account-warn-overlay')?.classList.remove('active');
-            alert('✅ 구글 계정이 연결됐습니다!\n\n이제 브라우저 캐시가 삭제되어도\n구글 로그인으로 데이터를 복원할 수 있습니다.');
-        } else {
-            // 이미 구글 로그인 상태
-            document.getElementById('account-warn-overlay')?.classList.remove('active');
-            alert('이미 구글 계정으로 로그인되어 있습니다.');
-        }
+        
+        // [수정] linkWithPopup 대신 signInWithPopup을 사용합니다.
+        // 이렇게 하면 어떤 기기에서든 동일한 구글 계정으로 로그인 시 똑같은 UID(자산)를 갖게 됩니다.
+        const result = await signInWithPopup(auth, provider);
+        
+        document.getElementById('account-warn-overlay')?.classList.remove('active');
+        alert('✅ 구글 로그인 성공! 모든 기기에서 자산이 동기화됩니다.');
+        
     } catch (err) {
         if (err.code === 'auth/popup-closed-by-user') return;
-        if (err.code === 'auth/credential-already-in-use') {
-            alert('⚠️ 이미 다른 계정에 연결된 구글 계정입니다.\n다른 구글 계정으로 시도해주세요.');
-        } else {
-            alert('연결 실패: ' + err.message);
-        }
+        
+        // 이제 'credential-already-in-use' 에러는 발생하지 않습니다.
+        alert('로그인 실패: ' + err.message);
     }
 };
 
@@ -1440,7 +1482,8 @@ onAuthStateChanged(auth, async (user) => {
 
         try {
             // 유저별 전용 노드에 접속 시각(타임스탬프) 저장 → 퇴장 시 자동 삭제
-            const myPresenceRef = ref(db, `presence/users/${userUID}`);
+            const sessionID = Math.random().toString(36).substring(2, 9);
+            const myPresenceRef = ref(db, `presence/users/${userUID}/${sessionID}`);
             await set(myPresenceRef, { connectedAt: Date.now() });
             onDisconnect(myPresenceRef).remove();
 
@@ -1481,6 +1524,30 @@ onAuthStateChanged(auth, async (user) => {
         signInAnonymously(auth);
     }
 });
+
+// ── 구글 계정 로그아웃 함수 ───────────────────────────────────────────
+window.logout = async function() {
+    if (!confirm("정말 로그아웃하시겠습니까?\n로그아웃 후에는 다시 로그인해야 자산이 연동됩니다.")) return;
+
+    try {
+        // 1. 모든 데이터 구독 중단 (불필요한 트래픽 방지)
+        stopAllStocksSubscriptions();
+
+        // 2. Firebase 로그아웃 실행
+        await signOut(auth);
+
+        // 3. 로그아웃 후 처리
+        // signOut 호출 시 onAuthStateChanged가 자동으로 감지하여 
+        // 익명 로그인을 실행하거나 인트로를 띄우게 됩니다.
+        alert("성공적으로 로그아웃되었습니다.");
+        
+        // 페이지를 새로고침하여 모든 상태를 초기화하는 것이 가장 깔끔합니다.
+        location.reload(); 
+    } catch (err) {
+        console.error("로그아웃 오류:", err);
+        alert("로그아웃 중 오류가 발생했습니다.");
+    }
+};
 
 // ── 랭킹 디바운싱 ────────────────────────────────────────────
 function scheduleRankingUpdate(stockId, qtyDelta) {
@@ -1545,6 +1612,51 @@ async function flushRankingUpdate() {
             pendingDeltas[id] = (pendingDeltas[id] || 0) + delta;
         });
         if (rankingDebounceTimer === null) rankingDebounceTimer = setTimeout(flushRankingUpdate, 15000);
+    }
+}
+
+/**
+ * 차트 데이터를 분석하여 서킷브레이커 발동 여부 결정
+ */
+function checkCircuitBreaker(stockId, candles) {
+    if (!candles || candles.length < 2) return;
+
+    const now = Date.now();
+    const state = circuitBreakerState[stockId] || { frozenUntil: 0, lastTriggered: 0, pendingTimer: null };
+    circuitBreakerState[stockId] = state;
+
+    // 1. 이미 동결 중이거나, 최근 10분 내에 발동된 적이 있다면 패스 (연속 발동 방지)
+    if (state.frozenUntil > now || (now - state.lastTriggered) < 600000) return;
+
+    // 2. 최근 10분간의 데이터 필터링
+    const tenMinsAgo = Math.floor(now / 1000) - 600;
+    const recentCandles = candles.filter(c => c.t >= tenMinsAgo);
+    if (recentCandles.length < 2) return;
+
+    // 3. 변동폭 계산 (최고가와 최저가 기준)
+    const high = Math.max(...recentCandles.map(c => c.h));
+    const low = Math.min(...recentCandles.map(c => c.l));
+    const variation = ((high - low) / low) * 100;
+
+    // 4. 30% 이상 변동 시 발동 예약
+    if (variation >= 30) {
+        // 이미 예약된 타이머가 있다면 중복 예약 방지
+        if (state.pendingTimer) return;
+
+        // 45초~90초 사이 랜덤 지연 
+        const delay = Math.floor(Math.random() * (90000 - 45000 + 1)) + 45000;
+        
+        state.pendingTimer = setTimeout(() => {
+            state.frozenUntil = Date.now() + 60000; // 1분간 동결
+            state.lastTriggered = Date.now();
+            state.pendingTimer = null;
+            
+            // UI 즉시 업데이트 (카드 잠금 등)
+            updateUI(true);
+            alert(`⚠️ [서킷브레이커] 해당 종목의 변동성이 너무 커서 1분간 거래가 일시 동결됩니다.`);
+        }, delay);
+
+        console.log(`[CB] ${stockId} 서킷브레이커 예약됨: ${delay/1000}초 후 발동`);
     }
 }
 
@@ -1808,6 +1920,10 @@ async function fetchCandles(stockId) {
             candleDataCache = Object.values(raw)
                 .map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c, v: c.v || 0, t: c.t }))
                 .sort((a, b) => a.t - b.t);
+
+	    // [추가] 데이터 로드 후 서킷브레이커 기준 체크
+            checkCircuitBreaker(stockId, candleDataCache);
+
         } else {
             candleDataCache = [];
         }
@@ -2031,8 +2147,15 @@ window.trade = async function (id, type, qty = 1) {
         return;
     }
 
-    const currentTime  = Date.now();
-    const cooldownTime = 1000;
+    // 서킷 브레이크 발동 
+    const now = Date.now();
+    const cb = circuitBreakerState[id];
+
+    if (cb && cb.frozenUntil > now) {
+        const remain = Math.ceil((cb.frozenUntil - now) / 1000);
+        alert(`🚫 서킷브레이커 발동 중! (${remain}초 후 해제)`);
+        return;
+    }
 
     if (currentTime - lastTradeTime < cooldownTime) {
         const remaining = Math.ceil((cooldownTime - (currentTime - lastTradeTime)) / 1000);
@@ -2084,14 +2207,32 @@ window.trade = async function (id, type, qty = 1) {
 
     if (!myData.stocks) myData.stocks = {};
 
-    const stockRef = ref(db, `stocks/${id}`);
-    const userRef  = ref(db, `users/${userUID}`);
-    const impact   = 0.0005 * Math.log2(1 + qty);
-    const spread   = 0.001;
-    const fee      = 0.003;
+const stockRef = ref(db, `stocks/${id}`);
+const userRef  = ref(db, `users/${userUID}`);
 
-    let qtyDelta     = 0;
-    let finalPrice   = 0;
+// 현재 주가 정보 가져오기
+const currentStockData = allStocks.find(s => s.id === id);
+const currentPrice = currentStockData ? currentStockData.price : 10000;
+
+// 1. 기본 변동 배율 (기존 로직 유지: 100만 원일 때 0.5배 감쇄)
+const priceRatio = 10000 / currentPrice;
+const multiplier = Math.pow(priceRatio, 0.1505);
+
+// 2. [수정됨] 매도 시 주가 비례 하락 가중치 (선형 확장형)
+let sellPressure = 1;
+if (type === 'sell') {
+    // 주가가 1만 원을 초과하는 시점부터 약 99만 원당 1배씩 하락 위력이 추가됩니다.
+    // Math.min을 제거하여 주가가 높아질수록 하락폭이 무제한으로 강해집니다.
+    sellPressure = 1 + (Math.max(0, currentPrice - 10000) / 990000);
+}
+
+// 3. 최종 영향력 계산
+// 매수 시: multiplier (주가가 높을수록 무거움)
+// 매도 시: multiplier * sellPressure (주가가 높을수록 압도적으로 폭락)
+const impact = 0.0005 * Math.log2(1 + qty) * multiplier * sellPressure;
+
+const spread = 0.001;
+const fee    = 0.003;
 
     // 버그2 수정 — 트랜잭션 재시도 시 중복 차감 방지
     // myData를 트랜잭션 콜백 밖에서만 수정하고,
@@ -2334,14 +2475,45 @@ function createSparkline(history, isUp) {
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
     if (!listDiv || !myData) return;
+
     const filtered = allStocks
         .filter(s => s.name && s.name.includes(filter))
         .sort((a, b) => (b.price || 0) - (a.price || 0))
         .slice(0, 100);
+
     listDiv.innerHTML = "";
     stockElements = {};
+
     filtered.forEach(s => {
         const card = createStockCard(s);
+        
+        // ── [추가] 서킷브레이커 상태 확인 및 UI 반영 ──────────────
+        const cb = circuitBreakerState[s.id];
+        const isFrozen = cb && cb.frozenUntil > Date.now();
+
+        if (isFrozen) {
+            const remain = Math.ceil((cb.frozenUntil - Date.now()) / 1000);
+            
+            // 1. 카드 전체를 반투명하게 만들고 클릭 차단
+            card.style.opacity = "0.5";
+            card.style.filter = "grayscale(0.8)";
+            card.style.pointerEvents = "none"; // 클릭 불가 (상세창/거래 차단)
+            card.style.position = "relative";
+
+            // 2. 동결 안내 레이어 추가 (선택 사항)
+            // 카드 위에 "동결 중 (N초)" 메시지를 띄우고 싶다면 여기에 요소를 append 할 수 있습니다.
+            const badge = document.createElement('div');
+            badge.style.cssText = `
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: rgba(239, 68, 68, 0.9); color: white; padding: 4px 8px;
+                border-radius: 4px; font-size: 12px; font-weight: bold; z-index: 10;
+                white-space: nowrap; pointer-events: none;
+            `;
+            badge.textContent = `🚫 동결 중 (${remain}초)`;
+            card.appendChild(badge);
+        }
+        // ──────────────────────────────────────────────────
+
         stockElements[s.id] = card;
         listDiv.appendChild(card);
     });
@@ -2452,13 +2624,32 @@ function processStocksSnap(snap) {
 }
 
 function stopAllStocksSubscriptions() {
-    if (stocksUnsubscribe) { stocksUnsubscribe(); stocksUnsubscribe = null; }
-    if (stocksPollTimer)   { clearInterval(stocksPollTimer); stocksPollTimer = null; }
+    if (typeof stocksUnsubscribe === 'function') {
+        stocksUnsubscribe(); // Firebase 리스너 해제
+        stocksUnsubscribe = null;
+        console.log("🛑 실시간 구독 해제됨");
+    }
+    if (stocksPollTimer) {
+        clearInterval(stocksPollTimer);
+        stocksPollTimer = null;
+        console.log("🛑 폴링 타이머 중단됨");
+    }
 }
 
 function startStocksRealtime() {
-    if (stocksUnsubscribe) return; // 이미 구독 중
-    if (stocksPollTimer) { clearInterval(stocksPollTimer); stocksPollTimer = null; }
+    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    
+    // 실행 전 무조건 기존 구독 청소 (중복 방지)
+    stopAllStocksSubscriptions();
+
+    // 관리자가 아니고 정규장도 아니라면 실시간 구독을 거부하고 폴링으로 전환
+    if (!isAdmin && !isRegularMarket()) {
+        console.warn("⚠️ 정규장이 아니므로 실시간 구독을 취소하고 폴링으로 전환합니다.");
+        startStocksPolling(); 
+        return;
+    }
+
+    console.log("🚀 실시간 구독 시작");
     stocksUnsubscribe = onValue(ref(db, 'stocks/'), processStocksSnap);
 }
 
