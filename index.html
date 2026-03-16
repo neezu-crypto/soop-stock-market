@@ -2146,15 +2146,16 @@ window.smartClampQty = function(el, stockId, type) {
 // ── 거래 함수 ────────────────────────────────────────────────
 window.trade = async function (id, type, qty = 1) {
 
-	// [해결방법] 함수 가장 첫 줄에 아래 코드를 추가하세요!
-    const currentTime = Date.now();
-
     // 공지 종목 거래 차단
     const stockInfo = allStocks.find(s => s.id === id);
     if (stockInfo?.name?.includes('[공지]')) {
         alert('📢 공지 종목은 거래할 수 없습니다.');
         return;
     }
+
+	// [해결방법] 함수 가장 첫 줄에 아래 코드를 추가하세요!
+    const currentTime = Date.now();
+	const cooldownTime = 1000;
 
     // 서킷 브레이크 발동 
     const cb = circuitBreakerState[id];
