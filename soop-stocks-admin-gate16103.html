@@ -165,19 +165,18 @@
 
     <!-- 🏆 랭킹 TOP5 관리 -->
     <div class="container" style="display:block; border-color: #a855f7;">
-        <h1>🏆 랭킹 TOP5 관리</h1>
+        <h1>🏆 랭킹 TOP5 초기화</h1>
         <div class="info-box">
-            모든 유저의 보유 주식을 집계하여 <b>/rankings/top5</b> 경로에 저장합니다.<br>
-            메인 페이지는 이 경로만 구독하므로, <span style="color:#38bdf8">users/ 전체를 읽지 않아도 됩니다.</span><br>
-            거래량이 많을 때 수동으로 눌러 최신 상태를 반영하세요.
+            장 재오픈 시 랭킹을 0부터 다시 집계하고 싶을 때 사용합니다.<br>
+            <span style="color:#ef4444;">초기화 시 현재 rankings/top5 데이터가 삭제됩니다.</span>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <span style="font-size:13px; color:#94a3b8;">저장된 TOP5 상태:</span>
             <span id="ranking-status" class="status-chip loading">불러오는 중...</span>
         </div>
         <div style="display:flex; gap:10px;">
-            <button class="btn-success" style="flex:1;" onclick="previewRankings()">🔍 집계 미리보기</button>
-            <button class="btn-primary" style="flex:2; margin-top:0;" onclick="saveRankingsToFirebase()">💾 TOP5 저장 (DB 반영)</button>
+            <button class="btn-success" style="flex:1;" onclick="previewRankings()">🔍 현재 TOP5 확인</button>
+            <button class="btn-primary" style="flex:2; margin-top:0; background:#ef4444;" onclick="resetRankings()">🗑️ 랭킹 초기화</button>
         </div>
         <div class="ranking-preview" id="ranking-preview-table">
             <table>
@@ -638,25 +637,25 @@
         try {
             const top5 = await calcTop5();
             renderPreviewTable(top5);
-            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '⚠️ 미리보기 (아직 저장 안 됨)';
+            statusEl.className = 'status-chip unsaved'; statusEl.innerText = `현재 ${top5.length}개 종목`;
         } catch(e) { alert("집계 중 오류: " + e.message); statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생'; }
     };
 
-    window.saveRankingsToFirebase = async function(silent = false) {
+    window.resetRankings = async function() {
+        if (!confirm('⚠️ 랭킹 TOP5를 초기화하시겠습니까?\n\n현재 rankings/top5 데이터가 삭제되고\n다음 거래부터 0부터 다시 집계됩니다.')) return;
         const statusEl = document.getElementById('ranking-status');
-        statusEl.className = 'status-chip loading'; statusEl.innerText = '저장 중...';
+        statusEl.className = 'status-chip loading'; statusEl.innerText = '초기화 중...';
         try {
-            const top5 = await calcTop5();
-            await set(ref(db, 'rankings/top5'), {
-                savedAt: new Date().toISOString(),
-                items: top5.map((s, i) => ({ rank: i + 1, id: s.id, name: s.name, price: s.price, totalQty: s.totalQty }))
-            });
-            renderPreviewTable(top5);
-            if (!silent) alert(`✅ /rankings/top5 저장 완료!\n\n` + top5.map((s, i) => `${i+1}위 ${s.name} (${s.totalQty.toLocaleString()}주)`).join('\n'));
-            await loadRankingStatus();
+            await set(ref(db, 'rankings/top5'), { items: [], savedAt: new Date().toISOString() });
+            const tbody = document.getElementById('ranking-preview-body');
+            const wrap  = document.getElementById('ranking-preview-table');
+            if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">초기화 완료 — 다음 거래부터 집계 시작</td></tr>`;
+            if (wrap)  wrap.style.display = 'block';
+            statusEl.className = 'status-chip'; statusEl.innerText = '✅ 초기화 완료';
+            alert('✅ 랭킹이 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
         } catch(e) {
-            if (!silent) alert("저장 중 오류: " + e.message);
-            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '저장 실패';
+            alert('초기화 실패: ' + e.message);
+            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생';
         }
     };
 
