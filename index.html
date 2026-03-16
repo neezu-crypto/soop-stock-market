@@ -1325,6 +1325,9 @@ function tryCloseIntro() {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) {
         if (allStocks.length === 0) return; // stocks 로드 대기
+        // 마감 오버레이도 함께 제거
+        const maintOverlay = document.getElementById('maintenance-overlay');
+        if (maintOverlay) maintOverlay.style.display = 'none';
         setTimeout(() => { introOverlay.classList.add('hidden'); }, 500);
         return;
     }
