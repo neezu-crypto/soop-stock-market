@@ -1163,9 +1163,18 @@ function applyMarketState() {
     const timerEl = document.getElementById('maintenance-timer');
     if (!overlay) return;
 
+    const isAdmin     = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     const maintenance = !!siteConfig.maintenance;
     const mh          = siteConfig.marketHours;
     const marketOpen  = isMarketOpen();
+
+    // 관리자는 마감/점검 오버레이 표시 안 함
+    if (isAdmin) {
+        overlay.style.display = 'none';
+        if (marketCheckTimer) clearTimeout(marketCheckTimer);
+        marketCheckTimer = setTimeout(applyMarketState, 60000);
+        return;
+    }
 
     if (maintenance) {
         overlay.style.display = 'flex';
