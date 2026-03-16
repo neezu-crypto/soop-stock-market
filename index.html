@@ -1486,12 +1486,12 @@ async function flushRankingUpdate() {
                 itemMap[id].price    = stockData.price;
                 itemMap[id].name     = stockData.name;
             } else {
-                // top5 밖 신규 진입 후보 — allStocks 캐시의 volume 기준
+                // top5 밖 신규 진입 — delta만 사용 (초기화 후 0부터 집계 보장)
                 itemMap[id] = {
                     id,
                     name:     stockData.name,
                     price:    stockData.price,
-                    totalQty: stockData.volume || Math.max(0, delta)
+                    totalQty: Math.max(0, delta)
                 };
             }
         });
