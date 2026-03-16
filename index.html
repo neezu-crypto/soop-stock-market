@@ -1017,38 +1017,16 @@ const auth = getAuth(app);
 let siteConfig      = {};
 let siteConfigReady = false;
 
-// ── 관리자 점검 모드 + 시장 운영 시간 즉시 체크 ─────────────
-// onValue는 비동기라 첫 로드 시 오버레이가 늦게 뜨는 문제 발생
-// get()으로 즉시 1회 읽어서 마감/점검 여부를 먼저 확인
-// → siteConfig 수신 전에 인트로가 종료돼 거래화면이 노출되는 것 방지
-(async () => {
-    try {
-        const snap   = await get(ref(db, 'siteConfig/'));
-        siteConfig   = snap.val() || {};
-        siteConfigReady = true;
-
-        const overlay = document.getElementById('maintenance-overlay');
-        const timerEl = document.getElementById('maintenance-timer');
-        const title   = overlay?.querySelector('.maintenance-title');
-        const desc    = overlay?.querySelector('.maintenance-desc');
-        const badge   = overlay?.querySelector('.maintenance-time-badge');
-
-        if (siteConfig.maintenance === true) {
-            if (overlay) overlay.style.display = 'flex';
-            if (timerEl) timerEl.innerText = '관리자 점검 중';
-            if (title)   title.innerText   = '서버 점검 중';
-            if (desc)    desc.innerHTML    = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
-            if (badge)   badge.innerHTML   = '🔧 관리자 점검 중';
-        } else {
-            applyMarketState();
-        }
-        // siteConfig 수신 완료 → 인트로 대기 중이었으면 즉시 updateUI 재시도
-        if (allStocks.length > 0) updateUI(true);
-    } catch(e) {
-        siteConfigReady = true;
-        if (allStocks.length > 0) updateUI(true);
-    }
-})();
+// ── siteConfig 즉시 로드 (get) ───────────────────────────────
+get(ref(db, 'siteConfig/')).then(snap => {
+    siteConfig      = snap.val() || {};
+    siteConfigReady = true;
+    applyMarketState();
+    tryCloseIntro(); // 마감이면 stocks 없어도 인트로 즉시 닫힘
+}).catch(() => {
+    siteConfigReady = true;
+    tryCloseIntro();
+});
 
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
@@ -1142,11 +1120,14 @@ setInterval(() => {
     }
 }, 30000);
 
-// ── 관리자 점검 모드 실시간 구독 ────────────────────────────
-// ── siteConfig 통합 구독 (maintenance + marketHours) ────────
+// ── siteConfig 실시간 구독 ───────────────────────────────────
 onValue(ref(db, 'siteConfig/'), (snap) => {
     siteConfig = snap.val() || {};
     applyMarketState();
+    if (!siteConfigReady) {
+        siteConfigReady = true;
+        tryCloseIntro();
+    }
 });
 
 function isMarketOpen() {
@@ -1331,31 +1312,50 @@ function selectStockForSearch(stockName) {
 }
 
 // ── UI 갱신 ──────────────────────────────────────────────────
-let accountWarnShown = false; // 안내창 1회만 표시
+let accountWarnShown = false;
+
+// ── 인트로 닫기 시도 ─────────────────────────────────────────
+function tryCloseIntro() {
+    if (!siteConfigReady) return; // siteConfig 아직 미수신
+
+    const introOverlay = document.getElementById('intro-overlay');
+    if (!introOverlay || introOverlay.classList.contains('hidden')) return;
+
+    // 마감/점검 여부 — 데이터로 직접 판단
+    const isBlocked = !!siteConfig.maintenance || (
+        siteConfig.marketHours?.enabled && !isMarketOpen()
+    );
+
+    if (isBlocked) {
+        // 마감/점검 → stocks 없어도 즉시 인트로 제거 + 마감 오버레이 표시
+        applyMarketState();
+        introOverlay.classList.add('hidden');
+        return;
+    }
+
+    // 오픈 시간 → stocks도 로드됐을 때만 인트로 제거
+    if (allStocks.length === 0) return;
+
+    setTimeout(() => {
+        introOverlay.classList.add('hidden');
+        if (!accountWarnShown && auth.currentUser?.isAnonymous) {
+            accountWarnShown = true;
+            setTimeout(() => {
+                document.getElementById('account-warn-overlay')?.classList.add('active');
+            }, 600);
+        }
+    }, 500);
+}
 
 function updateUI(isFullRender = true) {
     const cashDisplay = document.getElementById('my-cash');
-    const overlay     = document.getElementById('intro-overlay');
     if (myData) {
         if (cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
         renderMyPortfolio();
     }
     if (isFullRender && allStocks.length > 0) {
         renderStocks(document.getElementById('search-input')?.value || "");
-        if (overlay && !overlay.classList.contains('hidden')) {
-            // siteConfig 수신 완료 전까지 인트로 유지 → 마감 화면 노출 방지
-            if (!siteConfigReady) return;
-            setTimeout(() => {
-                overlay.classList.add('hidden');
-                // 인트로 종료 후 익명 유저에게만 계정 안내창 표시
-                if (!accountWarnShown && auth.currentUser?.isAnonymous) {
-                    accountWarnShown = true;
-                    setTimeout(() => {
-                        document.getElementById('account-warn-overlay')?.classList.add('active');
-                    }, 600); // 인트로 페이드아웃 후 표시
-                }
-            }, 500);
-        }
+        tryCloseIntro();
     }
 }
 
@@ -2399,6 +2399,7 @@ function processStocksSnap(snap) {
     if (allStocks.length === 0) {
         allStocks = newStocks;
         renderStocks();
+        tryCloseIntro(); // stocks 로드 완료 → 오픈 시간이면 인트로 닫기
     } else {
         newStocks.forEach(ns => {
             const old = allStocks.find(os => os.id === ns.id);
