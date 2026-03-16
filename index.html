@@ -1415,6 +1415,10 @@ onAuthStateChanged(auth, async (user) => {
         const countRef = ref(db, 'presence/count');
         if (!myData) myData = { cash: 1000000, stocks: {} };
 
+        // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
+        tryCloseIntro();
+        applyStocksMode();
+
         try {
             // 유저별 전용 노드에 접속 시각(타임스탬프) 저장 → 퇴장 시 자동 삭제
             const myPresenceRef = ref(db, `presence/users/${userUID}`);
