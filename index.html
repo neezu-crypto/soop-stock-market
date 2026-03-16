@@ -905,27 +905,33 @@
 <div class="wrapper">
 
 <!-- ── 로그아웃 버튼 ── -->
-    <div style="display:flex; justify-content:flex-end; margin-bottom: 8px; padding: 0 4px;">
-        <button onclick="logout()" style="
-            background: rgba(239, 68, 68, 0.1); 
-            color: #ef4444; 
-            border: 1px solid rgba(239, 68, 68, 0.3); 
-            padding: 5px 12px; 
-            border-radius: 6px; 
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            transition: all 0.2s;
-            -webkit-tap-highlight-color: transparent; /* 모바일 터치 시 잔상 방지 */
-        " onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'" 
-           onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'">
-            <span>로그아웃</span>
-            <span style="font-size: 10px;">➔</span>
-        </button>
-    </div>
+<div style="display:flex; justify-content:flex-end; margin-bottom: 8px; padding: 0 4px;">
+    <button onclick="logout()" style="
+        background: rgba(239, 68, 68, 0.1); 
+        color: #ef4444; 
+        border: 1px solid rgba(239, 68, 68, 0.3); 
+        
+        /* 1. 패딩을 늘려 버튼 전체 크기 확대 (기존 5px 12px) */
+        padding: 8px 18px; 
+        
+        border-radius: 8px; 
+        cursor: pointer;
+
+        /* 2. 폰트 사이즈 확대 (기존 11px / 화살표 10px) */
+        font-size: 14px;
+        
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+        -webkit-tap-highlight-color: transparent;
+    " onmouseover="this.style.background='rgba(239, 68, 68, 0.2)'" 
+       onmouseout="this.style.background='rgba(239, 68, 68, 0.1)'">
+        <span>로그아웃</span>
+        <span style="font-size: 13px;">➔</span>
+    </button>
+</div>
 
 <!-- ── 지갑 영역 ── -->
     <div class="wallet-bar">
