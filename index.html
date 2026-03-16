@@ -639,7 +639,7 @@
 </div>
 
 <!-- ── 정기점검 오버레이 ── -->
-<div id="maintenance-overlay" style="display:none;">
+<div id="maintenance-overlay" style="display:none;" tabindex="0" onkeydown="if(event.ctrlKey&&event.key==='Enter'){document.dispatchEvent(new KeyboardEvent('keydown',{ctrlKey:true,key:'Enter',bubbles:true}));}">
     <div class="maintenance-content">
         <div class="maintenance-icon">🔔</div>
         <div class="maintenance-title">주식 시장 오픈 준비 중</div>
@@ -1169,6 +1169,7 @@ function applyMarketState() {
 
     if (maintenance) {
         overlay.style.display = 'flex';
+        setTimeout(() => overlay.focus(), 100);
         if (timerEl) timerEl.innerText = '관리자 점검 중';
         const title = overlay.querySelector('.maintenance-title');
         const desc  = overlay.querySelector('.maintenance-desc');
@@ -1179,6 +1180,7 @@ function applyMarketState() {
 
     } else if (mh && mh.enabled && !marketOpen) {
         overlay.style.display = 'flex';
+        setTimeout(() => overlay.focus(), 100);
         const title = overlay.querySelector('.maintenance-title');
         const desc  = overlay.querySelector('.maintenance-desc');
         const badge = overlay.querySelector('.maintenance-time-badge');
@@ -2396,6 +2398,7 @@ function updateCardContent(card, s, userStock) {
 // ────────────────────────────────────────────────────────────
 let stocksUnsubscribe  = null; // onValue 해제 함수
 let stocksPollTimer    = null; // 폴링 타이머
+let stocksMetaUnsubscribe = null; // stocksMeta onValue 해제 함수
 
 function processStocksSnap(snap) {
     const data      = snap.val() || {};
@@ -2482,8 +2485,6 @@ applyStocksMode();
 setInterval(applyStocksMode, 60000);
 
 // ── stocksMeta/ — history 별도 구독 (오픈 시간에만 활성) ────
-let stocksMetaUnsubscribe = null;
-
 function startStocksMeta() {
     if (stocksMetaUnsubscribe) return;
     stocksMetaUnsubscribe = onValue(ref(db, 'stocksMeta/'), (snap) => {
@@ -2533,13 +2534,29 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
     }
-    // ── Ctrl+Enter: 관리자 구글 로그인 ──────────────────────
+    // ── Ctrl+Enter: 관리자 구글 로그인 / 마감 안내창 우회 ────
     if (e.ctrlKey && e.key === 'Enter') {
+        const currentUser = auth.currentUser;
+
+        // 이미 관리자로 로그인된 상태면 바로 마감 안내창 해제
+        if (currentUser?.email === 'skftodwocks2@gmail.com') {
+            const maintOverlay = document.getElementById('maintenance-overlay');
+            if (maintOverlay) maintOverlay.style.display = 'none';
+            // stocks 강제 1회 로드 후 구독 시작
+            get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+            applyStocksMode();
+            return;
+        }
+
+        // 미로그인 또는 일반 유저 → 구글 로그인 팝업
         const provider = new GoogleAuthProvider();
         signInWithPopup(auth, provider)
             .then(result => {
                 if (result.user.email === 'skftodwocks2@gmail.com') {
-                    alert('✅ 관리자 로그인 성공');
+                    const maintOverlay = document.getElementById('maintenance-overlay');
+                    if (maintOverlay) maintOverlay.style.display = 'none';
+                    get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+                    applyStocksMode();
                 } else {
                     alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
                     signInAnonymously(auth);
