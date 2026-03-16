@@ -2418,6 +2418,11 @@ function processStocksSnap(snap) {
     }
 }
 
+function stopAllStocksSubscriptions() {
+    if (stocksUnsubscribe) { stocksUnsubscribe(); stocksUnsubscribe = null; }
+    if (stocksPollTimer)   { clearInterval(stocksPollTimer); stocksPollTimer = null; }
+}
+
 function startStocksRealtime() {
     if (stocksUnsubscribe) return; // 이미 구독 중
     if (stocksPollTimer) { clearInterval(stocksPollTimer); stocksPollTimer = null; }
@@ -2435,6 +2440,16 @@ function startStocksPolling() {
 }
 
 function applyStocksMode() {
+    const mh = siteConfig.marketHours;
+    // 마감 시간이면 모든 구독/폴링 중단
+    if (mh && mh.enabled && !isMarketOpen()) {
+        stopAllStocksSubscriptions();
+        stopStocksMeta();
+        return;
+    }
+    // 오픈 시간 → stocksMeta 구독 시작
+    startStocksMeta();
+    // 정규장/비정규장 분기
     if (isRegularMarket()) {
         startStocksRealtime();
     } else {
@@ -2445,22 +2460,30 @@ function applyStocksMode() {
 // 최초 실행
 applyStocksMode();
 
-// siteConfig 변경 시 모드 재적용 (정규장↔비정규장 전환)
-// 1분마다 체크해서 정규장 시간 되면 자동 전환
+// 1분마다 시장 상태 체크 → 자동 전환
 setInterval(applyStocksMode, 60000);
 
-// ── stocksMeta/ — history 별도 실시간 구독 ───────────────────
-onValue(ref(db, 'stocksMeta/'), (snap) => {
-    if (!snap.exists()) return;
-    const data = snap.val();
-    Object.entries(data).forEach(([id, meta]) => {
-        if (meta?.history) {
-            allHistories[id] = meta.history;
-            const stock = allStocks.find(s => s.id === id);
-            if (stock) stock.history = meta.history;
-        }
+// ── stocksMeta/ — history 별도 구독 (오픈 시간에만 활성) ────
+let stocksMetaUnsubscribe = null;
+
+function startStocksMeta() {
+    if (stocksMetaUnsubscribe) return;
+    stocksMetaUnsubscribe = onValue(ref(db, 'stocksMeta/'), (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.val();
+        Object.entries(data).forEach(([id, meta]) => {
+            if (meta?.history) {
+                allHistories[id] = meta.history;
+                const stock = allStocks.find(s => s.id === id);
+                if (stock) stock.history = meta.history;
+            }
+        });
     });
-});
+}
+
+function stopStocksMeta() {
+    if (stocksMetaUnsubscribe) { stocksMetaUnsubscribe(); stocksMetaUnsubscribe = null; }
+}
 
 // ── stocksBanner/ — 배너 최초 1회 로드 ───────────────────────
 get(ref(db, 'stocksBanner/')).then(snap => {
