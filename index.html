@@ -639,21 +639,37 @@
 </div>
 
 <!-- ── 정기점검 오버레이 ── -->
-<div id="maintenance-overlay" style="display:none;" tabindex="0" onkeydown="if(event.ctrlKey&&event.key==='Enter'){document.dispatchEvent(new KeyboardEvent('keydown',{ctrlKey:true,key:'Enter',bubbles:true}));}">
-    <div class="maintenance-content">
-        <div class="maintenance-icon">🔔</div>
-        <div class="maintenance-title">주식 시장 오픈 준비 중</div>
-        <div class="maintenance-desc">
-            현재는 원활한 거래를 위한 <b>장 시작 준비 시간</b>입니다.<br>
-            잠시 후 스트리머 주식시장이 개장됩니다.
+<div id="maintenance-overlay" style="display:none;" tabindex="0">
+    <div class="maintenance-content" style="max-width: 480px;"> <div class="maintenance-icon">🚀</div>
+        <div class="maintenance-title">시스템 안정화 및 보안 강화 안내</div>
+        
+        <div class="maintenance-desc" style="text-align: left; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
+            안녕하세요, <b>스트리머 주식시장 운영진</b>입니다.<br><br>
+            현재 저희 서비스는 더욱 강력한 보안 체계 구축과 쾌적한 거래 환경 제공을 위해 대대적인 시스템 정비 기간을 갖고 있습니다.<br><br>
+            유저분들의 소중한 데이터를 보호하고, 한층 강화된 보안 로직을 적용하여 더 나은 거래 경험을 드리기 위한 결정이오니 넓은 양해를 부탁드립니다.
         </div>
-        <div class="maintenance-time-badge">🕒 시장 운영 시간: 09:00 ~ 익일 04:00</div>
-        <div class="maintenance-desc" style="margin-bottom:0; font-size: 13px; color: #94a3b8;">
-            준비 시간 동안에는 거래가 제한되며,<br>
-            개장과 동시에 실시간 차트가 활성화됩니다.
+
+        <div class="maintenance-time-badge" style="margin-top: 20px;">🗓️ 재오픈 예정일: 2026년 4월 1일(수)</div>
+
+        <div class="maintenance-desc" style="text-align: left; font-size: 13px; color: #94a3b8; margin-top: 10px;">
+            <b style="color: #f8fafc;">[안내 사항]</b><br>
+            • <b>재오픈 일시:</b> 2026년 4월 1일(수) 정식 재개장<br>
+            • <b>홍보 배너 연장:</b> 현재 홍보 중인 모든 배너는 서비스 중단 기간만큼 차감 없이 보호됩니다. 각 배너별 잔여 기간에 맞춰 재오픈 시점에 유효 기간을 모두 연장해 드릴 예정입니다.
         </div>
+
+        <div class="maintenance-desc" style="margin-top: 15px; font-style: italic; color: #38bdf8;">
+            "더욱 신뢰할 수 있는 모습으로 4월 1일 다시 뵙겠습니다."
+        </div>
+
+		<div style="margin-top: 25px;">
+    <a href="https://www.sooplive.co.kr/station/skftodwocks2" target="_blank" 
+       style="display: inline-block; background: #9146FF; color: white; padding: 12px 24px; border-radius: 12px; font-weight: 800; text-decoration: none; transition: 0.2s; box-shadow: 0 4px 15px rgba(145, 70, 255, 0.3);">
+       📺 개발자 SOOP 방송국
+    </a>
+</div>
+
         <div class="maintenance-countdown" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            장 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
+            새로운 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
         </div>
     </div>
 </div>
@@ -1206,119 +1222,46 @@ function applyMarketState() {
     const timerEl = document.getElementById('maintenance-timer');
     if (!overlay) return;
 
-    const isAdmin     = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-    const maintenance = !!siteConfig.maintenance;
-    const mh          = siteConfig.marketHours;
-    const marketOpen  = isMarketOpen();
+    // 관리자 여부 확인
+    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
 
-    // ── 1. 관리자 계정: 모든 제한 우회 ────────────────────────
+    // 1. 관리자: 공지 무시하고 정상 접속
     if (isAdmin) {
         overlay.style.display = 'none';
-        // 관리자는 항상 실시간 데이터를 수신하도록 설정
         startStocksRealtime(); 
-        
         if (marketCheckTimer) clearTimeout(marketCheckTimer);
         marketCheckTimer = setTimeout(applyMarketState, 60000);
         return;
     }
 
-    // ── 2. 점검 중 또는 시장 마감 상태 ────────────────────────
-    if (maintenance || (mh && mh.enabled && !marketOpen)) {
-        // [핵심] 시장이 닫혔으므로 모든 데이터 구독(실시간/폴링)을 즉시 중단
-        stopAllStocksSubscriptions();
+    // 2. 일반 유저: 4월 1일 재오픈 공지 강제 노출
+    stopAllStocksSubscriptions(); // 데이터 수신 중단 (비용 절감)
+    overlay.style.display = 'flex';
+    setTimeout(() => overlay.focus(), 100);
 
-        overlay.style.display = 'flex';
-        setTimeout(() => overlay.focus(), 100);
-        
-        const title = overlay.querySelector('.maintenance-title');
-        const desc  = overlay.querySelector('.maintenance-desc');
-        const badge = overlay.querySelector('.maintenance-time-badge');
+    // D-Day 카운트다운 로직
+    if (timerEl) {
+        const targetDate = new Date('2026-04-01T09:00:00+09:00');
+        const now = new Date();
+        const diff = targetDate - now;
 
-        if (maintenance) {
-            // 점검 중 UI
-            if (timerEl) timerEl.innerText = '관리자 점검 중';
-            if (title) title.innerText = '서버 점검 중';
-            if (desc)  desc.innerHTML  = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
-            if (badge) badge.innerHTML = '🔧 관리자 점검 중';
+        if (diff <= 0) {
+            timerEl.innerText = "곧 오픈됩니다!";
         } else {
-            // 시장 마감 UI
-            const overnightTotal   = mh.open > mh.close;
-            const overnightRegular = mh.regularOpen && mh.regularClose && mh.regularOpen > mh.regularClose;
-            const totalLabel   = overnightTotal ? `${mh.open} ~ 익일 ${mh.close}` : `${mh.open} ~ ${mh.close}`;
-            const regularLabel = (mh.regularOpen && mh.regularClose)
-                ? (overnightRegular ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}` : `${mh.regularOpen} ~ ${mh.regularClose}`)
-                : null;
-
-            if (title) title.innerText = '시장 마감 중';
-            if (desc) desc.innerHTML =
-                `현재는 거래 시간이 아닙니다.<br>운영 시간에 다시 방문해 주세요.<br><br>` +
-                `<span style="color:#94a3b8; font-size:13px;">` +
-                `📌 전체 오픈: <b style="color:#f8fafc;">${totalLabel} KST</b><br>` +
-                (regularLabel ? `⚡ 정규장: <b style="color:#38bdf8;">${regularLabel} KST</b>` : '') +
-                `</span>`;
-            if (badge) badge.innerHTML = `🕐 시장 운영 시간: ${totalLabel} KST`;
-
-            if (timerEl) {
-                const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
-                const nowMins = now.getHours() * 60 + now.getMinutes();
-                const [oh, om] = (mh.open || '18:00').split(':').map(Number);
-                const openMins = oh * 60 + om;
-                let diff = openMins - nowMins;
-                if (diff <= 0) diff += 1440;
-                const h = Math.floor(diff / 60);
-                const m = diff % 60;
-                timerEl.innerText = `${h > 0 ? h + '시간 ' : ''}${m}분 후 (${mh.open} KST)`;
-            }
-        }
-    } else {
-        // ── 3. 시장 운영 중: 모드별 데이터 구독 제어 ────────────────
-        overlay.style.display = 'none';
-
-        // [핵심] 정규장 여부에 따라 실시간/폴링 모드를 강제로 전환
-        if (isRegularMarket()) {
-            startStocksRealtime(); // 실시간 구독 시작 (함수 내부에서 기존 것 삭제 후 시작)
-        } else {
-            startStocksPolling();  // 30초 폴링 시작 (함수 내부에서 실시간 구독 삭제)
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const mins = Math.floor((diff / (1000 * 60)) % 60);
+            
+            let timeString = "";
+            if (days > 0) timeString += `${days}일 `;
+            if (hours > 0 || days > 0) timeString += `${hours}시간 `;
+            timeString += `${mins}분`;
+            
+            timerEl.innerText = timeString;
         }
     }
 
-    // ── 4. 시장 모드 안내 배너 UI 업데이트 ────────────────────────
-    const modeBanner = document.getElementById('market-mode-banner');
-    if (modeBanner) {
-        if (!mh || !mh.enabled || !marketOpen) {
-            modeBanner.style.display = 'none';
-        } else if (isRegularMarket()) {
-            const overnightR = mh.regularOpen > mh.regularClose;
-            const rLabel = overnightR
-                ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}`
-                : `${mh.regularOpen} ~ ${mh.regularClose}`;
-            
-            modeBanner.style.display = 'block';
-            modeBanner.style.background = 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(56,189,248,0.05))';
-            modeBanner.style.border = '1px solid rgba(56,189,248,0.4)';
-            modeBanner.style.color = '#f8fafc';
-            modeBanner.innerHTML =
-                `⚡ <b style="color:#38bdf8; font-size:14px;">정규장 진행 중</b> &nbsp;—&nbsp; 주가가 실시간으로 반영됩니다.<br>` +
-                `<span style="color:#64748b; font-size:12px; font-weight:400;">${rLabel} KST</span>`;
-        } else {
-            const overnightT = mh.open > mh.close;
-            const overnightR = mh.regularOpen && mh.regularClose && mh.regularOpen > mh.regularClose;
-            const tLabel = overnightT ? `${mh.open} ~ 익일 ${mh.close}` : `${mh.open} ~ ${mh.close}`;
-            const rLabel = (mh.regularOpen && mh.regularClose)
-                ? (overnightR ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}` : `${mh.regularOpen} ~ ${mh.regularClose}`)
-                : null;
-            
-            modeBanner.style.display = 'block';
-            modeBanner.style.background = 'linear-gradient(135deg, rgba(251,191,36,0.12), rgba(251,191,36,0.04))';
-            modeBanner.style.border = '1px solid rgba(251,191,36,0.35)';
-            modeBanner.style.color = '#f8fafc';
-            modeBanner.innerHTML =
-                `🕐 <b style="color:#fbbf24; font-size:14px;">비정규장</b> &nbsp;—&nbsp; 주가가 30초마다 갱신됩니다.<br>` +
-                (rLabel ? `<span style="color:#64748b; font-size:12px; font-weight:400;">⚡ 정규장 실시간 거래: ${rLabel} KST</span>` : '');
-        }
-    }
-
-    // 1분마다 상태 재검토 (시간 경과에 따른 자동 모드 전환용)
+    // 1분마다 갱신
     if (marketCheckTimer) clearTimeout(marketCheckTimer);
     marketCheckTimer = setTimeout(applyMarketState, 60000);
 }
