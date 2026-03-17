@@ -2817,7 +2817,8 @@ function applyStocksMode() {
         // 정규장: 실시간 구독 (폴링 중단)
         allIds.forEach(id => {
             if (favPollTimers[id]) { clearInterval(favPollTimers[id]); delete favPollTimers[id]; }
-            subscribeToFavorite(id);
+            if (favorites[id])   subscribeToFavorite(id);
+            if (ownedStocks[id]) subscribeToOwned(id);
         });
     } else {
         // 비정규장: 폴링 30초 (실시간 구독 해제)
