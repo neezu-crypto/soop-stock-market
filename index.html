@@ -2360,9 +2360,16 @@ const fee    = 0.003;
             const card = stockElements[id];
             const stockData = favorites[id] || ownedStocks[id] || searchResults[id];
 
-            // 신규 보유 종목이면 ownedStocks에 즉시 데이터 채움
-            if (stockData && (myData?.stocks?.[id]?.qty || 0) > 0) {
-                ownedStocks[id] = { ...stockData, id };
+            // 보유량 기준으로 ownedStocks 갱신
+            const currentQty = myData?.stocks?.[id]?.qty || 0;
+            if (currentQty > 0 && stockData) {
+                ownedStocks[id] = { ...stockData, id }; // 신규/유지 보유
+            } else if (currentQty === 0) {
+                delete ownedStocks[id]; // 전량 매도 → 제거
+                if (ownedUnsubs[id]) { ownedUnsubs[id](); delete ownedUnsubs[id]; }
+                if (favPollTimers[id] && !favorites[id]) {
+                    clearInterval(favPollTimers[id]); delete favPollTimers[id];
+                }
             }
 
             if (card && stockData) {
