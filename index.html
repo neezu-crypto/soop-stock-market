@@ -2391,18 +2391,25 @@ function renderBanners() {
     if (!bannerList) return;
     const now = new Date();
 
-    // stocksBanner 캐시 기반으로 배너 목록 구성
+    // stocksBanner 캐시 기반으로 배너 목록 구성 (allStocks 불필요)
     let activeBanners = Object.entries(allBanners)
         .map(([id, banner]) => {
-            const stock = allStocks.find(s => s.id === id);
-            if (!stock || !banner.bannerImg) return null;
+            if (!banner.bannerImg) return null;
+            // 즐겨찾기/보유 캐시에서 이름 참조, 없으면 id 사용
+            const cached = favorites[id] || ownedStocks[id];
             let diffDays = Infinity;
             if (banner.bannerEndDate) {
                 const endDate = new Date(banner.bannerEndDate);
                 endDate.setHours(23, 59, 59, 999);
                 diffDays = Math.ceil((endDate - now) / 86400000);
             }
-            return { ...stock, ...banner, id, diffDays };
+            return {
+                id,
+                name:     cached?.name || banner.name || id,
+                price:    cached?.price || 0,
+                ...banner,
+                diffDays
+            };
         })
         .filter(s => s && s.diffDays >= 0);
 
@@ -2608,9 +2615,6 @@ function processStocksSnap(snap) {
         allStocks = newStocks;
     }
     updateUI(false);
-    if (!isBannerRendered && allStocks.length > 0 && Object.keys(allBanners).length > 0) {
-        setTimeout(() => { renderBanners(); isBannerRendered = true; }, 100);
-    }
 }
 
 function stopAllStocksSubscriptions() {
