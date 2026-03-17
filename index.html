@@ -2121,7 +2121,7 @@ window.smartClampQty = function(el, stockId, type) {
 // ── 거래 함수 ────────────────────────────────────────────────
 window.trade = async function (id, type, qty = 1) {
 
-	// 0. 관리자 여부 확인 (Firebase Auth 기준)
+    // 0. 관리자 여부 확인 (Firebase Auth 기준)
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
 
     // 공지 종목 거래 차단
@@ -2129,6 +2129,14 @@ window.trade = async function (id, type, qty = 1) {
     if (stockInfo?.name?.includes('[공지]')) {
         alert('📢 공지 종목은 거래할 수 없습니다.');
         return;
+    }
+
+    // history 캐시 없으면 거래 전 먼저 로드
+    if (!allHistories[id]) {
+        try {
+            const hSnap = await get(ref(db, `stocksMeta/${id}/history`));
+            if (hSnap.exists()) allHistories[id] = hSnap.val();
+        } catch(e) {}
     }
 
 	// [해결방법] 함수 가장 첫 줄에 아래 코드를 추가하세요!
@@ -2277,7 +2285,9 @@ const fee    = 0.003;
                 finalPrice   = finalTradePrice;
             }
 
-            let history = currentStock.history || [prevPrice];
+            // stocks/에서 history 제거됐으므로 allHistories 캐시 사용
+            let history = (allHistories[id] ? [...allHistories[id]] : null)
+                       || [prevPrice];
             history.push(newPrice);
             if (history.length > 20) history.shift();
 
@@ -2664,21 +2674,88 @@ function startStocksPolling() {
     // 즐겨찾기 기반 개별 구독으로 대체 — 전체 폴링 불필요
 }
 
+// ── 활동 감지 + 정규장/비정규장 구독 모드 ───────────────────
+let isUserActive      = true;
+let activityTimer     = null;
+let favPollTimers     = {}; // 비정규장 폴링 타이머 { stockId: intervalId }
+
+function onUserActive() {
+    if (!isUserActive) {
+        isUserActive = true;
+        applyStocksMode(); // 활동 재개 → 구독 재시작
+    }
+    clearTimeout(activityTimer);
+    activityTimer = setTimeout(() => {
+        isUserActive = false;
+        pauseAllSubscriptions(); // 10초 비활동 → 중단
+    }, 10000);
+}
+
+function pauseAllSubscriptions() {
+    // 실시간 구독 해제
+    Object.keys(favoriteUnsubs).forEach(id => {
+        if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
+    });
+    Object.keys(ownedUnsubs).forEach(id => {
+        if (ownedUnsubs[id]) { ownedUnsubs[id](); delete ownedUnsubs[id]; }
+    });
+    // 폴링 타이머 해제
+    Object.keys(favPollTimers).forEach(id => {
+        clearInterval(favPollTimers[id]); delete favPollTimers[id];
+    });
+}
+
+// 마우스/터치/키보드 이벤트 감지
+['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+    document.addEventListener(evt, onUserActive, { passive: true });
+});
+
 function applyStocksMode() {
     const mh      = siteConfig.marketHours;
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
 
-    // 마감 시간이면 즐겨찾기 구독도 중단 (관리자 제외)
+    // 마감 시간 → 모든 구독 중단 (관리자 제외)
     if (!isAdmin && mh && mh.enabled && !isMarketOpen()) {
-        Object.keys(favoriteUnsubs).forEach(id => {
-            if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
-        });
+        pauseAllSubscriptions();
         stopStocksMeta();
         return;
     }
-    // 오픈 시간 → stocksMeta 구독 + 즐겨찾기 재구독
+
+    // 비활동 상태면 재구독 안 함
+    if (!isUserActive) return;
+
+    // 오픈 시간 → 정규장/비정규장 분기
     startStocksMeta();
-    Object.keys(favorites).forEach(id => subscribeToFavorite(id));
+    const allIds = [
+        ...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])
+    ];
+
+    if (isRegularMarket()) {
+        // 정규장: 실시간 구독 (폴링 중단)
+        allIds.forEach(id => {
+            if (favPollTimers[id]) { clearInterval(favPollTimers[id]); delete favPollTimers[id]; }
+            subscribeToFavorite(id);
+        });
+    } else {
+        // 비정규장: 폴링 30초 (실시간 구독 해제)
+        allIds.forEach(id => {
+            if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
+            if (ownedUnsubs[id])    { ownedUnsubs[id](); delete ownedUnsubs[id]; }
+            if (favPollTimers[id]) return; // 이미 폴링 중
+            const poll = () => {
+                get(ref(db, `stocks/${id}`)).then(snap => {
+                    if (!snap.exists()) return;
+                    const data = { ...snap.val(), id };
+                    data.history = allHistories[id] || [data.price, data.price];
+                    if (favorites[id])   favorites[id]   = data;
+                    if (ownedStocks[id]) ownedStocks[id] = data;
+                    renderFavoriteList();
+                }).catch(() => {});
+            };
+            poll(); // 즉시 1회
+            favPollTimers[id] = setInterval(poll, 30000);
+        });
+    }
 }
 
 // 최초 실행
@@ -3099,14 +3176,21 @@ function syncOwnedSubscriptions() {
     const currentOwned = new Set(
         Object.keys(myData.stocks).filter(id => (myData.stocks[id]?.qty || 0) > 0)
     );
-    // 신규 보유 → 구독 시작
-    currentOwned.forEach(id => subscribeToOwned(id));
+    // 신규 보유 → ownedStocks에 등록 후 applyStocksMode가 구독 방식 결정
+    currentOwned.forEach(id => {
+        if (!ownedStocks[id]) ownedStocks[id] = { id };
+    });
     // 매도 완료 → 구독 해제 (즐겨찾기에 없는 경우만)
-    Object.keys(ownedUnsubs).forEach(id => {
+    Object.keys(ownedStocks).forEach(id => {
         if (!currentOwned.has(id) && !favorites[id]) {
-            unsubscribeFromOwned(id);
+            if (ownedUnsubs[id]) { ownedUnsubs[id](); delete ownedUnsubs[id]; }
+            if (favPollTimers[id] && !favorites[id]) {
+                clearInterval(favPollTimers[id]); delete favPollTimers[id];
+            }
+            delete ownedStocks[id];
         }
     });
+    applyStocksMode();
 }
 
 // ── 검색창 이벤트 ────────────────────────────────────────
