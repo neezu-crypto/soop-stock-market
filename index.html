@@ -1100,6 +1100,32 @@ onValue(ref(db, 'siteConfig/'), (snap) => {
     applyMarketState();
 }).catch?.(() => {});
 
+// ── 점검창 카운트다운 즉시 시작 ──────────────────────────────
+(function startCountdown() {
+    const timerEl    = document.getElementById('maintenance-timer');
+    const targetDate = new Date('2026-04-01T00:00:00+09:00');
+
+    function tick() {
+        const diff = targetDate - new Date();
+        if (!timerEl) return;
+        if (diff <= 0) {
+            timerEl.innerText = '곧 오픈됩니다!';
+            return;
+        }
+        const days  = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const mins  = Math.floor((diff / (1000 * 60)) % 60);
+        const secs  = Math.floor((diff / 1000) % 60);
+        let str = '';
+        if (days > 0)  str += `${days}일 `;
+        if (hours > 0 || days > 0) str += `${hours}시간 `;
+        str += `${mins}분 ${String(secs).padStart(2,'0')}초`;
+        timerEl.innerText = str;
+        setTimeout(tick, 1000);
+    }
+    tick();
+})();
+
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
 let userUID          = null;
