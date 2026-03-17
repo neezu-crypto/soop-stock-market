@@ -1598,18 +1598,24 @@ async function flushRankingUpdate() {
         const itemMap = {};
         items.forEach(item => { itemMap[item.id] = item; });
 
-        // delta 종목 반영 — Firebase 추가 읽기 없이 allStocks 캐시 사용
-        Object.entries(deltas).forEach(([id, delta]) => {
-            const stockData = allStocks.find(s => s.id === id);
+        // delta 종목 반영 — favorites/ownedStocks 캐시 우선, 없으면 Firebase 조회
+        await Promise.all(Object.entries(deltas).map(async ([id, delta]) => {
+            let stockData = favorites[id] || ownedStocks[id] || searchResults[id];
+
+            // 캐시에 없으면 Firebase에서 직접 조회
+            if (!stockData) {
+                try {
+                    const snap = await get(ref(db, `stocks/${id}`));
+                    if (snap.exists()) stockData = { ...snap.val(), id };
+                } catch(e) {}
+            }
             if (!stockData) return;
 
             if (itemMap[id]) {
-                // 이미 top5에 있으면 delta만 가산
                 itemMap[id].totalQty = Math.max(0, itemMap[id].totalQty + delta);
                 itemMap[id].price    = stockData.price;
                 itemMap[id].name     = stockData.name;
             } else {
-                // top5 밖 신규 진입 — delta만 사용 (초기화 후 0부터 집계 보장)
                 itemMap[id] = {
                     id,
                     name:     stockData.name,
@@ -1617,7 +1623,7 @@ async function flushRankingUpdate() {
                     totalQty: Math.max(0, delta)
                 };
             }
-        });
+        }));
 
         // 전체 후보 정렬 후 상위 5개 추출
         const newTop5 = Object.values(itemMap)
@@ -1630,6 +1636,8 @@ async function flushRankingUpdate() {
             items:   newTop5
         });
 
+        // 본인 화면 랭킹 즉시 갱신
+        renderRankingFromCache(newTop5);
         lastRankingWriteTime = Date.now();
 
     } catch (e) {
