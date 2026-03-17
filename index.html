@@ -1230,12 +1230,12 @@ function playHoverSound() {
     sound.play().catch(() => {});
 }
 
-// ── 랭킹 배치 누적 (브라우저에 쌓다가 20건마다 서버 반영) ────
+// ── 랭킹 배치 누적 (브라우저에 쌓다가 5건마다 서버 반영) ────
 const RANKING_BATCH_SIZE = 20;
 let rankingBuffer = {}; // { stockId: totalQtyDelta }
 let rankingBufferCount = 0; // 누적 거래 건수
 
-// 거래 시 호출 — 브라우저 버퍼에 누적 후 20건마다 서버 반영
+// 거래 시 호출 — 브라우저 버퍼에 누적 후 5건마다 서버 반영
 function accumulateRanking(stockId, qtyDelta) {
     rankingBuffer[stockId] = (rankingBuffer[stockId] || 0) + qtyDelta;
     rankingBufferCount++;
@@ -1454,17 +1454,24 @@ function renderMyPortfolio() {
         const info = userStocks[id];
         const currentPrice = stockData?.price || 0;
         totalStockValue += currentPrice * info.qty;
-        const profit = info.avg > 0
-            ? (((currentPrice - info.avg) / info.avg) * 100).toFixed(1)
+
+        // 주가 미로드 시 수익률 표시 보류
+        const priceLoaded = currentPrice > 0;
+        const profit = !priceLoaded ? null
+            : info.avg > 0 ? (((currentPrice - info.avg) / info.avg) * 100).toFixed(1)
             : '0.0';
-        const profitClass = profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
+        const profitClass = profit === null ? 'steady'
+            : profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
+        const profitText = profit === null ? '로딩 중...'
+            : `${profit > 0 ? '+' : ''}${profit}%`;
+
         const item = document.createElement('div');
         item.className = 'my-stock-item';
         item.setAttribute('data-name', name);
         item.innerHTML = `
             <div class="my-stock-info">
                 <span class="my-stock-name">${name}</span>
-                <span class="my-stock-profit ${profitClass}">${profit > 0 ? '+' : ''}${profit}%</span>
+                <span class="my-stock-profit ${profitClass}">${profitText}</span>
             </div>
             <div class="my-stock-details">
                 <span>${info.qty}주 보유</span>
