@@ -1459,7 +1459,8 @@ onAuthStateChanged(auth, async (user) => {
         // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
         tryCloseIntro();
         applyStocksMode();
-        initFavorites(); // 즐겨찾기 초기 로드
+        initFavorites();       // 즐겨찾기 초기 로드
+        loadStockNameCache();  // 종목 이름 캐시 로드 (검색 준비)
 
         try {
             // 유저별 전용 노드에 접속 시각(타임스탬프) 저장 → 퇴장 시 자동 삭제
@@ -2884,6 +2885,32 @@ function createFavoriteCard(s) {
 }
 
 // ── 검색 ────────────────────────────────────────────────
+// ── 종목 이름 목록 캐시 (검색용) ────────────────────────────
+// { id: name } 형태로 저장, 실시간 데이터(price 등) 제외
+let stockNameCache = {}; // { id: name }
+
+async function loadStockNameCache() {
+    // 1. 로컬 캐시 확인
+    const cached = loadStaticCache();
+    if (cached?.stockNames) {
+        stockNameCache = cached.stockNames;
+        return;
+    }
+    // 2. Firebase에서 이름만 로드
+    try {
+        const snap = await get(ref(db, 'stocks/'));
+        if (!snap.exists()) return;
+        const data = snap.val();
+        stockNameCache = {};
+        Object.entries(data).forEach(([id, s]) => {
+            if (s.name) stockNameCache[id] = s.name;
+        });
+        // 기존 캐시에 병합 저장
+        const existing = loadStaticCache() || {};
+        saveStaticCache({ ...existing, stockNames: stockNameCache });
+    } catch(e) {}
+}
+
 async function handleSearch(query) {
     const listDiv  = document.getElementById('stock-list');
     const emptyDiv = document.getElementById('stock-empty');
@@ -2899,19 +2926,23 @@ async function handleSearch(query) {
         return;
     }
 
-    // 검색어 있으면 stocks/ 전체에서 이름 검색 (1회 get)
     listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">🔍 검색 중...</div>`;
     if (emptyDiv) emptyDiv.style.display = 'none';
 
     try {
-        const snap = await get(ref(db, 'stocks/'));
-        if (!snap.exists()) return;
-        const data = snap.val();
-        searchResults = {};
+        // 이름 캐시 없으면 먼저 로드
+        if (Object.keys(stockNameCache).length === 0) {
+            await loadStockNameCache();
+        }
 
-        Object.entries(data).forEach(([id, stock]) => {
-            if (stock.name && stock.name.includes(q)) {
-                searchResults[id] = { ...stock, id };
+        searchResults = {};
+        Object.entries(stockNameCache).forEach(([id, name]) => {
+            if (name.includes(q)) {
+                // 즐겨찾기/보유 캐시에 실시간 데이터가 있으면 병합
+                const cached = favorites[id] || ownedStocks[id];
+                searchResults[id] = cached
+                    ? { ...cached, id }
+                    : { id, name, price: 0, change: 0, volume: 0 };
             }
         });
 
