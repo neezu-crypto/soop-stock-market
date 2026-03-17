@@ -1231,10 +1231,7 @@ function playHoverSound() {
 }
 
 // ── 랭킹 디바운싱 상태 ──────────────────────────────────────
-const RANKING_DEBOUNCE_MS = 30000;
-let rankingDebounceTimer  = null;
-let pendingDeltas         = {};
-let lastRankingWriteTime  = 0;
+// ── rankings/top5 — 접속 시 1회만 로드 ──────────────────────
 
 // ── rankings/top5 — 접속 시 1회만 로드 ──────────────────────
 get(ref(db, 'rankings/top5')).then(snap => {
@@ -1572,81 +1569,6 @@ window.logout = async function() {
         alert("로그아웃 중 오류가 발생했습니다.");
     }
 };
-
-// ── 랭킹 디바운싱 ────────────────────────────────────────────
-function scheduleRankingUpdate(stockId, qtyDelta) {
-    pendingDeltas[stockId] = (pendingDeltas[stockId] || 0) + qtyDelta;
-    if (rankingDebounceTimer !== null) return;
-    const elapsed  = Date.now() - lastRankingWriteTime;
-    const waitTime = Math.max(0, RANKING_DEBOUNCE_MS - elapsed);
-    rankingDebounceTimer = setTimeout(flushRankingUpdate, waitTime);
-}
-
-// 누적된 거래량 델타를 rankings/top5에 반영
-async function flushRankingUpdate() {
-    rankingDebounceTimer = null;
-    const deltas = { ...pendingDeltas };
-    pendingDeltas = {};
-    if (Object.keys(deltas).length === 0) return;
-
-    try {
-        const snap    = await get(ref(db, 'rankings/top5'));
-        const current = snap.exists() ? snap.val() : { items: [] };
-        const items   = current.items || [];
-
-        // top5를 id → item 맵으로 변환
-        const itemMap = {};
-        items.forEach(item => { itemMap[item.id] = item; });
-
-        // delta 종목 반영 — favorites/ownedStocks 캐시 우선, 없으면 Firebase 조회
-        await Promise.all(Object.entries(deltas).map(async ([id, delta]) => {
-            let stockData = favorites[id] || ownedStocks[id] || searchResults[id];
-
-            // 캐시에 없으면 Firebase에서 직접 조회
-            if (!stockData) {
-                try {
-                    const snap = await get(ref(db, `stocks/${id}`));
-                    if (snap.exists()) stockData = { ...snap.val(), id };
-                } catch(e) {}
-            }
-            if (!stockData) return;
-
-            if (itemMap[id]) {
-                itemMap[id].totalQty = Math.max(0, itemMap[id].totalQty + delta);
-                itemMap[id].price    = stockData.price;
-                itemMap[id].name     = stockData.name;
-            } else {
-                itemMap[id] = {
-                    id,
-                    name:     stockData.name,
-                    price:    stockData.price,
-                    totalQty: Math.max(0, delta)
-                };
-            }
-        }));
-
-        // 전체 후보 정렬 후 상위 5개 추출
-        const newTop5 = Object.values(itemMap)
-            .sort((a, b) => b.totalQty - a.totalQty)
-            .slice(0, 5);
-        newTop5.forEach((item, i) => { item.rank = i + 1; });
-
-        await set(ref(db, 'rankings/top5'), {
-            savedAt: current.savedAt || Date.now(),
-            items:   newTop5
-        });
-
-        // 본인 화면 랭킹 즉시 갱신
-        renderRankingFromCache(newTop5);
-        lastRankingWriteTime = Date.now();
-
-    } catch (e) {
-        Object.entries(deltas).forEach(([id, delta]) => {
-            pendingDeltas[id] = (pendingDeltas[id] || 0) + delta;
-        });
-        if (rankingDebounceTimer === null) rankingDebounceTimer = setTimeout(flushRankingUpdate, 15000);
-    }
-}
 
 /**
  * 차트 데이터를 분석하여 서킷브레이커 발동 여부 결정
@@ -2395,7 +2317,6 @@ const fee    = 0.003;
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
-        scheduleRankingUpdate(id, qtyDelta);
 
     } catch (error) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
