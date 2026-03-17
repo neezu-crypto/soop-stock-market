@@ -1350,18 +1350,21 @@ function renderMyPortfolio() {
     portfolioDiv.innerHTML = "";
     stockIds.forEach(id => {
         const stockData = ownedStocks[id] || favorites[id] || searchResults[id];
-        if (!stockData) return;
+        const name = stockData?.name || stockNameCache[id];
+        if (!name) return; // 이름조차 없으면 스킵
         const info = userStocks[id];
-        const currentPrice = stockData.price || 0;
+        const currentPrice = stockData?.price || 0;
         totalStockValue += currentPrice * info.qty;
-        const profit = (((currentPrice - info.avg) / info.avg) * 100).toFixed(1);
+        const profit = info.avg > 0
+            ? (((currentPrice - info.avg) / info.avg) * 100).toFixed(1)
+            : '0.0';
         const profitClass = profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
         const item = document.createElement('div');
         item.className = 'my-stock-item';
-        item.setAttribute('data-name', stockData.name);
+        item.setAttribute('data-name', name);
         item.innerHTML = `
             <div class="my-stock-info">
-                <span class="my-stock-name">${stockData.name}</span>
+                <span class="my-stock-name">${name}</span>
                 <span class="my-stock-profit ${profitClass}">${profit > 0 ? '+' : ''}${profit}%</span>
             </div>
             <div class="my-stock-details">
