@@ -3229,11 +3229,16 @@ function initFavorites() {
 }
 
 // ── 보유 주식 개별 구독 ──────────────────────────────────
+// 보유 주식의 history 로드 후 stocks/{id} 실시간 구독 시작
 function subscribeToOwned(stockId) {
-    if (ownedUnsubs[stockId]) return; // 이미 구독 중
+    if (ownedUnsubs[stockId]) { console.log('[owned] 이미 구독 중:', stockId); return; }
+
+    console.log('[owned] 구독 시작 시도:', stockId);
 
     const startOwned = () => {
+        console.log('[owned] onValue 등록:', stockId);
         ownedUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
+            console.log('[owned] 데이터 수신:', stockId, snap.exists() ? snap.val()?.price : '없음');
             if (!snap.exists()) return;
             const data = { ...snap.val(), id: stockId };
             data.history = allHistories[stockId] || [data.price, data.price];
@@ -3264,10 +3269,11 @@ function unsubscribeFromOwned(stockId) {
 
 // ── 보유 주식 변동 시 구독 재계산 ────────────────────────
 function syncOwnedSubscriptions() {
-    if (!myData?.stocks) return;
+    if (!myData?.stocks) { console.log('[sync] myData.stocks 없음'); return; }
     const currentOwned = new Set(
         Object.keys(myData.stocks).filter(id => (myData.stocks[id]?.qty || 0) > 0)
     );
+    console.log('[sync] 보유 종목:', [...currentOwned]);
     // 신규 보유 → 즉시 구독 시작
     currentOwned.forEach(id => {
         if (!ownedStocks[id]) ownedStocks[id] = { id };
