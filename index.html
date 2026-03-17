@@ -2314,6 +2314,8 @@ const fee    = 0.003;
         // history → stocksMeta/ 별도 저장 (stocks/ 전송량 감소)
         if (historyToWrite) {
             allHistories[id] = historyToWrite;
+            if (favorites[id])    favorites[id].history    = historyToWrite;
+            if (ownedStocks[id])  ownedStocks[id].history  = historyToWrite;
             set(ref(db, `stocksMeta/${id}/history`), historyToWrite).catch(() => {});
         }
 
@@ -2803,10 +2805,16 @@ function loadFavoritesFromLocal() {
 // ── 즐겨찾기 종목 개별 구독 시작 ────────────────────────
 function subscribeToFavorite(stockId) {
     if (favoriteUnsubs[stockId]) return; // 이미 구독 중
+
+    // stocksMeta/{id}/history 1회 로드
+    get(ref(db, `stocksMeta/${stockId}/history`)).then(snap => {
+        if (snap.exists()) allHistories[stockId] = snap.val();
+    }).catch(() => {});
+
     favoriteUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
         if (!snap.exists()) return;
         const data = { ...snap.val(), id: stockId };
-        data.history = allHistories[stockId] || data.history || [data.price, data.price];
+        data.history = allHistories[stockId] || [data.price, data.price];
         if (allBanners[stockId]) {
             data.bannerImg     = allBanners[stockId].bannerImg;
             data.bannerEndDate = allBanners[stockId].bannerEndDate;
@@ -3053,10 +3061,18 @@ function initFavorites() {
 // ── 보유 주식 개별 구독 ──────────────────────────────────
 function subscribeToOwned(stockId) {
     if (ownedUnsubs[stockId]) return; // 이미 구독 중
+
+    // stocksMeta/{id}/history 1회 로드
+    if (!allHistories[stockId]) {
+        get(ref(db, `stocksMeta/${stockId}/history`)).then(snap => {
+            if (snap.exists()) allHistories[stockId] = snap.val();
+        }).catch(() => {});
+    }
+
     ownedUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
         if (!snap.exists()) return;
         const data = { ...snap.val(), id: stockId };
-        data.history = allHistories[stockId] || data.history || [data.price, data.price];
+        data.history = allHistories[stockId] || [data.price, data.price];
         ownedStocks[stockId] = data;
         // 즐겨찾기에도 있으면 favorites 캐시도 갱신
         if (favorites[stockId]) favorites[stockId] = data;
