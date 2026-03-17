@@ -3268,9 +3268,10 @@ function syncOwnedSubscriptions() {
     const currentOwned = new Set(
         Object.keys(myData.stocks).filter(id => (myData.stocks[id]?.qty || 0) > 0)
     );
-    // 신규 보유 → ownedStocks에 등록 후 applyStocksMode가 구독 방식 결정
+    // 신규 보유 → 즉시 구독 시작
     currentOwned.forEach(id => {
         if (!ownedStocks[id]) ownedStocks[id] = { id };
+        subscribeToOwned(id);
     });
     // 매도 완료 → 구독 해제 (즐겨찾기에 없는 경우만)
     Object.keys(ownedStocks).forEach(id => {
@@ -3282,7 +3283,6 @@ function syncOwnedSubscriptions() {
             delete ownedStocks[id];
         }
     });
-    applyStocksMode();
 }
 
 // ── 검색창 이벤트 ────────────────────────────────────────
