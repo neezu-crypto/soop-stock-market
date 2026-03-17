@@ -2395,8 +2395,9 @@ function renderBanners() {
     let activeBanners = Object.entries(allBanners)
         .map(([id, banner]) => {
             if (!banner.bannerImg) return null;
-            // 즐겨찾기/보유 캐시에서 이름 참조, 없으면 id 사용
+            // 이름 우선순위: allBanners.name > 즐겨찾기/보유 캐시 > id
             const cached = favorites[id] || ownedStocks[id];
+            const name   = banner.name || cached?.name || id;
             let diffDays = Infinity;
             if (banner.bannerEndDate) {
                 const endDate = new Date(banner.bannerEndDate);
@@ -2405,7 +2406,7 @@ function renderBanners() {
             }
             return {
                 id,
-                name:     cached?.name || banner.name || id,
+                name,
                 price:    cached?.price || 0,
                 ...banner,
                 diffDays
@@ -2681,25 +2682,82 @@ function stopStocksMeta() {
     if (stocksMetaUnsubscribe) { stocksMetaUnsubscribe(); stocksMetaUnsubscribe = null; }
 }
 
-// ── stocksBanner/ — 배너 최초 1회 로드 ───────────────────────
-get(ref(db, 'stocksBanner/')).then(snap => {
-    if (!snap.exists()) return;
-    const data = snap.val();
-    Object.entries(data).forEach(([id, banner]) => {
-        allBanners[id] = banner;
-        const stock = allStocks.find(s => s.id === id);
-        if (stock) {
-            stock.bannerImg     = banner.bannerImg;
-            stock.bannerEndDate = banner.bannerEndDate;
-            stock.bannerIsPaid  = banner.bannerIsPaid;
-            stock.link          = banner.link;
-        }
-    });
-    // stocksBanner 로드 완료 시 항상 재렌더링 (isBannerRendered 무관)
-    // → stocks/ onValue보다 늦게 도착해도 배너가 정상 표시됨
-    renderBanners();
-    isBannerRendered = true;
-}).catch(() => {});
+// ── 정적 데이터 로컬 캐시 (이름/배너 등 잘 바뀌지 않는 데이터) ──
+const CACHE_KEY     = 'soop_static_cache';
+const CACHE_TTL_MS  = 24 * 60 * 60 * 1000; // 24시간
+
+function loadStaticCache() {
+    try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return null;
+        const { ts, data } = JSON.parse(raw);
+        if (Date.now() - ts > CACHE_TTL_MS) return null; // 만료
+        return data;
+    } catch(e) { return null; }
+}
+
+function saveStaticCache(data) {
+    try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+    } catch(e) {}
+}
+
+// ── stocksBanner/ — 배너 최초 1회 로드 (로컬 캐시 우선) ─────
+(async () => {
+    // 1. 로컬 캐시 확인
+    const cached = loadStaticCache();
+    if (cached?.banners) {
+        Object.assign(allBanners, cached.banners);
+        // 만료일은 캐시 제외 → Firebase에서 최신값 가져오기
+        get(ref(db, 'stocksBanner/')).then(snap => {
+            if (!snap.exists()) return;
+            Object.entries(snap.val()).forEach(([id, b]) => {
+                if (allBanners[id]) allBanners[id].bannerEndDate = b.bannerEndDate;
+            });
+            renderBanners();
+            isBannerRendered = true;
+        }).catch(() => { renderBanners(); isBannerRendered = true; });
+        return;
+    }
+
+    // 2. 캐시 없으면 Firebase에서 로드
+    try {
+        const snap = await get(ref(db, 'stocksBanner/'));
+        if (!snap.exists()) return;
+        const data = snap.val();
+
+        Object.entries(data).forEach(([id, banner]) => {
+            allBanners[id] = banner;
+        });
+
+        // 이름 없는 배너 종목 → stocks/{id}/name 조회
+        const idsNeedingName = Object.keys(allBanners).filter(id =>
+            !allBanners[id].name
+        );
+        await Promise.all(idsNeedingName.map(async id => {
+            try {
+                const nameSnap = await get(ref(db, `stocks/${id}/name`));
+                if (nameSnap.exists()) allBanners[id].name = nameSnap.val();
+            } catch(e) {}
+        }));
+
+        // 3. 로컬에 캐시 저장 (만료일 제외한 정적 필드만)
+        const cacheData = {};
+        Object.entries(allBanners).forEach(([id, b]) => {
+            cacheData[id] = {
+                name:        b.name,
+                bannerImg:   b.bannerImg,
+                link:        b.link,
+                bannerIsPaid: b.bannerIsPaid,
+                // bannerEndDate는 자주 바뀌므로 캐시 제외
+            };
+        });
+        saveStaticCache({ banners: cacheData });
+
+        renderBanners();
+        isBannerRendered = true;
+    } catch(e) {}
+})();
 
 // ══════════════════════════════════════════════════════════
 // 즐겨찾기 시스템 (온디맨드 방식)
