@@ -657,7 +657,7 @@
 </div>
 
 <!-- ── 정기점검 오버레이 ── -->
-<div id="maintenance-overlay" style="display:none;" tabindex="0">
+<div id="maintenance-overlay" style="display:flex;" tabindex="0">
     <div class="maintenance-content" style="max-width: 480px;"> <div class="maintenance-icon">🚀</div>
         <div class="maintenance-title">시스템 안정화 및 보안 강화 안내</div>
         
@@ -1090,20 +1090,15 @@ const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const auth = getAuth(app);
 
-// ── siteConfig 상태 변수 (async 블록보다 먼저 선언) ─────────
+// ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
-let siteConfigReady = false;
+let siteConfigReady = true; // 점검창 기본 표시 방식으로 변경 — siteConfig 불필요
 
-// ── siteConfig 즉시 로드 (get) ───────────────────────────────
-get(ref(db, 'siteConfig/')).then(snap => {
-    siteConfig      = snap.val() || {};
-    siteConfigReady = true;
+// siteConfig 실시간 구독 (관리자 전용 — 시장 운영 시간 등 참조용)
+onValue(ref(db, 'siteConfig/'), (snap) => {
+    siteConfig = snap.val() || {};
     applyMarketState();
-    tryCloseIntro(); // 마감이면 stocks 없어도 인트로 즉시 닫힘
-}).catch(() => {
-    siteConfigReady = true;
-    tryCloseIntro();
-});
+}).catch?.(() => {});
 
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
@@ -1365,45 +1360,22 @@ function selectStockForSearch(stockName) {
 // ── UI 갱신 ──────────────────────────────────────────────────
 let accountWarnShown = false;
 
-// ── 인트로 닫기 시도 ─────────────────────────────────────────
+// ── 거래화면 진입 시도 ───────────────────────────────────────
+// 점검창이 기본 표시 → 관리자만 진입 가능
 function tryCloseIntro() {
-    if (!siteConfigReady) return; // siteConfig 아직 미수신
-
     const introOverlay = document.getElementById('intro-overlay');
-    if (!introOverlay || introOverlay.classList.contains('hidden')) return;
 
-    // 관리자 계정이면 마감 여부 무관하게 거래화면으로 진입
+    // 관리자 계정이면 applyMarketState가 점검창 숨기고 거래화면 진입 처리
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) {
-        const maintOverlay = document.getElementById('maintenance-overlay');
-        if (maintOverlay) maintOverlay.style.display = 'none';
-        setTimeout(() => { introOverlay.classList.add('hidden'); }, 500);
-        return;
-    }
-
-    // 마감/점검 여부 — 데이터로 직접 판단
-    const isBlocked = !!siteConfig.maintenance || (
-        siteConfig.marketHours?.enabled && !isMarketOpen()
-    );
-
-    if (isBlocked) {
         applyMarketState();
-        introOverlay.classList.add('hidden');
+        if (introOverlay && !introOverlay.classList.contains('hidden')) {
+            setTimeout(() => { introOverlay.classList.add('hidden'); }, 300);
+        }
         return;
     }
 
-    // 오픈 시간 → auth 완료 후 즉시 인트로 제거 (stocks 로드 불필요)
-    if (!auth.currentUser) return;
-
-    setTimeout(() => {
-        introOverlay.classList.add('hidden');
-        if (!accountWarnShown && auth.currentUser?.isAnonymous) {
-            accountWarnShown = true;
-            setTimeout(() => {
-                document.getElementById('account-warn-overlay')?.classList.add('active');
-            }, 600);
-        }
-    }, 500);
+    // 일반 유저 — 점검창 유지 (진입 불가)
 }
 
 function updateUI(isFullRender = true) {
@@ -2285,10 +2257,12 @@ const fee    = 0.003;
 
             historyToWrite = history; // stocksMeta/에 저장할 history
 
+            // history 필드 제외하고 stocks/ 업데이트
+            // eslint-disable-next-line no-unused-vars
+            const { history: _h, ...stockWithoutHistory } = currentStock;
             return {
-                ...currentStock,
+                ...stockWithoutHistory,
                 price:   newPrice,
-                history: history,
                 volume:  (currentStock.volume || 0) + qty,
                 change:  (((newPrice - prevPrice) / prevPrice) * 100).toFixed(2)
             };
