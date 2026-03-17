@@ -3245,6 +3245,7 @@ function subscribeToOwned(stockId) {
             ownedStocks[stockId] = data;
             if (favorites[stockId]) favorites[stockId] = data;
             renderFavoriteList();
+            renderMyPortfolio(); // 포트폴리오 수익률 갱신
         });
     };
 
