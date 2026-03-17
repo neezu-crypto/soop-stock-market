@@ -2231,6 +2231,8 @@ const fee    = 0.003;
     let cashDelta    = 0;  // 트랜잭션 성공 후 적용할 현금 변동액
     let userStockNew = null; // 트랜잭션 성공 후 적용할 보유 주식 정보
     let historyToWrite = null; // 트랜잭션 후 stocksMeta/에 저장할 history
+    let qtyDelta     = 0;  // 랭킹 업데이트용 수량 변화
+    let finalPrice   = 0;  // 분봉 업데이트용 최종 거래 가격
 
     try {
         let abortReason = null; // 트랜잭션 중단 사유
