@@ -2414,6 +2414,13 @@ const fee    = 0.003;
                 }
             }
 
+            // 즐겨찾기/보유 모두 없으면 카드 리스트에서 즉시 제거
+            if (currentQty === 0 && !favorites[id]) {
+                renderFavoriteList();
+                renderMyPortfolio();
+                return;
+            }
+
             if (card && stockData) {
                 updateCardContent(card, stockData,
                     myData?.stocks?.[id] || { qty: 0, avg: 0 });
