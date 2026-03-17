@@ -2429,7 +2429,17 @@ const fee    = 0.003;
 
             // 즐겨찾기/보유 모두 없으면 카드 리스트에서 즉시 제거
             if (currentQty === 0 && !favorites[id]) {
-                renderFavoriteList();
+                const searchVal = document.getElementById('search-input')?.value?.trim() || '';
+                if (searchVal) {
+                    // 검색 중이면 카드 유지 + 버튼/보유수만 갱신
+                    if (card && stockData) {
+                        updateCardContent(card, stockData, { qty: 0, avg: 0 });
+                        const favBtn = card.querySelector('.btn-favorite');
+                        if (favBtn) { favBtn.textContent = '☆'; favBtn.title = '즐겨찾기 추가'; }
+                    }
+                } else {
+                    renderFavoriteList();
+                }
                 renderMyPortfolio();
                 return;
             }
