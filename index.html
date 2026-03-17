@@ -2967,6 +2967,16 @@ async function handleSearch(query) {
                         if (card && myData) {
                             updateCardContent(card, searchResults[id],
                                 (myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+                            // updateCardContent 후 즐겨찾기 버튼 복원
+                            if (!card.querySelector('.btn-favorite')) {
+                                const favBtn = document.createElement('button');
+                                const isFav  = !!favorites[id];
+                                favBtn.className   = 'btn-favorite';
+                                favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+                                favBtn.textContent = isFav ? '⭐' : '☆';
+                                favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(id); };
+                                card.querySelector('.price-group')?.appendChild(favBtn);
+                            }
                         }
                     }
                 } catch(e) {}
