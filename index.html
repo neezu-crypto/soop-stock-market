@@ -1230,8 +1230,73 @@ function playHoverSound() {
     sound.play().catch(() => {});
 }
 
-// ── 랭킹 디바운싱 상태 ──────────────────────────────────────
-// ── rankings/top5 — 접속 시 1회만 로드 ──────────────────────
+// ── 랭킹 배치 누적 (브라우저에 쌓다가 20건마다 서버 반영) ────
+const RANKING_BATCH_SIZE = 20;
+let rankingBuffer = {}; // { stockId: totalQtyDelta }
+let rankingBufferCount = 0; // 누적 거래 건수
+
+// 거래 시 호출 — 브라우저 버퍼에 누적 후 20건마다 서버 반영
+function accumulateRanking(stockId, qtyDelta) {
+    rankingBuffer[stockId] = (rankingBuffer[stockId] || 0) + qtyDelta;
+    rankingBufferCount++;
+    if (rankingBufferCount >= RANKING_BATCH_SIZE) {
+        flushRankingBuffer();
+    }
+}
+
+// 버퍼 → rankings/top5 서버 반영
+async function flushRankingBuffer() {
+    if (Object.keys(rankingBuffer).length === 0) return;
+    const deltas = { ...rankingBuffer };
+    rankingBuffer = {};
+    rankingBufferCount = 0;
+
+    try {
+        const snap    = await get(ref(db, 'rankings/top5'));
+        const current = snap.exists() ? snap.val() : { items: [] };
+        const itemMap = {};
+        (current.items || []).forEach(item => { itemMap[item.id] = item; });
+
+        await Promise.all(Object.entries(deltas).map(async ([id, delta]) => {
+            let stockData = favorites[id] || ownedStocks[id] || searchResults[id];
+            if (!stockData) {
+                try {
+                    const s = await get(ref(db, `stocks/${id}`));
+                    if (s.exists()) stockData = { ...s.val(), id };
+                } catch(e) {}
+            }
+            if (!stockData) return;
+
+            if (itemMap[id]) {
+                itemMap[id].totalQty = Math.max(0, itemMap[id].totalQty + delta);
+                itemMap[id].price    = stockData.price;
+                itemMap[id].name     = stockData.name;
+            } else {
+                itemMap[id] = { id, name: stockData.name, price: stockData.price, totalQty: Math.max(0, delta) };
+            }
+        }));
+
+        const newTop5 = Object.values(itemMap)
+            .sort((a, b) => b.totalQty - a.totalQty)
+            .slice(0, 5);
+        newTop5.forEach((item, i) => { item.rank = i + 1; });
+
+        await set(ref(db, 'rankings/top5'), { savedAt: current.savedAt || Date.now(), items: newTop5 });
+        renderRankingFromCache(newTop5);
+
+    } catch(e) {
+        // 실패 시 버퍼에 복원
+        Object.entries(deltas).forEach(([id, delta]) => {
+            rankingBuffer[id] = (rankingBuffer[id] || 0) + delta;
+        });
+        rankingBufferCount += Object.keys(deltas).length;
+    }
+}
+
+// 페이지 종료 시 미전송 버퍼 처리
+window.addEventListener('beforeunload', () => {
+    if (Object.keys(rankingBuffer).length > 0) flushRankingBuffer();
+});
 
 // ── rankings/top5 — 접속 시 1회만 로드 ──────────────────────
 get(ref(db, 'rankings/top5')).then(snap => {
@@ -2317,6 +2382,7 @@ const fee    = 0.003;
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
+        accumulateRanking(id, qtyDelta); // 브라우저 버퍼에 누적
 
     } catch (error) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
