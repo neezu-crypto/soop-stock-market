@@ -2340,6 +2340,25 @@ const fee    = 0.003;
         setTimeout(() => {
             isTrading = false;
             updateUI(true);
+            // 거래한 종목 카드 즉시 업데이트 (보유수, 버튼 활성화)
+            const card = stockElements[id];
+            if (card) {
+                const stockData = favorites[id] || ownedStocks[id] || searchResults[id];
+                if (stockData) {
+                    updateCardContent(card, stockData,
+                        (myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+                    // 즐겨찾기 버튼 복원
+                    if (!card.querySelector('.btn-favorite')) {
+                        const favBtn = document.createElement('button');
+                        const isFav  = !!favorites[id];
+                        favBtn.className   = 'btn-favorite';
+                        favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+                        favBtn.textContent = isFav ? '⭐' : '☆';
+                        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(id); };
+                        card.querySelector('.price-group')?.appendChild(favBtn);
+                    }
+                }
+            }
         }, cooldownTime);
     }
 };
