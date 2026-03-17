@@ -628,6 +628,30 @@
         #stock-empty .empty-icon { font-size: 48px; }
         #stock-empty .empty-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
         #stock-empty .empty-desc  { font-size: 13px; line-height: 1.7; }
+        /* ── 절전 모드 오버레이 ── */
+        #power-save-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 8888;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 14px;
+            backdrop-filter: blur(1px);
+            animation: fadeInDim 0.5s ease;
+        }
+        #power-save-overlay.active { display: flex; }
+        @keyframes fadeInDim {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        .power-save-icon  { font-size: 40px; }
+        .power-save-title {
+            font-size: 15px; font-weight: 800; color: #f8fafc;
+            letter-spacing: 0.5px;
+        }
+        .power-save-desc  { font-size: 13px; color: #94a3b8; }
     </style>
 </head>
 <body>
@@ -654,6 +678,13 @@
             괜찮아요, 익명으로 계속할게요
         </button>
     </div>
+</div>
+
+<!-- ── 절전 모드 오버레이 ── -->
+<div id="power-save-overlay">
+    <div class="power-save-icon">🌙</div>
+    <div class="power-save-title">데이터 절전 모드 ON</div>
+    <div class="power-save-desc">터치하거나 움직이면 해제됩니다</div>
 </div>
 
 <!-- ── 정기점검 오버레이 ── -->
@@ -1039,10 +1070,12 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWi
 const MAINTENANCE_START = -1;  // 비활성화 — 운영시간은 관리자 페이지 siteConfig/marketHours로 제어
 const MAINTENANCE_END   = -1;
 
+// 하드코딩 정기점검 시간 여부 반환 (현재 비활성화)
 function isMaintenanceTime() {
     return false; // 하드코딩 정기점검 비활성화
 }
 
+// 다음 오픈 시각까지 남은 시간(ms) 반환
 function getTimeUntilOpen() {
     // siteConfig.marketHours 기반으로 오픈까지 남은 시간 계산
     const mh = (typeof siteConfig !== 'undefined') ? siteConfig.marketHours : null;
@@ -1186,6 +1219,7 @@ let hoverPoolIdx  = 0;
 let lastHoverTime = 0;
 const HOVER_COOLDOWN_MS = 80; // 너무 빠른 연속 재생 방지
 
+// 카드 호버 효과음 재생 (쿨다운 적용)
 function playHoverSound() {
     const now = Date.now();
     if (now - lastHoverTime < HOVER_COOLDOWN_MS) return;
@@ -1212,6 +1246,7 @@ onValue(ref(db, 'rankings/top5'), (snap) => {
     renderRankingFromCache(snap.val().items || []);
 });
 
+// 캐시된 랭킹 데이터를 상단 배너에 렌더링
 function renderRankingFromCache(items) {
     const rankDiv = document.getElementById('top-rankers');
     if (!rankDiv) return;
@@ -1248,6 +1283,7 @@ onValue(ref(db, 'siteConfig/'), (snap) => {
     tryCloseIntro();
 });
 
+// 현재 시각이 전체 오픈 시간 이내인지 여부 반환
 function isMarketOpen() {
     const mh = siteConfig.marketHours;
     if (!mh || !mh.enabled) return true;
@@ -1276,6 +1312,7 @@ function isRegularMarket() {
     return nowMins >= rOpenMins || nowMins < rCloseMins;
 }
 
+// 마감/점검 여부에 따라 오버레이 표시 및 시장 모드 배너 업데이트
 function applyMarketState() {
     const overlay = document.getElementById('maintenance-overlay');
     const timerEl = document.getElementById('maintenance-timer');
@@ -1376,6 +1413,7 @@ function renderMyPortfolio() {
     if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
 }
 
+// 종목명으로 검색창 자동 입력 후 포커스
 function selectStockForSearch(stockName) {
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
@@ -1407,6 +1445,7 @@ function tryCloseIntro() {
     // 일반 유저 — 점검창 유지 (진입 불가)
 }
 
+// 잔고·보유 주식 패널 갱신
 function updateUI(isFullRender = true) {
     const cashDisplay = document.getElementById('my-cash');
     if (myData) {
@@ -1420,6 +1459,7 @@ window.closeAccountWarn = function() {
     document.getElementById('account-warn-overlay')?.classList.remove('active');
 };
 
+// 구글 팝업으로 로그인 또는 익명 계정에 연동
 window.loginWithGoogle = async function() {
     try {
         const provider = new GoogleAuthProvider();
@@ -1542,6 +1582,7 @@ function scheduleRankingUpdate(stockId, qtyDelta) {
     rankingDebounceTimer = setTimeout(flushRankingUpdate, waitTime);
 }
 
+// 누적된 거래량 델타를 rankings/top5에 반영
 async function flushRankingUpdate() {
     rankingDebounceTimer = null;
     const deltas = { ...pendingDeltas };
@@ -1837,6 +1878,7 @@ async function fetchChartBanner() {
     }
 }
 
+// 차트 모달 헤더의 종목명·현재가·변동률 업데이트
 function updateChartModalHeader(s) {
     const isUp = (s.change || 0) >= 0;
     document.getElementById('cm-name').textContent   = s.name;
@@ -2409,6 +2451,7 @@ window.togglePortfolio = function() {
     }
 };
 
+// 모바일 보유 주식 패널 닫기
 window.closePortfolio = function() {
     const panel = document.getElementById('my-stocks-container');
     const dim   = document.getElementById('portfolio-dim');
@@ -2568,6 +2611,7 @@ function renderStocks(filter = "") {
     });
 }
 
+// 종목 데이터로 주식 카드 DOM 엘리먼트 생성
 function createStockCard(s) {
     const card = document.createElement('div');
     card.className = 'stock-card';
@@ -2586,6 +2630,7 @@ function createStockCard(s) {
     return card;
 }
 
+// 기존 카드의 주가·변동률·보유량 등 내용만 업데이트
 function updateCardContent(card, s, userStock) {
     const isUp = (s.change || 0) >= 0;
     let myProfit = 0, profitClass = 'steady';
@@ -2635,6 +2680,7 @@ let stocksUnsubscribe  = null; // onValue 해제 함수
 let stocksPollTimer    = null; // 폴링 타이머
 let stocksMetaUnsubscribe = null; // stocksMeta onValue 해제 함수
 
+// stocks/ Firebase 스냅샷을 allStocks 캐시에 반영
 function processStocksSnap(snap) {
     const data      = snap.val() || {};
     const newStocks = Object.keys(data).map(key => {
@@ -2669,6 +2715,7 @@ function processStocksSnap(snap) {
     updateUI(false);
 }
 
+// stocks/ 실시간 구독과 폴링 타이머 모두 해제
 function stopAllStocksSubscriptions() {
     if (typeof stocksUnsubscribe === 'function') {
         stocksUnsubscribe(); // Firebase 리스너 해제
@@ -2682,10 +2729,12 @@ function stopAllStocksSubscriptions() {
     }
 }
 
+// stocks/ 전체 실시간 구독 시작 (레거시 — 현재 미사용)
 function startStocksRealtime() {
     // 즐겨찾기 기반 개별 구독으로 대체 — 전체 구독 불필요
 }
 
+// stocks/ 전체 폴링 시작 (레거시 — 현재 미사용)
 function startStocksPolling() {
     // 즐겨찾기 기반 개별 구독으로 대체 — 전체 폴링 불필요
 }
@@ -2695,9 +2744,12 @@ let isUserActive      = true;
 let activityTimer     = null;
 let favPollTimers     = {}; // 비정규장 폴링 타이머 { stockId: intervalId }
 
+// 마우스·터치·키 입력 감지 시 호출 — 비활동 타이머 리셋 및 구독 재개
 function onUserActive() {
     if (!isUserActive) {
         isUserActive = true;
+        // 절전 모드 오버레이 숨김
+        document.getElementById('power-save-overlay')?.classList.remove('active');
         applyStocksMode(); // 활동 재개 → 구독 재시작
     }
     clearTimeout(activityTimer);
@@ -2707,6 +2759,7 @@ function onUserActive() {
     }, 10000);
 }
 
+// 비활동 10초 후 주가·분봉 구독 전부 일시 중단
 function pauseAllSubscriptions() {
     // 실시간 구독 해제
     Object.keys(favoriteUnsubs).forEach(id => {
@@ -2721,6 +2774,8 @@ function pauseAllSubscriptions() {
     });
     // stocksMeta/ 구독 해제
     stopStocksMeta();
+    // 절전 모드 오버레이 표시
+    document.getElementById('power-save-overlay')?.classList.add('active');
 }
 
 // 마우스/터치/키보드 이벤트 감지
@@ -2728,6 +2783,7 @@ function pauseAllSubscriptions() {
     document.addEventListener(evt, onUserActive, { passive: true });
 });
 
+// 정규장/비정규장/마감 상태에 따라 구독 방식(실시간/폴링/중단) 결정
 function applyStocksMode() {
     const mh      = siteConfig.marketHours;
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
@@ -2798,6 +2854,7 @@ function startStocksMeta() {
     });
 }
 
+// stocksMeta/ 실시간 구독 해제
 function stopStocksMeta() {
     if (stocksMetaUnsubscribe) { stocksMetaUnsubscribe(); stocksMetaUnsubscribe = null; }
 }
@@ -2806,6 +2863,7 @@ function stopStocksMeta() {
 const CACHE_KEY     = 'soop_static_cache';
 const CACHE_TTL_MS  = 24 * 60 * 60 * 1000; // 24시간
 
+// localStorage에서 정적 데이터 캐시 로드 (24시간 TTL)
 function loadStaticCache() {
     try {
         const raw = localStorage.getItem(CACHE_KEY);
@@ -2816,6 +2874,7 @@ function loadStaticCache() {
     } catch(e) { return null; }
 }
 
+// 정적 데이터를 localStorage에 저장 (타임스탬프 포함)
 function saveStaticCache(data) {
     try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
@@ -2891,6 +2950,7 @@ function saveFavoritesToLocal() {
     } catch(e) {}
 }
 
+// localStorage에서 즐겨찾기 종목 ID 목록 로드
 function loadFavoritesFromLocal() {
     try {
         const raw = localStorage.getItem('soop_favorites');
@@ -2923,6 +2983,7 @@ function subscribeToFavorite(stockId) {
     });
 }
 
+// 즐겨찾기 종목 구독 해제 및 favorites 캐시에서 제거
 function unsubscribeFromFavorite(stockId) {
     if (favoriteUnsubs[stockId]) {
         favoriteUnsubs[stockId]();
@@ -3015,6 +3076,7 @@ function createFavoriteCard(s) {
 // { id: name } 형태로 저장, 실시간 데이터(price 등) 제외
 let stockNameCache = {}; // { id: name }
 
+// 종목 이름 목록을 localStorage 캐시 또는 Firebase에서 로드
 async function loadStockNameCache() {
     // 1. 로컬 캐시 확인
     const cached = loadStaticCache();
@@ -3037,6 +3099,7 @@ async function loadStockNameCache() {
     } catch(e) {}
 }
 
+// 검색어 입력 처리 — 이름 캐시 기반 검색 후 가격 조회
 async function handleSearch(query) {
     const listDiv  = document.getElementById('stock-list');
     const emptyDiv = document.getElementById('stock-empty');
@@ -3180,6 +3243,7 @@ function subscribeToOwned(stockId) {
     }
 }
 
+// 보유 종목 구독 해제 및 ownedStocks 캐시에서 제거
 function unsubscribeFromOwned(stockId) {
     if (ownedUnsubs[stockId]) {
         ownedUnsubs[stockId]();
