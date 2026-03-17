@@ -2489,7 +2489,8 @@ function createSparkline(history, isUp) {
     const min   = Math.min(...history);
     const max   = Math.max(...history);
     const range = max - min || 1;
-    const pts   = history.map((v, i) => `${(i / 19) * 80},${35 - ((v - min) / range * 35)}`).join(' ');
+    const last  = history.length - 1;
+    const pts   = history.map((v, i) => `${(i / last) * 80},${35 - ((v - min) / range * 35)}`).join(' ');
     return `<svg class="chart-container"><polyline class="sparkline ${isUp ? 'up' : 'down'}" points="${pts}" /></svg>`;
 }
 
@@ -2809,6 +2810,7 @@ function subscribeToFavorite(stockId) {
     // history 먼저 로드 후 stocks 구독 시작 (타이밍 보장)
     get(ref(db, `stocksMeta/${stockId}/history`)).then(snap => {
         if (snap.exists()) allHistories[stockId] = snap.val();
+        console.log(`[history] ${stockId} 로드:`, allHistories[stockId]?.length ?? 0, '개');
     }).catch(() => {}).finally(() => {
         favoriteUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
             if (!snap.exists()) return;
