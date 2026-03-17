@@ -1123,6 +1123,10 @@ let favoriteUnsubs   = {};    // { stockId: unsubscribe함수 }
 let searchResults    = {};    // 검색 결과 캐시 { stockId: stockData }
 let searchUnsub      = null;  // 현재 검색 종목 구독 해제 함수
 
+// ── 보유 주식 구독 상태 ──────────────────────────────────────
+let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
+let ownedUnsubs      = {};    // { stockId: unsubscribe함수 }
+
 // ── 서킷브레이커(CB) 및 거래량 상태 ──────────────────────────
 // 종목별 서킷브레이커 상태 관리 (동결 시간, 마지막 발동 시각, 예약 타이머)
 const circuitBreakerState = {}; 
@@ -1485,8 +1489,6 @@ onAuthStateChanged(auth, async (user) => {
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
-                // ...serverData를 앞에 두고 cash/stocks를 뒤에서 보정
-                // → serverData에 cash/stocks가 있으면 그대로, 없으면 기본값 적용
                 myData = {
                     ...serverData,
                     cash:   serverData.cash   ?? 1000000,
@@ -1496,6 +1498,9 @@ onAuthStateChanged(auth, async (user) => {
                 if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
             }
             updateUI(true);
+
+            // 보유 주식 구독 재계산 (보유량 변동 시마다)
+            syncOwnedSubscriptions();
         });
     } else {
         signInAnonymously(auth);
@@ -2744,10 +2749,15 @@ window.toggleFavorite = function(stockId) {
         unsubscribeFromFavorite(stockId);
         saveFavoritesToLocal();
         renderFavoriteList();
-        // 검색 결과가 있으면 검색 화면 버튼 업데이트
         renderSearchResults();
     } else {
-        // 추가 — 현재 검색 결과에서 데이터 가져오기
+        // 추가 — 보유하지 않은 종목은 5개까지만 허용
+        const isOwned       = (myData?.stocks?.[stockId]?.qty || 0) > 0;
+        const nonOwnedCount = Object.keys(favorites).filter(id => !(myData?.stocks?.[id]?.qty > 0)).length;
+        if (!isOwned && nonOwnedCount >= 5) {
+            alert('보유하지 않은 종목의 즐겨찾기는 최대 5개까지 가능합니다.');
+            return;
+        }
         const stockData = searchResults[stockId];
         if (stockData) favorites[stockId] = stockData;
         subscribeToFavorite(stockId);
@@ -2762,7 +2772,14 @@ function renderFavoriteList() {
     const emptyDiv = document.getElementById('stock-empty');
     if (!listDiv) return;
 
-    const items = Object.values(favorites);
+    // 즐겨찾기 + 보유 주식 합산 (중복 제거)
+    const merged = {};
+    Object.entries(favorites).forEach(([id, s])    => { merged[id] = { ...s, isFavorite: true }; });
+    Object.entries(ownedStocks).forEach(([id, s])   => {
+        if (merged[id]) merged[id] = { ...merged[id], ...s, isFavorite: true };
+        else merged[id] = { ...s, isFavorite: false };
+    });
+    const items = Object.values(merged);
 
     if (items.length === 0) {
         listDiv.innerHTML  = '';
@@ -2779,7 +2796,13 @@ function renderFavoriteList() {
     listDiv.innerHTML = '';
     stockElements     = {};
     items.sort((a, b) => (b.price || 0) - (a.price || 0)).forEach(s => {
-        const card = createFavoriteCard(s);
+        const card   = createStockCard(s);
+        const favBtn = document.createElement('button');
+        favBtn.className   = 'btn-favorite';
+        favBtn.title       = s.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가';
+        favBtn.textContent = s.isFavorite ? '⭐' : '☆';
+        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(s.id); };
+        card.querySelector('.price-group')?.appendChild(favBtn);
         listDiv.appendChild(card);
         stockElements[s.id] = card;
     });
@@ -2878,6 +2901,44 @@ function initFavorites() {
         return;
     }
     savedIds.forEach(id => subscribeToFavorite(id));
+}
+
+// ── 보유 주식 개별 구독 ──────────────────────────────────
+function subscribeToOwned(stockId) {
+    if (ownedUnsubs[stockId]) return; // 이미 구독 중
+    ownedUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
+        if (!snap.exists()) return;
+        const data = { ...snap.val(), id: stockId };
+        data.history = allHistories[stockId] || data.history || [data.price, data.price];
+        ownedStocks[stockId] = data;
+        // 즐겨찾기에도 있으면 favorites 캐시도 갱신
+        if (favorites[stockId]) favorites[stockId] = data;
+        renderFavoriteList();
+    });
+}
+
+function unsubscribeFromOwned(stockId) {
+    if (ownedUnsubs[stockId]) {
+        ownedUnsubs[stockId]();
+        delete ownedUnsubs[stockId];
+    }
+    delete ownedStocks[stockId];
+}
+
+// ── 보유 주식 변동 시 구독 재계산 ────────────────────────
+function syncOwnedSubscriptions() {
+    if (!myData?.stocks) return;
+    const currentOwned = new Set(
+        Object.keys(myData.stocks).filter(id => (myData.stocks[id]?.qty || 0) > 0)
+    );
+    // 신규 보유 → 구독 시작
+    currentOwned.forEach(id => subscribeToOwned(id));
+    // 매도 완료 → 구독 해제 (즐겨찾기에 없는 경우만)
+    Object.keys(ownedUnsubs).forEach(id => {
+        if (!currentOwned.has(id) && !favorites[id]) {
+            unsubscribeFromOwned(id);
+        }
+    });
 }
 
 // ── 검색창 이벤트 ────────────────────────────────────────
