@@ -1260,6 +1260,8 @@ async function flushRankingBuffer() {
         (current.items || []).forEach(item => { itemMap[item.id] = item; });
 
         await Promise.all(Object.entries(deltas).map(async ([id, delta]) => {
+            if (delta === 0) return; // delta가 0이면 스킵
+
             let stockData = favorites[id] || ownedStocks[id] || searchResults[id];
             if (!stockData) {
                 try {
@@ -1277,6 +1279,11 @@ async function flushRankingBuffer() {
                 itemMap[id] = { id, name: stockData.name, price: stockData.price, totalQty: Math.max(0, delta) };
             }
         }));
+
+        // totalQty가 0인 종목 제거
+        Object.keys(itemMap).forEach(id => {
+            if ((itemMap[id].totalQty || 0) <= 0) delete itemMap[id];
+        });
 
         const newTop5 = Object.values(itemMap)
             .sort((a, b) => b.totalQty - a.totalQty)
@@ -2393,7 +2400,7 @@ const fee    = 0.003;
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
-        accumulateRanking(id, qtyDelta); // 브라우저 버퍼에 누적
+        accumulateRanking(id, qty); // 매수/매도 관계없이 거래량으로 관심도 집계
 
     } catch (error) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
