@@ -610,6 +610,24 @@
             transition: color 0.2s;
         }
         .btn-skip-login:hover { color: #94a3b8; }
+        /* ── 즐겨찾기 ── */
+        .btn-favorite {
+            background: none; border: none; cursor: pointer;
+            font-size: 18px; padding: 4px 6px; line-height: 1;
+            transition: transform 0.15s;
+        }
+        .btn-favorite:hover { transform: scale(1.2); }
+
+        /* ── 검색 빈 화면 안내 ── */
+        #stock-empty {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 60px 20px; color: var(--text-sub);
+            text-align: center; gap: 12px;
+        }
+        #stock-empty .empty-icon { font-size: 48px; }
+        #stock-empty .empty-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
+        #stock-empty .empty-desc  { font-size: 13px; line-height: 1.7; }
     </style>
 </head>
 <body>
@@ -975,13 +993,23 @@
     <header>
         <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
         <p style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
-            종목 카드를 클릭하면 분봉 차트를 확인할 수 있습니다.
+            관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.
         </p>
         <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
     <div class="ranking-bar">
         <div class="ranking-title">🔥 인기 TOP 5</div>
         <div id="top-rankers" class="ranking-list">불러오는 중...</div>
+    </div>
+    <!-- 빈 화면 안내 (즐겨찾기 없을 때) -->
+    <div id="stock-empty">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">관심 종목을 추가해보세요</div>
+        <div class="empty-desc">
+            위 검색창에서 스트리머를 검색한 뒤<br>
+            ⭐ 버튼을 눌러 즐겨찾기하면<br>
+            여기에 실시간으로 표시됩니다.
+        </div>
     </div>
     <main id="stock-list"></main>
     <div class="banner-container" id="banner-list">
@@ -1088,6 +1116,16 @@ let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
 let marketCheckTimer = null;
+
+// ── 즐겨찾기 상태 ────────────────────────────────────────────
+let favorites        = {};    // { stockId: { id, name, price, ... } }
+let favoriteUnsubs   = {};    // { stockId: unsubscribe함수 }
+let searchResults    = {};    // 검색 결과 캐시 { stockId: stockData }
+let searchUnsub      = null;  // 현재 검색 종목 구독 해제 함수
+
+// ── 보유 주식 구독 상태 ──────────────────────────────────────
+let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
+let ownedUnsubs      = {};    // { stockId: unsubscribe함수 }
 
 // ── 서킷브레이커(CB) 및 거래량 상태 ──────────────────────────
 // 종목별 서킷브레이커 상태 관리 (동결 시간, 마지막 발동 시각, 예약 타이머)
@@ -1337,8 +1375,6 @@ function tryCloseIntro() {
     // 관리자 계정이면 마감 여부 무관하게 거래화면으로 진입
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) {
-        if (allStocks.length === 0) return; // stocks 로드 대기
-        // 마감 오버레이도 함께 제거
         const maintOverlay = document.getElementById('maintenance-overlay');
         if (maintOverlay) maintOverlay.style.display = 'none';
         setTimeout(() => { introOverlay.classList.add('hidden'); }, 500);
@@ -1351,14 +1387,13 @@ function tryCloseIntro() {
     );
 
     if (isBlocked) {
-        // 마감/점검 → stocks 없어도 즉시 인트로 제거 + 마감 오버레이 표시
         applyMarketState();
         introOverlay.classList.add('hidden');
         return;
     }
 
-    // 오픈 시간 → stocks도 로드됐을 때만 인트로 제거
-    if (allStocks.length === 0) return;
+    // 오픈 시간 → auth 완료 후 즉시 인트로 제거 (stocks 로드 불필요)
+    if (!auth.currentUser) return;
 
     setTimeout(() => {
         introOverlay.classList.add('hidden');
@@ -1376,10 +1411,6 @@ function updateUI(isFullRender = true) {
     if (myData) {
         if (cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
         renderMyPortfolio();
-    }
-    if (isFullRender && allStocks.length > 0) {
-        renderStocks(document.getElementById('search-input')?.value || "");
-        tryCloseIntro();
     }
 }
 
@@ -1428,6 +1459,7 @@ onAuthStateChanged(auth, async (user) => {
         // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
         tryCloseIntro();
         applyStocksMode();
+        initFavorites(); // 즐겨찾기 초기 로드
 
         try {
             // 유저별 전용 노드에 접속 시각(타임스탬프) 저장 → 퇴장 시 자동 삭제
@@ -1457,8 +1489,6 @@ onAuthStateChanged(auth, async (user) => {
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
-                // ...serverData를 앞에 두고 cash/stocks를 뒤에서 보정
-                // → serverData에 cash/stocks가 있으면 그대로, 없으면 기본값 적용
                 myData = {
                     ...serverData,
                     cash:   serverData.cash   ?? 1000000,
@@ -1468,6 +1498,9 @@ onAuthStateChanged(auth, async (user) => {
                 if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
             }
             updateUI(true);
+
+            // 보유 주식 구독 재계산 (보유량 변동 시마다)
+            syncOwnedSubscriptions();
         });
     } else {
         signInAnonymously(auth);
@@ -2594,50 +2627,28 @@ function stopAllStocksSubscriptions() {
 }
 
 function startStocksRealtime() {
-    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-    
-    // 실행 전 무조건 기존 구독 청소 (중복 방지)
-    stopAllStocksSubscriptions();
-
-    // 관리자가 아니고 정규장도 아니라면 실시간 구독을 거부하고 폴링으로 전환
-    if (!isAdmin && !isRegularMarket()) {
-        console.warn("⚠️ 정규장이 아니므로 실시간 구독을 취소하고 폴링으로 전환합니다.");
-        startStocksPolling(); 
-        return;
-    }
-
-    console.log("🚀 실시간 구독 시작");
-    stocksUnsubscribe = onValue(ref(db, 'stocks/'), processStocksSnap);
+    // 즐겨찾기 기반 개별 구독으로 대체 — 전체 구독 불필요
 }
 
 function startStocksPolling() {
-    if (stocksPollTimer) return; // 이미 폴링 중
-    if (stocksUnsubscribe) { stocksUnsubscribe(); stocksUnsubscribe = null; }
-    // 즉시 1회 실행 후 30초마다 반복
-    get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
-    stocksPollTimer = setInterval(() => {
-        get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
-    }, 30000);
+    // 즐겨찾기 기반 개별 구독으로 대체 — 전체 폴링 불필요
 }
 
 function applyStocksMode() {
     const mh      = siteConfig.marketHours;
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
 
-    // 마감 시간이면 모든 구독/폴링 중단 (관리자 제외)
+    // 마감 시간이면 즐겨찾기 구독도 중단 (관리자 제외)
     if (!isAdmin && mh && mh.enabled && !isMarketOpen()) {
-        stopAllStocksSubscriptions();
+        Object.keys(favoriteUnsubs).forEach(id => {
+            if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
+        });
         stopStocksMeta();
         return;
     }
-    // 오픈 시간 또는 관리자 → stocksMeta 구독 시작
+    // 오픈 시간 → stocksMeta 구독 + 즐겨찾기 재구독
     startStocksMeta();
-    // 정규장/비정규장 분기
-    if (isRegularMarket()) {
-        startStocksRealtime();
-    } else {
-        startStocksPolling();
-    }
+    Object.keys(favorites).forEach(id => subscribeToFavorite(id));
 }
 
 // 최초 실행
@@ -2686,8 +2697,254 @@ get(ref(db, 'stocksBanner/')).then(snap => {
     isBannerRendered = true;
 }).catch(() => {});
 
-// ── 검색창 ───────────────────────────────────────────────────
-document.getElementById('search-input')?.addEventListener('input', () => updateUI(true));
+// ══════════════════════════════════════════════════════════
+// 즐겨찾기 시스템 (온디맨드 방식)
+// ══════════════════════════════════════════════════════════
+
+// ── 즐겨찾기 저장/불러오기 ───────────────────────────────
+function saveFavoritesToLocal() {
+    try {
+        const ids = Object.keys(favorites);
+        localStorage.setItem('soop_favorites', JSON.stringify(ids));
+    } catch(e) {}
+}
+
+function loadFavoritesFromLocal() {
+    try {
+        const raw = localStorage.getItem('soop_favorites');
+        return raw ? JSON.parse(raw) : [];
+    } catch(e) { return []; }
+}
+
+// ── 즐겨찾기 종목 개별 구독 시작 ────────────────────────
+function subscribeToFavorite(stockId) {
+    if (favoriteUnsubs[stockId]) return; // 이미 구독 중
+    favoriteUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
+        if (!snap.exists()) return;
+        const data = { ...snap.val(), id: stockId };
+        data.history = allHistories[stockId] || data.history || [data.price, data.price];
+        if (allBanners[stockId]) {
+            data.bannerImg     = allBanners[stockId].bannerImg;
+            data.bannerEndDate = allBanners[stockId].bannerEndDate;
+            data.bannerIsPaid  = allBanners[stockId].bannerIsPaid;
+            data.link          = allBanners[stockId].link;
+        }
+        favorites[stockId] = data;
+        renderFavoriteList();
+    });
+}
+
+function unsubscribeFromFavorite(stockId) {
+    if (favoriteUnsubs[stockId]) {
+        favoriteUnsubs[stockId]();
+        delete favoriteUnsubs[stockId];
+    }
+    delete favorites[stockId];
+}
+
+// ── 즐겨찾기 추가/제거 ───────────────────────────────────
+window.toggleFavorite = function(stockId) {
+    if (favorites[stockId]) {
+        // 제거
+        unsubscribeFromFavorite(stockId);
+        saveFavoritesToLocal();
+        renderFavoriteList();
+        renderSearchResults();
+    } else {
+        // 추가 — 보유하지 않은 종목은 5개까지만 허용
+        const isOwned       = (myData?.stocks?.[stockId]?.qty || 0) > 0;
+        const nonOwnedCount = Object.keys(favorites).filter(id => !(myData?.stocks?.[id]?.qty > 0)).length;
+        if (!isOwned && nonOwnedCount >= 5) {
+            alert('보유하지 않은 종목의 즐겨찾기는 최대 5개까지 가능합니다.');
+            return;
+        }
+        const stockData = searchResults[stockId];
+        if (stockData) favorites[stockId] = stockData;
+        subscribeToFavorite(stockId);
+        saveFavoritesToLocal();
+        renderSearchResults();
+    }
+};
+
+// ── 즐겨찾기 목록 렌더링 ────────────────────────────────
+function renderFavoriteList() {
+    const listDiv  = document.getElementById('stock-list');
+    const emptyDiv = document.getElementById('stock-empty');
+    if (!listDiv) return;
+
+    // 즐겨찾기 + 보유 주식 합산 (중복 제거)
+    const merged = {};
+    Object.entries(favorites).forEach(([id, s])    => { merged[id] = { ...s, isFavorite: true }; });
+    Object.entries(ownedStocks).forEach(([id, s])   => {
+        if (merged[id]) merged[id] = { ...merged[id], ...s, isFavorite: true };
+        else merged[id] = { ...s, isFavorite: false };
+    });
+    const items = Object.values(merged);
+
+    if (items.length === 0) {
+        listDiv.innerHTML  = '';
+        stockElements      = {};
+        if (emptyDiv) emptyDiv.style.display = 'flex';
+        return;
+    }
+    if (emptyDiv) emptyDiv.style.display = 'none';
+
+    // 검색창에 값이 있으면 검색 결과 모드 유지
+    const searchVal = document.getElementById('search-input')?.value || '';
+    if (searchVal.trim()) return;
+
+    listDiv.innerHTML = '';
+    stockElements     = {};
+    items.sort((a, b) => (b.price || 0) - (a.price || 0)).forEach(s => {
+        const card   = createStockCard(s);
+        const favBtn = document.createElement('button');
+        favBtn.className   = 'btn-favorite';
+        favBtn.title       = s.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가';
+        favBtn.textContent = s.isFavorite ? '⭐' : '☆';
+        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(s.id); };
+        card.querySelector('.price-group')?.appendChild(favBtn);
+        listDiv.appendChild(card);
+        stockElements[s.id] = card;
+    });
+}
+
+// ── 즐겨찾기 카드 생성 (일반 카드 + ⭐ 버튼) ──────────
+function createFavoriteCard(s) {
+    const card = createStockCard(s);
+    // 즐겨찾기 해제 버튼 추가
+    const favBtn = document.createElement('button');
+    favBtn.className = 'btn-favorite';
+    favBtn.title     = '즐겨찾기 해제';
+    favBtn.textContent = '⭐';
+    favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(s.id); };
+    card.querySelector('.price-group')?.appendChild(favBtn);
+    return card;
+}
+
+// ── 검색 ────────────────────────────────────────────────
+async function handleSearch(query) {
+    const listDiv  = document.getElementById('stock-list');
+    const emptyDiv = document.getElementById('stock-empty');
+    if (!listDiv) return;
+
+    const q = query.trim();
+
+    // 검색어 없으면 즐겨찾기 목록으로 복귀
+    if (!q) {
+        searchResults = {};
+        if (searchUnsub) { searchUnsub(); searchUnsub = null; }
+        renderFavoriteList();
+        return;
+    }
+
+    // 검색어 있으면 stocks/ 전체에서 이름 검색 (1회 get)
+    listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">🔍 검색 중...</div>`;
+    if (emptyDiv) emptyDiv.style.display = 'none';
+
+    try {
+        const snap = await get(ref(db, 'stocks/'));
+        if (!snap.exists()) return;
+        const data = snap.val();
+        searchResults = {};
+
+        Object.entries(data).forEach(([id, stock]) => {
+            if (stock.name && stock.name.includes(q)) {
+                searchResults[id] = { ...stock, id };
+            }
+        });
+
+        renderSearchResults();
+    } catch(e) {
+        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;">검색 실패: ${e.message}</div>`;
+    }
+}
+
+// ── 검색 결과 렌더링 ─────────────────────────────────────
+function renderSearchResults() {
+    const listDiv  = document.getElementById('stock-list');
+    const emptyDiv = document.getElementById('stock-empty');
+    const q        = document.getElementById('search-input')?.value?.trim() || '';
+    if (!q || !listDiv) return;
+
+    const items = Object.values(searchResults)
+        .sort((a, b) => (b.price || 0) - (a.price || 0));
+
+    if (items.length === 0) {
+        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">검색 결과가 없습니다.</div>`;
+        if (emptyDiv) emptyDiv.style.display = 'none';
+        return;
+    }
+    if (emptyDiv) emptyDiv.style.display = 'none';
+
+    listDiv.innerHTML = '';
+    stockElements     = {};
+    items.forEach(s => {
+        const card   = createStockCard(s);
+        const favBtn = document.createElement('button');
+        const isFav  = !!favorites[s.id];
+        favBtn.className   = 'btn-favorite';
+        favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+        favBtn.textContent = isFav ? '⭐' : '☆';
+        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(s.id); };
+        card.querySelector('.price-group')?.appendChild(favBtn);
+        listDiv.appendChild(card);
+        stockElements[s.id] = card;
+    });
+}
+
+// ── 초기 즐겨찾기 로드 (로컬스토리지 → Firebase 구독) ──
+function initFavorites() {
+    const savedIds = loadFavoritesFromLocal();
+    if (savedIds.length === 0) {
+        const emptyDiv = document.getElementById('stock-empty');
+        if (emptyDiv) emptyDiv.style.display = 'flex';
+        return;
+    }
+    savedIds.forEach(id => subscribeToFavorite(id));
+}
+
+// ── 보유 주식 개별 구독 ──────────────────────────────────
+function subscribeToOwned(stockId) {
+    if (ownedUnsubs[stockId]) return; // 이미 구독 중
+    ownedUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
+        if (!snap.exists()) return;
+        const data = { ...snap.val(), id: stockId };
+        data.history = allHistories[stockId] || data.history || [data.price, data.price];
+        ownedStocks[stockId] = data;
+        // 즐겨찾기에도 있으면 favorites 캐시도 갱신
+        if (favorites[stockId]) favorites[stockId] = data;
+        renderFavoriteList();
+    });
+}
+
+function unsubscribeFromOwned(stockId) {
+    if (ownedUnsubs[stockId]) {
+        ownedUnsubs[stockId]();
+        delete ownedUnsubs[stockId];
+    }
+    delete ownedStocks[stockId];
+}
+
+// ── 보유 주식 변동 시 구독 재계산 ────────────────────────
+function syncOwnedSubscriptions() {
+    if (!myData?.stocks) return;
+    const currentOwned = new Set(
+        Object.keys(myData.stocks).filter(id => (myData.stocks[id]?.qty || 0) > 0)
+    );
+    // 신규 보유 → 구독 시작
+    currentOwned.forEach(id => subscribeToOwned(id));
+    // 매도 완료 → 구독 해제 (즐겨찾기에 없는 경우만)
+    Object.keys(ownedUnsubs).forEach(id => {
+        if (!currentOwned.has(id) && !favorites[id]) {
+            unsubscribeFromOwned(id);
+        }
+    });
+}
+
+// ── 검색창 이벤트 ────────────────────────────────────────
+document.getElementById('search-input')?.addEventListener('input', (e) => {
+    handleSearch(e.target.value);
+});
 
 // ── ESC 키로 모달 닫기 ───────────────────────────────────────
 document.addEventListener('keydown', (e) => {
