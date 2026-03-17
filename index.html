@@ -1235,10 +1235,11 @@ const RANKING_BATCH_SIZE = 20;
 let rankingBuffer = {}; // { stockId: totalQtyDelta }
 let rankingBufferCount = 0; // 누적 거래 건수
 
-// 거래 시 호출 — 브라우저 버퍼에 누적 후 5건마다 서버 반영
+// 거래 시 호출 — 브라우저 버퍼에 누적 후 20건마다 서버 반영
 function accumulateRanking(stockId, qtyDelta) {
     rankingBuffer[stockId] = (rankingBuffer[stockId] || 0) + qtyDelta;
     rankingBufferCount++;
+    console.log(`[ranking] 버퍼 누적: ${rankingBufferCount}/${RANKING_BATCH_SIZE}`, rankingBuffer);
     if (rankingBufferCount >= RANKING_BATCH_SIZE) {
         flushRankingBuffer();
     }
@@ -1246,10 +1247,11 @@ function accumulateRanking(stockId, qtyDelta) {
 
 // 버퍼 → rankings/top5 서버 반영
 async function flushRankingBuffer() {
-    if (Object.keys(rankingBuffer).length === 0) return;
+    if (Object.keys(rankingBuffer).length === 0) { console.log('[ranking] 버퍼 비어있음, 스킵'); return; }
     const deltas = { ...rankingBuffer };
     rankingBuffer = {};
     rankingBufferCount = 0;
+    console.log('[ranking] flush 시작, deltas:', deltas);
 
     try {
         const snap    = await get(ref(db, 'rankings/top5'));
@@ -1265,7 +1267,7 @@ async function flushRankingBuffer() {
                     if (s.exists()) stockData = { ...s.val(), id };
                 } catch(e) {}
             }
-            if (!stockData) return;
+            if (!stockData) { console.log('[ranking] stockData 없음:', id); return; }
 
             if (itemMap[id]) {
                 itemMap[id].totalQty = Math.max(0, itemMap[id].totalQty + delta);
@@ -1282,9 +1284,11 @@ async function flushRankingBuffer() {
         newTop5.forEach((item, i) => { item.rank = i + 1; });
 
         await set(ref(db, 'rankings/top5'), { savedAt: current.savedAt || Date.now(), items: newTop5 });
+        console.log('[ranking] 서버 반영 완료:', newTop5);
         renderRankingFromCache(newTop5);
 
     } catch(e) {
+        console.error('[ranking] flush 실패:', e.message);
         // 실패 시 버퍼에 복원
         Object.entries(deltas).forEach(([id, delta]) => {
             rankingBuffer[id] = (rankingBuffer[id] || 0) + delta;
