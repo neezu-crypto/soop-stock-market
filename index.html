@@ -1349,7 +1349,7 @@ function renderMyPortfolio() {
 
     portfolioDiv.innerHTML = "";
     stockIds.forEach(id => {
-        const stockData = allStocks.find(s => s.id === id);
+        const stockData = ownedStocks[id] || favorites[id] || searchResults[id];
         if (!stockData) return;
         const info = userStocks[id];
         const currentPrice = stockData.price || 0;
