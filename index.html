@@ -1236,15 +1236,15 @@ let rankingDebounceTimer  = null;
 let pendingDeltas         = {};
 let lastRankingWriteTime  = 0;
 
-// ── rankings/top5 구독 ──────────────────────────────────────
-onValue(ref(db, 'rankings/top5'), (snap) => {
+// ── rankings/top5 — 접속 시 1회만 로드 ──────────────────────
+get(ref(db, 'rankings/top5')).then(snap => {
     if (!snap.exists()) {
         const rankDiv = document.getElementById('top-rankers');
         if (rankDiv) rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">집계 데이터 없음</span>`;
         return;
     }
     renderRankingFromCache(snap.val().items || []);
-});
+}).catch(() => {});
 
 // 캐시된 랭킹 데이터를 상단 배너에 렌더링
 function renderRankingFromCache(items) {
