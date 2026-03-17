@@ -1132,7 +1132,7 @@ let userUID          = null;
 let allStocks        = [];
 let allHistories     = {}; // stocksMeta/{id}/history 캐시
 let allBanners       = {}; // stocksBanner/{id} 캐시
-let isTrading        = false;
+let isTrading        = null; // 거래 중인 종목 ID (null이면 미거래)
 let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
@@ -2161,7 +2161,8 @@ window.trade = async function (id, type, qty = 1) {
         alert(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
         return;
     }
-    if (isTrading) return;
+    if (isTrading === id) return; // 같은 종목 중복 거래 방지
+    if (isTrading) {} // 다른 종목은 허용
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
 
     // 4. 점검 모드 + 시장 마감 체크 (관리자는 무시)
@@ -2202,7 +2203,7 @@ window.trade = async function (id, type, qty = 1) {
         }
     }
 
-    isTrading = true;
+    isTrading = id; // 해당 종목만 버튼 비활성화
     updateUI(false);
 
     if (!myData.stocks) myData.stocks = {};
@@ -2353,7 +2354,7 @@ const fee    = 0.003;
         else alert("거래 중 오류가 발생했습니다.");
     } finally {
         setTimeout(() => {
-            isTrading = false;
+            isTrading = null;
             updateUI(true);
             // 거래한 종목 카드 즉시 업데이트 (보유수, 버튼 활성화)
             const card = stockElements[id];
@@ -2366,7 +2367,7 @@ const fee    = 0.003;
 
             if (card && stockData) {
                 updateCardContent(card, stockData,
-                    (myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+                    myData?.stocks?.[id] || { qty: 0, avg: 0 });
                 // 즐겨찾기 버튼 복원
                 if (!card.querySelector('.btn-favorite')) {
                     const favBtn = document.createElement('button');
@@ -2378,6 +2379,7 @@ const fee    = 0.003;
                     card.querySelector('.price-group')?.appendChild(favBtn);
                 }
             }
+            renderMyPortfolio();
         }, cooldownTime);
     }
 };
@@ -2609,10 +2611,10 @@ function updateCardContent(card, s, userStock) {
             <div class="trade-btn-row">
                 <button class="btn-trade-buy"  data-trade-type="buy"
                     onclick="event.stopPropagation(); tradeWithInput('${s.id}','buy')"
-                    ${isTrading ? 'disabled' : ''}>매수</button>
+                    ${isTrading === s.id ? 'disabled' : ''}>매수</button>
                 <button class="btn-trade-sell" data-trade-type="sell"
                     onclick="event.stopPropagation(); tradeWithInput('${s.id}','sell')"
-                    ${isTrading ? 'disabled' : ''}>매도</button>
+                    ${isTrading === s.id ? 'disabled' : ''}>매도</button>
             </div>
         </div>
     `;
