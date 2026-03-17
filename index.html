@@ -2949,6 +2949,29 @@ async function handleSearch(query) {
         });
 
         renderSearchResults();
+
+        // 캐시 없는 종목 → 실시간 가격 즉시 조회 후 카드 업데이트
+        const needsPrice = Object.keys(searchResults).filter(id =>
+            !favorites[id] && !ownedStocks[id]
+        );
+        if (needsPrice.length > 0) {
+            needsPrice.forEach(async id => {
+                try {
+                    const snap = await get(ref(db, `stocks/${id}`));
+                    if (!snap.exists()) return;
+                    const data = snap.val();
+                    // 검색창이 아직 같은 검색어면 결과 업데이트
+                    if (document.getElementById('search-input')?.value?.trim() === q) {
+                        searchResults[id] = { ...data, id };
+                        const card = stockElements[id];
+                        if (card && myData) {
+                            updateCardContent(card, searchResults[id],
+                                (myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+                        }
+                    }
+                } catch(e) {}
+            });
+        }
     } catch(e) {
         listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;">검색 실패: ${e.message}</div>`;
     }
