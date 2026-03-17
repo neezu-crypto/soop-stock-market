@@ -2719,6 +2719,8 @@ function pauseAllSubscriptions() {
     Object.keys(favPollTimers).forEach(id => {
         clearInterval(favPollTimers[id]); delete favPollTimers[id];
     });
+    // stocksMeta/ 구독 해제
+    stopStocksMeta();
 }
 
 // 마우스/터치/키보드 이벤트 감지
