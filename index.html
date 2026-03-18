@@ -2127,48 +2127,49 @@ function renderCandleChart() {
 window.tradeFromModal = function(type) {
     if (!chartModalStockId) return;
     const input = document.getElementById('modal-qty-input');
-    const qty   = Math.min(Math.max(1, parseInt(input?.value) || 1), 100);
-    if (input) input.value = qty;
+    if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
+    const qty = Math.min(Math.max(1, parseInt(input.value) || 1), 100);
     window.trade(chartModalStockId, type, qty);
 };
 
 // ── 카드 수량 입력 거래 ──────────────────────────────────────
 window.tradeWithInput = function(id, type) {
     const input = document.getElementById(`qty-${id}`);
-    const qty   = Math.min(Math.max(1, parseInt(input?.value) || 1), 100);
-    if (input) input.value = qty;
+    if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
+    const qty = Math.min(Math.max(1, parseInt(input.value) || 1), 100);
     window.trade(id, type, qty);
 };
 
 // ── 수량 입력 클램프 (1~100 범위 강제) ──────────────────────
+// 수량을 지울수있게 허용 — 거래 시점에만 유효성 검사
 window.clampQty = function(el) {
+    if (el.value === '' || el.value === '-') return; // 입력 중 빈값 허용
     let v = parseInt(el.value);
-    if (isNaN(v) || v < 1) el.value = 1;
-    else if (v > 100)       el.value = 100;
+    if (isNaN(v)) { el.value = ''; return; }
+    if (v > 100) el.value = 100;
+    if (v < 0)   el.value = '';
 };
 
 // ── 수량 자동 조정 (blur 시 잔고/보유량 기준으로 스마트 클램프) ─
 // type: 'buy' → 잔고 기준 최대 구매 가능 수량
 // type: 'sell' → 보유 수량 기준 최대 매도 가능 수량
 window.smartClampQty = function(el, stockId, type) {
+    if (el.value === '') return; // 빈값 유지 허용
     let v = parseInt(el.value);
-    if (isNaN(v) || v < 1) { el.value = 1; return; }
+    if (isNaN(v) || v < 1) { el.value = ''; return; }
     if (v > 100) v = 100;
 
     if (!myData) { el.value = v; return; }
 
-    const stock     = allStocks.find(s => s.id === stockId);
+    const stock     = favorites[stockId] || ownedStocks[stockId] || searchResults[stockId];
     const userStock = myData.stocks?.[stockId] || { qty: 0 };
 
     if (type === 'buy' && stock) {
-        // 잔고로 살 수 있는 최대 수량 계산
-        // impact는 로그 스케일이라 근사값으로 현재가 기준 단순 계산
-        const estPrice  = Math.round(stock.price * (1 + 0.0005)); // spread 포함 대략적 가격
+        const estPrice  = Math.round(stock.price * (1 + 0.0005));
         const maxAfford = Math.floor((myData.cash || 0) / estPrice);
         const maxBuy    = Math.min(v, maxAfford, 100);
         el.value = Math.max(1, maxBuy);
     } else if (type === 'sell') {
-        // 보유량 초과 방지
         const maxSell = Math.min(v, userStock.qty, 100);
         el.value = Math.max(1, maxSell);
     } else {
@@ -2662,8 +2663,9 @@ function updateCardContent(card, s, userStock) {
         profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
     }
 
-    // 수량 입력값 보존 — 주가 변동으로 카드가 재렌더링돼도 입력값 유지
-    const prevQty = document.getElementById(`qty-${s.id}`)?.value || '1';
+    // 수량 입력값 보존 — 빈값 포함
+    const prevQtyEl = document.getElementById(`qty-${s.id}`);
+    const prevQty = prevQtyEl ? prevQtyEl.value : '1';
     card.innerHTML = `
         <div class="info-group">
             <div class="stock-name">${s.name}</div>
