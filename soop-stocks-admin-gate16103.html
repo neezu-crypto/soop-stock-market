@@ -1439,10 +1439,8 @@
                         </div>
                         <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
                     </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <input type="text" placeholder="종목 ID (예: id_xxx)" id="stock-id-${reqId}"
-                            style="flex:1; background:#1e293b; border:1px solid #334155; color:#f8fafc; padding:8px 10px; border-radius:6px; font-size:12px; outline:none;">
-                        <button onclick="approveAdRequest('${reqId}', ${req.days})"
+                    <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end;">
+                        <button onclick="approveAdRequest('${reqId}', ${req.days}, '${req.nickname}')"
                             style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px; white-space:nowrap;">수락</button>
                         <button onclick="rejectAdRequest('${reqId}')"
                             style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
@@ -1455,15 +1453,25 @@
         }
     };
 
-    window.approveAdRequest = async function(reqId, days) {
-        const stockIdEl = document.getElementById(`stock-id-${reqId}`);
-        const stockId   = stockIdEl?.value.trim();
-        if (!stockId) { alert('종목 ID를 입력해주세요.'); return; }
+    window.approveAdRequest = async function(reqId, days, nickname) {
+        // stocks/ 에서 닉네임으로 종목 ID 자동 검색
+        const stocksSnap = await get(ref(db, 'stocks/'));
+        if (!stocksSnap.exists()) { alert('종목 데이터를 불러올 수 없습니다.'); return; }
+
+        let stockId = null;
+        stocksSnap.forEach(child => {
+            if (child.val().name === nickname) stockId = child.key;
+        });
+
+        if (!stockId) {
+            alert(`❌ "${nickname}" 종목을 찾을 수 없습니다.\n종목명과 닉네임이 일치하는지 확인해주세요.`);
+            return;
+        }
 
         // 오늘부터 days일 후 만료일 자동 계산
         const endDateObj = new Date();
         endDateObj.setDate(endDateObj.getDate() + days);
-        const endDate = endDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+        const endDate = endDateObj.toISOString().split('T')[0];
 
         try {
             const snap = await get(ref(db, `adRequests/${reqId}`));
@@ -1485,7 +1493,7 @@
                 approvedAt: Date.now()
             });
 
-            alert(`✅ ${req.nickname} 수락 완료!\n만료일: ${endDate}\nstocksBanner/${stockId}에 등록됐습니다.`);
+            alert(`✅ ${req.nickname} 수락 완료!\n종목 ID: ${stockId}\n만료일: ${endDate}`);
             loadAdRequests();
         } catch(e) {
             alert('수락 실패: ' + e.message);
