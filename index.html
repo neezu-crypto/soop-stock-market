@@ -3488,7 +3488,7 @@ async function handleSearch(query) {
             });
         }
     } catch(e) {
-        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;">검색 실패: ${e.message}</div>`;
+        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;">검색 실패: ${escapeHtml(e.message)}</div>`;
     }
 }
 
