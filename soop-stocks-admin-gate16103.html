@@ -61,14 +61,13 @@
         .accordion-header {
             display: flex; align-items: center; justify-content: space-between;
             cursor: pointer; user-select: none;
-            margin-bottom: 0; border-bottom: none; padding-bottom: 0;
         }
         .accordion-header h1 { margin-bottom: 0; border-bottom: none; padding-bottom: 0; flex: 1; }
-        .accordion-arrow { font-size: 14px; color: #64748b; transition: transform 0.25s; flex-shrink: 0; }
+        .accordion-arrow { font-size: 14px; color: #64748b; transition: transform 0.25s; flex-shrink: 0; margin-left: 10px; }
         .accordion-arrow.open { transform: rotate(180deg); }
-        .accordion-body { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
-        .accordion-body.open { max-height: 3000px; }
-        .accordion-body-inner { padding-top: 16px; border-top: 1px solid #334155; margin-top: 16px; }
+        .accordion-body { overflow: hidden; max-height: 0; transition: max-height 0.35s ease; }
+        .accordion-body.open { max-height: 4000px; }
+        .accordion-sep { border-top: 1px solid #334155; margin-top: 14px; padding-top: 14px; }
     </style>
 </head>
 <body>
@@ -85,18 +84,17 @@
 
     <!-- 🔴 점검 모드 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🔴 점검 모드 관리</h1>
             <span class="accordion-arrow open">▼</span>
         </div>
         <div class="accordion-body open">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box" style="color:#fca5a5;">
             토글을 켜면 메인 페이지 접속자 전원에게 즉시 점검 오버레이가 표시되고 거래가 차단됩니다.<br>
             <span style="color:#38bdf8;">Firebase DB의 siteConfig/maintenance 값을 변경합니다.</span>
-                </div>
         </div>
-    </div>        <div class="toggle-wrap">
+        <div class="toggle-wrap">
             <div>
                 <div class="toggle-label">점검 모드</div>
                 <div class="toggle-sub">ON 시 모든 유저 거래 즉시 차단</div>
@@ -110,23 +108,24 @@
             <span class="dot" style="background:#334155;"></span>
             <span style="color:#64748b;">상태 불러오는 중...</span>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🕐 시장 운영 시간 관리 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🕐 시장 운영 시간 관리</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">
             <b>전체 오픈 시간</b> — 거래 가능, 비실시간(30초 폴링) 모드<br>
             <b>정규장 시간</b> — 전체 오픈 시간 내에서 실시간 거래 모드<br>
             <span style="color:#38bdf8;">기준 시각: 한국 표준시 (KST) · 매일 동일하게 적용됩니다.</span>
-                </div>
         </div>
-    </div>
+
         <!-- 활성화 토글 -->
         <div class="toggle-wrap">
             <div>
@@ -186,22 +185,23 @@
 
         <!-- 현재 상태 -->
         <div id="market-hours-status" style="font-size:13px; color:#94a3b8; margin-top:10px;"></div>
+        </div>
+        </div>
     </div>
 
     <!-- 🏆 랭킹 TOP5 관리 -->
     <div class="container" style="display:block; border-color: #a855f7;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🏆 랭킹 TOP5 초기화</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">
             장 재오픈 시 랭킹을 0부터 다시 집계하고 싶을 때 사용합니다.<br>
             <span style="color:#ef4444;">초기화 시 현재 rankings/top5 데이터가 삭제됩니다.</span>
-                </div>
         </div>
-    </div>        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <span style="font-size:13px; color:#94a3b8;">저장된 TOP5 상태:</span>
             <span id="ranking-status" class="status-chip loading">불러오는 중...</span>
         </div>
@@ -215,43 +215,45 @@
                 <tbody id="ranking-preview-body"></tbody>
             </table>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🔍 개별 종목 관리 -->
     <div class="container" style="display:block">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🔍 개별 종목 관리</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="data-status-bar">
             <span>종목 데이터: <b id="stocks-load-status">로딩 중...</b></span>
             <button class="btn-success" onclick="reloadStocks()" style="padding:6px 14px; font-size:12px;">🔄 새로고침</button>
-                </div>
         </div>
-    </div>        <div class="info-box">종목 이름을 검색하여 가격을 직접 수정할 수 있습니다.</div>
+        <div class="info-box">종목 이름을 검색하여 가격을 직접 수정할 수 있습니다.</div>
         <input type="text" id="admin-search" placeholder="스트리머 검색..."
             style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box; margin-bottom:15px;">
         <div id="admin-stock-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;"></div>
+        </div>
+        </div>
     </div>
 
     <!-- 🛠 종목 상세 정보 수정 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🛠 종목 상세 정보 수정</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">닉네임을 입력하고 '불러오기'를 누르면 현재 저장된 모든 정보를 수정할 수 있습니다.</div>
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
             <input type="text" id="edit-search-name" placeholder="수정할 스트리머 닉네임"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
             <button class="btn-success" onclick="loadStockData()" style="white-space:nowrap;">불러오기</button>
-                </div>
         </div>
-    </div>        <div id="edit-form" style="display: none; flex-direction: column; gap: 10px; border-top: 1px solid #334155; padding-top: 15px;">
+        <div id="edit-form" style="display: none; flex-direction: column; gap: 10px; border-top: 1px solid #334155; padding-top: 15px;">
             <div style="font-size: 12px; color: #94a3b8;">종목 ID: <span id="edit-stock-id">-</span></div>
             <label style="font-size: 13px; color: #38bdf8;">현재 가격 (원)</label>
             <input type="number" id="edit-stock-price" style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:10px; border-radius:8px;">
@@ -270,23 +272,24 @@
             </div>
             <button class="btn-primary" style="background: #f59e0b; color: #0f172a;" onclick="updateStockData()">정보 최종 수정하기</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 📺 차트 하단 배너 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>📺 차트 하단 배너 관리</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">
             차트창 하단에 단독 노출되는 광고 배너를 설정합니다.<br>
             <span style="color:#38bdf8;">배너 사이즈: 720 × 150px · 이미지 및 GIF 지원</span><br>
             <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 무료 체험 없음 · 별풍선 80개/일</span>
-                </div>
         </div>
-    </div>        <div class="chart-banner-info-row">
+        <div class="chart-banner-info-row">
             <span>현재 배너 상태:</span>
             <span id="chart-banner-status" class="status-chip loading">불러오는 중...</span>
         </div>
@@ -321,40 +324,42 @@
             <div style="font-size:12px; color:#64748b; text-align:right; margin-top:-6px;" id="cb-enddate-preview"></div>
             <button class="btn-primary" onclick="saveChartBanner()" style="margin-top:5px;">📺 차트 배너 등록 / 교체</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 📈 주가 일괄 조정 -->
     <div class="container" style="display:block">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>📈 주가 일괄 조정 (% 단위)</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">주가 상위 100위 이내 종목만 입력한 수치만큼 주가를 변동시킵니다.</div>
         <div class="batch-control">
             <input type="number" id="percent-input" placeholder="예: 10 또는 -5">
             <button class="btn-success" onclick="adjustAllPrices()">일괄 적용</button>
-                </div>
         </div>
-    </div>    </div>
+        </div>
+        </div>
+    </div>
 
     <!-- ✂️ 액면분할 -->
     <div class="container" style="display:block; border-color: #a855f7;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>✂️ 액면분할</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">
             주가를 낮추고 유저 보유량을 비례해서 늘립니다.<br>
             <span style="color:#a855f7;">유저 손익 변화 없이 주가만 낮아집니다.</span><br>
             <span style="color:#38bdf8;">※ 주가 상위 100위 이내 종목만 적용됩니다.</span><br>
             <span style="color:#ef4444;">⚠️ 전체 유저 데이터를 수정하므로 신중하게 실행하세요.</span>
-                </div>
         </div>
-    </div>        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
             <button onclick="selectSplitRatio(2)"  id="split-btn-2"      style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">2:1</button>
             <button onclick="selectSplitRatio(5)"  id="split-btn-5"      style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">5:1</button>
             <button onclick="selectSplitRatio(10)" id="split-btn-10"     style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">10:1</button>
@@ -385,72 +390,76 @@
             <button class="btn-success" style="flex:1;" onclick="previewSplit()">🔍 미리보기</button>
             <button class="btn-primary" style="flex:2; margin-top:0; background:#a855f7; color:white;" onclick="executeSplit()">✂️ 액면분할 실행</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🧹 데이터 무결성 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🧹 데이터 무결성 관리</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box" style="color: #fca5a5;">이미 상장된 종목 중 중복된 닉네임을 찾아 정리합니다. (최초 상장본 유지)</div>
         <button class="btn-primary" style="background: #ef4444; color: white;" onclick="cleanupDuplicateStocks()">중복 닉네임 일괄 정리</button>
-            </div>
+        </div>
         </div>
     </div>
+
     <!-- 🗑 미거래 유저 데이터 정리 -->
     <div class="container" style="display:block; border-color: #f97316;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🗑 미거래 유저 데이터 정리</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box" style="color: #fed7aa;">
             한 번도 거래하지 않은 유저(잔고 1,000,000원 &amp; 보유 주식 없음)의 데이터를 삭제합니다.<br>
             <span style="color:#38bdf8;">Firebase 저장 용량과 랭킹 집계 속도를 개선합니다.</span>
-                </div>
         </div>
-    </div>        <div id="cleanup-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <div id="cleanup-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
         <div style="display:flex; gap:10px;">
             <button class="btn-success" style="flex:1;" onclick="previewInactiveUsers()">🔍 미거래 유저 집계</button>
             <button class="btn-primary" style="flex:2; margin-top:0; background:#f97316; color:white;" onclick="cleanupInactiveUsers()">🗑 미거래 유저 삭제</button>
+        </div>
+        </div>
         </div>
     </div>
 
     <!-- 🚀 스트리머 상장 및 삭제 -->
     <div class="container" style="display:block">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🚀 스트리머 상장 및 삭제</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요. <br>상장은 신규 추가, 삭제는 목록에서 제거합니다.</div>
         <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
         <div style="display: flex; gap: 10px;">
             <button class="btn-primary" onclick="uploadStocks()">일괄 상장 실행</button>
             <button class="btn-primary" style="background: #64748b;" onclick="deleteStocks()">일괄 삭제 실행</button>
-                </div>
         </div>
-    </div>    </div>
+        </div>
+        </div>
+    </div>
 
     <!-- 📺 방송국 배너 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>📺 방송국 배너 관리</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">
             닉네임이 일치하는 종목에 배너를 설정합니다.<br>
             <span style="color:#38bdf8;">유료: 기간 설정 필수 · 무료: 기간 없이 AD 표시 · 유료가 항상 상단 노출</span>
-                </div>
         </div>
-    </div>        <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
             <button id="tab-paid" onclick="switchBannerTab('paid')"
                 style="flex:1; background:#38bdf8; color:#0f172a; border:none; padding:10px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">💰 유료 홍보</button>
             <button id="tab-free" onclick="switchBannerTab('free')"
@@ -476,25 +485,28 @@
             <div id="banner-enddate-preview" style="font-size:12px; color:#64748b; text-align:right; margin-top:-4px;"></div>
             <button class="btn-primary" id="banner-submit-btn" onclick="window.addBannerToStock()">💰 유료 배너 등록</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🔄 배너 데이터 마이그레이션 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
-        <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
             <h1>🔄 배너 데이터 마이그레이션</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
-            <div class="accordion-body-inner">
+        <div class="accordion-sep">
         <div class="info-box">
             기존 <b>stocks/</b>에 저장된 배너 데이터를 <b>stocksBanner/</b> 경로로 복사합니다.<br>
             <span style="color:#38bdf8;">최초 1회 실행 후 이후 배너 등록/수정은 자동으로 양쪽에 저장됩니다.</span>
-                </div>
         </div>
-    </div>        <div id="migration-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <div id="migration-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
         <button class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="runBannerMigration()">
             🔄 배너 데이터 복사 실행
         </button>
+        </div>
+        </div>
     </div>
 
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
@@ -1162,7 +1174,7 @@
             document.getElementById('market-open').value    = data.open         || '18:00';
             document.getElementById('market-close').value   = data.close        || '06:00';
             document.getElementById('regular-open').value   = data.regularOpen  || '20:00';
-            document.getElementById('regular-close').value  = (data.regularClose === '00:00' ? '00:00' : data.regularClose) || '00:00';
+            document.getElementById('regular-close').value  = data.regularClose || '00:00';
             renderMarketHoursStatus(data);
         } catch (e) {
             if (statusEl) statusEl.innerText = '불러오기 실패';
@@ -1373,14 +1385,16 @@
             statusEl.innerText   = '❌ 오류: ' + e.message;
         }
     };
-    // ── 아코디언 토글 ──────────────────────────────────────────
-    window.toggleAccordion = function(header) {
-        const body  = header.nextElementSibling;
-        const arrow = header.querySelector('.accordion-arrow');
-        const isOpen = body.classList.contains('open');
-        body.classList.toggle('open', !isOpen);
-        arrow.classList.toggle('open', !isOpen);
-    };
+    // ── 아코디언 토글 ─────────────────────────────────────────
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const body  = header.nextElementSibling;
+            const arrow = header.querySelector('.accordion-arrow');
+            const isOpen = body.classList.contains('open');
+            body.classList.toggle('open', !isOpen);
+            arrow.classList.toggle('open', !isOpen);
+        });
+    });
 
 </script>
 </body>
