@@ -1173,6 +1173,7 @@ let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
 let marketCheckTimer = null;
+let sparklinePriceCache = {}; // { stockId: [price, ...] } — 메모리만, 새로고침 시 초기화
 
 // ── 즐겨찾기 상태 ────────────────────────────────────────────
 let favorites        = {};    // { stockId: { id, name, price, ... } }
@@ -1820,8 +1821,53 @@ function checkCircuitBreaker(stockId, candles) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// 분봉 차트 로직
+// localStorage 캔들 캐시 (6시간 TTL)
 // ══════════════════════════════════════════════════════════════
+const CANDLE_CACHE_PREFIX = 'soop_candles_';
+const CANDLE_CACHE_TTL    = 6 * 60 * 60 * 1000; // 6시간 ms
+
+// 단일 캔들을 localStorage에 저장/업데이트
+function saveCandleToLocal(stockId, candle) {
+    try {
+        const key      = CANDLE_CACHE_PREFIX + stockId;
+        const existing = loadCandlesFromLocal(stockId);
+        // 같은 ts 캔들이 있으면 병합
+        const idx = existing.findIndex(c => c.t === candle.t);
+        if (idx >= 0) {
+            existing[idx] = {
+                ...existing[idx],
+                h: Math.max(existing[idx].h, candle.h),
+                l: Math.min(existing[idx].l, candle.l),
+                c: candle.c,
+                v: existing[idx].v + candle.v,
+            };
+        } else {
+            existing.push(candle);
+        }
+        // 6시간 초과 캔들 정리
+        const cutoff = Math.floor(Date.now() / 1000) - MAX_CANDLE_MINUTES * 60;
+        const pruned = existing.filter(c => c.t >= cutoff);
+        localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data: pruned }));
+    } catch(e) { /* localStorage 용량 초과 등 무시 */ }
+}
+
+// localStorage에서 캔들 배열 로드 (TTL 초과 시 빈 배열)
+function loadCandlesFromLocal(stockId) {
+    try {
+        const key = CANDLE_CACHE_PREFIX + stockId;
+        const raw = localStorage.getItem(key);
+        if (!raw) return [];
+        const { ts, data } = JSON.parse(raw);
+        // 저장 시각이 6시간 초과면 만료
+        if (Date.now() - ts > CANDLE_CACHE_TTL) {
+            localStorage.removeItem(key);
+            return [];
+        }
+        return Array.isArray(data) ? data : [];
+    } catch(e) { return []; }
+}
+
+
 
 /**
  * 현재 분(분 단위 UNIX timestamp, 초 단위)을 반환
@@ -1867,6 +1913,10 @@ async function flushCandlestick(stockId) {
     const buf = candleBuffer[stockId];
     if (!buf) return;
 
+    // ── localStorage 캔들 캐시 저장 (6시간 TTL) ──────────────
+    saveCandleToLocal(stockId, { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts });
+
+    // ── Firebase write (기존 유지) ────────────────────────────
     const candleRef = ref(db, `candlesticks/${stockId}/${buf.ts}`);
     try {
         await runTransaction(candleRef, (current) => {
@@ -1892,22 +1942,21 @@ async function flushCandlestick(stockId) {
 }
 
 /**
- * 360분 이전 캔들 삭제
+ * 360분 이전 캔들 정리 — localStorage는 saveCandleToLocal에서 자동 처리
+ * Firebase 쪽 오래된 캔들 삭제만 유지
  */
 async function pruneOldCandles(stockId) {
-    const cutoff  = (Math.floor(Date.now() / 60000) - MAX_CANDLE_MINUTES) * 60;
-    const oldRef  = ref(db, `candlesticks/${stockId}`);
+    const cutoff = (Math.floor(Date.now() / 60000) - MAX_CANDLE_MINUTES) * 60;
+    const oldRef = ref(db, `candlesticks/${stockId}`);
     try {
         const snap = await get(oldRef);
         if (!snap.exists()) return;
-        const data = snap.val();
+        const data     = snap.val();
         const toDelete = Object.keys(data).filter(ts => parseInt(ts) < cutoff);
         for (const ts of toDelete) {
             await set(ref(db, `candlesticks/${stockId}/${ts}`), null);
         }
-    } catch (e) {
-        // 정리 실패는 무시 (다음 거래 때 재시도)
-    }
+    } catch (e) { /* 무시 */ }
 }
 
 /**
@@ -2060,33 +2109,39 @@ document.querySelectorAll('.int-tab').forEach(tab => {
 });
 
 // ── Firebase 분봉 1회 읽기 (onValue 구독 없음) ──────────────
-// 모달을 열 때 단 1번만 get() 호출 → 이후 탭 전환은 캐시만 사용
+// localStorage 우선 → 없으면 Firebase fallback (read 절약)
 async function fetchCandles(stockId) {
     if (chartIsLoading) return;
     chartIsLoading = true;
 
-    // 로딩 표시
     const emptyMsg = document.getElementById('chart-empty-msg');
     const canvas   = document.getElementById('candleChart');
-    if (canvas)   canvas.style.display   = 'none';
+    if (canvas)   canvas.style.display = 'none';
     if (emptyMsg) {
         emptyMsg.style.display = 'flex';
         emptyMsg.innerHTML = `<div class="empty-icon">⏳</div><div>데이터 불러오는 중...</div>`;
     }
 
     try {
-        const snap = await get(ref(db, `candlesticks/${stockId}`));
-        if (snap.exists()) {
-            const raw = snap.val();
-            candleDataCache = Object.values(raw)
-                .map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c, v: c.v || 0, t: c.t }))
-                .sort((a, b) => a.t - b.t);
-
-	    // [추가] 데이터 로드 후 서킷브레이커 기준 체크
+        // 1. localStorage 캐시 우선 확인
+        const local = loadCandlesFromLocal(stockId);
+        if (local.length > 0) {
+            candleDataCache = local.sort((a, b) => a.t - b.t);
             checkCircuitBreaker(stockId, candleDataCache);
-
         } else {
-            candleDataCache = [];
+            // 2. 로컬 없으면 Firebase fallback (최초 접속 또는 만료 시)
+            const snap = await get(ref(db, `candlesticks/${stockId}`));
+            if (snap.exists()) {
+                const raw = snap.val();
+                candleDataCache = Object.values(raw)
+                    .map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c, v: c.v || 0, t: c.t }))
+                    .sort((a, b) => a.t - b.t);
+                checkCircuitBreaker(stockId, candleDataCache);
+                // Firebase에서 가져온 데이터를 localStorage에 저장
+                candleDataCache.forEach(c => saveCandleToLocal(stockId, c));
+            } else {
+                candleDataCache = [];
+            }
         }
     } catch (e) {
         console.warn('[candle] fetch 실패:', e.message);
@@ -2095,10 +2150,8 @@ async function fetchCandles(stockId) {
         chartIsLoading = false;
     }
 
-    // 모달이 닫혔으면 렌더 스킵
     if (!chartModalStockId) return;
 
-    // 빈 데이터 메시지 원복 후 차트 렌더
     if (emptyMsg) {
         emptyMsg.innerHTML = `
             <div class="empty-icon">📊</div>
@@ -2830,7 +2883,11 @@ function sanitizeUrl(url, fallback) {
 }
 
 // ── 스파크라인 ───────────────────────────────────────────────
-function createSparkline(history, isUp) {
+function createSparkline(stockId, fallbackPrice, isUp) {
+    // sparklinePriceCache 우선 — 없으면 현재가 2개로 flat line
+    const history = (sparklinePriceCache[stockId]?.length >= 2)
+        ? sparklinePriceCache[stockId]
+        : (fallbackPrice ? [fallbackPrice, fallbackPrice] : null);
     if (!history || history.length < 2) return '';
     const min   = Math.min(...history);
     const max   = Math.max(...history);
@@ -2933,7 +2990,7 @@ function updateCardContent(card, s, userStock) {
                 <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
                 <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
             </div>
-            <div class="chart-wrap">${createSparkline(s.history || [s.price, s.price], isUp)}</div>
+            <div class="chart-wrap">${createSparkline(s.id, s.price, isUp)}</div>
             <div class="trade-input-wrap">
                 <div class="trade-qty-row">
                     <input type="number" class="trade-qty-input" id="qty-${s.id}"
@@ -2973,7 +3030,7 @@ function updateCardContent(card, s, userStock) {
     if (changeEl) { changeEl.textContent = `${isUp ? '+' : ''}${s.change || 0}%`; changeEl.className = `price-change ${isUp ? 'up' : 'down'}`; }
 
     const chartWrap = card.querySelector('.chart-wrap');
-    if (chartWrap) chartWrap.innerHTML = createSparkline(s.history || [s.price, s.price], isUp);
+    if (chartWrap) chartWrap.innerHTML = createSparkline(s.id, s.price, isUp);
 
     const buyBtn  = card.querySelector('.btn-trade-buy');
     const sellBtn = card.querySelector('.btn-trade-sell');
@@ -3010,6 +3067,11 @@ function processStocksSnap(snap) {
         newStocks.forEach(ns => {
             const old = allStocks.find(os => os.id === ns.id);
             if (old && (old.price !== ns.price || old.change !== ns.change)) {
+                // 주가 변동 → 스파크라인 캐시에 누적 (최대 20개)
+                if (!sparklinePriceCache[ns.id]) sparklinePriceCache[ns.id] = [old.price];
+                sparklinePriceCache[ns.id].push(ns.price);
+                if (sparklinePriceCache[ns.id].length > 20) sparklinePriceCache[ns.id].shift();
+
                 const card = stockElements[ns.id];
                 if (!card) return;
                 const qtyInput = document.getElementById(`qty-${ns.id}`);
@@ -3253,6 +3315,13 @@ function subscribeToFavorite(stockId) {
     favoriteUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
         if (!snap.exists()) return;
         const data = { ...snap.val(), id: stockId };
+        // 주가 변동 → 스파크라인 캐시 누적
+        const prevPrice = favorites[stockId]?.price;
+        if (prevPrice && prevPrice !== data.price) {
+            if (!sparklinePriceCache[stockId]) sparklinePriceCache[stockId] = [prevPrice];
+            sparklinePriceCache[stockId].push(data.price);
+            if (sparklinePriceCache[stockId].length > 20) sparklinePriceCache[stockId].shift();
+        }
         if (allBanners[stockId]) {
             data.bannerImg     = allBanners[stockId].bannerImg;
             data.bannerEndDate = allBanners[stockId].bannerEndDate;
@@ -3488,7 +3557,7 @@ async function handleSearch(query) {
             });
         }
     } catch(e) {
-        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;">검색 실패: ${escapeHtml(e.message)}</div>`;
+        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;">검색 실패: ${e.message}</div>`;
     }
 }
 
