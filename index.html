@@ -1001,10 +1001,29 @@
             <div style="width:1px; height:16px; background:#334155;"></div>
             <div class="wallet-info">1회 최대 거래: <span style="color:#f59e0b;">1억원</span></div>
         </div>
-        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
             <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
             <div style="font-size:12px;color:var(--text-sub);">
                 🟢 실시간 접속 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>
+            </div>
+            <!-- 로그인 상태 표시 -->
+            <div id="auth-status-bar" style="display:flex; align-items:center; gap:8px;">
+                <!-- 익명 상태일 때 -->
+                <div id="auth-anon" style="display:none; align-items:center; gap:6px;">
+                    <span style="font-size:11px; color:#f59e0b;">⚠️ 익명 이용 중</span>
+                    <button onclick="loginWithGoogle()"
+                        style="font-size:11px; font-weight:800; background:white; color:#1e293b;
+                               border:none; border-radius:6px; padding:3px 10px; cursor:pointer;
+                               display:flex; align-items:center; gap:4px; white-space:nowrap;">
+                        <svg width="12" height="12" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.86l6.09-6.09C34.46 3.07 29.5 1 24 1 14.82 1 7.07 6.48 3.68 14.17l7.1 5.52C12.56 13.1 17.83 9.5 24 9.5z"/><path fill="#4285F4" d="M46.52 24.5c0-1.64-.15-3.22-.42-4.74H24v8.98h12.68c-.55 2.97-2.2 5.48-4.68 7.17l7.19 5.58C43.38 37.43 46.52 31.4 46.52 24.5z"/><path fill="#FBBC05" d="M10.78 28.31A14.55 14.55 0 0 1 9.5 24c0-1.49.26-2.93.72-4.27l-7.1-5.52A23.93 23.93 0 0 0 0 24c0 3.87.93 7.53 2.57 10.77l8.21-6.46z"/><path fill="#34A853" d="M24 47c6.48 0 11.92-2.15 15.89-5.84l-7.19-5.58c-2.15 1.45-4.9 2.3-8.7 2.3-6.17 0-11.44-3.6-13.22-9.19l-8.21 6.46C7.07 41.52 14.82 47 24 47z"/></svg>
+                        구글로 전환
+                    </button>
+                </div>
+                <!-- 구글 로그인 상태일 때 -->
+                <div id="auth-google" style="display:none; align-items:center; gap:6px;">
+                    <svg width="12" height="12" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.14 0 5.95 1.08 8.17 2.86l6.09-6.09C34.46 3.07 29.5 1 24 1 14.82 1 7.07 6.48 3.68 14.17l7.1 5.52C12.56 13.1 17.83 9.5 24 9.5z"/><path fill="#4285F4" d="M46.52 24.5c0-1.64-.15-3.22-.42-4.74H24v8.98h12.68c-.55 2.97-2.2 5.48-4.68 7.17l7.19 5.58C43.38 37.43 46.52 31.4 46.52 24.5z"/><path fill="#FBBC05" d="M10.78 28.31A14.55 14.55 0 0 1 9.5 24c0-1.49.26-2.93.72-4.27l-7.1-5.52A23.93 23.93 0 0 0 0 24c0 3.87.93 7.53 2.57 10.77l8.21-6.46z"/><path fill="#34A853" d="M24 47c6.48 0 11.92-2.15 15.89-5.84l-7.19-5.58c-2.15 1.45-4.9 2.3-8.7 2.3-6.17 0-11.44-3.6-13.22-9.19l-8.21 6.46C7.07 41.52 14.82 47 24 47z"/></svg>
+                    <span id="auth-google-email" style="font-size:11px; color:#4ade80; font-weight:700;"></span>
+                </div>
             </div>
         </div>
     </div>
@@ -1661,22 +1680,48 @@ window.closeAccountWarn = function() {
 };
 
 // 구글 팝업으로 로그인 또는 익명 계정에 연동
+// ── 로그인 상태 UI 업데이트 ─────────────────────────────────
+function updateAuthStatusUI(user) {
+    const anonEl   = document.getElementById('auth-anon');
+    const googleEl = document.getElementById('auth-google');
+    const emailEl  = document.getElementById('auth-google-email');
+    if (!anonEl || !googleEl) return;
+
+    const isAnonymous = user.isAnonymous;
+    anonEl.style.display   = isAnonymous ? 'flex' : 'none';
+    googleEl.style.display = isAnonymous ? 'none' : 'flex';
+    if (!isAnonymous && emailEl) {
+        emailEl.textContent = '구글 연동됨';
+    }
+}
+
 window.loginWithGoogle = async function() {
+    const provider = new GoogleAuthProvider();
     try {
-        const provider = new GoogleAuthProvider();
-        
-        // [수정] linkWithPopup 대신 signInWithPopup을 사용합니다.
-        // 이렇게 하면 어떤 기기에서든 동일한 구글 계정으로 로그인 시 똑같은 UID(자산)를 갖게 됩니다.
-        const result = await signInWithPopup(auth, provider);
-        
+        // 1. 익명 계정에 구글 계정 연결 시도 — UID 유지, 자산 보존
+        await linkWithPopup(auth, provider);
         document.getElementById('account-warn-overlay')?.classList.remove('active');
-        alert('✅ 구글 로그인 성공! 모든 기기에서 자산이 동기화됩니다.');
-        
+        alert('✅ 구글 계정 연동 완료!\n자산이 그대로 유지되며 다른 기기에서도 동일한 자산으로 접속할 수 있습니다.');
     } catch (err) {
-        if (err.code === 'auth/popup-closed-by-user') return;
-        
-        // 이제 'credential-already-in-use' 에러는 발생하지 않습니다.
-        alert('로그인 실패: ' + err.message);
+        if (err.code === 'auth/popup-closed-by-user' ||
+            err.code === 'auth/cancelled-popup-request') return;
+
+        if (err.code === 'auth/credential-already-in-use' ||
+            err.code === 'auth/email-already-in-use') {
+            // 이미 다른 기기에서 이 구글 계정으로 연동된 경우
+            // → 해당 구글 UID로 로그인 (기존 자산 사용)
+            try {
+                await signInWithPopup(auth, provider);
+                document.getElementById('account-warn-overlay')?.classList.remove('active');
+                alert('✅ 기존 구글 계정으로 로그인됐습니다.\n이전에 연동된 자산으로 접속합니다.');
+            } catch (err2) {
+                if (err2.code !== 'auth/popup-closed-by-user') {
+                    alert('로그인 실패: ' + err2.message);
+                }
+            }
+        } else {
+            alert('로그인 실패: ' + err.message);
+        }
     }
 };
 
@@ -1696,6 +1741,9 @@ onAuthStateChanged(auth, async (user) => {
         userUID = user.uid;
         const userRef  = ref(db, `users/${userUID}`);
         if (!myData) myData = { cash: 1000000, stocks: {} };
+
+        // 로그인 상태 UI 업데이트
+        updateAuthStatusUI(user);
 
         // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
         tryCloseIntro();
