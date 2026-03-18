@@ -3161,7 +3161,13 @@ function saveStaticCache(data) {
         get(ref(db, 'stocksBanner/')).then(snap => {
             if (!snap.exists()) return;
             Object.entries(snap.val()).forEach(([id, b]) => {
-                if (allBanners[id]) allBanners[id].bannerEndDate = b.bannerEndDate;
+                if (allBanners[id]) {
+                    // 기존 배너 — 만료일만 갱신
+                    allBanners[id].bannerEndDate = b.bannerEndDate;
+                } else {
+                    // 신규 배너 — 전체 등록
+                    allBanners[id] = b;
+                }
             });
             renderBanners();
             isBannerRendered = true;
