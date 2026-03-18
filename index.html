@@ -3414,20 +3414,41 @@ async function loadStockNameCache() {
     const cached = loadStaticCache();
     if (cached?.stockNames) {
         stockNameCache = cached.stockNames;
+        // Firebase 버전과 비교 — 상장/삭제 있으면 캐시 무효화 후 재로드
+        try {
+            const verSnap = await get(ref(db, 'siteConfig/stockCacheVersion'));
+            const remoteVer = verSnap.exists() ? verSnap.val() : 0;
+            const localVer  = cached.stockCacheVersion || 0;
+            if (remoteVer !== localVer) {
+                // 버전 다름 → Firebase에서 전체 재로드
+                const snap = await get(ref(db, 'stocks/'));
+                if (!snap.exists()) return;
+                stockNameCache = {};
+                Object.entries(snap.val()).forEach(([id, s]) => {
+                    if (s.name) stockNameCache[id] = s.name;
+                });
+                saveStaticCache({ ...cached, stockNames: stockNameCache, stockCacheVersion: remoteVer });
+            }
+        } catch(e) {}
         return;
     }
-    // 2. Firebase에서 이름만 로드
+    // 2. 캐시 없으면 Firebase에서 1회 로드
     try {
-        const snap = await get(ref(db, 'stocks/'));
+        const [snap, verSnap] = await Promise.all([
+            get(ref(db, 'stocks/')),
+            get(ref(db, 'siteConfig/stockCacheVersion'))
+        ]);
         if (!snap.exists()) return;
-        const data = snap.val();
         stockNameCache = {};
-        Object.entries(data).forEach(([id, s]) => {
+        Object.entries(snap.val()).forEach(([id, s]) => {
             if (s.name) stockNameCache[id] = s.name;
         });
-        // 기존 캐시에 병합 저장
         const existing = loadStaticCache() || {};
-        saveStaticCache({ ...existing, stockNames: stockNameCache });
+        saveStaticCache({
+            ...existing,
+            stockNames: stockNameCache,
+            stockCacheVersion: verSnap.exists() ? verSnap.val() : 0
+        });
     } catch(e) {}
 }
 
