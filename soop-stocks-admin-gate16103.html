@@ -589,6 +589,17 @@
             .replace(/'/g, '&#x27;');
     }
 
+    // 사용자 페이지 배너 캐시 무효화 — bannerCacheVersion 증가
+    async function invalidateStaticCache() {
+        try {
+            const snap = await get(ref(db, 'siteConfig/bannerCacheVersion'));
+            const current = snap.exists() ? snap.val() : 0;
+            await set(ref(db, 'siteConfig/bannerCacheVersion'), current + 1);
+        } catch(e) {
+            console.warn('[cache] 버전 업데이트 실패:', e.message);
+        }
+    }
+
     let allStocksData = {};
 
     // ── 종목 데이터 로드 ─────────────────────────────────────
@@ -1006,6 +1017,7 @@
         try {
             await update(ref(db, 'stocks/'), stocksUpdates);
             await update(ref(db, 'stocksBanner/'), bannerUpdates);
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
             alert(`✅ 종목 정보가 수정되었습니다!\n홍보 유형: ${editBannerIsPaid ? '💰 유료' : '🎁 무료'}`);
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-search-name').value = "";
@@ -1038,6 +1050,7 @@
             document.getElementById('edit-stock-date').value   = '';
             switchEditBannerType('paid');
 
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
             alert('✅ 배너가 삭제되었습니다.');
         } catch (e) {
             alert('삭제 실패: ' + e.message);
@@ -1614,6 +1627,7 @@
                 })
             ]);
 
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
             alert(`✅ ${req.nickname} 수락 완료!\n종목 ID: ${stockId}\n만료일: ${endDate}`);
             loadAdRequests();
         } catch(e) {
@@ -1699,6 +1713,7 @@
             await update(ref(db, `chartAdRequests/${reqId}`), {
                 status: 'approved', approvedAt: Date.now(), endDate
             });
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
             alert(`✅ ${req.nickname} 차트 배너 수락 완료!\n만료일: ${endDate}`);
             loadChartAdRequests();
         } catch(e) {
