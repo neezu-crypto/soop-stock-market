@@ -528,6 +528,25 @@
         </div>
     </div>
 
+    <!-- 📺 차트 배너 신청 검수 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <div class="accordion-header">
+            <h1>📺 차트 배너 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 차트 하단 배너 목록입니다. <b>수락</b> 시 chartBanner에 자동 등록됩니다.
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadChartAdRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="chart-ad-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -1519,6 +1538,85 @@
                 rejectedAt: Date.now()
             });
             loadAdRequests();
+        } catch(e) {
+            alert('거절 실패: ' + e.message);
+        }
+    };
+
+    // ── 차트 배너 신청 검수 ───────────────────────────────────
+    window.loadChartAdRequests = async function() {
+        const listEl = document.getElementById('chart-ad-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'chartAdRequests/'));
+            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
+            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([reqId, req]) => {
+                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+                const card = document.createElement('div');
+                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.innerHTML = `
+                    <div style="margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-weight:700; color:#f8fafc;">${req.nickname}</span>
+                            <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                        </div>
+                        <div style="font-size:12px; color:#64748b;">${req.days}일 · 별풍선 ${req.cost}개 · ${date}</div>
+                        <div style="font-size:11px; color:#475569; margin-top:4px; word-break:break-all;">${req.link}</div>
+                    </div>
+                    <!-- 배너 미리보기 -->
+                    <div style="background:#0a1628; border-radius:6px; overflow:hidden; border:1px solid #1e293b; margin-bottom:10px; position:relative;">
+                        <img src="${req.imgUrl}" style="width:100%; aspect-ratio:720/150; object-fit:cover; display:block;"
+                            onerror="this.parentElement.innerHTML='<div style=\'padding:10px; color:#475569; font-size:12px;\'>이미지 로드 실패</div>'">
+                        <div style="position:absolute;top:4px;right:6px;background:rgba(0,0,0,0.5);color:#94a3b8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">AD</div>
+                    </div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <button onclick="approveChartAdRequest('${reqId}', ${req.days})"
+                            style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>
+                        <button onclick="rejectChartAdRequest('${reqId}')"
+                            style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${e.message}</div>`;
+        }
+    };
+
+    window.approveChartAdRequest = async function(reqId, days) {
+        try {
+            const snap = await get(ref(db, `chartAdRequests/${reqId}`));
+            if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
+            const req = snap.val();
+
+            const endDateObj = new Date();
+            endDateObj.setDate(endDateObj.getDate() + days);
+            const endDate = endDateObj.toISOString().split('T')[0];
+
+            await set(ref(db, 'chartBanner'), {
+                img:     req.imgUrl,
+                link:    req.link,
+                endDate: endDate
+            });
+            await update(ref(db, `chartAdRequests/${reqId}`), {
+                status: 'approved', approvedAt: Date.now(), endDate
+            });
+            alert(`✅ ${req.nickname} 차트 배너 수락 완료!\n만료일: ${endDate}`);
+            loadChartAdRequests();
+        } catch(e) {
+            alert('수락 실패: ' + e.message);
+        }
+    };
+
+    window.rejectChartAdRequest = async function(reqId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `chartAdRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
+            loadChartAdRequests();
         } catch(e) {
             alert('거절 실패: ' + e.message);
         }
