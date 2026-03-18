@@ -2796,10 +2796,11 @@ function updateCardContent(card, s, userStock) {
 
     // 최초 생성 시 HTML 구조 초기화
     if (!card.querySelector('.info-group')) {
+        const name = s.name || stockNameCache[s.id] || s.id;
         const prevQty = document.getElementById(`qty-${s.id}`)?.value || '1';
         card.innerHTML = `
             <div class="info-group">
-                <div class="stock-name">${s.name}</div>
+                <div class="stock-name">${name}</div>
                 <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
             </div>
             <div class="price-group">
@@ -2830,6 +2831,12 @@ function updateCardContent(card, s, userStock) {
     }
 
     // 이미 구조가 있으면 DOM 직접 업데이트 — input 건드리지 않음
+    const nameEl = card.querySelector('.stock-name');
+    if (nameEl) {
+        const name = s.name || stockNameCache[s.id];
+        if (name) nameEl.textContent = name;
+    }
+
     const myQtyEl = card.querySelector('.my-qty');
     if (myQtyEl) myQtyEl.innerHTML = `보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>`;
 
