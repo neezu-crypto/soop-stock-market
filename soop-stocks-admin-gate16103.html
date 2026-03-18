@@ -1032,6 +1032,7 @@
         if (confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
             try {
                 await update(ref(db, 'stocks/'), stocks);
+                await set(ref(db, 'siteConfig/stockCacheVersion'), Date.now()); // 캐시 무효화
                 alert("🎉 상장이 완료되었습니다!");
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
@@ -1055,6 +1056,7 @@
             if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
             if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
                 await update(ref(db, 'stocks/'), deleteUpdates);
+                await set(ref(db, 'siteConfig/stockCacheVersion'), Date.now()); // 캐시 무효화
                 alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
