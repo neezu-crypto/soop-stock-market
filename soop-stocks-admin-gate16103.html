@@ -173,7 +173,7 @@
                     <div style="font-size:18px; color:#334155; margin-top:18px;">→</div>
                     <div style="flex:1;">
                         <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">정규장 종료</div>
-                        <input type="time" id="regular-close" value="24:00"
+                        <input type="time" id="regular-close" value="00:00"
                             style="width:100%; background:#1e293b; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
                     </div>
                 </div>
@@ -1162,7 +1162,7 @@
             document.getElementById('market-open').value    = data.open         || '18:00';
             document.getElementById('market-close').value   = data.close        || '06:00';
             document.getElementById('regular-open').value   = data.regularOpen  || '20:00';
-            document.getElementById('regular-close').value  = data.regularClose || '24:00';
+            document.getElementById('regular-close').value  = (data.regularClose === '00:00' ? '00:00' : data.regularClose) || '00:00';
             renderMarketHoursStatus(data);
         } catch (e) {
             if (statusEl) statusEl.innerText = '불러오기 실패';
@@ -1187,7 +1187,7 @@
         const [oh,  om]  = (data.open         || '18:00').split(':').map(Number);
         const [ch,  cm]  = (data.close        || '06:00').split(':').map(Number);
         const [roh, rom] = (data.regularOpen  || '20:00').split(':').map(Number);
-        const [rch, rcm] = (data.regularClose || '24:00').split(':').map(Number);
+        const [rch, rcm] = (data.regularClose || '00:00').split(':').map(Number);
 
         const openMins    = oh  * 60 + om;
         const closeMins   = ch  * 60 + cm;
@@ -1215,7 +1215,7 @@
         const toggle = document.getElementById('market-hours-toggle');
         try {
             const snap    = await get(ref(db, 'siteConfig/marketHours'));
-            const current = snap.exists() ? snap.val() : { open: '18:00', close: '06:00', regularOpen: '20:00', regularClose: '24:00' };
+            const current = snap.exists() ? snap.val() : { open: '18:00', close: '06:00', regularOpen: '20:00', regularClose: '00:00' };
             await set(ref(db, 'siteConfig/marketHours'), { ...current, enabled });
             renderMarketHoursStatus({ ...current, enabled });
             alert(enabled
@@ -1374,13 +1374,13 @@
         }
     };
     // ── 아코디언 토글 ──────────────────────────────────────────
-    function toggleAccordion(header) {
+    window.toggleAccordion = function(header) {
         const body  = header.nextElementSibling;
         const arrow = header.querySelector('.accordion-arrow');
         const isOpen = body.classList.contains('open');
         body.classList.toggle('open', !isOpen);
         arrow.classList.toggle('open', !isOpen);
-    }
+    };
 
 </script>
 </body>
