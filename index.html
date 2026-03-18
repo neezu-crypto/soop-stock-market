@@ -1486,14 +1486,27 @@ setInterval(() => {
 
 // ── siteConfig 실시간 구독 ───────────────────────────────────
 onValue(ref(db, 'siteConfig/'), (snap) => {
+    const prev = siteConfig;
     siteConfig = snap.val() || {};
     siteConfigReady = true;
 
-    console.log("⚙️ 설정 변경 감지, 현재 시간 기준 모드 재설정");
-    
-    // 설정이 바뀔 때마다 현재 시간이 정규장인지 체크하여 
-    // 리스너를 새로 붙이거나 떼는 작업을 강제로 수행
-    applyMarketState(); 
+    // frozenStocks 변경 감지 → 서킷브레이커 UI 반영
+    const frozenStocks = siteConfig.frozenStocks || {};
+    const now = Date.now();
+    Object.entries(frozenStocks).forEach(([stockId, frozenUntil]) => {
+        if (frozenUntil > now) {
+            // 새로 동결된 종목만 alert (이전에 없던 것)
+            const wasNotFrozen = !prev?.frozenStocks?.[stockId] ||
+                                  prev.frozenStocks[stockId] <= now;
+            if (wasNotFrozen) {
+                const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
+                alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
+            }
+        }
+    });
+
+    updateUI(true); // 카드 동결 UI 갱신
+    applyMarketState();
     tryCloseIntro();
 });
 
@@ -1828,47 +1841,60 @@ window.logout = async function() {
 };
 
 /**
- * 차트 데이터를 분석하여 서킷브레이커 발동 여부 결정
+ * 서킷브레이커 감지 — 발동 시 siteConfig/frozenStocks/{stockId}에 write
+ * siteConfig/ 구독으로 모든 접속자에게 동시 반영
  */
-function checkCircuitBreaker(stockId, candles) {
+async function checkCircuitBreaker(stockId, candles) {
     if (!candles || candles.length < 2) return;
 
-    const now = Date.now();
-    const state = circuitBreakerState[stockId] || { frozenUntil: 0, lastTriggered: 0, pendingTimer: null };
+    const now   = Date.now();
+    const state = circuitBreakerState[stockId] || { lastTriggered: 0, pendingTimer: null };
     circuitBreakerState[stockId] = state;
 
-    // 1. 이미 동결 중이거나, 최근 10분 내에 발동된 적이 있다면 패스 (연속 발동 방지)
-    if (state.frozenUntil > now || (now - state.lastTriggered) < 600000) return;
+    // 이미 동결 중이거나 최근 10분 내 발동 이력 있으면 패스
+    const frozen = siteConfig?.frozenStocks?.[stockId];
+    if ((frozen && frozen > now) || (now - state.lastTriggered) < 600000) return;
 
-    // 2. 최근 10분간의 데이터 필터링
-    const tenMinsAgo = Math.floor(now / 1000) - 600;
+    // 최근 10분간 캔들 필터링
+    const tenMinsAgo    = Math.floor(now / 1000) - 600;
     const recentCandles = candles.filter(c => c.t >= tenMinsAgo);
     if (recentCandles.length < 2) return;
 
-    // 3. 변동폭 계산 (최고가와 최저가 기준)
-    const high = Math.max(...recentCandles.map(c => c.h));
-    const low = Math.min(...recentCandles.map(c => c.l));
+    // 변동폭 계산
+    const high      = Math.max(...recentCandles.map(c => c.h));
+    const low       = Math.min(...recentCandles.map(c => c.l));
     const variation = ((high - low) / low) * 100;
 
-    // 4. 30% 이상 변동 시 발동 예약
     if (variation >= 30) {
-        // 이미 예약된 타이머가 있다면 중복 예약 방지
-        if (state.pendingTimer) return;
+        if (state.pendingTimer) return; // 이미 예약됨
 
-        // 45초~90초 사이 랜덤 지연 
-        const delay = Math.floor(Math.random() * (90000 - 45000 + 1)) + 45000;
-        
-        state.pendingTimer = setTimeout(() => {
-            state.frozenUntil = Date.now() + 60000; // 1분간 동결
+        // 45~90초 랜덤 딜레이 (선착순 매매 방지)
+        const delay = Math.floor(Math.random() * 45000) + 45000;
+
+        state.pendingTimer = setTimeout(async () => {
             state.lastTriggered = Date.now();
-            state.pendingTimer = null;
-            
-            // UI 즉시 업데이트 (카드 잠금 등)
-            updateUI(true);
-            alert(`⚠️ [서킷브레이커] 해당 종목의 변동성이 너무 커서 1분간 거래가 일시 동결됩니다.`);
+            state.pendingTimer  = null;
+
+            const frozenUntil = Date.now() + 60000; // 1분 동결
+            try {
+                // siteConfig/frozenStocks/{stockId}에 write
+                // → 모든 접속자의 siteConfig/ 구독 콜백 즉시 실행
+                await set(ref(db, `siteConfig/frozenStocks/${stockId}`), frozenUntil);
+                // 1분 후 자동 삭제
+                setTimeout(async () => {
+                    try { await set(ref(db, `siteConfig/frozenStocks/${stockId}`), null); }
+                    catch(e) {}
+                }, 60000);
+            } catch(e) {
+                console.warn('[CB] Firebase write 실패, 로컬만 적용:', e.message);
+                // Firebase 실패 시 로컬 fallback
+                circuitBreakerState[stockId].frozenUntil = frozenUntil;
+                updateUI(true);
+                alert(`⚠️ [서킷브레이커] ${stockId} 종목이 1분간 거래 동결됩니다.`);
+            }
         }, delay);
 
-        console.log(`[CB] ${stockId} 서킷브레이커 예약됨: ${delay/1000}초 후 발동`);
+        console.log(`[CB] ${stockId} 서킷브레이커 예약: ${delay / 1000}초 후 발동`);
     }
 }
 
@@ -1984,6 +2010,9 @@ async function flushCandlestick(stockId) {
     } catch (e) {
         console.warn('[candle] flush 실패 (무시):', e.message);
     }
+
+    // 거래 발생 시마다 서킷브레이커 감지 (차트 모달 없이도 실시간 체크)
+    checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId));
 
     pruneOldCandles(stockId);
 }
@@ -2412,16 +2441,13 @@ window.trade = async function (id, type, qty = 1) {
         return;
     }
 
-
-	// [해결방법] 함수 가장 첫 줄에 아래 코드를 추가하세요!
     const currentTime = Date.now();
-	const cooldownTime = 1000;
+    const cooldownTime = 1000;
 
-    // 서킷 브레이크 발동 
-    const cb = circuitBreakerState[id];
-
-    if (cb && cb.frozenUntil > currentTime && !isAdmin) {
-        const remain = Math.ceil((cb.frozenUntil - currentTime) / 1000);
+    // 서킷브레이커 — siteConfig.frozenStocks 기준 (서버 공유)
+    const frozenUntil = siteConfig?.frozenStocks?.[id];
+    if (frozenUntil && frozenUntil > currentTime && !isAdmin) {
+        const remain = Math.ceil((frozenUntil - currentTime) / 1000);
         alert(`🚫 서킷브레이커 발동 중! (${remain}초 후 해제)`);
         return;
     }
@@ -2961,11 +2987,11 @@ function renderStocks(filter = "") {
         const card = createStockCard(s);
         
         // ── [추가] 서킷브레이커 상태 확인 및 UI 반영 ──────────────
-        const cb = circuitBreakerState[s.id];
-        const isFrozen = cb && cb.frozenUntil > Date.now();
+        const frozenUntil = siteConfig?.frozenStocks?.[s.id];
+        const isFrozen    = frozenUntil && frozenUntil > Date.now();
 
         if (isFrozen) {
-            const remain = Math.ceil((cb.frozenUntil - Date.now()) / 1000);
+            const remain = Math.ceil((frozenUntil - Date.now()) / 1000);
             
             // 1. 카드 전체를 반투명하게 만들고 클릭 차단
             card.style.opacity = "0.5";
