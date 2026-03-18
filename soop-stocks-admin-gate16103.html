@@ -905,6 +905,17 @@
             let targetId = null, targetData = null;
             Object.entries(data).forEach(([id, stock]) => { if (stock.name === searchName) { targetId = id; targetData = stock; } });
             if (!targetId) return alert("해당 종목을 찾을 수 없습니다.");
+
+            // stocksBanner/ 에서 배너 데이터 추가 조회
+            const bannerSnap = await get(ref(db, `stocksBanner/${targetId}`));
+            if (bannerSnap.exists()) {
+                const b = bannerSnap.val();
+                targetData.bannerImg     = b.bannerImg     || targetData.bannerImg     || '';
+                targetData.link          = b.link          || targetData.link          || '';
+                targetData.bannerEndDate = b.bannerEndDate || targetData.bannerEndDate || '';
+                targetData.bannerIsPaid  = b.bannerIsPaid  !== undefined ? b.bannerIsPaid : targetData.bannerIsPaid;
+            }
+
             document.getElementById('edit-stock-id').innerText  = targetId;
             document.getElementById('edit-stock-price').value   = targetData.price || 0;
             document.getElementById('edit-stock-banner').value  = targetData.bannerImg || "";
