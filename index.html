@@ -1947,7 +1947,8 @@ function filterByTimeframe(candles, timeframeMin) {
 
 // ── 차트 모달 열기 ───────────────────────────────────────────
 window.openChartModal = function(stockId) {
-    const s = allStocks.find(x => x.id === stockId);
+    const s = favorites[stockId] || ownedStocks[stockId] || searchResults[stockId]
+           || allStocks.find(x => x.id === stockId);
     if (!s) return;
 
     chartModalStockId = stockId;
@@ -2767,9 +2768,13 @@ function createStockCard(s) {
     card.className = 'stock-card';
     card.setAttribute('data-id', s.id);
 
-    // 카드 클릭 → 차트 모달 (버튼 클릭은 제외)
+    // 카드 클릭 → 차트 모달 (버튼/입력칸 클릭은 제외)
     card.addEventListener('click', (e) => {
-        if (e.target.closest('.btn')) return;
+        if (e.target.closest('.btn-trade-buy')) return;
+        if (e.target.closest('.btn-trade-sell')) return;
+        if (e.target.closest('.btn-favorite')) return;
+        if (e.target.closest('.trade-qty-input')) return;
+        if (e.target.closest('.trade-input-wrap')) return;
         openChartModal(s.id);
     });
 
