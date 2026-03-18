@@ -199,7 +199,7 @@
         <div class="accordion-sep">
         <div class="info-box">
             장 재오픈 시 랭킹을 0부터 다시 집계하고 싶을 때 사용합니다.<br>
-            <span style="color:#ef4444;">초기화 시 현재 rankings/top5 데이터가 삭제됩니다.</span>
+            <span style="color:#ef4444;">초기화 시 거래량 TOP5 · 순매수 TOP5 · 순매도 TOP5 데이터가 모두 삭제됩니다.</span>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <span style="font-size:13px; color:#94a3b8;">저장된 TOP5 상태:</span>
@@ -509,6 +509,25 @@
         </div>
     </div>
 
+    <!-- 📬 홍보 신청 검수 -->
+    <div class="container" style="display:block; border-color: #22c55e;">
+        <div class="accordion-header">
+            <h1>📬 홍보 신청 검수</h1>
+            <span class="accordion-arrow open">▼</span>
+        </div>
+        <div class="accordion-body open">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 배너 홍보 목록입니다. <b>수락</b> 시 stocksBanner에 자동 등록됩니다.
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadAdRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="ad-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -745,17 +764,22 @@
     };
 
     window.resetRankings = async function() {
-        if (!confirm('⚠️ 랭킹 TOP5를 초기화하시겠습니까?\n\n현재 rankings/top5 데이터가 삭제되고\n다음 거래부터 0부터 다시 집계됩니다.')) return;
+        if (!confirm('⚠️ 랭킹 전체를 초기화하시겠습니까?\n\n• 거래량 TOP5\n• 순매수 TOP5\n• 순매도 TOP5\n\n다음 거래부터 0부터 다시 집계됩니다.')) return;
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading'; statusEl.innerText = '초기화 중...';
         try {
-            await set(ref(db, 'rankings/top5'), { items: [], savedAt: new Date().toISOString() });
+            const empty = { items: [], savedAt: new Date().toISOString() };
+            await Promise.all([
+                set(ref(db, 'rankings/top5'),        empty),
+                set(ref(db, 'rankings/netBuyTop5'),  empty),
+                set(ref(db, 'rankings/netSellTop5'), empty),
+            ]);
             const tbody = document.getElementById('ranking-preview-body');
             const wrap  = document.getElementById('ranking-preview-table');
             if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">초기화 완료 — 다음 거래부터 집계 시작</td></tr>`;
             if (wrap)  wrap.style.display = 'block';
             statusEl.className = 'status-chip'; statusEl.innerText = '✅ 초기화 완료';
-            alert('✅ 랭킹이 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
+            alert('✅ 랭킹 3종 모두 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
         } catch(e) {
             alert('초기화 실패: ' + e.message);
             statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생';
@@ -1385,6 +1409,102 @@
             statusEl.innerText   = '❌ 오류: ' + e.message;
         }
     };
+    // ── 홍보 신청 검수 ────────────────────────────────────────
+    window.loadAdRequests = async function() {
+        const listEl = document.getElementById('ad-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'adRequests/'));
+            if (!snap.exists()) {
+                listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>';
+                return;
+            }
+            const data = snap.val();
+            const items = Object.entries(data).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([reqId, req]) => {
+                const date = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+                const card = document.createElement('div');
+                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                        <img src="${req.imgUrl}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#1e293b;"
+                            onerror="this.style.display='none'">
+                        <div style="flex:1;">
+                            <div style="font-weight:700; color:#f8fafc;">${req.nickname}</div>
+                            <div style="font-size:12px; color:#64748b;">${req.soopId} · ${req.days}일 · 별풍선 ${req.cost}개</div>
+                            <div style="font-size:11px; color:#475569; margin-top:2px;">${date}</div>
+                        </div>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="text" placeholder="종목 ID (예: id_xxx)" id="stock-id-${reqId}"
+                            style="flex:1; background:#1e293b; border:1px solid #334155; color:#f8fafc; padding:8px 10px; border-radius:6px; font-size:12px; outline:none;">
+                        <button onclick="approveAdRequest('${reqId}', ${req.days})"
+                            style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px; white-space:nowrap;">수락</button>
+                        <button onclick="rejectAdRequest('${reqId}')"
+                            style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${e.message}</div>`;
+        }
+    };
+
+    window.approveAdRequest = async function(reqId, days) {
+        const stockIdEl = document.getElementById(`stock-id-${reqId}`);
+        const stockId   = stockIdEl?.value.trim();
+        if (!stockId) { alert('종목 ID를 입력해주세요.'); return; }
+
+        // 오늘부터 days일 후 만료일 자동 계산
+        const endDateObj = new Date();
+        endDateObj.setDate(endDateObj.getDate() + days);
+        const endDate = endDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+
+        try {
+            const snap = await get(ref(db, `adRequests/${reqId}`));
+            if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
+            const req = snap.val();
+
+            await update(ref(db, `stocksBanner/${stockId}`), {
+                name:          req.nickname,
+                bannerImg:     req.imgUrl,
+                link:          req.link,
+                bannerEndDate: endDate,
+                bannerIsPaid:  true
+            });
+
+            await update(ref(db, `adRequests/${reqId}`), {
+                status:     'approved',
+                stockId,
+                endDate,
+                approvedAt: Date.now()
+            });
+
+            alert(`✅ ${req.nickname} 수락 완료!\n만료일: ${endDate}\nstocksBanner/${stockId}에 등록됐습니다.`);
+            loadAdRequests();
+        } catch(e) {
+            alert('수락 실패: ' + e.message);
+        }
+    };
+
+    window.rejectAdRequest = async function(reqId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `adRequests/${reqId}`), {
+                status:     'rejected',
+                rejectedAt: Date.now()
+            });
+            loadAdRequests();
+        } catch(e) {
+            alert('거절 실패: ' + e.message);
+        }
+    };
+
     // ── 아코디언 토글 ─────────────────────────────────────────
     document.querySelectorAll('.accordion-header').forEach(header => {
         header.addEventListener('click', () => {
