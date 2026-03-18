@@ -905,75 +905,59 @@
 <div id="chart-ad-modal" class="promo-modal-overlay" style="z-index:4000;">
     <div class="promo-modal-content" style="max-width:420px;">
         <div class="promo-modal-header">
-            <h2>📺 차트 하단 배너 광고</h2>
+            <h2>📺 차트 하단 배너 신청</h2>
         </div>
 
-        <!-- 배너 미리보기 영역 -->
-        <div style="margin-bottom:16px;">
-            <!-- 사이즈 태그 -->
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                <span style="background:rgba(56,189,248,0.12);color:var(--primary);font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid rgba(56,189,248,0.3);">🖼 720 × 150 px</span>
-                <span style="background:rgba(99,102,241,0.12);color:#a5b4fc;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid rgba(99,102,241,0.3);">✅ SOOP 방송국 하단 배너와 동일 사이즈</span>
+        <!-- 사이즈 안내 -->
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <span style="background:rgba(56,189,248,0.12);color:var(--primary);font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid rgba(56,189,248,0.3);">🖼 720 × 150 px</span>
+            <span style="background:rgba(99,102,241,0.12);color:#a5b4fc;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid rgba(99,102,241,0.3);">✅ SOOP 방송국 하단 배너와 동일</span>
+        </div>
+
+        <!-- 특징 + 비용 -->
+        <ul class="promo-info-list" style="margin-bottom:16px;">
+            <li>📊 <b>노출:</b> 차트창을 여는 모든 유저에게 단독 노출</li>
+            <li>🔗 <b>기능:</b> 클릭 시 원하는 링크로 즉시 이동</li>
+            <li>🖼 <b>형식:</b> 이미지 · GIF 모두 지원</li>
+            <li>💰 <b>비용:</b> 1일 당 별풍선 80개</li>
+        </ul>
+
+        <!-- 신청 폼 -->
+        <div id="chart-ad-form" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+            <div>
+                <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">닉네임</div>
+                <input id="chart-ad-nickname" type="text" placeholder="스트리머 닉네임"
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
             </div>
-            <!-- 미리보기 박스 -->
-            <div style="background:#0a1628;border-radius:10px;overflow:hidden;border:1px dashed #38bdf8;position:relative;">
-                <div style="aspect-ratio:720/150;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
-                    <span style="font-size:22px;">🖼</span>
-                    <span style="font-size:12px;color:#94a3b8;font-weight:700;">배너 이미지 · GIF 삽입 영역</span>
-                    <span style="font-size:11px;color:#475569;">720 × 150 px</span>
-                </div>
+            <div>
+                <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">배너 이미지 URL <span style="color:#475569;">(720×150px · GIF 가능)</span></div>
+                <input id="chart-ad-img" type="text" placeholder="https://..."
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
+            </div>
+            <!-- 이미지 미리보기 -->
+            <div id="chart-ad-preview" style="display:none; background:#0a1628; border-radius:8px; overflow:hidden; border:1px dashed #334155; position:relative;">
+                <img id="chart-ad-preview-img" style="width:100%; aspect-ratio:720/150; object-fit:cover; display:block;" src="" alt="">
                 <div style="position:absolute;top:4px;right:6px;background:rgba(0,0,0,0.5);color:#94a3b8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">AD</div>
             </div>
-            <!-- 안내 문구 -->
-            <div style="margin-top:8px;font-size:11px;color:#475569;text-align:center;">
-                💡 <span style="color:#aab2bd;">SOOP 방송국 하단 배너용으로 제작한 이미지를 그대로 사용할 수 있습니다</span>
+            <div>
+                <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">클릭 시 이동할 링크 URL</div>
+                <input id="chart-ad-link" type="text" placeholder="https://www.sooplive.co.kr/station/..."
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
             </div>
-        </div>
-
-        <!-- 혜택 안내 -->
-        <div style="background:rgba(239,68,68,0.08);padding:14px 16px;border-radius:10px;border:1px dashed #ef4444;margin-bottom:18px;text-align:left;">
-            <div style="font-size:12px;color:#ef4444;font-weight:800;margin-bottom:8px;">💎 차트 배너 광고 특징</div>
-            <ul style="list-style:none;padding:0;margin:0;font-size:13px;color:var(--text-main);line-height:2;">
-                <li>📊 차트창을 여는 모든 유저에게 단독 노출</li>
-                <li>🔗 클릭 시 원하는 링크로 즉시 이동</li>
-                <li>🖼 이미지 · GIF 모두 지원</li>
-            </ul>
-        </div>
-
-        <!-- 비용 안내 -->
-        <div style="background:rgba(56,189,248,0.07);padding:14px 16px;border-radius:10px;border:1px solid #1e3550;margin-bottom:20px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-size:13px;color:var(--text-sub);">광고 단가</span>
-                <span style="font-size:16px;font-weight:800;color:var(--primary);">🎁 별풍선 80개 <span style="font-size:12px;color:var(--text-sub);font-weight:400;">/ 1일</span></span>
+            <div>
+                <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">신청 기간 (일) <span style="color:#475569;">최대 99일</span></div>
+                <input id="chart-ad-days" type="number" min="1" max="99" placeholder="예: 7"
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
             </div>
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-sub);padding-top:8px;border-top:1px solid #1e3550;">
-                <span>무료 체험 없음 · 선불 결제</span>
-                <span>우측 배너와 별도 운영</span>
-            </div>
+            <div id="chart-ad-cost" style="font-size:12px; color:#64748b; text-align:right;"></div>
+            <div id="chart-ad-msg" style="font-size:12px; min-height:16px;"></div>
         </div>
 
-        <!-- 문의 안내 -->
-        <div style="background:rgba(255,255,255,0.04);padding:14px;border-radius:8px;margin-bottom:20px;border-left:3px solid #38bdf8;text-align:left;">
-            <p style="font-size:13px;color:#38bdf8;font-weight:800;margin:0 0 8px 0;">📋 문의 시 필수 포함 내용</p>
-            <ul style="list-style:none;padding:0;margin:0;font-size:12px;color:var(--text-main);line-height:1.9;">
-                <li>• 닉네임 및 이동할 링크 URL</li>
-                <li>• 배너 이미지 (720×150px · 사진 또는 GIF)</li>
-                <li>• 원하는 광고 기간 (일수)</li>
-            </ul>
-            <p style="font-size:12px;color:var(--text-sub);margin:8px 0 0 0;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">
-                💡 파일이 크다면 <span style="color:#94a3b8;">skftodwocks2&#64;gmail.com</span> 으로 발송
-            </p>
-        </div>
-
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex; gap:8px;">
             <button onclick="closeChartAdModal()"
-                style="flex:1;background:#334155;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;">
-                닫기
-            </button>
-            <button onclick="goToChartAdMessage()"
-                style="flex:2;background:var(--primary);color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:800;font-size:14px;">
-                쪽지로 문의하기
-            </button>
+                style="flex:1; background:#334155; color:white; border:none; padding:13px; border-radius:10px; cursor:pointer; font-weight:700; font-size:14px;">닫기</button>
+            <button onclick="submitChartAdRequest()"
+                style="flex:2; background:var(--primary); color:#0f172a; border:none; padding:13px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">신청하기</button>
         </div>
     </div>
 </div>
@@ -2635,18 +2619,74 @@ window.openPromoModal = () => {
     document.getElementById('promo-modal').classList.add('active');
 };
 window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
-window.openChartAdModal  = () => {
-    closeChartModal();   // 차트창 먼저 닫기
+window.openChartAdModal = () => {
+    ['chart-ad-nickname','chart-ad-img','chart-ad-link','chart-ad-days'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const preview = document.getElementById('chart-ad-preview');
+    const msg     = document.getElementById('chart-ad-msg');
+    const cost    = document.getElementById('chart-ad-cost');
+    const form    = document.getElementById('chart-ad-form');
+    if (preview) preview.style.display = 'none';
+    if (msg)  msg.textContent  = '';
+    if (cost) cost.textContent = '';
+    if (form) { form.style.opacity = '1'; form.style.pointerEvents = 'auto'; }
+    closeChartModal();
     document.getElementById('chart-ad-modal').classList.add('active');
 };
 window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
-window.goToMessage       = () => {
-    window.open("https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2", "_blank");
-    window.closePromoModal();
-};
-window.goToChartAdMessage = () => {
-    window.open("https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2", "_blank");
-    window.closeChartAdModal();
+
+// 이미지 URL 입력 시 미리보기 + 기간 입력 시 비용 표시
+document.addEventListener('input', (e) => {
+    if (e.target.id === 'chart-ad-img') {
+        const url     = e.target.value.trim();
+        const preview = document.getElementById('chart-ad-preview');
+        const img     = document.getElementById('chart-ad-preview-img');
+        if (!url || !preview || !img) return;
+        img.src      = url;
+        img.onerror  = () => { preview.style.display = 'none'; };
+        img.onload   = () => { preview.style.display = 'block'; };
+    }
+    if (e.target.id === 'chart-ad-days') {
+        const days   = parseInt(e.target.value);
+        const costEl = document.getElementById('chart-ad-cost');
+        if (!costEl) return;
+        costEl.textContent = days > 0 ? `총 별풍선 ${(days * 80).toLocaleString()}개` : '';
+        costEl.style.color = '#38bdf8';
+    }
+});
+
+// 차트 배너 신청 제출
+window.submitChartAdRequest = async function() {
+    const nickname = document.getElementById('chart-ad-nickname').value.trim();
+    const imgUrl   = document.getElementById('chart-ad-img').value.trim();
+    const linkUrl  = document.getElementById('chart-ad-link').value.trim();
+    const days     = parseInt(document.getElementById('chart-ad-days').value);
+    const msgEl    = document.getElementById('chart-ad-msg');
+
+    if (!nickname) { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임을 입력해주세요.'; return; }
+    if (!imgUrl)   { msgEl.style.color='#ef4444'; msgEl.textContent='배너 이미지 URL을 입력해주세요.'; return; }
+    if (!linkUrl)  { msgEl.style.color='#ef4444'; msgEl.textContent='링크 URL을 입력해주세요.'; return; }
+    if (!days || days < 1 || days > 99) { msgEl.style.color='#ef4444'; msgEl.textContent='신청 기간을 1~99일로 입력해주세요.'; return; }
+
+    const uid = auth.currentUser?.uid;
+    if (!uid) { msgEl.style.color='#ef4444'; msgEl.textContent='로그인이 필요합니다.'; return; }
+
+    msgEl.style.color = '#94a3b8';
+    msgEl.textContent = '신청 중...';
+    try {
+        await set(ref(db, `chartAdRequests/chart_${uid}_${Date.now()}`), {
+            nickname, imgUrl, link: linkUrl, days, uid,
+            status: 'pending', createdAt: Date.now(), cost: days * 80
+        });
+        msgEl.style.color = '#22c55e';
+        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 80개 = ${days * 80}개)`;
+        document.getElementById('chart-ad-form').style.opacity      = '0.5';
+        document.getElementById('chart-ad-form').style.pointerEvents = 'none';
+    } catch(e) {
+        msgEl.style.color = '#ef4444';
+        msgEl.textContent = '신청 실패: ' + e.message;
+    }
 };
 
 // ── SOOP ID 앞 2글자로 이미지 URL prefix 추정 ───────────────
