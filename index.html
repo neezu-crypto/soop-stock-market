@@ -1032,6 +1032,10 @@
         <div class="ranking-title">📊 거래량 TOP 5</div>
         <div id="top-rankers" class="ranking-list">불러오는 중...</div>
     </div>
+    <div class="ranking-bar">
+        <div class="ranking-title">📈 순매수 TOP 5</div>
+        <div id="net-buy-rankers" class="ranking-list">불러오는 중...</div>
+    </div>
     <!-- 빈 화면 안내 (즐겨찾기 없을 때) -->
     <div id="stock-empty">
         <div class="empty-icon">🔍</div>
@@ -1230,14 +1234,16 @@ function playHoverSound() {
     sound.play().catch(() => {});
 }
 
-// ── 랭킹 배치 누적 (브라우저에 쌓다가 5건마다 서버 반영) ────
+// ── 랭킹 배치 누적 (브라우저에 쌓다가 20건마다 서버 반영) ────
 const RANKING_BATCH_SIZE = 20;
-let rankingBuffer = {}; // { stockId: totalQtyDelta }
-let rankingBufferCount = 0; // 누적 거래 건수
+let rankingBuffer      = {}; // { stockId: totalQtyDelta } — 거래량 (절대값)
+let rankingBufferCount = 0;
+let netBuyBuffer       = {}; // { stockId: netQtyDelta }  — 순매수 (매수-매도)
 
 // 거래 시 호출 — 브라우저 버퍼에 누적 후 20건마다 서버 반영
-function accumulateRanking(stockId, qtyDelta) {
-    rankingBuffer[stockId] = (rankingBuffer[stockId] || 0) + qtyDelta;
+function accumulateRanking(stockId, qty, qtyDelta) {
+    rankingBuffer[stockId] = (rankingBuffer[stockId] || 0) + qty;       // 거래량 (절대값)
+    netBuyBuffer[stockId]  = (netBuyBuffer[stockId]  || 0) + qtyDelta; // 순매수 (매수-매도)
     rankingBufferCount++;
     console.log(`[ranking] 버퍼 누적: ${rankingBufferCount}/${RANKING_BATCH_SIZE}`, rankingBuffer);
     if (rankingBufferCount >= RANKING_BATCH_SIZE) {
@@ -1245,60 +1251,89 @@ function accumulateRanking(stockId, qtyDelta) {
     }
 }
 
-// 버퍼 → rankings/top5 서버 반영
+// 버퍼 → rankings/top5 + rankings/netBuyTop5 서버 반영
 async function flushRankingBuffer() {
     if (Object.keys(rankingBuffer).length === 0) { console.log('[ranking] 버퍼 비어있음, 스킵'); return; }
-    const deltas = { ...rankingBuffer };
-    rankingBuffer = {};
+    const deltas       = { ...rankingBuffer };
+    const netDeltas    = { ...netBuyBuffer };
+    rankingBuffer      = {};
+    netBuyBuffer       = {};
     rankingBufferCount = 0;
     console.log('[ranking] flush 시작, deltas:', deltas);
 
     try {
-        const snap    = await get(ref(db, 'rankings/top5'));
-        const current = snap.exists() ? snap.val() : { items: [] };
-        const itemMap = {};
-        (current.items || []).forEach(item => { itemMap[item.id] = item; });
-
-        await Promise.all(Object.entries(deltas).map(async ([id, delta]) => {
-            if (delta === 0) return; // delta가 0이면 스킵
-
-            let stockData = favorites[id] || ownedStocks[id] || searchResults[id];
-            if (!stockData) {
+        // 종목 데이터 캐시 준비
+        const stockDataMap = {};
+        await Promise.all(Object.keys(deltas).map(async id => {
+            let s = favorites[id] || ownedStocks[id] || searchResults[id];
+            if (!s) {
                 try {
-                    const s = await get(ref(db, `stocks/${id}`));
-                    if (s.exists()) stockData = { ...s.val(), id };
+                    const snap = await get(ref(db, `stocks/${id}`));
+                    if (snap.exists()) s = { ...snap.val(), id };
                 } catch(e) {}
             }
-            if (!stockData) { console.log('[ranking] stockData 없음:', id); return; }
-
-            if (itemMap[id]) {
-                itemMap[id].totalQty = Math.max(0, itemMap[id].totalQty + delta);
-                itemMap[id].price    = stockData.price;
-                itemMap[id].name     = stockData.name;
-            } else {
-                itemMap[id] = { id, name: stockData.name, price: stockData.price, totalQty: Math.max(0, delta) };
-            }
+            if (s) stockDataMap[id] = s;
         }));
 
-        // totalQty가 0인 종목 제거
-        Object.keys(itemMap).forEach(id => {
-            if ((itemMap[id].totalQty || 0) <= 0) delete itemMap[id];
+        // ── 거래량 TOP5 ──────────────────────────────────────
+        const volSnap   = await get(ref(db, 'rankings/top5'));
+        const volCurrent = volSnap.exists() ? volSnap.val() : { items: [] };
+        const volMap    = {};
+        (volCurrent.items || []).forEach(item => { volMap[item.id] = item; });
+
+        Object.entries(deltas).forEach(([id, delta]) => {
+            if (delta === 0) return;
+            const s = stockDataMap[id];
+            if (!s) { console.log('[ranking] stockData 없음:', id); return; }
+            if (volMap[id]) {
+                volMap[id].totalQty = Math.max(0, volMap[id].totalQty + delta);
+                volMap[id].price    = s.price;
+                volMap[id].name     = s.name;
+            } else {
+                volMap[id] = { id, name: s.name, price: s.price, totalQty: Math.max(0, delta) };
+            }
         });
-
-        const newTop5 = Object.values(itemMap)
-            .sort((a, b) => b.totalQty - a.totalQty)
-            .slice(0, 5);
+        Object.keys(volMap).forEach(id => { if ((volMap[id].totalQty || 0) <= 0) delete volMap[id]; });
+        const newTop5 = Object.values(volMap).sort((a, b) => b.totalQty - a.totalQty).slice(0, 5);
         newTop5.forEach((item, i) => { item.rank = i + 1; });
-
-        await set(ref(db, 'rankings/top5'), { savedAt: current.savedAt || Date.now(), items: newTop5 });
-        console.log('[ranking] 서버 반영 완료:', newTop5);
+        await set(ref(db, 'rankings/top5'), { savedAt: volCurrent.savedAt || Date.now(), items: newTop5 });
         renderRankingFromCache(newTop5);
+
+        // ── 순매수 TOP5 ──────────────────────────────────────
+        const netSnap    = await get(ref(db, 'rankings/netBuyTop5'));
+        const netCurrent = netSnap.exists() ? netSnap.val() : { items: [] };
+        const netMap     = {};
+        (netCurrent.items || []).forEach(item => { netMap[item.id] = item; });
+
+        Object.entries(netDeltas).forEach(([id, delta]) => {
+            if (delta === 0) return;
+            const s = stockDataMap[id];
+            if (!s) return;
+            if (netMap[id]) {
+                netMap[id].netQty = (netMap[id].netQty || 0) + delta;
+                netMap[id].price  = s.price;
+                netMap[id].name   = s.name;
+            } else {
+                netMap[id] = { id, name: s.name, price: s.price, netQty: delta };
+            }
+        });
+        const newNetTop5 = Object.values(netMap)
+            .filter(item => (item.netQty || 0) > 0)
+            .sort((a, b) => b.netQty - a.netQty)
+            .slice(0, 5);
+        newNetTop5.forEach((item, i) => { item.rank = i + 1; });
+        await set(ref(db, 'rankings/netBuyTop5'), { savedAt: netCurrent.savedAt || Date.now(), items: newNetTop5 });
+        renderNetBuyRanking(newNetTop5);
+
+        console.log('[ranking] 서버 반영 완료 — 거래량:', newTop5, '순매수:', newNetTop5);
 
     } catch(e) {
         console.error('[ranking] flush 실패:', e.message);
-        // 실패 시 버퍼에 복원
         Object.entries(deltas).forEach(([id, delta]) => {
             rankingBuffer[id] = (rankingBuffer[id] || 0) + delta;
+        });
+        Object.entries(netDeltas).forEach(([id, delta]) => {
+            netBuyBuffer[id] = (netBuyBuffer[id] || 0) + delta;
         });
         rankingBufferCount += Object.keys(deltas).length;
     }
@@ -1319,6 +1354,16 @@ get(ref(db, 'rankings/top5')).then(snap => {
     renderRankingFromCache(snap.val().items || []);
 }).catch(() => {});
 
+// ── rankings/netBuyTop5 — 접속 시 1회만 로드 ─────────────────
+get(ref(db, 'rankings/netBuyTop5')).then(snap => {
+    if (!snap.exists()) {
+        const rankDiv = document.getElementById('net-buy-rankers');
+        if (rankDiv) rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">집계 데이터 없음</span>`;
+        return;
+    }
+    renderNetBuyRanking(snap.val().items || []);
+}).catch(() => {});
+
 // 캐시된 랭킹 데이터를 상단 배너에 렌더링
 function renderRankingFromCache(items) {
     const rankDiv = document.getElementById('top-rankers');
@@ -1332,6 +1377,23 @@ function renderRankingFromCache(items) {
             <span class="rank-num">${s.rank}위</span>
             <span class="rank-name">${s.name}</span>
             <span class="rank-qty">총 ${s.totalQty?.toLocaleString() || 0}주</span>
+        </div>
+    `).join('');
+}
+
+// 순매수 랭킹 렌더링
+function renderNetBuyRanking(items) {
+    const rankDiv = document.getElementById('net-buy-rankers');
+    if (!rankDiv) return;
+    if (items.length === 0) {
+        rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">보유 데이터 없음</span>`;
+        return;
+    }
+    rankDiv.innerHTML = items.map(s => `
+        <div class="rank-item">
+            <span class="rank-num">${s.rank}위</span>
+            <span class="rank-name">${s.name}</span>
+            <span class="rank-qty up">+${s.netQty?.toLocaleString() || 0}주</span>
         </div>
     `).join('');
 }
@@ -2394,7 +2456,7 @@ const fee    = 0.003;
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
-        accumulateRanking(id, qty); // 매수/매도 관계없이 거래량으로 관심도 집계
+        accumulateRanking(id, qty, qtyDelta); // qty=거래량, qtyDelta=순매수(매수+/매도-)
 
     } catch (error) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
