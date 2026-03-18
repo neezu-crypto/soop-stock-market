@@ -2267,25 +2267,18 @@ const stockRef = ref(db, `stocks/${id}`);
 const userRef  = ref(db, `users/${userUID}`);
 
 // 현재 주가 정보 가져오기
-const currentStockData = allStocks.find(s => s.id === id);
-const currentPrice = currentStockData ? currentStockData.price : 10000;
+const currentStockData = favorites[id] || ownedStocks[id] || searchResults[id];
+const currentPrice = currentStockData?.price || 10000;
 
-// 1. 기본 변동 배율 (기존 로직 유지: 100만 원일 때 0.5배 감쇄)
-const priceRatio = 10000 / currentPrice;
-const multiplier = Math.pow(priceRatio, 0.1505);
-
-// 2. [수정됨] 매도 시 주가 비례 하락 가중치 (선형 확장형)
+// 매도 시 주가 비례 하락 가중치 (10만원에서 2배)
+// 1만원 기준, 9만원당 1배씩 하락 위력 추가
 let sellPressure = 1;
 if (type === 'sell') {
-    // 주가가 1만 원을 초과하는 시점부터 약 99만 원당 1배씩 하락 위력이 추가됩니다.
-    // Math.min을 제거하여 주가가 높아질수록 하락폭이 무제한으로 강해집니다.
-    sellPressure = 1 + (Math.max(0, currentPrice - 10000) / 990000);
+    sellPressure = 1 + (Math.max(0, currentPrice - 10000) / 90000);
 }
 
-// 3. 최종 영향력 계산
-// 매수 시: multiplier (주가가 높을수록 무거움)
-// 매도 시: multiplier * sellPressure (주가가 높을수록 압도적으로 폭락)
-const impact = 0.0005 * Math.log2(1 + qty) * multiplier * sellPressure;
+// 최종 영향력 계산 — 매수/매도 기본 변동폭은 동일, 매도만 sellPressure 적용
+const impact = 0.0005 * Math.log2(1 + qty) * sellPressure;
 
 const spread = 0.001;
 const fee    = 0.003;
