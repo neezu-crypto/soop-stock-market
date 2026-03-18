@@ -2004,7 +2004,7 @@ async function fetchChartBanner() {
 
         // 광고 있음 → 배너 이미지 표시
         imgEl.src          = data.img;
-        linkEl.href        = data.link || '#';
+        linkEl.href        = sanitizeUrl(data.link, '#');
         linkEl.style.display = 'flex';
 
     } catch (e) {
@@ -2639,9 +2639,14 @@ window.submitChartAdRequest = async function() {
     const days     = parseInt(document.getElementById('chart-ad-days').value);
     const msgEl    = document.getElementById('chart-ad-msg');
 
-    if (!nickname) { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임을 입력해주세요.'; return; }
-    if (!imgUrl)   { msgEl.style.color='#ef4444'; msgEl.textContent='배너 이미지 URL을 입력해주세요.'; return; }
-    if (!linkUrl)  { msgEl.style.color='#ef4444'; msgEl.textContent='링크 URL을 입력해주세요.'; return; }
+    if (!nickname)                  { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임을 입력해주세요.'; return; }
+    if (nickname.length > 50)       { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임은 50자 이내로 입력해주세요.'; return; }
+    if (!imgUrl)                    { msgEl.style.color='#ef4444'; msgEl.textContent='배너 이미지 URL을 입력해주세요.'; return; }
+    if (!/^https?:\/\//i.test(imgUrl))  { msgEl.style.color='#ef4444'; msgEl.textContent='이미지 URL은 https://로 시작해야 합니다.'; return; }
+    if (imgUrl.length > 500)        { msgEl.style.color='#ef4444'; msgEl.textContent='이미지 URL이 너무 깁니다.'; return; }
+    if (!linkUrl)                   { msgEl.style.color='#ef4444'; msgEl.textContent='링크 URL을 입력해주세요.'; return; }
+    if (!/^https?:\/\//i.test(linkUrl)) { msgEl.style.color='#ef4444'; msgEl.textContent='링크 URL은 https://로 시작해야 합니다.'; return; }
+    if (linkUrl.length > 500)       { msgEl.style.color='#ef4444'; msgEl.textContent='링크 URL이 너무 깁니다.'; return; }
     if (!days || days < 1 || days > 99) { msgEl.style.color='#ef4444'; msgEl.textContent='신청 기간을 1~99일로 입력해주세요.'; return; }
 
     const uid = auth.currentUser?.uid;
@@ -2696,8 +2701,11 @@ window.submitPromoRequest = async function() {
     const days     = parseInt(document.getElementById('promo-days').value);
     const msgEl    = document.getElementById('promo-msg');
 
-    if (!nickname) { msgEl.style.color = '#ef4444'; msgEl.textContent = '닉네임을 입력해주세요.'; return; }
-    if (!soopId)   { msgEl.style.color = '#ef4444'; msgEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
+    if (!nickname)              { msgEl.style.color = '#ef4444'; msgEl.textContent = '닉네임을 입력해주세요.'; return; }
+    if (nickname.length > 50)   { msgEl.style.color = '#ef4444'; msgEl.textContent = '닉네임은 50자 이내로 입력해주세요.'; return; }
+    if (!soopId)                { msgEl.style.color = '#ef4444'; msgEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
+    if (soopId.length > 50)     { msgEl.style.color = '#ef4444'; msgEl.textContent = 'SOOP 아이디는 50자 이내로 입력해주세요.'; return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(soopId)) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
     if (!days || days < 1 || days > 30) { msgEl.style.color = '#ef4444'; msgEl.textContent = '신청 기간을 1~30일로 입력해주세요.'; return; }
 
     const uid = auth.currentUser?.uid;
@@ -2777,7 +2785,7 @@ function renderBanners() {
     activeBanners.forEach(s => {
         const dDayText = s.diffDays === Infinity ? "AD" : (s.diffDays === 0 ? "오늘만료" : `D-${s.diffDays}`);
         const a = document.createElement('a');
-        a.href = s.link || `https://www.sooplive.co.kr/station/${s.id}`;
+        a.href = sanitizeUrl(s.link, `https://www.sooplive.co.kr/station/${s.id}`);
         a.target = "_blank";
         a.className = "banner-item promo-active";
         const imgSrc   = s.bannerImg.startsWith('images/') ? './' + s.bannerImg : s.bannerImg;
@@ -2813,6 +2821,12 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#x27;');
+}
+
+// URL이 http(s)://로 시작하지 않으면 fallback 반환 — javascript: 프로토콜 차단
+function sanitizeUrl(url, fallback) {
+    if (!url) return fallback || '#';
+    return /^https?:\/\//i.test(url.trim()) ? url.trim() : (fallback || '#');
 }
 
 // ── 스파크라인 ───────────────────────────────────────────────
