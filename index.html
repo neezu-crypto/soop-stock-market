@@ -1167,7 +1167,6 @@ onValue(ref(db, 'siteConfig/'), (snap) => {
 let myData           = null;
 let userUID          = null;
 let allStocks        = [];
-let allHistories     = {}; // stocksMeta/{id}/history 캐시
 let allBanners       = {}; // stocksBanner/{id} 캐시
 let isTrading        = null; // 거래 중인 종목 ID (null이면 미거래)
 let isBannerRendered = false;
@@ -1418,7 +1417,7 @@ function renderRankingFromCache(items) {
     rankDiv.innerHTML = items.map(s => `
         <div class="rank-item">
             <span class="rank-num">${s.rank}위</span>
-            <span class="rank-name">${s.name}</span>
+            <span class="rank-name">${escapeHtml(s.name)}</span>
             <span class="rank-qty">총 ${s.totalQty?.toLocaleString() || 0}주</span>
         </div>
     `).join('');
@@ -1435,7 +1434,7 @@ function renderNetBuyRanking(items) {
     rankDiv.innerHTML = items.map(s => `
         <div class="rank-item">
             <span class="rank-num">${s.rank}위</span>
-            <span class="rank-name">${s.name}</span>
+            <span class="rank-name">${escapeHtml(s.name)}</span>
             <span class="rank-qty up">+${s.netQty?.toLocaleString() || 0}주</span>
         </div>
     `).join('');
@@ -1452,7 +1451,7 @@ function renderNetSellRanking(items) {
     rankDiv.innerHTML = items.map(s => `
         <div class="rank-item">
             <span class="rank-num">${s.rank}위</span>
-            <span class="rank-name">${s.name}</span>
+            <span class="rank-name">${escapeHtml(s.name)}</span>
             <span class="rank-qty down">-${s.netSellQty?.toLocaleString() || 0}주</span>
         </div>
     `).join('');
@@ -1603,7 +1602,7 @@ function renderMyPortfolio() {
         item.setAttribute('data-name', name);
         item.innerHTML = `
             <div class="my-stock-info">
-                <span class="my-stock-name">${name}</span>
+                <span class="my-stock-name">${escapeHtml(name)}</span>
                 <span class="my-stock-profit ${profitClass}">${profitText}</span>
             </div>
             <div class="my-stock-details">
@@ -2313,13 +2312,6 @@ window.trade = async function (id, type, qty = 1) {
         return;
     }
 
-    // history 캐시 없으면 거래 전 먼저 로드
-    if (!allHistories[id]) {
-        try {
-            const hSnap = await get(ref(db, `stocksMeta/${id}/history`));
-            if (hSnap.exists()) allHistories[id] = hSnap.val();
-        } catch(e) {}
-    }
 
 	// [해결방법] 함수 가장 첫 줄에 아래 코드를 추가하세요!
     const currentTime = Date.now();
@@ -2412,7 +2404,6 @@ const fee    = 0.003;
     // 콜백 내부에서는 stocks 경로만 업데이트
     let cashDelta    = 0;  // 트랜잭션 성공 후 적용할 현금 변동액
     let userStockNew = null; // 트랜잭션 성공 후 적용할 보유 주식 정보
-    let historyToWrite = null; // 트랜잭션 후 stocksMeta/에 저장할 history
     let qtyDelta     = 0;  // 랭킹 업데이트용 수량 변화
     let finalPrice   = 0;  // 분봉 업데이트용 최종 거래 가격
 
@@ -2461,14 +2452,6 @@ const fee    = 0.003;
                 finalPrice   = finalTradePrice;
             }
 
-            // stocks/에서 history 제거됐으므로 allHistories 캐시 사용
-            let history = (allHistories[id] ? [...allHistories[id]] : null)
-                       || [prevPrice];
-            history.push(newPrice);
-            if (history.length > 20) history.shift();
-
-            historyToWrite = history; // stocksMeta/에 저장할 history
-
             // history 필드 제외하고 stocks/ 업데이트
             // eslint-disable-next-line no-unused-vars
             const { history: _h, ...stockWithoutHistory } = currentStock;
@@ -2496,14 +2479,6 @@ const fee    = 0.003;
             [`stocks/${id}`]: userStockNew,
             lastTradeTime:    serverTimestamp()
         });
-
-        // history → stocksMeta/ 별도 저장 (stocks/ 전송량 감소)
-        if (historyToWrite) {
-            allHistories[id] = historyToWrite;
-            if (favorites[id])    favorites[id].history    = historyToWrite;
-            if (ownedStocks[id])  ownedStocks[id].history  = historyToWrite;
-            set(ref(db, `stocksMeta/${id}/history`), historyToWrite).catch(() => {});
-        }
 
         // ── 분봉 업데이트 ─────────────────────────────────────
         if (finalPrice > 0) {
@@ -2809,12 +2784,12 @@ function renderBanners() {
         const loaderId = `loader-${s.id}`;
         const imgId    = `img-${s.id}`;
         a.innerHTML = `
-            <div class="promo-badge">${dDayText}</div>
+            <div class="promo-badge">${escapeHtml(dDayText)}</div>
             <div class="banner-circle">
                 <span id="${loaderId}" class="banner-no-img" style="font-size:9px;color:#94a3b8;">로딩중...</span>
-                <img id="${imgId}" src="${imgSrc}" alt="${s.name}" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                <img id="${imgId}" src="${escapeHtml(imgSrc)}" alt="${escapeHtml(s.name)}" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;">
             </div>
-            <div class="banner-name">${s.name}</div>`;
+            <div class="banner-name">${escapeHtml(s.name)}</div>`;
         bannerList.appendChild(a);
 
         setTimeout(() => {
@@ -2827,6 +2802,17 @@ function renderBanners() {
             }
         }, 0);
     });
+}
+
+// ── XSS 방어: Firebase 데이터를 innerHTML에 삽입하기 전 이스케이프 ──
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
 }
 
 // ── 스파크라인 ───────────────────────────────────────────────
@@ -2926,7 +2912,7 @@ function updateCardContent(card, s, userStock) {
         const prevQty = document.getElementById(`qty-${s.id}`)?.value || '1';
         card.innerHTML = `
             <div class="info-group">
-                <div class="stock-name">${name}</div>
+                <div class="stock-name">${escapeHtml(name)}</div>
                 <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
             </div>
             <div class="price-group">
@@ -2987,14 +2973,12 @@ function updateCardContent(card, s, userStock) {
 // ────────────────────────────────────────────────────────────
 let stocksUnsubscribe  = null; // onValue 해제 함수
 let stocksPollTimer    = null; // 폴링 타이머
-let stocksMetaUnsubscribe = null; // stocksMeta onValue 해제 함수
 
 // stocks/ Firebase 스냅샷을 allStocks 캐시에 반영
 function processStocksSnap(snap) {
     const data      = snap.val() || {};
     const newStocks = Object.keys(data).map(key => {
         const s = { ...data[key], id: key };
-        s.history = allHistories[key] || s.history || [s.price, s.price];
         if (allBanners[key]) {
             s.bannerImg     = allBanners[key].bannerImg;
             s.bannerEndDate = allBanners[key].bannerEndDate;
@@ -3081,8 +3065,6 @@ function pauseAllSubscriptions() {
     Object.keys(favPollTimers).forEach(id => {
         clearInterval(favPollTimers[id]); delete favPollTimers[id];
     });
-    // stocksMeta/ 구독 해제
-    stopStocksMeta();
     // 절전 모드 오버레이 표시
     document.getElementById('power-save-overlay')?.classList.add('active');
 }
@@ -3100,7 +3082,6 @@ function applyStocksMode() {
     // 마감 시간 → 모든 구독 중단 (관리자 제외)
     if (!isAdmin && mh && mh.enabled && !isMarketOpen()) {
         pauseAllSubscriptions();
-        stopStocksMeta();
         return;
     }
 
@@ -3108,7 +3089,6 @@ function applyStocksMode() {
     if (!isUserActive) return;
 
     // 오픈 시간 → 정규장/비정규장 분기
-    startStocksMeta();
     const allIds = [
         ...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])
     ];
@@ -3130,7 +3110,6 @@ function applyStocksMode() {
                 get(ref(db, `stocks/${id}`)).then(snap => {
                     if (!snap.exists()) return;
                     const data = { ...snap.val(), id };
-                    data.history = allHistories[id] || [data.price, data.price];
                     if (favorites[id])   favorites[id]   = data;
                     if (ownedStocks[id]) ownedStocks[id] = data;
                     renderFavoriteList();
@@ -3147,27 +3126,6 @@ applyStocksMode();
 
 // 1분마다 시장 상태 체크 → 자동 전환
 setInterval(applyStocksMode, 60000);
-
-// ── stocksMeta/ — history 별도 구독 (오픈 시간에만 활성) ────
-function startStocksMeta() {
-    if (stocksMetaUnsubscribe) return;
-    stocksMetaUnsubscribe = onValue(ref(db, 'stocksMeta/'), (snap) => {
-        if (!snap.exists()) return;
-        const data = snap.val();
-        Object.entries(data).forEach(([id, meta]) => {
-            if (meta?.history) {
-                allHistories[id] = meta.history;
-                const stock = allStocks.find(s => s.id === id);
-                if (stock) stock.history = meta.history;
-            }
-        });
-    });
-}
-
-// stocksMeta/ 실시간 구독 해제
-function stopStocksMeta() {
-    if (stocksMetaUnsubscribe) { stocksMetaUnsubscribe(); stocksMetaUnsubscribe = null; }
-}
 
 // ── 정적 데이터 로컬 캐시 (이름/배너 등 잘 바뀌지 않는 데이터) ──
 const CACHE_KEY     = 'soop_static_cache';
@@ -3278,24 +3236,17 @@ function loadFavoritesFromLocal() {
 function subscribeToFavorite(stockId) {
     if (favoriteUnsubs[stockId]) return; // 이미 구독 중
 
-    // history 먼저 로드 후 stocks 구독 시작 (타이밍 보장)
-    get(ref(db, `stocksMeta/${stockId}/history`)).then(snap => {
-        if (snap.exists()) allHistories[stockId] = snap.val();
-        console.log(`[history] ${stockId} 로드:`, allHistories[stockId]?.length ?? 0, '개');
-    }).catch(() => {}).finally(() => {
-        favoriteUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
-            if (!snap.exists()) return;
-            const data = { ...snap.val(), id: stockId };
-            data.history = allHistories[stockId] || [data.price, data.price];
-            if (allBanners[stockId]) {
-                data.bannerImg     = allBanners[stockId].bannerImg;
-                data.bannerEndDate = allBanners[stockId].bannerEndDate;
-                data.bannerIsPaid  = allBanners[stockId].bannerIsPaid;
-                data.link          = allBanners[stockId].link;
-            }
-            favorites[stockId] = data;
-            renderFavoriteList();
-        });
+    favoriteUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
+        if (!snap.exists()) return;
+        const data = { ...snap.val(), id: stockId };
+        if (allBanners[stockId]) {
+            data.bannerImg     = allBanners[stockId].bannerImg;
+            data.bannerEndDate = allBanners[stockId].bannerEndDate;
+            data.bannerIsPaid  = allBanners[stockId].bannerIsPaid;
+            data.link          = allBanners[stockId].link;
+        }
+        favorites[stockId] = data;
+        renderFavoriteList();
     });
 }
 
@@ -3572,7 +3523,6 @@ function initFavorites() {
 }
 
 // ── 보유 주식 개별 구독 ──────────────────────────────────
-// 보유 주식의 history 로드 후 stocks/{id} 실시간 구독 시작
 function subscribeToOwned(stockId) {
     if (ownedUnsubs[stockId]) { console.log('[owned] 이미 구독 중:', stockId); return; }
 
@@ -3584,7 +3534,6 @@ function subscribeToOwned(stockId) {
             console.log('[owned] 데이터 수신:', stockId, snap.exists() ? snap.val()?.price : '없음');
             if (!snap.exists()) return;
             const data = { ...snap.val(), id: stockId };
-            data.history = allHistories[stockId] || [data.price, data.price];
             ownedStocks[stockId] = data;
             if (favorites[stockId]) favorites[stockId] = data;
             renderFavoriteList();
@@ -3592,14 +3541,7 @@ function subscribeToOwned(stockId) {
         });
     };
 
-    // 즐겨찾기 구독 중이면 이미 history 로드됨 → 바로 시작
-    if (allHistories[stockId] || favoriteUnsubs[stockId]) {
-        startOwned();
-    } else {
-        get(ref(db, `stocksMeta/${stockId}/history`)).then(snap => {
-            if (snap.exists()) allHistories[stockId] = snap.val();
-        }).catch(() => {}).finally(startOwned);
-    }
+    startOwned();
 }
 
 // 보유 종목 구독 해제 및 ownedStocks 캐시에서 제거
