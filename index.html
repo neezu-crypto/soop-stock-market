@@ -2663,7 +2663,42 @@ function updateCardContent(card, s, userStock) {
         profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
     }
 
-    // DOM 직접 업데이트 — input 건드리지 않음
+    // 최초 생성 시 HTML 구조 초기화
+    if (!card.querySelector('.info-group')) {
+        const prevQty = document.getElementById(`qty-${s.id}`)?.value || '1';
+        card.innerHTML = `
+            <div class="info-group">
+                <div class="stock-name">${s.name}</div>
+                <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
+            </div>
+            <div class="price-group">
+                <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
+                <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
+            </div>
+            <div class="chart-wrap">${createSparkline(s.history || [s.price, s.price], isUp)}</div>
+            <div class="trade-input-wrap">
+                <div class="trade-qty-row">
+                    <input type="number" class="trade-qty-input" id="qty-${s.id}"
+                        value="${prevQty}" min="1" max="100"
+                        onclick="event.stopPropagation()"
+                        oninput="clampQty(this)"
+                        onblur="smartClampQty(this,'${s.id}',event.relatedTarget?.dataset?.tradeType||'buy')">
+                    <span class="trade-qty-hint">최대 100주</span>
+                </div>
+                <div class="trade-btn-row">
+                    <button class="btn-trade-buy"  data-trade-type="buy"
+                        onclick="event.stopPropagation(); tradeWithInput('${s.id}','buy')"
+                        ${isTrading === s.id ? 'disabled' : ''}>매수</button>
+                    <button class="btn-trade-sell" data-trade-type="sell"
+                        onclick="event.stopPropagation(); tradeWithInput('${s.id}','sell')"
+                        ${isTrading === s.id ? 'disabled' : ''}>매도</button>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // 이미 구조가 있으면 DOM 직접 업데이트 — input 건드리지 않음
     const myQtyEl = card.querySelector('.my-qty');
     if (myQtyEl) myQtyEl.innerHTML = `보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>`;
 
@@ -2676,7 +2711,6 @@ function updateCardContent(card, s, userStock) {
     const chartWrap = card.querySelector('.chart-wrap');
     if (chartWrap) chartWrap.innerHTML = createSparkline(s.history || [s.price, s.price], isUp);
 
-    // 매매 버튼 활성화 상태 갱신
     const buyBtn  = card.querySelector('.btn-trade-buy');
     const sellBtn = card.querySelector('.btn-trade-sell');
     if (buyBtn)  buyBtn.disabled  = (isTrading === s.id);
