@@ -886,7 +886,7 @@
         <!-- 차트 모달 하단 광고 배너 -->
         <div id="chart-ad-banner">
             <a id="chart-ad-link" href="#" target="_blank" style="display:none;">
-                <img id="chart-ad-img" src="" alt="광고 배너">
+                <img id="chart-ad-banner-img" src="" alt="광고 배너">
                 <div id="chart-ad-label">AD</div>
             </a>
             <!-- 광고 없을 때 모집 안내 -->
@@ -1976,7 +1976,7 @@ window.openChartModal = function(stockId) {
 // Firebase: chartBanner/{ img, link, endDate }
 async function fetchChartBanner() {
     const linkEl  = document.getElementById('chart-ad-link');
-    const imgEl   = document.getElementById('chart-ad-img');
+    const imgEl   = document.getElementById('chart-ad-banner-img');
     const emptyEl = document.getElementById('chart-ad-empty');
 
     // 초기화: 둘 다 숨기고 시작
