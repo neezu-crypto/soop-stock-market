@@ -3089,17 +3089,16 @@ function renderFavoriteList() {
     const searchVal = document.getElementById('search-input')?.value || '';
     if (searchVal.trim()) return;
 
-    listDiv.innerHTML = '';
-    stockElements     = {};
+    // listDiv를 비우지 않고 카드를 재사용/재정렬
+    const fragment = document.createDocumentFragment();
     items.sort((a, b) => (b.price || 0) - (a.price || 0)).forEach(s => {
-        // 기존 카드 재사용 — 새로 만들면 input 초기화됨
         let card = stockElements[s.id];
-        if (!card || !card.isConnected) {
+        if (!card) {
             card = createStockCard(s);
+            stockElements[s.id] = card;
         } else {
             updateCardContent(card, s, (myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
         }
-        // 즐겨찾기 버튼 상태 갱신
         let favBtn = card.querySelector('.btn-favorite');
         if (!favBtn) {
             favBtn = document.createElement('button');
@@ -3109,9 +3108,16 @@ function renderFavoriteList() {
         }
         favBtn.title       = s.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가';
         favBtn.textContent = s.isFavorite ? '⭐' : '☆';
-        listDiv.appendChild(card);
-        stockElements[s.id] = card;
+        fragment.appendChild(card);
     });
+    // 더 이상 필요 없는 카드 제거
+    Object.keys(stockElements).forEach(id => {
+        if (!items.find(s => s.id === id)) {
+            stockElements[id]?.remove();
+            delete stockElements[id];
+        }
+    });
+    listDiv.appendChild(fragment);
 }
 
 // ── 즐겨찾기 카드 생성 (일반 카드 + ⭐ 버튼) ──────────
