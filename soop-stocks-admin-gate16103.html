@@ -570,6 +570,25 @@
     const provider = new GoogleAuthProvider();
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
+    // 인증 가드 헬퍼 — 모든 admin 함수 진입부에서 호출
+    function isAdmin() {
+        const user = auth.currentUser;
+        if (user && user.email === ADMIN_EMAIL) return true;
+        alert('⛔ 관리자 권한이 없습니다.');
+        return false;
+    }
+
+    // XSS 방어 — innerHTML 삽입 전 이스케이프
+    function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;');
+    }
+
     let allStocksData = {};
 
     // ── 종목 데이터 로드 ─────────────────────────────────────
@@ -586,7 +605,8 @@
             if (statusEl) statusEl.innerText = '로드 실패';
         }
     }
-    window.reloadStocks = async function() { await loadStocksOnce(); };
+    window.reloadStocks = async function() {
+        if (!isAdmin()) return; await loadStocksOnce(); };
 
     async function loadRankingStatus() {
         const statusEl = document.getElementById('ranking-status');
@@ -644,6 +664,7 @@
     }
 
     window.saveChartBanner = async function() {
+        if (!isAdmin()) return;
         const name  = document.getElementById('cb-name').value.trim();
         const img   = document.getElementById('cb-img').value.trim();
         const link  = document.getElementById('cb-link').value.trim();
@@ -667,6 +688,7 @@
     };
 
     window.deleteChartBanner = async function() {
+        if (!isAdmin()) return;
         if (!confirm('현재 차트 배너를 삭제하시겠습니까?')) return;
         try {
             await remove(ref(db, 'chartBanner'));
@@ -724,6 +746,7 @@
     }
 
     window.toggleMaintenance = async function(isOn) {
+        if (!isAdmin()) return;
         const toggle = document.getElementById('maintenance-toggle');
         const msg = isOn
             ? '⚠️ 점검 모드를 켜시겠습니까?\n\n모든 유저에게 즉시 점검 오버레이가 표시되고 거래가 차단됩니다.'
@@ -775,6 +798,7 @@
     }
 
     window.previewRankings = async function() {
+        if (!isAdmin()) return;
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading'; statusEl.innerText = '집계 중...';
         try {
@@ -785,6 +809,7 @@
     };
 
     window.resetRankings = async function() {
+        if (!isAdmin()) return;
         if (!confirm('⚠️ 랭킹 전체를 초기화하시겠습니까?\n\n• 거래량 TOP5\n• 순매수 TOP5\n• 순매도 TOP5\n\n다음 거래부터 0부터 다시 집계됩니다.')) return;
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading'; statusEl.innerText = '초기화 중...';
@@ -833,6 +858,7 @@
     }
 
     window.previewInactiveUsers = async function() {
+        if (!isAdmin()) return;
         const statusEl = document.getElementById('cleanup-status');
         statusEl.innerText = '집계 중...';
         try {
@@ -842,6 +868,7 @@
     };
 
     window.cleanupInactiveUsers = async function() {
+        if (!isAdmin()) return;
         const statusEl = document.getElementById('cleanup-status');
         statusEl.innerText = '집계 중...';
         try {
@@ -884,6 +911,7 @@
     }
 
     window.updateSinglePrice = async function(id) {
+        if (!isAdmin()) return;
         const newPrice = parseInt(document.getElementById(`input-${id}`).value);
         if (isNaN(newPrice)) return alert("정확한 가격을 입력해주세요.");
         const oldStock = allStocksData[id];
@@ -904,6 +932,7 @@
     // ── 종목 상세 수정 유료/무료 탭 ──────────────────────────
     let editBannerIsPaid = true;
     window.switchEditBannerType = function(type) {
+        if (!isAdmin()) return;
         editBannerIsPaid = type === 'paid';
         const paidBtn = document.getElementById('edit-tab-paid');
         const freeBtn = document.getElementById('edit-tab-free');
@@ -917,6 +946,7 @@
     };
 
     window.loadStockData = async function() {
+        if (!isAdmin()) return;
         const searchName = document.getElementById('edit-search-name').value.trim();
         if (!searchName) return alert("닉네임을 입력해주세요.");
         try {
@@ -949,6 +979,7 @@
     };
 
     window.updateStockData = async function() {
+        if (!isAdmin()) return;
         const stockId = document.getElementById('edit-stock-id').innerText;
         if (stockId === "-") return;
         const newPrice  = parseInt(document.getElementById('edit-stock-price').value);
@@ -1016,6 +1047,7 @@
     document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
 
     window.cleanupDuplicateStocks = async function() {
+        if (!isAdmin()) return;
         try {
             const snapshot = await get(ref(db, 'stocks/'));
             const data = snapshot.val();
@@ -1058,6 +1090,7 @@
     };
 
     window.uploadStocks = async function() {
+        if (!isAdmin()) return;
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("이름을 입력해주세요.");
         const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
@@ -1075,6 +1108,7 @@
     };
 
     window.deleteStocks = async function() {
+        if (!isAdmin()) return;
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("삭제할 이름을 입력해주세요.");
         const namesToDelete = text.split('\n').map(n => n.trim()).filter(n => n !== "");
@@ -1102,6 +1136,7 @@
     let splitRatio = 2;
 
     window.selectSplitRatio = function(ratio) {
+        if (!isAdmin()) return;
         ['2','5','10','custom'].forEach(v => {
             const btn = document.getElementById(`split-btn-${v}`);
             if (btn) { btn.style.background = '#1e293b'; btn.style.color = '#94a3b8'; btn.style.border = '1px solid #334155'; }
@@ -1128,6 +1163,7 @@
     }
 
     window.previewSplit = async function() {
+        if (!isAdmin()) return;
         const ratio    = getSelectedRatio();
         const statusEl = document.getElementById('split-status');
         if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
@@ -1147,6 +1183,7 @@
     };
 
     window.executeSplit = async function() {
+        if (!isAdmin()) return;
         const ratio    = getSelectedRatio();
         const statusEl = document.getElementById('split-status');
         if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
@@ -1221,6 +1258,7 @@
 
     // ── 주가 일괄 조정 ───────────────────────────────────────
     window.adjustAllPrices = async function() {
+        if (!isAdmin()) return;
         const percent = parseFloat(document.getElementById('percent-input').value);
         if (isNaN(percent)) return alert("숫자를 입력해주세요.");
         try {
@@ -1314,6 +1352,7 @@
     }
 
     window.toggleMarketHours = async function(enabled) {
+        if (!isAdmin()) return;
         const toggle = document.getElementById('market-hours-toggle');
         try {
             const snap    = await get(ref(db, 'siteConfig/marketHours'));
@@ -1330,6 +1369,7 @@
     };
 
     window.saveMarketHours = async function() {
+        if (!isAdmin()) return;
         const open         = document.getElementById('market-open').value;
         const close        = document.getElementById('market-close').value;
         const regularOpen  = document.getElementById('regular-open').value;
@@ -1367,6 +1407,7 @@
     // ── 배너 탭 전환 ─────────────────────────────────────────
     let bannerMode = 'paid';
     window.switchBannerTab = function(mode) {
+        if (!isAdmin()) return;
         bannerMode = mode;
         const paidBtn    = document.getElementById('tab-paid');
         const freeBtn    = document.getElementById('tab-free');
@@ -1404,6 +1445,7 @@
     });
 
     window.addBannerToStock = async function() {
+        if (!isAdmin()) return;
         const targetNickname = document.getElementById('banner-nickname').value.trim();
         const imgUrl         = document.getElementById('banner-img-url').value.trim();
         const linkUrl        = document.getElementById('banner-link-url').value.trim();
@@ -1443,6 +1485,7 @@
     };
     // ── 배너 마이그레이션: stocks/ → stocksBanner/ ───────────
     window.runBannerMigration = async function() {
+        if (!isAdmin()) return;
         const statusEl = document.getElementById('migration-status');
         if (!confirm('stocks/의 배너 데이터를 stocksBanner/로 복사합니다.\n계속하시겠습니까?')) return;
         statusEl.style.color = '#f59e0b';
@@ -1477,6 +1520,7 @@
     };
     // ── 홍보 신청 검수 ────────────────────────────────────────
     window.loadAdRequests = async function() {
+        if (!isAdmin()) return;
         const listEl = document.getElementById('ad-request-list');
         listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
         try {
@@ -1515,11 +1559,12 @@
                 listEl.appendChild(card);
             });
         } catch(e) {
-            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${e.message}</div>`;
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
         }
     };
 
     window.approveAdRequest = async function(reqId, days, nickname) {
+        if (!isAdmin()) return;
         // stocks/ 에서 닉네임으로 종목 ID 자동 검색
         const stocksSnap = await get(ref(db, 'stocks/'));
         if (!stocksSnap.exists()) { alert('종목 데이터를 불러올 수 없습니다.'); return; }
@@ -1544,20 +1589,30 @@
             if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
             const req = snap.val();
 
-            await update(ref(db, `stocksBanner/${stockId}`), {
+            const bannerData = {
                 name:          req.nickname,
                 bannerImg:     req.imgUrl,
                 link:          req.link,
                 bannerEndDate: endDate,
                 bannerIsPaid:  true
-            });
+            };
 
-            await update(ref(db, `adRequests/${reqId}`), {
-                status:     'approved',
-                stockId,
-                endDate,
-                approvedAt: Date.now()
-            });
+            // stocks/ + stocksBanner/ + adRequests/ 동시 쓰기
+            await Promise.all([
+                update(ref(db, `stocks/${stockId}`), {
+                    bannerImg:     req.imgUrl,
+                    link:          req.link,
+                    bannerEndDate: endDate,
+                    bannerIsPaid:  true
+                }),
+                update(ref(db, `stocksBanner/${stockId}`), bannerData),
+                update(ref(db, `adRequests/${reqId}`), {
+                    status:     'approved',
+                    stockId,
+                    endDate,
+                    approvedAt: Date.now()
+                })
+            ]);
 
             alert(`✅ ${req.nickname} 수락 완료!\n종목 ID: ${stockId}\n만료일: ${endDate}`);
             loadAdRequests();
@@ -1567,6 +1622,7 @@
     };
 
     window.rejectAdRequest = async function(reqId) {
+        if (!isAdmin()) return;
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
             await update(ref(db, `adRequests/${reqId}`), {
@@ -1581,6 +1637,7 @@
 
     // ── 차트 배너 신청 검수 ───────────────────────────────────
     window.loadChartAdRequests = async function() {
+        if (!isAdmin()) return;
         const listEl = document.getElementById('chart-ad-request-list');
         listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
         try {
@@ -1619,11 +1676,12 @@
                 listEl.appendChild(card);
             });
         } catch(e) {
-            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${e.message}</div>`;
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
         }
     };
 
     window.approveChartAdRequest = async function(reqId, days) {
+        if (!isAdmin()) return;
         try {
             const snap = await get(ref(db, `chartAdRequests/${reqId}`));
             if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
@@ -1649,6 +1707,7 @@
     };
 
     window.rejectChartAdRequest = async function(reqId) {
+        if (!isAdmin()) return;
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
             await update(ref(db, `chartAdRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
