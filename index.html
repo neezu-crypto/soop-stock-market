@@ -765,35 +765,47 @@
 <!-- ── 프로모 모달 ── -->
 <div id="promo-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
-        <div class="promo-modal-header"><h2>📢 방송국 홍보 안내</h2></div>
-        <div class="promo-benefit-box" style="background:rgba(239,68,68,0.08); border:1px dashed #ef4444;">
-            <span style="background:#64748b;color:white;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:800;vertical-align:middle;text-decoration:line-through;">EVENT</span>
-            <p style="margin:8px 0 0 0;font-size:13px;color:#94a3b8;font-weight:700;text-decoration:line-through;">최초 7일간 무료</p>
-            <div style="margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;">
-                <span style="background:#ef4444;color:white;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:800;">종료</span>
-                <p style="margin:0;font-size:14px;color:#fca5a5;font-weight:800;">문의 폭주로 인해 이벤트 조기종료</p>
-            </div>
-        </div>
-        <ul class="promo-info-list" style="margin-bottom:20px;">
+        <div class="promo-modal-header"><h2>📢 방송국 홍보 신청</h2></div>
+
+        <!-- 안내 -->
+        <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 거래소 우측 상단 배너</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
             <li>💰 <b>비용:</b> 1일 당 별풍선 20개</li>
         </ul>
-        <div style="background:rgba(255,255,255,0.05);padding:15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;">
-            <p style="font-size:13px;color:#38bdf8;font-weight:bold;margin-bottom:8px;">📋 문의 시 필수 포함 내용</p>
-            <ul style="list-style:none;padding:0;margin:0;font-size:12px;color:var(--text-main);line-height:1.8;">
-                <li>• 닉네임 및 방송국 주소(URL)</li>
-                <li>• 홍보용 배너 이미지 (사진 또는 GIF)</li>
-            </ul>
-            <p style="font-size:13px;color:var(--text-sub);margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
-                💡 파일 용량이 크다면?<br>
-                <span style="color:#94a3b8;">skftodwocks2&#64;gmail.com</span> 으로 발송
-            </p>
+
+        <!-- 신청 폼 -->
+        <div id="promo-form" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+            <div>
+                <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">닉네임</div>
+                <input id="promo-nickname" type="text" placeholder="스트리머 닉네임"
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
+            </div>
+            <div>
+                <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">SOOP 아이디</div>
+                <input id="promo-soop-id" type="text" placeholder="soop 아이디"
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
+            </div>
+            <div>
+                <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">신청 기간 (일)</div>
+                <input id="promo-days" type="number" min="1" max="30" placeholder="예: 7"
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
+            </div>
+            <!-- 미리보기 -->
+            <div id="promo-preview" style="display:none; align-items:center; gap:12px; background:#0f172a; padding:12px; border-radius:8px; border:1px solid #334155;">
+                <img id="promo-preview-img" style="width:48px; height:48px; border-radius:50%; object-fit:cover;" src="" alt="">
+                <div>
+                    <div id="promo-preview-name" style="font-size:14px; font-weight:700; color:#f8fafc;"></div>
+                    <div id="promo-preview-url" style="font-size:11px; color:#64748b; margin-top:2px;"></div>
+                </div>
+            </div>
+            <div id="promo-msg" style="font-size:12px; min-height:16px;"></div>
         </div>
-        <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
-            <button onclick="closePromoModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
-            <button onclick="window.open('https://www.sooplive.co.kr/station/skftodwocks2','_blank')" style="flex:1.2;min-width:90px;background:#6366f1;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">개발자</button>
-            <button class="btn-confirm-contact" onclick="goToMessage()" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">문의하기</button>
+
+        <div style="display:flex; gap:8px;">
+            <button onclick="closePromoModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button onclick="window.open('https://www.sooplive.co.kr/station/skftodwocks2','_blank')" style="flex:1; background:#6366f1; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">개발자</button>
+            <button onclick="submitPromoRequest()" style="flex:2; background:#38bdf8; color:#0f172a; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">신청하기</button>
         </div>
     </div>
 </div>
@@ -2613,7 +2625,15 @@ window.closePortfolio = function() {
 };
 
 // ── 모달 ─────────────────────────────────────────────────────
-window.openPromoModal    = () => document.getElementById('promo-modal').classList.add('active');
+window.openPromoModal = () => {
+    // 폼 초기화
+    document.getElementById('promo-nickname').value = '';
+    document.getElementById('promo-soop-id').value  = '';
+    document.getElementById('promo-days').value     = '';
+    document.getElementById('promo-preview').style.display = 'none';
+    document.getElementById('promo-msg').textContent = '';
+    document.getElementById('promo-modal').classList.add('active');
+};
 window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
 window.openChartAdModal  = () => {
     closeChartModal();   // 차트창 먼저 닫기
@@ -2627,6 +2647,72 @@ window.goToMessage       = () => {
 window.goToChartAdMessage = () => {
     window.open("https://note.sooplive.co.kr/app/index.php?page=write&targetUserId=skftodwocks2", "_blank");
     window.closeChartAdModal();
+};
+
+// ── SOOP ID 앞 2글자로 이미지 URL prefix 추정 ───────────────
+function getSoopImgUrl(soopId) {
+    if (!soopId) return '';
+    const prefix = soopId.substring(0, 2).toLowerCase();
+    return `https://stimg.sooplive.co.kr/LOGO/${prefix}/${soopId}/${soopId}.jpg`;
+}
+
+// ── SOOP ID 입력 시 미리보기 ────────────────────────────────
+document.addEventListener('input', (e) => {
+    if (e.target.id !== 'promo-soop-id') return;
+    const soopId  = e.target.value.trim();
+    const preview = document.getElementById('promo-preview');
+    if (!soopId) { preview.style.display = 'none'; return; }
+
+    const imgUrl = getSoopImgUrl(soopId);
+    const img    = document.getElementById('promo-preview-img');
+    img.src = imgUrl;
+    img.onerror = () => { img.src = ''; };
+    document.getElementById('promo-preview-name').textContent =
+        document.getElementById('promo-nickname').value.trim() || soopId;
+    document.getElementById('promo-preview-url').textContent =
+        `sooplive.co.kr/station/${soopId}`;
+    preview.style.display = 'flex';
+});
+
+// ── 홍보 신청 제출 ───────────────────────────────────────────
+window.submitPromoRequest = async function() {
+    const nickname = document.getElementById('promo-nickname').value.trim();
+    const soopId   = document.getElementById('promo-soop-id').value.trim();
+    const days     = parseInt(document.getElementById('promo-days').value);
+    const msgEl    = document.getElementById('promo-msg');
+
+    if (!nickname) { msgEl.style.color = '#ef4444'; msgEl.textContent = '닉네임을 입력해주세요.'; return; }
+    if (!soopId)   { msgEl.style.color = '#ef4444'; msgEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
+    if (!days || days < 1 || days > 30) { msgEl.style.color = '#ef4444'; msgEl.textContent = '신청 기간을 1~30일로 입력해주세요.'; return; }
+
+    const uid = auth.currentUser?.uid;
+    if (!uid) { msgEl.style.color = '#ef4444'; msgEl.textContent = '로그인이 필요합니다.'; return; }
+
+    msgEl.style.color = '#94a3b8';
+    msgEl.textContent = '신청 중...';
+
+    try {
+        const reqId  = `${soopId}_${Date.now()}`;
+        const imgUrl = getSoopImgUrl(soopId);
+        await set(ref(db, `adRequests/${reqId}`), {
+            nickname,
+            soopId,
+            days,
+            imgUrl,
+            link:      `https://www.sooplive.co.kr/station/${soopId}`,
+            uid,
+            status:    'pending',  // pending / approved / rejected
+            createdAt: Date.now(),
+            cost:      days * 20   // 별풍선
+        });
+        msgEl.style.color = '#22c55e';
+        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 20개 = ${days * 20}개)`;
+        document.getElementById('promo-form').style.opacity = '0.5';
+        document.getElementById('promo-form').style.pointerEvents = 'none';
+    } catch(e) {
+        msgEl.style.color = '#ef4444';
+        msgEl.textContent = '신청 실패: ' + e.message;
+    }
 };
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
