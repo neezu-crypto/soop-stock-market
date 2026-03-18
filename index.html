@@ -3092,13 +3092,23 @@ function renderFavoriteList() {
     listDiv.innerHTML = '';
     stockElements     = {};
     items.sort((a, b) => (b.price || 0) - (a.price || 0)).forEach(s => {
-        const card   = createStockCard(s);
-        const favBtn = document.createElement('button');
-        favBtn.className   = 'btn-favorite';
+        // 기존 카드 재사용 — 새로 만들면 input 초기화됨
+        let card = stockElements[s.id];
+        if (!card || !card.isConnected) {
+            card = createStockCard(s);
+        } else {
+            updateCardContent(card, s, (myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
+        }
+        // 즐겨찾기 버튼 상태 갱신
+        let favBtn = card.querySelector('.btn-favorite');
+        if (!favBtn) {
+            favBtn = document.createElement('button');
+            favBtn.className = 'btn-favorite';
+            favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(s.id); };
+            card.querySelector('.price-group')?.appendChild(favBtn);
+        }
         favBtn.title       = s.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가';
         favBtn.textContent = s.isFavorite ? '⭐' : '☆';
-        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(s.id); };
-        card.querySelector('.price-group')?.appendChild(favBtn);
         listDiv.appendChild(card);
         stockElements[s.id] = card;
     });
