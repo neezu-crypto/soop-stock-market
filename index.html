@@ -2935,6 +2935,11 @@ window.submitPromoRequest = async function() {
         msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 20개 = ${days * 20}개)`;
         document.getElementById('promo-form').style.opacity = '0.5';
         document.getElementById('promo-form').style.pointerEvents = 'none';
+        // 후원 창 자동 오픈
+        window.open(
+            `https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`,
+            '_blank'
+        );
     } catch(e) {
         msgEl.style.color = '#ef4444';
         msgEl.textContent = '신청 실패: ' + e.message;
