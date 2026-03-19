@@ -2866,6 +2866,21 @@ window.submitChartAdRequest = async function() {
         msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 80개 = ${days * 80}개)`;
         document.getElementById('chart-ad-form').style.opacity      = '0.5';
         document.getElementById('chart-ad-form').style.pointerEvents = 'none';
+        // 후원 창 자동 오픈 (모바일/PC 분기)
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        if (isMobile) {
+            const r = Math.random();
+            window.open(
+                `https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`,
+                '_blank'
+            );
+        } else {
+            window.open(
+                `https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`,
+                '_blank',
+                'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes'
+            );
+        }
     } catch(e) {
         msgEl.style.color = '#ef4444';
         msgEl.textContent = '신청 실패: ' + e.message;
@@ -2935,11 +2950,21 @@ window.submitPromoRequest = async function() {
         msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 20개 = ${days * 20}개)`;
         document.getElementById('promo-form').style.opacity = '0.5';
         document.getElementById('promo-form').style.pointerEvents = 'none';
-        // 후원 창 자동 오픈
-        window.open(
-            `https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`,
-            '_blank'
-        );
+        // 후원 창 자동 오픈 (모바일/PC 분기)
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        if (isMobile) {
+            const r = Math.random();
+            window.open(
+                `https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`,
+                '_blank'
+            );
+        } else {
+            window.open(
+                `https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`,
+                '_blank',
+                'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes'
+            );
+        }
     } catch(e) {
         msgEl.style.color = '#ef4444';
         msgEl.textContent = '신청 실패: ' + e.message;
