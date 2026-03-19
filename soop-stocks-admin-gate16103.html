@@ -343,6 +343,10 @@
             <input type="number" id="percent-input" placeholder="예: 10 또는 -5">
             <button class="btn-success" onclick="adjustAllPrices()">일괄 적용</button>
         </div>
+            <div style="margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
+            <div class="info-box" style="background:rgba(239,68,68,0.08); border-color:#ef4444;">⚠️ 모든 종목의 주가를 10,000원으로 초기화합니다. 되돌릴 수 없습니다.</div>
+            <button class="btn-danger" style="width:100%; margin-top:8px;" onclick="resetAllPrices()">🔄 전체 주가 초기화 (10,000원)</button>
+        </div>
         </div>
         </div>
     </div>
@@ -1297,6 +1301,26 @@
             alert(`🔥 주가 상위 100개 종목이 ${percent}% 조정되었습니다!`);
             await loadStocksOnce();
         } catch (e) { alert("오류 발생: " + e.message); }
+    };
+
+    window.resetAllPrices = async function() {
+        if (!isAdmin()) return;
+        if (!confirm('⚠️ 모든 종목의 주가를 10,000원으로 초기화합니다.\n\n이 작업은 되돌릴 수 없습니다.\n계속하시겠습니까?')) return;
+        try {
+            const snapshot = await get(ref(db, 'stocks/'));
+            const data = snapshot.val();
+            if (!data) return alert('종목 데이터가 없습니다.');
+ 
+            const updates = {};
+            Object.keys(data).forEach(id => {
+                updates[`${id}/price`]   = 10000;
+                updates[`${id}/change`]  = '0.00';
+                updates[`${id}/volume`]  = 0;
+            });
+            await update(ref(db, 'stocks/'), updates);
+            alert(`✅ 전체 ${Object.keys(data).length}개 종목 주가가 10,000원으로 초기화됐습니다.`);
+            await loadStocksOnce();
+        } catch (e) { alert('초기화 실패: ' + e.message); }
     };
 
     // ── 시장 운영 시간 ───────────────────────────────────────
