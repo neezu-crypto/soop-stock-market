@@ -1186,11 +1186,11 @@ const auth = getAuth(app);
 let siteConfig      = {};
 let siteConfigReady = true; // 점검창 기본 표시 방식으로 변경 — siteConfig 불필요
 
-// siteConfig 초기 1회 로드
-get(ref(db, 'siteConfig/')).then(snap => {
-    siteConfig = snap.exists() ? snap.val() : {};
+// siteConfig 실시간 구독 (관리자 전용 — 시장 운영 시간 등 참조용)
+onValue(ref(db, 'siteConfig/'), (snap) => {
+    siteConfig = snap.val() || {};
     applyMarketState();
-}).catch(() => {});
+}).catch?.(() => {});
 
 // ── 점검창 카운트다운 즉시 시작 ──────────────────────────────
 (function startCountdown() {
@@ -1531,35 +1531,51 @@ setInterval(() => {
     }
 }, 30000);
 
-// ── siteConfig 초기 로드 + maintenance/frozenStocks 실시간 구독 ──
-get(ref(db, 'siteConfig/')).then(snap => {
-    siteConfig = snap.exists() ? snap.val() : {};
+// ── siteConfig 실시간 구독 ───────────────────────────────────
+onValue(ref(db, 'siteConfig/'), (snap) => {
+    const prev = siteConfig;
+    siteConfig = snap.val() || {};
     siteConfigReady = true;
-    applyMarketState();
-    tryCloseIntro();
-}).catch(() => {});
 
-// 점검 모드 실시간 구독
-onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
-    siteConfig.maintenance = snap.val() ?? false;
-    applyMarketState();
-});
-
-// 서킷브레이커 실시간 구독
-onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
-    const prev = siteConfig.frozenStocks || {};
-    siteConfig.frozenStocks = snap.val() || {};
+    // frozenStocks 변경 감지 → 서킷브레이커 UI 반영
+    const frozenStocks = siteConfig.frozenStocks || {};
     const now = Date.now();
-    Object.entries(siteConfig.frozenStocks).forEach(([stockId, frozenUntil]) => {
+    Object.entries(frozenStocks).forEach(([stockId, frozenUntil]) => {
         if (frozenUntil > now) {
-            const wasNotFrozen = !prev[stockId] || prev[stockId] <= now;
+            // 새로 동결된 종목만 처리 (이전에 없던 것)
+            const wasNotFrozen = !prev?.frozenStocks?.[stockId] ||
+                                  prev.frozenStocks[stockId] <= now;
             if (wasNotFrozen) {
                 const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
                 alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
+
+                // 동결 중 구독 일시 중단 (데이터 절약)
+                if (favoriteUnsubs[stockId]) {
+                    favoriteUnsubs[stockId]();
+                    delete favoriteUnsubs[stockId];
+                }
+                if (ownedUnsubs[stockId]) {
+                    ownedUnsubs[stockId]();
+                    delete ownedUnsubs[stockId];
+                }
+                if (favPollTimers[stockId]) {
+                    clearInterval(favPollTimers[stockId]);
+                    delete favPollTimers[stockId];
+                }
+
+                // 동결 해제 시점에 재구독
+                const remaining = frozenUntil - now;
+                setTimeout(() => {
+                    if (favorites[stockId])   subscribeToFavorite(stockId);
+                    if (ownedStocks[stockId]) subscribeToOwned(stockId);
+                }, remaining + 500); // 해제 후 0.5초 여유
             }
         }
     });
-    updateUI(true);
+
+    updateUI(true); // 카드 동결 UI 갱신
+    applyMarketState();
+    tryCloseIntro();
 });
 
 // 현재 시각이 전체 오픈 시간 이내인지 여부 반환
