@@ -2879,7 +2879,7 @@ function renderBanners() {
             const name   = banner.name || cached?.name || id;
             let diffDays = Infinity;
             if (banner.bannerEndDate) {
-                const endDate = new Date(banner.bannerEndDate);
+                const endDate = new Date(banner.bannerEndDate + 'T00:00:00');
                 endDate.setHours(23, 59, 59, 999);
                 diffDays = Math.ceil((endDate - now) / 86400000);
             }
