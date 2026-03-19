@@ -131,6 +131,33 @@
         .rank-name { color: var(--text-main); }
         .rank-vol  { color: var(--text-sub); font-size: 11px; }
 
+		/* ── 공지 안내 바 ── */
+.notice-bar {
+    background: var(--card-bg);
+    width: 100%;
+    padding: 12px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    border: 1px dashed #1e3a5f;
+    overflow: hidden;
+}
+.notice-title {
+    font-weight: 800;
+    color: #60a5fa;
+    margin-right: 15px;
+    white-space: nowrap;
+    font-size: 14px;
+}
+.notice-content {
+    font-size: 13px;
+    color: var(--text-main);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
         /* ── 배너 ── */
         .banner-container { 
             position: fixed; 
@@ -1055,6 +1082,15 @@
         <div class="ranking-title">📉 순매도 TOP 5</div>
         <div id="net-sell-rankers" class="ranking-list">불러오는 중...</div>
     </div>
+
+	<!-- 공지 안내 영역 -->
+<div class="notice-bar" style="display:none;">
+    <div class="notice-title">📢 공지</div>
+    <div class="notice-content">
+        <span class="notice-text"></span>
+    </div>
+</div>
+	
     <!-- 빈 화면 안내 (즐겨찾기 없을 때) -->
     <div id="stock-empty">
         <div class="empty-icon">🔍</div>
@@ -1476,6 +1512,15 @@ function renderNetSellRanking(items) {
         </div>
     `).join('');
 }
+
+	// ── 공지 바 ──────────────────────────────────────────────
+get(ref(db, 'siteConfig/notice')).then(snap => {
+    if (!snap.exists()) return;
+    const { text, enabled } = snap.val();
+    if (!enabled || !text?.trim()) return;
+    document.querySelector('.notice-text').textContent = text;
+    document.querySelector('.notice-bar').style.display = 'flex';
+});
 
 // 이미 접속 중인 사용자를 위한 점검 시간 주기 체크 (30초마다)
 setInterval(() => {
