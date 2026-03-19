@@ -128,6 +128,104 @@
         </div>
     </div>
 
+    <!-- 📉 매도 하락 가중치 설정 -->
+    <div class="container" style="display:block; border-color: #ef4444;">
+        <div class="accordion-header">
+            <h1>📉 매도 하락 가중치 설정</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            주가가 높을수록 매도 시 하락폭이 커지는 비례 가중치를 설정합니다.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>siteConfig/sellConfig</b> 값을 변경합니다.</span>
+        </div>
+
+        <!-- 현재 적용값 표시 -->
+        <div class="data-status-bar" style="margin-bottom:15px;">
+            <span>현재 적용값: <b id="sell-config-status" style="color:#f8fafc;">불러오는 중...</b></span>
+            <span id="sell-config-chip" class="status-chip loading">불러오는 중...</span>
+        </div>
+
+        <!-- 파라미터 입력 -->
+        <div style="display:flex; flex-direction:column; gap:12px;">
+
+            <!-- basePrice -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div>
+                        <div style="font-size:13px; color:#ef4444; font-weight:800;">기준 주가 (basePrice)</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:3px;">이 금액 이하는 가중치 1배 (하락 없음)</div>
+                    </div>
+                    <span style="font-size:12px; color:#94a3b8; font-weight:700;">기본값: 10,000원</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="sell-base-price" value="10000" min="1000" step="1000"
+                        style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
+                    <span style="color:#94a3b8; font-size:13px; white-space:nowrap;">원</span>
+                </div>
+            </div>
+
+            <!-- scalePrice -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div>
+                        <div style="font-size:13px; color:#ef4444; font-weight:800;">가중치 증가 구간 (scalePrice)</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:3px;">이 금액마다 가중치 1배씩 추가</div>
+                    </div>
+                    <span style="font-size:12px; color:#94a3b8; font-weight:700;">기본값: 90,000원</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="sell-scale-price" value="90000" min="1000" step="1000"
+                        style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
+                    <span style="color:#94a3b8; font-size:13px; white-space:nowrap;">원</span>
+                </div>
+            </div>
+
+            <!-- impact / spread / fee -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="font-size:13px; color:#f59e0b; font-weight:800; margin-bottom:10px;">⚙️ 거래 영향력 파라미터</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+                    <div>
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">impact 계수</div>
+                        <input type="number" id="sell-impact" value="0.0005" min="0.0001" max="0.01" step="0.0001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.0005</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">spread</div>
+                        <input type="number" id="sell-spread" value="0.001" min="0" max="0.1" step="0.001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.001</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">수수료 (fee)</div>
+                        <input type="number" id="sell-fee" value="0.003" min="0" max="0.1" step="0.001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.003</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 시뮬레이터 -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="font-size:13px; color:#a855f7; font-weight:800; margin-bottom:10px;">🧮 가중치 시뮬레이터</div>
+                <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+                    <input type="number" id="sim-price" placeholder="주가 (예: 100000)" min="0"
+                        style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 12px; border-radius:8px; font-size:13px; outline:none;">
+                    <input type="number" id="sim-qty" placeholder="수량 (예: 10)" min="1"
+                        style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 12px; border-radius:8px; font-size:13px; outline:none;">
+                    <button onclick="runSimulator()" style="background:#a855f7; color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:700; font-size:12px; white-space:nowrap;">계산</button>
+                </div>
+                <div id="sim-result" style="font-size:13px; color:#64748b;">주가와 수량을 입력 후 계산하세요.</div>
+            </div>
+
+            <button class="btn-primary" style="margin-top:4px; background:#ef4444;" onclick="saveSellConfig()">💾 하락 가중치 저장</button>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 🔴 점검 모드 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
         <div class="accordion-header">
@@ -1801,6 +1899,84 @@
             alert('거절 실패: ' + e.message);
         }
     };
+
+    // ── 매도 하락 가중치 설정 ──────────────────────────────────
+    async function loadSellConfig() {
+        try {
+            const snap = await get(ref(db, 'siteConfig/sellConfig'));
+            const chip = document.getElementById('sell-config-chip');
+            const statusEl = document.getElementById('sell-config-status');
+
+            if (!snap.exists()) {
+                chip.className = 'status-chip none';
+                chip.textContent = '기본값 사용 중';
+                statusEl.textContent = 'basePrice: 10,000 / scalePrice: 90,000';
+                return;
+            }
+            const d = snap.val();
+            if (d.basePrice  !== undefined) document.getElementById('sell-base-price').value  = d.basePrice;
+            if (d.scalePrice !== undefined) document.getElementById('sell-scale-price').value = d.scalePrice;
+            if (d.impact     !== undefined) document.getElementById('sell-impact').value      = d.impact;
+            if (d.spread     !== undefined) document.getElementById('sell-spread').value      = d.spread;
+            if (d.fee        !== undefined) document.getElementById('sell-fee').value         = d.fee;
+
+            chip.className = 'status-chip active';
+            chip.textContent = '커스텀 적용 중';
+            statusEl.textContent = `base: ${Number(d.basePrice).toLocaleString()}원 / scale: ${Number(d.scalePrice).toLocaleString()}원`;
+        } catch(e) {
+            document.getElementById('sell-config-chip').className = 'status-chip expired';
+            document.getElementById('sell-config-chip').textContent = '오류';
+        }
+    }
+
+    window.saveSellConfig = async function() {
+        if (!isAdmin()) return;
+        const basePrice  = Number(document.getElementById('sell-base-price').value);
+        const scalePrice = Number(document.getElementById('sell-scale-price').value);
+        const impact     = Number(document.getElementById('sell-impact').value);
+        const spread     = Number(document.getElementById('sell-spread').value);
+        const fee        = Number(document.getElementById('sell-fee').value);
+
+        if (!basePrice || !scalePrice || scalePrice <= 0) {
+            alert('기준 주가와 가중치 구간은 0보다 커야 합니다.'); return;
+        }
+        try {
+            await set(ref(db, 'siteConfig/sellConfig'), { basePrice, scalePrice, impact, spread, fee, updatedAt: Date.now() });
+            document.getElementById('sell-config-chip').className = 'status-chip active';
+            document.getElementById('sell-config-chip').textContent = '커스텀 적용 중';
+            document.getElementById('sell-config-status').textContent = `base: ${basePrice.toLocaleString()}원 / scale: ${scalePrice.toLocaleString()}원`;
+            alert('✅ 하락 가중치 설정이 저장되었습니다.');
+        } catch(e) {
+            alert('저장 실패: ' + e.message);
+        }
+    };
+
+    window.runSimulator = function() {
+        const price      = Number(document.getElementById('sim-price').value);
+        const qty        = Number(document.getElementById('sim-qty').value);
+        const basePrice  = Number(document.getElementById('sell-base-price').value)  || 10000;
+        const scalePrice = Number(document.getElementById('sell-scale-price').value) || 90000;
+        const impact     = Number(document.getElementById('sell-impact').value)      || 0.0005;
+        const resultEl   = document.getElementById('sim-result');
+
+        if (!price || !qty) { resultEl.textContent = '주가와 수량을 입력하세요.'; resultEl.style.color = '#64748b'; return; }
+
+        const sellPressure = 1 + (Math.max(0, price - basePrice) / scalePrice);
+        const impactVal    = impact * Math.log2(1 + qty) * sellPressure;
+        const dropAmt      = Math.round(price * impactVal);
+
+        resultEl.style.color = '#f8fafc';
+        resultEl.innerHTML = `
+            <div style="display:grid; grid-template-columns:auto 1fr; gap:4px 12px; line-height:1.8;">
+                <span style="color:#94a3b8;">sellPressure</span><span style="color:#ef4444; font-weight:700;">${sellPressure.toFixed(4)}배</span>
+                <span style="color:#94a3b8;">impact 수치</span><span style="color:#fca5a5;">${(impactVal * 100).toFixed(4)}%</span>
+                <span style="color:#94a3b8;">예상 하락폭</span><span style="color:#ef4444; font-weight:700;">▼ ${dropAmt.toLocaleString()}원</span>
+                <span style="color:#94a3b8;">매도 후 예상가</span><span style="color:#f8fafc; font-weight:700;">${Math.max(0, price - dropAmt).toLocaleString()}원</span>
+            </div>
+        `;
+    };
+
+    loadSellConfig();
 
     // ── 공지 관리 ─────────────────────────────────────────────
     async function loadNotice() {
