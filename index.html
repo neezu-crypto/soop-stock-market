@@ -3474,24 +3474,32 @@ function subscribeToFavorite(stockId) {
     if (favoriteUnsubs[stockId]) return; // 이미 구독 중
 
     favoriteUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
-        if (!snap.exists()) return;
-        const data = { ...snap.val(), id: stockId };
-        // 주가 변동 → 스파크라인 캐시 누적
-        const prevPrice = favorites[stockId]?.price;
-        if (prevPrice && prevPrice !== data.price) {
-            if (!sparklinePriceCache[stockId]) sparklinePriceCache[stockId] = [prevPrice];
+    if (!snap.exists()) return;
+    const data = { ...snap.val(), id: stockId };
+
+    // 주가 변동 → 스파크라인 캐시 누적
+    const prevPrice = favorites[stockId]?.price;
+    if (prevPrice !== undefined) {
+        // 기준값이 없으면 prevPrice로 초기화 후 누적
+        if (!sparklinePriceCache[stockId]) sparklinePriceCache[stockId] = [prevPrice];
+        if (prevPrice !== data.price) {
             sparklinePriceCache[stockId].push(data.price);
             if (sparklinePriceCache[stockId].length > 20) sparklinePriceCache[stockId].shift();
         }
-        if (allBanners[stockId]) {
-            data.bannerImg     = allBanners[stockId].bannerImg;
-            data.bannerEndDate = allBanners[stockId].bannerEndDate;
-            data.bannerIsPaid  = allBanners[stockId].bannerIsPaid;
-            data.link          = allBanners[stockId].link;
-        }
-        favorites[stockId] = data;
-        renderFavoriteList();
-    });
+    } else {
+        // 최초 구독 시 현재가로 초기값 설정
+        if (!sparklinePriceCache[stockId]) sparklinePriceCache[stockId] = [data.price];
+    }
+
+    if (allBanners[stockId]) {
+        data.bannerImg     = allBanners[stockId].bannerImg;
+        data.bannerEndDate = allBanners[stockId].bannerEndDate;
+        data.bannerIsPaid  = allBanners[stockId].bannerIsPaid;
+        data.link          = allBanners[stockId].link;
+    }
+    favorites[stockId] = data;
+    renderFavoriteList();
+});
 }
 
 // 즐겨찾기 종목 구독 해제 및 favorites 캐시에서 제거
@@ -3773,17 +3781,30 @@ function subscribeToOwned(stockId) {
     console.log('[owned] 구독 시작 시도:', stockId);
 
     const startOwned = () => {
-        console.log('[owned] onValue 등록:', stockId);
-        ownedUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
-            console.log('[owned] 데이터 수신:', stockId, snap.exists() ? snap.val()?.price : '없음');
-            if (!snap.exists()) return;
-            const data = { ...snap.val(), id: stockId };
-            ownedStocks[stockId] = data;
-            if (favorites[stockId]) favorites[stockId] = data;
-            renderFavoriteList();
-            renderMyPortfolio(); // 포트폴리오 수익률 갱신
-        });
-    };
+    console.log('[owned] onValue 등록:', stockId);
+    ownedUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
+        console.log('[owned] 데이터 수신:', stockId, snap.exists() ? snap.val()?.price : '없음');
+        if (!snap.exists()) return;
+        const data = { ...snap.val(), id: stockId };
+
+        // 주가 변동 → 스파크라인 캐시 누적
+        const prevPrice = ownedStocks[stockId]?.price;
+        if (prevPrice !== undefined) {
+            if (!sparklinePriceCache[stockId]) sparklinePriceCache[stockId] = [prevPrice];
+            if (prevPrice !== data.price) {
+                sparklinePriceCache[stockId].push(data.price);
+                if (sparklinePriceCache[stockId].length > 20) sparklinePriceCache[stockId].shift();
+            }
+        } else {
+            if (!sparklinePriceCache[stockId]) sparklinePriceCache[stockId] = [data.price];
+        }
+
+        ownedStocks[stockId] = data;
+        if (favorites[stockId]) favorites[stockId] = data;
+        renderFavoriteList();
+        renderMyPortfolio();
+    });
+};
 
     startOwned();
 }
