@@ -2100,7 +2100,13 @@
             alert('기준 주가와 가중치 구간은 0보다 커야 합니다.'); return;
         }
         try {
-            await set(ref(db, 'siteConfig/sellConfig'), { basePrice, scalePrice, impact, spread, fee, updatedAt: Date.now() });
+            const snap = await get(ref(db, 'siteConfig/sellConfig'));
+            const current = snap.exists() ? snap.val() : {};
+            await set(ref(db, 'siteConfig/sellConfig'), {
+                ...current,
+                basePrice, scalePrice, impact, spread, fee,
+                updatedAt: Date.now()
+            });
             document.getElementById('sell-config-chip').className = 'status-chip active';
             document.getElementById('sell-config-chip').textContent = '커스텀 적용 중';
             document.getElementById('sell-config-status').textContent = `base: ${basePrice.toLocaleString()}원 / scale: ${scalePrice.toLocaleString()}원`;
