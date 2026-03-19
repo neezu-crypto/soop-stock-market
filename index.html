@@ -1229,6 +1229,8 @@ let stockElements    = {};
 let lastTradeTime    = 0;
 let marketCheckTimer = null;
 let sparklinePriceCache = {}; // { stockId: [price, ...] } — 메모리만, 새로고침 시 초기화
+let sellConfigCache = null;
+let sellConfigFetchCount = 0;
 
 // ── 즐겨찾기 상태 ────────────────────────────────────────────
 let favorites        = {};    // { stockId: { id, name, price, ... } }
@@ -2557,14 +2559,18 @@ const userRef  = ref(db, `users/${userUID}`);
 const currentStockData = favorites[id] || ownedStocks[id] || searchResults[id];
 const currentPrice = currentStockData?.price || 10000;
 
-// 매매마다 서버에서 설정값 로드
-const cfgSnap = await get(ref(db, 'siteConfig/sellConfig'));
-const cfg = cfgSnap.exists() ? cfgSnap.val() : {};
-const basePrice  = cfg.basePrice  ?? 10000;
-const scalePrice = cfg.scalePrice ?? 90000;
-const impactCoef = cfg.impact     ?? 0.0005;
-const spread     = cfg.spread     ?? 0.001;
-const fee        = cfg.fee        ?? 0.003;
+// 20번마다 한 번씩 서버에서 설정값 로드
+if (!sellConfigCache || sellConfigFetchCount % 20 === 0) {
+    const cfgSnap = await get(ref(db, 'siteConfig/sellConfig'));
+    sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
+}
+sellConfigFetchCount++;
+
+const basePrice  = sellConfigCache.basePrice  ?? 10000;
+const scalePrice = sellConfigCache.scalePrice ?? 90000;
+const impactCoef = sellConfigCache.impact     ?? 0.0005;
+const spread     = sellConfigCache.spread     ?? 0.001;
+const fee        = sellConfigCache.fee        ?? 0.003;
 
 // 매도 시 주가 비례 하락 가중치
 let sellPressure = 1;
