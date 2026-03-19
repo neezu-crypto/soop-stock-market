@@ -2075,12 +2075,14 @@
             chip.textContent = '커스텀 적용 중';
             statusEl.textContent = `base: ${Number(d.basePrice).toLocaleString()}원 / scale: ${Number(d.scalePrice).toLocaleString()}원`;
 
-            // 자동모드 저장 상태 복원
-            if (d.autoMode?.enabled) {
-                document.getElementById('auto-mode-toggle').checked = true;
+            // 자동모드 저장 상태 복원 (ON/OFF 관계없이 설정값 항상 복원)
+            if (d.autoMode) {
                 if (d.autoMode.interval) document.getElementById('auto-interval').value = d.autoMode.interval;
                 if (d.autoMode.ranges)   restoreAutoRanges(d.autoMode.ranges);
-                startAutoMode(d.autoMode.interval, d.autoMode.ranges);
+                if (d.autoMode.enabled) {
+                    document.getElementById('auto-mode-toggle').checked = true;
+                    startAutoMode(d.autoMode.interval, d.autoMode.ranges);
+                }
             }
         } catch(e) {
             document.getElementById('sell-config-chip').className = 'status-chip expired';
@@ -2169,7 +2171,9 @@
             startAutoMode(interval, ranges);
         } else {
             stopAutoMode();
-            await saveAutoModeConfig(false);
+            const interval = Number(document.getElementById('auto-interval').value) || 60;
+            const ranges = getAutoRanges();
+            await saveAutoModeConfig(false, interval, ranges);
         }
     };
 
@@ -2206,7 +2210,7 @@
             const current = snap.exists() ? snap.val() : {};
             await set(ref(db, 'siteConfig/sellConfig'), {
                 ...current,
-                autoMode: enabled ? { enabled: true, interval, ranges } : { enabled: false },
+                autoMode: enabled ? { enabled: true, interval, ranges } : { enabled: false, interval: interval ?? current.autoMode?.interval, ranges: ranges ?? current.autoMode?.ranges },
                 updatedAt: Date.now()
             });
         } catch(e) {
