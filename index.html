@@ -3345,7 +3345,7 @@ async function loadBannersFromFirebase(remoteVer) {
         Object.assign(allBanners, cached.banners);
 
         // 만료일 + 신규/삭제 배너 동기화 (Firebase 1회 read)
-        get(ref(db, 'stocksBanner/')).then(snap => {
+        get(ref(db, 'stocksBanner/')).then(async snap => {
             if (!snap.exists()) {
                 allBanners = {};
                 renderBanners();
@@ -3364,6 +3364,23 @@ async function loadBannersFromFirebase(remoteVer) {
                     allBanners[id] = b; // 신규 배너
                 }
             });
+            // name 없는 배너 → stocks/{id}/name 조회 후 캐시 갱신
+            const needName = Object.keys(allBanners).filter(id => !allBanners[id].name);
+            if (needName.length > 0) {
+                await Promise.all(needName.map(async id => {
+                    try {
+                        const ns = await get(ref(db, `stocks/${id}/name`));
+                        if (ns.exists()) allBanners[id].name = ns.val();
+                    } catch(e) {}
+                }));
+                // name 추가됐으면 캐시 갱신
+                const cacheData = {};
+                Object.entries(allBanners).forEach(([id, b]) => {
+                    cacheData[id] = { name: b.name, bannerImg: b.bannerImg, link: b.link, bannerIsPaid: b.bannerIsPaid };
+                });
+                const existing = loadStaticCache() || {};
+                saveStaticCache({ ...existing, banners: cacheData });
+            }
             renderBanners();
             isBannerRendered = true;
         }).catch(() => { renderBanners(); isBannerRendered = true; });
