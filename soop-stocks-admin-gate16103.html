@@ -220,6 +220,51 @@
                 <div id="sim-result" style="font-size:13px; color:#64748b;">주가와 수량을 입력 후 계산하세요.</div>
             </div>
 
+            <!-- 🤖 자동모드 -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div>
+                        <div style="font-size:13px; color:#22c55e; font-weight:800;">🤖 impact 자동 변동 모드</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:3px;">주기마다 impact 계수를 범위 내에서 랜덤 변동</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="auto-mode-toggle" onchange="toggleAutoMode(this.checked)">
+                        <span class="toggle-slider" style="--checked-color:#22c55e;"></span>
+                    </label>
+                </div>
+
+                <div id="auto-mode-form" style="display:flex; flex-direction:column; gap:10px;">
+                    <!-- 주기 -->
+                    <div style="display:flex; align-items:center; gap:8px; background:#1e293b; padding:10px 12px; border-radius:8px; border:1px solid #334155;">
+                        <span style="font-size:12px; color:#94a3b8; white-space:nowrap;">변동 주기</span>
+                        <input type="number" id="auto-interval" value="60" min="10" max="3600" step="10"
+                            style="flex:1; background:transparent; border:none; color:#22c55e; font-size:15px; font-weight:700; outline:none; text-align:right;">
+                        <span style="font-size:12px; color:#94a3b8; white-space:nowrap;">초</span>
+                    </div>
+                    <!-- 범위 -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div style="background:#1e293b; padding:10px 12px; border-radius:8px; border:1px solid #334155;">
+                            <div style="font-size:11px; color:#94a3b8; margin-bottom:4px;">최솟값</div>
+                            <div style="display:flex; align-items:center; gap:4px;">
+                                <input type="number" id="auto-min" value="0.0001" min="0.0001" max="0.01" step="0.0001"
+                                    style="flex:1; background:transparent; border:none; color:#22c55e; font-size:14px; font-weight:700; outline:none;">
+                            </div>
+                        </div>
+                        <div style="background:#1e293b; padding:10px 12px; border-radius:8px; border:1px solid #334155;">
+                            <div style="font-size:11px; color:#94a3b8; margin-bottom:4px;">최댓값</div>
+                            <div style="display:flex; align-items:center; gap:4px;">
+                                <input type="number" id="auto-max" value="0.002" min="0.0001" max="0.01" step="0.0001"
+                                    style="flex:1; background:transparent; border:none; color:#ef4444; font-size:14px; font-weight:700; outline:none;">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 상태 표시 -->
+                    <div id="auto-mode-status" style="font-size:12px; color:#64748b; text-align:center; padding:8px; background:#1e293b; border-radius:8px;">
+                        자동모드 꺼짐
+                    </div>
+                </div>
+            </div>
+
             <button class="btn-primary" style="margin-top:4px; background:#ef4444;" onclick="saveSellConfig()">💾 하락 가중치 저장</button>
         </div>
         </div>
@@ -1901,6 +1946,8 @@
     };
 
     // ── 매도 하락 가중치 설정 ──────────────────────────────────
+    let autoModeTimer = null;
+
     async function loadSellConfig() {
         try {
             const snap = await get(ref(db, 'siteConfig/sellConfig'));
@@ -1923,6 +1970,15 @@
             chip.className = 'status-chip active';
             chip.textContent = '커스텀 적용 중';
             statusEl.textContent = `base: ${Number(d.basePrice).toLocaleString()}원 / scale: ${Number(d.scalePrice).toLocaleString()}원`;
+
+            // 자동모드 저장 상태 복원
+            if (d.autoMode?.enabled) {
+                document.getElementById('auto-mode-toggle').checked = true;
+                if (d.autoMode.interval) document.getElementById('auto-interval').value = d.autoMode.interval;
+                if (d.autoMode.min)      document.getElementById('auto-min').value      = d.autoMode.min;
+                if (d.autoMode.max)      document.getElementById('auto-max').value      = d.autoMode.max;
+                startAutoMode(d.autoMode.interval, d.autoMode.min, d.autoMode.max);
+            }
         } catch(e) {
             document.getElementById('sell-config-chip').className = 'status-chip expired';
             document.getElementById('sell-config-chip').textContent = '오류';
@@ -1975,6 +2031,95 @@
             </div>
         `;
     };
+
+    window.toggleAutoMode = async function(enabled) {
+        if (!isAdmin()) return;
+        if (enabled) {
+            const interval = Number(document.getElementById('auto-interval').value) || 60;
+            const min      = Number(document.getElementById('auto-min').value)      || 0.0001;
+            const max      = Number(document.getElementById('auto-max').value)      || 0.002;
+            if (min >= max) {
+                alert('최솟값은 최댓값보다 작아야 합니다.');
+                document.getElementById('auto-mode-toggle').checked = false;
+                return;
+            }
+            if (interval < 10) {
+                alert('변동 주기는 최소 10초 이상이어야 합니다.');
+                document.getElementById('auto-mode-toggle').checked = false;
+                return;
+            }
+            await saveAutoModeConfig(true, interval, min, max);
+            startAutoMode(interval, min, max);
+        } else {
+            stopAutoMode();
+            await saveAutoModeConfig(false);
+        }
+    };
+
+    async function saveAutoModeConfig(enabled, interval, min, max) {
+        try {
+            const snap = await get(ref(db, 'siteConfig/sellConfig'));
+            const current = snap.exists() ? snap.val() : {};
+            await set(ref(db, 'siteConfig/sellConfig'), {
+                ...current,
+                autoMode: enabled ? { enabled: true, interval, min, max } : { enabled: false },
+                updatedAt: Date.now()
+            });
+        } catch(e) {
+            alert('자동모드 설정 저장 실패: ' + e.message);
+        }
+    }
+
+    function startAutoMode(interval, min, max) {
+        stopAutoMode(); // 기존 타이머 정리
+        const statusEl = document.getElementById('auto-mode-status');
+        let nextTick = interval;
+
+        const tick = async () => {
+            // 범위 내 랜덤 impact 생성 (소수점 4자리)
+            const newImpact = Math.round((min + Math.random() * (max - min)) * 10000) / 10000;
+            try {
+                const snap = await get(ref(db, 'siteConfig/sellConfig'));
+                const current = snap.exists() ? snap.val() : {};
+                await update(ref(db, 'siteConfig/sellConfig'), { ...current, impact: newImpact, updatedAt: Date.now() });
+                document.getElementById('sell-impact').value = newImpact;
+                const now = new Date().toLocaleTimeString('ko-KR');
+                statusEl.style.color = '#22c55e';
+                statusEl.textContent = `✅ 마지막 변동: ${now} → impact = ${newImpact}`;
+            } catch(e) {
+                statusEl.style.color = '#ef4444';
+                statusEl.textContent = `❌ 변동 실패: ${e.message}`;
+            }
+        };
+
+        // 즉시 1회 실행 후 주기 반복
+        tick();
+        autoModeTimer = setInterval(tick, interval * 1000);
+
+        // 카운트다운 표시
+        let countdown = interval;
+        const countdownTimer = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) countdown = interval;
+            const statusEl2 = document.getElementById('auto-mode-status');
+            if (document.getElementById('auto-mode-toggle').checked) {
+                const base = statusEl2.textContent.split(' |')[0];
+                statusEl2.textContent = `${base} | 다음 변동: ${countdown}초 후`;
+            } else {
+                clearInterval(countdownTimer);
+            }
+        }, 1000);
+    }
+
+    function stopAutoMode() {
+        if (autoModeTimer) {
+            clearInterval(autoModeTimer);
+            autoModeTimer = null;
+        }
+        const statusEl = document.getElementById('auto-mode-status');
+        statusEl.style.color = '#64748b';
+        statusEl.textContent = '자동모드 꺼짐';
+    }
 
     loadSellConfig();
 
