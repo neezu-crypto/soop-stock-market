@@ -53,8 +53,8 @@
             #relay-tab {
                 display: flex;
                 position: fixed;
-                left: 0; top: calc(50% + 80px);
-                transform: translateY(-50%);
+                left: 0; top: 50%;
+                transform: translateY(0%);
                 z-index: 2400;
                 flex-direction: column;
                 align-items: center;
@@ -63,26 +63,27 @@
                 background: var(--card-bg);
                 border: 1px solid #334155;
                 border-left: none;
-                border-radius: 0 10px 10px 0;
+                border-top: none;
+                border-radius: 0 0 10px 0;
                 padding: 12px 6px;
                 cursor: pointer;
                 transition: background 0.2s, border-color 0.6s ease, box-shadow 0.6s ease;
-                box-shadow: 3px 0 12px rgba(0,0,0,0.3);
+                box-shadow: 3px 3px 12px rgba(0,0,0,0.2);
             }
-            #relay-tab:hover { background: rgba(56,189,248,0.1); }
+            #relay-tab:hover { background: rgba(239,68,68,0.08); }
             #relay-tab.has-relay {
                 border-color: #ef4444;
-                box-shadow: 3px 0 14px rgba(239,68,68,0.3);
+                box-shadow: 3px 3px 14px rgba(239,68,68,0.3);
                 animation: relay-pulse 2s ease-in-out infinite;
             }
             @keyframes relay-pulse {
-                0%, 100% { box-shadow: 3px 0 14px rgba(239,68,68,0.3); }
-                50%       { box-shadow: 3px 0 20px rgba(239,68,68,0.55); }
+                0%, 100% { box-shadow: 3px 3px 14px rgba(239,68,68,0.3); }
+                50%       { box-shadow: 3px 3px 20px rgba(239,68,68,0.55); }
             }
             #relay-tab .tab-icon { font-size: 16px; }
             #relay-tab .tab-label {
                 font-size: 10px; font-weight: 800;
-                color: var(--primary);
+                color: #94a3b8;
                 writing-mode: vertical-rl;
                 text-orientation: mixed;
                 letter-spacing: 1px;
@@ -125,26 +126,26 @@
         .relay-empty { font-size: 12px; color: #64748b; text-align: center; padding: 16px 0; }
         .relay-apply-btn { width: 100%; margin-top: 12px; background: #ef4444; color: white; border: none; border-radius: 10px; padding: 11px; font-size: 13px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
         .relay-apply-btn:hover { opacity: 0.85; }
-        /* PC에서도 패널 보이게 */
+        /* PC에서도 패널 보이게 — 포트폴리오 패널 아래 */
         @media (min-width: 1301px) {
             .relay-container {
                 display: flex;
                 position: fixed;
-                right: 20px; top: 50%;
-                transform: translateY(-50%) translateY(120px);
-                width: 200px;
+                left: 80px; top: 50%;
+                transform: translateY(10px);
+                width: 220px;
                 background: var(--card-bg);
-                border-radius: 16px;
+                border-radius: 20px;
                 border: 1px solid #334155;
                 flex-direction: column;
-                padding: 16px;
+                padding: 16px 20px;
                 box-shadow: 0 10px 30px rgba(0,0,0,0.5);
                 z-index: 1000;
-                max-height: 60vh;
+                max-height: 50vh;
                 transition: border-color 0.6s ease, box-shadow 0.6s ease;
             }
             .relay-container.has-relay {
-                border-color: rgba(239,68,68,0.5);
+                border-color: rgba(239,68,68,0.4);
                 box-shadow: 0 10px 30px rgba(239,68,68,0.15);
             }
         }
@@ -389,7 +390,7 @@
                 display: flex;
                 position: fixed;
                 left: 0; top: 50%;
-                transform: translateY(-50%);
+                transform: translateY(-100%);
                 z-index: 2400;
                 flex-direction: column;
                 align-items: center;
@@ -398,11 +399,12 @@
                 background: var(--card-bg);
                 border: 1px solid var(--primary);
                 border-left: none;
-                border-radius: 0 10px 10px 0;
+                border-bottom: none;
+                border-radius: 0 10px 0 0;
                 padding: 12px 6px;
                 cursor: pointer;
                 transition: background 0.2s;
-                box-shadow: 3px 0 12px rgba(0,0,0,0.3);
+                box-shadow: 3px -2px 12px rgba(0,0,0,0.2);
             }
             #portfolio-tab:hover { background: rgba(56,189,248,0.1); }
             #portfolio-tab .tab-icon { font-size: 16px; }
@@ -1651,13 +1653,27 @@ function renderRelayPanel(data) {
 })();
 
 window.toggleRelay = function() {
-    const container = document.getElementById('relay-container');
-    const dim       = document.getElementById('portfolio-dim');
-    const isOpen    = container.classList.contains('mobile-open');
-    // 포트폴리오 패널 닫기
-    document.getElementById('my-stocks-container')?.classList.remove('mobile-open');
-    container.classList.toggle('mobile-open', !isOpen);
-    dim.classList.toggle('active', !isOpen);
+    const container  = document.getElementById('relay-container');
+    const dim        = document.getElementById('portfolio-dim');
+    const relayTab   = document.getElementById('relay-tab');
+    const portTab    = document.getElementById('portfolio-tab');
+    const portPanel  = document.getElementById('my-stocks-container');
+    const isOpen     = container.classList.contains('mobile-open');
+    if (isOpen) {
+        container.classList.remove('mobile-open');
+        dim?.classList.remove('active');
+        if (relayTab) relayTab.style.left = '0';
+        if (portTab)  portTab.style.left  = '0';
+    } else {
+        // 포트폴리오 패널 닫기
+        portPanel?.classList.remove('mobile-open');
+        if (portTab) portTab.style.left = '0';
+        // 중계방 열기
+        container.classList.add('mobile-open');
+        dim?.classList.add('active');
+        if (relayTab) relayTab.style.left = '260px';
+        if (portTab)  portTab.style.left  = '260px';
+    }
 };
 
 window.openRelayApplyModal = function() {
@@ -3049,30 +3065,39 @@ const impact = impactCoef * Math.log2(1 + qty) * sellPressure;
 
 // ── 모바일 보유 주식 패널 슬라이드 ──────────────────────────
 window.togglePortfolio = function() {
-    const panel = document.getElementById('my-stocks-container');
-    const dim   = document.getElementById('portfolio-dim');
-    const tab   = document.getElementById('portfolio-tab');
+    const panel     = document.getElementById('my-stocks-container');
+    const dim       = document.getElementById('portfolio-dim');
+    const tab       = document.getElementById('portfolio-tab');
+    const relayPanel= document.getElementById('relay-container');
+    const relayTab  = document.getElementById('relay-tab');
     if (!panel) return;
     const isOpen = panel.classList.contains('mobile-open');
     if (isOpen) {
         panel.classList.remove('mobile-open');
         dim?.classList.remove('active');
         if (tab) tab.style.left = '0';
+        if (relayTab) relayTab.style.left = '0';
     } else {
+        // 중계방 패널 닫기
+        relayPanel?.classList.remove('mobile-open');
+        // 포트폴리오 열기
         panel.classList.add('mobile-open');
         dim?.classList.add('active');
-        if (tab) tab.style.left = '260px'; // 패널 너비만큼 밀기
+        if (tab) tab.style.left = '260px';
+        if (relayTab) relayTab.style.left = '260px';
     }
 };
 
 // 모바일 보유 주식 패널 닫기
 window.closePortfolio = function() {
-    const panel = document.getElementById('my-stocks-container');
-    const dim   = document.getElementById('portfolio-dim');
-    const tab   = document.getElementById('portfolio-tab');
+    const panel    = document.getElementById('my-stocks-container');
+    const dim      = document.getElementById('portfolio-dim');
+    const tab      = document.getElementById('portfolio-tab');
+    const relayTab = document.getElementById('relay-tab');
     panel?.classList.remove('mobile-open');
     dim?.classList.remove('active');
     if (tab) tab.style.left = '0';
+    if (relayTab) relayTab.style.left = '0';
 };
 
 // ── 모달 ─────────────────────────────────────────────────────
