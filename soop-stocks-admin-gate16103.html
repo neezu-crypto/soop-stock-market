@@ -923,7 +923,7 @@
             <span id="candle-prune-chip" class="status-chip none">미실행</span>
         </div>
         <div id="candle-prune-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:150px; overflow-y:auto; display:none;"></div>
-        <button class="btn-primary" style="background:#475569;" onclick="pruneAllCandles()">🗑 오래된 캔들 정리 실행</button>
+        <button class="btn-primary" style="background:#475569; margin-bottom:12px;" onclick="pruneAllCandles()">🗑 오래된 캔들 정리 실행</button>
         </div>
         </div>
     </div>
@@ -946,6 +946,57 @@
         </div>
         <div id="asset-rank-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:120px; overflow-y:auto; display:none;"></div>
         <button class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="calcAssetRanking()">📊 자산 랭킹 집계 실행</button>
+        </div>
+        </div>
+    </div>
+
+    <!-- ⏰ 일일 자동 실행 설정 -->
+    <div class="container" style="display:block; border-color: #6366f1;">
+        <div class="accordion-header">
+            <h1>⏰ 일일 자동 실행 설정</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            매일 지정한 시각에 <b>자산 랭킹 집계</b>와 <b>오래된 캔들 정리</b>를 자동 실행합니다.<br>
+            <span style="color:#f59e0b;">⚠️ 관리자 페이지가 열려있는 동안만 동작합니다. 새 창으로 열어두세요.</span>
+        </div>
+        <div class="toggle-wrap" style="margin-bottom:12px;">
+            <div>
+                <div class="toggle-label">자동 실행</div>
+                <div class="toggle-sub" id="auto-daily-next">OFF 상태</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="auto-daily-toggle" onchange="toggleDailyAuto(this.checked)">
+                <span class="toggle-slider" style="--checked-color:#6366f1;"></span>
+            </label>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+            <div style="font-size:13px; color:#94a3b8;">실행 시각</div>
+            <input type="number" id="auto-daily-hour" min="0" max="23" value="0"
+                style="width:64px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
+                oninput="updateDailyAutoNext()">
+            <span style="color:#64748b;">시</span>
+            <input type="number" id="auto-daily-min" min="0" max="59" value="0"
+                style="width:64px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
+                oninput="updateDailyAutoNext()">
+            <span style="color:#64748b;">분</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="auto-run-ranking" checked style="accent-color:#6366f1;">
+                📊 자산 랭킹 집계
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="auto-run-candle" checked style="accent-color:#6366f1;">
+                🗑 오래된 캔들 정리
+            </label>
+        </div>
+        <div class="data-status-bar">
+            <span>마지막 자동 실행: <b id="auto-daily-last" style="color:#f8fafc;">-</b></span>
+            <span id="auto-daily-chip" class="status-chip none">대기 중</span>
+        </div>
         </div>
         </div>
     </div>
@@ -2605,9 +2656,9 @@
     };
 
     // ── 오래된 캔들 정리 ──────────────────────────────────────
-    window.pruneAllCandles = async function() {
+    window.pruneAllCandles = async function(silent = false) {
         if (!isAdmin()) return;
-        if (!confirm('모든 종목의 6시간 이전 캔들을 삭제합니다. 계속하시겠습니까?')) return;
+        if (!silent && !confirm('모든 종목의 6시간 이전 캔들을 삭제합니다. 계속하시겠습니까?')) return;
 
         const statusEl = document.getElementById('candle-prune-status');
         const chipEl   = document.getElementById('candle-prune-chip');
@@ -2671,10 +2722,72 @@
     };
 
 
+    // ── 일일 자동 실행 ────────────────────────────────────────
+    let dailyAutoTimer = null;
+
+    window.toggleDailyAuto = function(enabled) {
+        if (enabled) {
+            scheduleDailyAuto();
+        } else {
+            clearTimeout(dailyAutoTimer);
+            dailyAutoTimer = null;
+            document.getElementById('auto-daily-next').textContent = 'OFF 상태';
+            document.getElementById('auto-daily-chip').className   = 'status-chip none';
+            document.getElementById('auto-daily-chip').textContent = '대기 중';
+        }
+    };
+
+    function scheduleDailyAuto() {
+        clearTimeout(dailyAutoTimer);
+        const hour = parseInt(document.getElementById('auto-daily-hour').value) || 0;
+        const min  = parseInt(document.getElementById('auto-daily-min').value)  || 0;
+
+        const now   = new Date();
+        const next  = new Date();
+        next.setHours(hour, min, 0, 0);
+        if (next <= now) next.setDate(next.getDate() + 1); // 이미 지난 시각이면 다음 날
+
+        const delay = next.getTime() - now.getTime();
+        const nextStr = next.toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
+
+        document.getElementById('auto-daily-next').textContent    = `다음 실행: ${nextStr}`;
+        document.getElementById('auto-daily-chip').className      = 'status-chip loading';
+        document.getElementById('auto-daily-chip').textContent    = '예약됨';
+
+        dailyAutoTimer = setTimeout(async () => {
+            const lastEl  = document.getElementById('auto-daily-last');
+            const chipEl  = document.getElementById('auto-daily-chip');
+            chipEl.className   = 'status-chip loading';
+            chipEl.textContent = '실행 중';
+
+            const runRanking = document.getElementById('auto-run-ranking').checked;
+            const runCandle  = document.getElementById('auto-run-candle').checked;
+
+            if (runRanking) await calcAssetRanking(true);
+            if (runCandle)  await pruneAllCandles(true);
+
+            const doneStr = new Date().toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
+            lastEl.textContent = doneStr;
+            chipEl.className   = 'status-chip active';
+            chipEl.textContent = '완료';
+
+            // 다음 날 재예약
+            if (document.getElementById('auto-daily-toggle').checked) {
+                scheduleDailyAuto();
+            }
+        }, delay);
+    }
+
+    window.updateDailyAutoNext = function() {
+        if (document.getElementById('auto-daily-toggle').checked) {
+            scheduleDailyAuto();
+        }
+    };
+
     // ── 자산 랭킹 집계 ────────────────────────────────────────
-    window.calcAssetRanking = async function() {
+    window.calcAssetRanking = async function(silent = false) {
         if (!isAdmin()) return;
-        if (!confirm('전체 유저 자산 랭킹을 집계합니다. 계속하시겠습니까?')) return;
+        if (!silent && !confirm('전체 유저 자산 랭킹을 집계합니다. 계속하시겠습니까?')) return;
 
         const chipEl   = document.getElementById('asset-rank-chip');
         const lastEl   = document.getElementById('asset-rank-last');
