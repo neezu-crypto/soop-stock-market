@@ -916,6 +916,28 @@
         </div>
     </div>
 
+    <!-- 📊 자산 랭킹 집계 -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <div class="accordion-header">
+            <h1>📊 자산 랭킹 집계</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            전체 유저의 자산(현금+보유주식 평가금)을 계산해 상위 100위를 <b>assetRanking/</b> 경로에 저장합니다.<br>
+            <span style="color:#f59e0b;">⚠️ 유저 수가 많을수록 시간이 걸립니다. 장 마감 후 실행을 권장합니다.</span>
+        </div>
+        <div class="data-status-bar" style="margin-bottom:12px;">
+            <span>마지막 집계: <b id="asset-rank-last" style="color:#f8fafc;">-</b></span>
+            <span id="asset-rank-chip" class="status-chip none">미실행</span>
+        </div>
+        <div id="asset-rank-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:120px; overflow-y:auto; display:none;"></div>
+        <button class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="calcAssetRanking()">📊 자산 랭킹 집계 실행</button>
+        </div>
+        </div>
+    </div>
+
     <!-- 👑 구독자 신청 검수 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
         <div class="accordion-header">
@@ -2631,6 +2653,76 @@
         }
     };
 
+
+    // ── 자산 랭킹 집계 ────────────────────────────────────────
+    window.calcAssetRanking = async function() {
+        if (!isAdmin()) return;
+        if (!confirm('전체 유저 자산 랭킹을 집계합니다. 계속하시겠습니까?')) return;
+
+        const chipEl   = document.getElementById('asset-rank-chip');
+        const lastEl   = document.getElementById('asset-rank-last');
+        const logEl    = document.getElementById('asset-rank-log');
+
+        chipEl.className   = 'status-chip loading';
+        chipEl.textContent = '집계 중';
+        logEl.style.display = 'block';
+        logEl.innerHTML    = '';
+
+        try {
+            // 1. 전체 유저 데이터 읽기
+            logEl.innerHTML += '<div>유저 데이터 읽는 중...</div>';
+            const usersSnap = await get(ref(db, 'users/'));
+            if (!usersSnap.exists()) { logEl.innerHTML += '<div style="color:#ef4444;">유저 데이터 없음</div>'; return; }
+            const users = usersSnap.val();
+
+            // 2. 전체 종목 현재가 읽기
+            logEl.innerHTML += '<div>종목 현재가 읽는 중...</div>';
+            const stocksSnap = await get(ref(db, 'stocks/'));
+            const stocks = stocksSnap.exists() ? stocksSnap.val() : {};
+
+            // 3. 유저별 자산 계산
+            logEl.innerHTML += '<div>자산 계산 중...</div>';
+            const assetList = Object.entries(users).map(([uid, u]) => {
+                let total = Math.floor(u.cash || 0);
+                if (u.stocks) {
+                    Object.entries(u.stocks).forEach(([stockId, s]) => {
+                        if (!s.qty || s.qty <= 0) return;
+                        const price = stocks[stockId]?.price || 0;
+                        total += Math.floor(price * s.qty);
+                    });
+                }
+                return { uid, totalAsset: total };
+            });
+
+            // 4. 정렬 후 TOP 100
+            assetList.sort((a, b) => b.totalAsset - a.totalAsset);
+            const top100 = assetList.slice(0, 100).map((item, i) => ({
+                rank: i + 1,
+                totalAsset: item.totalAsset
+            }));
+
+            // 5. Firebase 저장 (UID 제외, 순위+자산만)
+            const now = Date.now();
+            await set(ref(db, 'assetRanking/'), {
+                updatedAt:  now,
+                totalUsers: assetList.length,
+                items:      top100
+            });
+
+            const nowStr = new Date(now).toLocaleString('ko-KR');
+            chipEl.className   = 'status-chip active';
+            chipEl.textContent = '완료';
+            lastEl.textContent = nowStr;
+            logEl.innerHTML += `<div style="color:#22c55e;">✅ 완료 — 총 ${assetList.length}명 집계, TOP 100 저장 (${nowStr})</div>`;
+            logEl.innerHTML += `<div style="color:#94a3b8;">1위: ${top100[0]?.totalAsset.toLocaleString()}원 / 100위: ${top100[99]?.totalAsset.toLocaleString()}원</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+
+        } catch(e) {
+            chipEl.className   = 'status-chip expired';
+            chipEl.textContent = '오류';
+            logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${e.message}</div>`;
+        }
+    };
 
     // ── 구독자 신청 검수 ─────────────────────────────────────
     window.loadSubscribeRequests = async function() {
