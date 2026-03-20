@@ -916,6 +916,37 @@
         </div>
     </div>
 
+    <!-- 👑 구독자 신청 검수 -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <div class="accordion-header">
+            <h1>👑 구독자 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 구독자 인증 목록입니다. SOOP에서 실제 구독 여부 확인 후 <b>수락</b>하면 자산 랭킹이 활성화됩니다.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>subscribeRequests/{uid}</b> 경로를 변경합니다.</span>
+        </div>
+
+        <!-- 일괄 만료 처리 -->
+        <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155; margin-bottom:14px;">
+            <div style="font-size:13px; color:#f59e0b; font-weight:800; margin-bottom:8px;">📋 일괄 만료 처리</div>
+            <div style="font-size:12px; color:#64748b; margin-bottom:8px;">만료된 구독자 닉네임을 줄바꿈으로 구분하여 입력하세요.</div>
+            <textarea id="expire-nicknames" placeholder="닉네임1&#10;닉네임2&#10;닉네임3"
+                style="width:100%; height:80px; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:10px; border-radius:8px; font-size:13px; resize:none; box-sizing:border-box; margin-bottom:8px;"></textarea>
+            <div id="expire-status" style="font-size:12px; color:#64748b; margin-bottom:8px; min-height:16px;"></div>
+            <button class="btn-danger" style="width:100%; font-size:13px;" onclick="bulkExpireSubscribers()">🗑 일괄 만료 처리</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadSubscribeRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="subscribe-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -2600,6 +2631,119 @@
         }
     };
 
+
+    // ── 구독자 신청 검수 ─────────────────────────────────────
+    window.loadSubscribeRequests = async function() {
+        if (!isAdmin()) return;
+        const listEl = document.getElementById('subscribe-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'subscribeRequests/'));
+            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
+            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([uid, req]) => {
+                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'expired' ? '#64748b' : '#f59e0b';
+                const statusText  = req.status === 'approved' ? '✅ 승인됨' : req.status === 'expired' ? '⬛ 만료됨' : '⏳ 대기중';
+                const card = document.createElement('div');
+                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div>
+                            <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req.nickname)}</span>
+                            <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req.soopId)}</span>
+                        </div>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    <div style="font-size:11px; color:#475569; margin-bottom:10px;">UID: ${uid} · ${date}</div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
+                            style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
+                        ${req.status !== 'approved' ? `<button onclick="approveSubscriber('${uid}')"
+                            style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>` : ''}
+                        ${req.status === 'approved' ? `<button onclick="expireSubscriber('${uid}')"
+                            style="background:#475569; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">만료</button>` : ''}
+                        <button onclick="deleteSubscribeRequest('${uid}')"
+                            style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    window.approveSubscriber = async function(uid) {
+        if (!isAdmin()) return;
+        try {
+            await update(ref(db, `subscribeRequests/${uid}`), { status: 'approved', approvedAt: Date.now() });
+            alert('✅ 승인 완료!');
+            loadSubscribeRequests();
+        } catch(e) { alert('승인 실패: ' + e.message); }
+    };
+
+    window.expireSubscriber = async function(uid) {
+        if (!isAdmin()) return;
+        if (!confirm('이 구독자를 만료 처리하시겠습니까?')) return;
+        try {
+            await update(ref(db, `subscribeRequests/${uid}`), { status: 'expired', expiredAt: Date.now() });
+            loadSubscribeRequests();
+        } catch(e) { alert('만료 처리 실패: ' + e.message); }
+    };
+
+    window.deleteSubscribeRequest = async function(uid) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 삭제하시겠습니까?')) return;
+        try {
+            await set(ref(db, `subscribeRequests/${uid}`), null);
+            loadSubscribeRequests();
+        } catch(e) { alert('삭제 실패: ' + e.message); }
+    };
+
+    window.bulkExpireSubscribers = async function() {
+        if (!isAdmin()) return;
+        const text      = document.getElementById('expire-nicknames').value.trim();
+        const statusEl  = document.getElementById('expire-status');
+        if (!text) { statusEl.style.color = '#ef4444'; statusEl.textContent = '닉네임을 입력해주세요.'; return; }
+
+        const nicknames = text.split('
+').map(n => n.trim()).filter(n => n.length > 0);
+        if (nicknames.length === 0) return;
+
+        statusEl.style.color = '#94a3b8';
+        statusEl.textContent = `처리 중... (0/${nicknames.length})`;
+
+        try {
+            const snap = await get(ref(db, 'subscribeRequests/'));
+            if (!snap.exists()) { statusEl.style.color = '#ef4444'; statusEl.textContent = '데이터 없음'; return; }
+
+            const allData = snap.val();
+            let processed = 0, notFound = [];
+
+            for (const nickname of nicknames) {
+                const entry = Object.entries(allData).find(([, v]) => v.nickname === nickname);
+                if (entry) {
+                    const [uid] = entry;
+                    await update(ref(db, `subscribeRequests/${uid}`), { status: 'expired', expiredAt: Date.now() });
+                    processed++;
+                    statusEl.textContent = `처리 중... (${processed}/${nicknames.length})`;
+                } else {
+                    notFound.push(nickname);
+                }
+            }
+
+            let msg = `✅ ${processed}명 만료 처리 완료.`;
+            if (notFound.length > 0) msg += ` 미발견: ${notFound.join(', ')}`;
+            statusEl.style.color = processed > 0 ? '#22c55e' : '#f59e0b';
+            statusEl.textContent = msg;
+            if (processed > 0) loadSubscribeRequests();
+        } catch(e) {
+            statusEl.style.color = '#ef4444';
+            statusEl.textContent = '오류: ' + e.message;
+        }
+    };
 
     // ── 아코디언 토글 ─────────────────────────────────────────
     document.querySelectorAll('.accordion-header').forEach(header => {
