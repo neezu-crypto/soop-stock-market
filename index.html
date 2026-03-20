@@ -966,8 +966,20 @@
         </div>
         <!-- 승인 완료 — 랭킹 표시 -->
         <div id="ranking-content" style="display:none;">
-            <div style="font-size:12px; color:#64748b; text-align:center; padding:20px 0;">
-                🚧 랭킹 기능 준비 중
+            <!-- 내 순위 카드 -->
+            <div id="my-rank-card" style="background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(245,158,11,0.04)); border:1px solid rgba(245,158,11,0.3); border-radius:12px; padding:14px; margin-bottom:12px; text-align:center;">
+                <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">내 자산 순위</div>
+                <div id="my-rank-number" style="font-size:28px; font-weight:800; color:#f59e0b;">-</div>
+                <div id="my-rank-asset" style="font-size:12px; color:#64748b; margin-top:4px;">-</div>
+                <div id="my-rank-context" style="font-size:11px; color:#475569; margin-top:6px;">-</div>
+            </div>
+            <!-- 상위 100위 목록 -->
+            <div style="font-size:11px; color:#64748b; margin-bottom:6px; display:flex; justify-content:space-between;">
+                <span>TOP 100 자산 랭킹</span>
+                <span id="ranking-updated-at">-</span>
+            </div>
+            <div id="asset-ranking-list" style="display:flex; flex-direction:column; gap:4px; max-height:300px; overflow-y:auto;">
+                <div style="font-size:12px; color:#64748b; text-align:center; padding:16px 0;">불러오는 중...</div>
             </div>
         </div>
     </div>
@@ -3137,6 +3149,7 @@ async function checkSubscribeStatus() {
             document.getElementById('ranking-gate').style.display    = 'none';
             document.getElementById('ranking-pending').style.display  = 'none';
             document.getElementById('ranking-content').style.display  = 'block';
+            loadAssetRanking();
         } else {
             // pending
             document.getElementById('ranking-gate').style.display    = 'none';
@@ -3144,6 +3157,77 @@ async function checkSubscribeStatus() {
             document.getElementById('ranking-content').style.display  = 'none';
         }
     } catch(e) {}
+}
+
+// ── 자산 랭킹 로드 ──────────────────────────────────────────
+async function loadAssetRanking() {
+    const listEl    = document.getElementById('asset-ranking-list');
+    const updatedEl = document.getElementById('ranking-updated-at');
+    const rankNoEl  = document.getElementById('my-rank-number');
+    const rankAssetEl  = document.getElementById('my-rank-asset');
+    const rankCtxEl = document.getElementById('my-rank-context');
+    if (!listEl) return;
+
+    try {
+        const snap = await get(ref(db, 'assetRanking/'));
+        if (!snap.exists()) {
+            listEl.innerHTML = '<div style="font-size:12px; color:#64748b; text-align:center; padding:16px 0;">집계된 데이터가 없습니다.<br>장 마감 후 관리자가 집계합니다.</div>';
+            return;
+        }
+        const data  = snap.val();
+        const items = data.items || [];
+        const total = data.totalUsers || 0;
+        const updatedAt = data.updatedAt ? new Date(data.updatedAt).toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'numeric',minute:'numeric'}) : '-';
+        if (updatedEl) updatedEl.textContent = updatedAt + ' 기준';
+
+        // 내 자산 계산
+        let myAsset = myData?.cash || 0;
+        if (myData?.stocks && allStocks.length > 0) {
+            Object.entries(myData.stocks).forEach(([id, s]) => {
+                if (!s.qty || s.qty <= 0) return;
+                const stock = allStocks.find(st => st.id === id);
+                if (stock) myAsset += stock.price * s.qty;
+            });
+        }
+        myAsset = Math.floor(myAsset);
+
+        // 내 순위 찾기
+        const myRankItem = items.find((item, i) => {
+            const next = items[i + 1];
+            return myAsset >= item.totalAsset && (!next || myAsset > next.totalAsset);
+        });
+        const myRank = myRankItem ? myRankItem.rank : (items.length > 0 && myAsset < items[items.length-1].totalAsset ? total : 1);
+        const above  = myRank - 1;
+        const below  = total - myRank;
+
+        if (rankNoEl) {
+            if (myRank <= 100) {
+                rankNoEl.textContent = `${myRank}위`;
+                rankNoEl.style.color = myRank <= 3 ? '#f59e0b' : '#f8fafc';
+            } else {
+                rankNoEl.textContent = '100위 밖';
+                rankNoEl.style.color = '#64748b';
+            }
+        }
+        if (rankAssetEl) rankAssetEl.textContent = `내 자산: ${myAsset.toLocaleString()}원`;
+        if (rankCtxEl)   rankCtxEl.textContent   = `위로 ${above.toLocaleString()}명 · 아래로 ${below.toLocaleString()}명 · 전체 ${total.toLocaleString()}명`;
+
+        // TOP 100 목록
+        listEl.innerHTML = items.map(item => {
+            const isMine  = item.rank === myRank && myRank <= 100;
+            const medal   = item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : item.rank;
+            const bgColor = isMine ? 'rgba(245,158,11,0.1)' : 'transparent';
+            const border  = isMine ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent';
+            return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-radius:8px; background:${bgColor}; border:${border};">
+                <span style="font-size:13px; font-weight:${isMine?'800':'400'}; color:${isMine?'#f59e0b':'#94a3b8'}; width:36px;">${medal}</span>
+                <span style="flex:1; font-size:12px; color:${isMine?'#f8fafc':'#64748b'};">${isMine?'◀ 나':'　'}</span>
+                <span style="font-size:12px; font-weight:700; color:${isMine?'#f59e0b':'#94a3b8'};">${item.totalAsset.toLocaleString()}원</span>
+            </div>`;
+        }).join('');
+
+    } catch(e) {
+        listEl.innerHTML = `<div style="font-size:12px; color:#ef4444; text-align:center; padding:16px 0;">오류: ${e.message}</div>`;
+    }
 }
 
 window.submitSubscribeRequest = async function() {
