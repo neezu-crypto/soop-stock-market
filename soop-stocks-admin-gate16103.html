@@ -56,6 +56,44 @@
         .toggle-switch input:checked + .toggle-slider:before { transform: translateX(24px); }
         .maintenance-status { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
         .maintenance-status .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+        /* ── 소형 토글 (자동모드 항목별) ── */
+        .toggle-switch-sm { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+        .toggle-switch-sm input { opacity: 0; width: 0; height: 0; }
+        .toggle-switch-sm .toggle-slider { position: absolute; inset: 0; background: #334155; border-radius: 20px; cursor: pointer; transition: 0.3s; }
+        .toggle-switch-sm .toggle-slider:before { content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%; background: white; left: 3px; top: 3px; transition: 0.3s; }
+        .toggle-switch-sm input:checked + .toggle-slider { background: #22c55e; }
+        .toggle-switch-sm input:checked + .toggle-slider:before { transform: translateX(16px); }
+
+        
+        .live-ranking-wrap { max-width: 600px; width: 100%; }
+        .live-ranking-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .live-ranking-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .live-ranking-table th { background: #0f172a; color: #38bdf8; padding: 10px 12px; text-align: left; font-weight: 700; position: sticky; top: 0; }
+        .live-ranking-table td { padding: 9px 12px; border-top: 1px solid #1e293b; color: #f8fafc; }
+        .live-ranking-table tr:hover td { background: rgba(56,189,248,0.05); }
+        .live-ranking-table .rank-no { color: #64748b; font-weight: 700; width: 36px; }
+        .live-ranking-table .rank-no.top3 { color: #f59e0b; }
+        .live-ranking-table .price-up   { color: #ef4444; font-weight: 700; }
+        .live-ranking-table .price-down { color: #3b82f6; font-weight: 700; }
+        .live-ranking-table .price-flat { color: #64748b; }
+        .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 6px; animation: live-blink 1s infinite; }
+        @keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .live-ranking-container { max-height: 600px; overflow-y: auto; border-radius: 10px; border: 1px solid #334155; }
+        .live-ranking-container::-webkit-scrollbar { width: 4px; }
+        .live-ranking-container::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
+
+        /* ── 아코디언 ── */
+        .accordion-header {
+            display: flex; align-items: center; justify-content: space-between;
+            cursor: pointer; user-select: none;
+        }
+        .accordion-header h1 { margin-bottom: 0; border-bottom: none; padding-bottom: 0; flex: 1; }
+        .accordion-arrow { font-size: 14px; color: #64748b; transition: transform 0.25s; flex-shrink: 0; margin-left: 10px; }
+        .accordion-arrow.open { transform: rotate(180deg); }
+        .accordion-body { overflow: hidden; max-height: 0; transition: max-height 0.35s ease; }
+        .accordion-body.open { max-height: 4000px; }
+        .accordion-sep { border-top: 1px solid #334155; margin-top: 14px; padding-top: 14px; }
     </style>
 </head>
 <body>
@@ -70,9 +108,308 @@
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
 
+    <!-- 📊 실시간 랭킹 바로가기 -->
+    <div style="margin-bottom:20px;">
+        <button onclick="window.open('soop-stocks-ranking-live.html', '_blank', 'width=1200,height=800')"
+            style="width:100%; background:#22c55e; color:white; border:none; padding:14px; border-radius:12px; font-size:15px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:opacity 0.2s;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:white; animation:live-blink 1s infinite;"></span>
+            📊 실시간 주가 랭킹 TOP 100 열기
+        </button>
+    </div>
+
+    <!-- 📢 공지 관리 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <div class="accordion-header">
+            <h1>📢 공지 관리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            메인 페이지 순매도 랭킹 아래에 표시되는 공지 내용을 관리합니다.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>siteConfig/notice</b> 값을 변경합니다.</span>
+        </div>
+
+        <!-- 현재 공지 상태 -->
+        <div class="data-status-bar" style="margin-bottom:15px;">
+            <span>현재 공지: <b id="notice-current-text" style="color:#f8fafc;">불러오는 중...</b></span>
+            <span id="notice-active-chip" class="status-chip loading">불러오는 중...</span>
+        </div>
+
+        <!-- 공지 활성화 토글 -->
+        <div class="toggle-wrap">
+            <div>
+                <div class="toggle-label">공지 표시</div>
+                <div class="toggle-sub">OFF 시 메인 페이지에서 공지 바 숨김</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="notice-toggle" onchange="toggleNotice(this.checked)">
+                <span class="toggle-slider" style="--checked-color:#38bdf8;"></span>
+            </label>
+        </div>
+
+        <!-- 공지 입력 폼 -->
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
+            <textarea id="notice-input" placeholder="공지 내용을 입력하세요..." style="height:100px; margin-top:0;"></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span id="notice-char-count" style="font-size:12px; color:#64748b;">0 / 200자</span>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-danger" style="padding:10px 16px; font-size:13px;" onclick="clearNotice()">🗑 공지 삭제</button>
+                    <button class="btn-primary" style="margin-top:0; width:auto; padding:10px 20px; font-size:13px;" onclick="saveNotice()">💾 공지 저장</button>
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- 📉 매도 하락 가중치 설정 -->
+    <div class="container" style="display:block; border-color: #ef4444;">
+        <div class="accordion-header">
+            <h1>📉 매도 하락 가중치 설정</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            주가가 높을수록 매도 시 하락폭이 커지는 비례 가중치를 설정합니다.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>siteConfig/sellConfig</b> 값을 변경합니다.</span>
+        </div>
+
+        <!-- 현재 적용값 표시 -->
+        <div class="data-status-bar" style="margin-bottom:15px;">
+            <span>현재 적용값: <b id="sell-config-status" style="color:#f8fafc;">불러오는 중...</b></span>
+            <span id="sell-config-chip" class="status-chip loading">불러오는 중...</span>
+        </div>
+
+        <!-- 파라미터 입력 -->
+        <div style="display:flex; flex-direction:column; gap:12px;">
+
+            <!-- basePrice -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div>
+                        <div style="font-size:13px; color:#ef4444; font-weight:800;">기준 주가 (basePrice)</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:3px;">이 금액 이하는 가중치 1배 (하락 없음)</div>
+                    </div>
+                    <span style="font-size:12px; color:#94a3b8; font-weight:700;">기본값: 10,000원</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="sell-base-price" value="10000" min="1000" step="1000"
+                        style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
+                    <span style="color:#94a3b8; font-size:13px; white-space:nowrap;">원</span>
+                </div>
+            </div>
+
+            <!-- scalePrice -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div>
+                        <div style="font-size:13px; color:#ef4444; font-weight:800;">가중치 증가 구간 (scalePrice)</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:3px;">이 금액마다 가중치 1배씩 추가</div>
+                    </div>
+                    <span style="font-size:12px; color:#94a3b8; font-weight:700;">기본값: 90,000원</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="sell-scale-price" value="90000" min="1000" step="1000"
+                        style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
+                    <span style="color:#94a3b8; font-size:13px; white-space:nowrap;">원</span>
+                </div>
+            </div>
+
+            <!-- impact / spread / fee -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="font-size:13px; color:#f59e0b; font-weight:800; margin-bottom:10px;">⚙️ 거래 영향력 파라미터</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+                    <div>
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">impact 계수</div>
+                        <input type="number" id="sell-impact" value="0.0005" min="0.0001" max="0.01" step="0.0001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.0005</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">spread</div>
+                        <input type="number" id="sell-spread" value="0.001" min="0" max="0.1" step="0.001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.001</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">수수료 (fee)</div>
+                        <input type="number" id="sell-fee" value="0.003" min="0" max="0.1" step="0.001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.003</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 시뮬레이터 -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="font-size:13px; color:#a855f7; font-weight:800; margin-bottom:10px;">🧮 가중치 시뮬레이터</div>
+                <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+                    <input type="number" id="sim-price" placeholder="주가 (예: 100000)" min="0"
+                        style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 12px; border-radius:8px; font-size:13px; outline:none;">
+                    <input type="number" id="sim-qty" placeholder="수량 (예: 10)" min="1"
+                        style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 12px; border-radius:8px; font-size:13px; outline:none;">
+                    <button onclick="runSimulator()" style="background:#a855f7; color:white; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:700; font-size:12px; white-space:nowrap;">계산</button>
+                </div>
+                <div id="sim-result" style="font-size:13px; color:#64748b;">주가와 수량을 입력 후 계산하세요.</div>
+            </div>
+
+            <!-- 🤖 자동모드 -->
+            <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div>
+                        <div style="font-size:13px; color:#22c55e; font-weight:800;">🤖 자동 변동 모드</div>
+                        <div style="font-size:12px; color:#64748b; margin-top:3px;">주기마다 활성화된 항목을 범위 내 랜덤값으로 변동</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="auto-mode-toggle" onchange="toggleAutoMode(this.checked)">
+                        <span class="toggle-slider" style="--checked-color:#22c55e;"></span>
+                    </label>
+                </div>
+
+                <div id="auto-mode-form" style="display:flex; flex-direction:column; gap:10px;">
+
+                    <!-- 변동 주기 -->
+                    <div style="display:flex; align-items:center; gap:8px; background:#1e293b; padding:10px 12px; border-radius:8px; border:1px solid #334155;">
+                        <span style="font-size:12px; color:#94a3b8; white-space:nowrap;">변동 주기</span>
+                        <input type="number" id="auto-interval" value="60" min="10" max="3600" step="10"
+                            style="flex:1; background:transparent; border:none; color:#22c55e; font-size:15px; font-weight:700; outline:none; text-align:right;">
+                        <span style="font-size:12px; color:#94a3b8; white-space:nowrap;">초</span>
+                    </div>
+
+                    <!-- 각 파라미터 범위 설정 -->
+                    <!-- impact -->
+                    <div style="background:#1e293b; border-radius:8px; padding:10px 12px; border:1px solid #334155;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <label class="toggle-switch-sm">
+                                    <input type="checkbox" id="auto-impact-on" checked>
+                                    <span class="toggle-slider" style="--checked-color:#22c55e; border-radius:20px;"></span>
+                                </label>
+                                <span style="font-size:12px; color:#f59e0b; font-weight:700;">impact 계수</span>
+                            </div>
+                            <span style="font-size:11px; color:#475569;">기본 0.0005</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최솟값</div>
+                                <input type="number" id="auto-impact-min" value="0.0001" step="0.0001" min="0.0001" max="0.01"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#22c55e; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최댓값</div>
+                                <input type="number" id="auto-impact-max" value="0.002" step="0.0001" min="0.0001" max="0.01"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#ef4444; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                        </div>
+                    </div>
+
+                    <!-- basePrice -->
+                    <div style="background:#1e293b; border-radius:8px; padding:10px 12px; border:1px solid #334155;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <label class="toggle-switch-sm">
+                                    <input type="checkbox" id="auto-baseprice-on">
+                                    <span class="toggle-slider" style="--checked-color:#22c55e; border-radius:20px;"></span>
+                                </label>
+                                <span style="font-size:12px; color:#ef4444; font-weight:700;">기준 주가 (basePrice)</span>
+                            </div>
+                            <span style="font-size:11px; color:#475569;">기본 10,000원</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최솟값 (원)</div>
+                                <input type="number" id="auto-baseprice-min" value="5000" step="1000" min="1000"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#22c55e; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최댓값 (원)</div>
+                                <input type="number" id="auto-baseprice-max" value="20000" step="1000" min="1000"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#ef4444; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                        </div>
+                    </div>
+
+                    <!-- scalePrice -->
+                    <div style="background:#1e293b; border-radius:8px; padding:10px 12px; border:1px solid #334155;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <label class="toggle-switch-sm">
+                                    <input type="checkbox" id="auto-scaleprice-on">
+                                    <span class="toggle-slider" style="--checked-color:#22c55e; border-radius:20px;"></span>
+                                </label>
+                                <span style="font-size:12px; color:#ef4444; font-weight:700;">가중치 구간 (scalePrice)</span>
+                            </div>
+                            <span style="font-size:11px; color:#475569;">기본 90,000원</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최솟값 (원)</div>
+                                <input type="number" id="auto-scaleprice-min" value="50000" step="5000" min="1000"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#22c55e; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최댓값 (원)</div>
+                                <input type="number" id="auto-scaleprice-max" value="150000" step="5000" min="1000"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#ef4444; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                        </div>
+                    </div>
+
+                    <!-- spread -->
+                    <div style="background:#1e293b; border-radius:8px; padding:10px 12px; border:1px solid #334155;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <label class="toggle-switch-sm">
+                                    <input type="checkbox" id="auto-spread-on">
+                                    <span class="toggle-slider" style="--checked-color:#22c55e; border-radius:20px;"></span>
+                                </label>
+                                <span style="font-size:12px; color:#f59e0b; font-weight:700;">spread</span>
+                            </div>
+                            <span style="font-size:11px; color:#475569;">기본 0.001</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최솟값</div>
+                                <input type="number" id="auto-spread-min" value="0.0005" step="0.0001" min="0" max="0.1"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#22c55e; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최댓값</div>
+                                <input type="number" id="auto-spread-max" value="0.003" step="0.0001" min="0" max="0.1"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#ef4444; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                        </div>
+                    </div>
+
+                    <!-- fee -->
+                    <div style="background:#1e293b; border-radius:8px; padding:10px 12px; border:1px solid #334155;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <label class="toggle-switch-sm">
+                                    <input type="checkbox" id="auto-fee-on">
+                                    <span class="toggle-slider" style="--checked-color:#22c55e; border-radius:20px;"></span>
+                                </label>
+                                <span style="font-size:12px; color:#f59e0b; font-weight:700;">수수료 (fee)</span>
+                            </div>
+                            <span style="font-size:11px; color:#475569;">기본 0.003</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최솟값</div>
+                                <input type="number" id="auto-fee-min" value="0.001" step="0.001" min="0" max="0.1"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#22c55e; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                            <div><div style="font-size:10px; color:#64748b; margin-bottom:3px;">최댓값</div>
+                                <input type="number" id="auto-fee-max" value="0.005" step="0.001" min="0" max="0.1"
+                                    style="width:100%; background:#0f172a; border:1px solid #334155; color:#ef4444; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none; box-sizing:border-box;"></div>
+                        </div>
+                    </div>
+
+                    <!-- 상태 표시 -->
+                    <div id="auto-mode-status" style="font-size:12px; color:#64748b; text-align:center; padding:8px; background:#1e293b; border-radius:8px;">
+                        자동모드 꺼짐
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-primary" style="margin-top:4px; background:#ef4444;" onclick="saveSellConfig()">💾 하락 가중치 저장</button>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 🔴 점검 모드 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
-        <h1>🔴 점검 모드 관리</h1>
+        <div class="accordion-header">
+            <h1>🔴 점검 모드 관리</h1>
+            <span class="accordion-arrow open">▼</span>
+        </div>
+        <div class="accordion-body open">
+        <div class="accordion-sep">
         <div class="info-box" style="color:#fca5a5;">
             토글을 켜면 메인 페이지 접속자 전원에게 즉시 점검 오버레이가 표시되고 거래가 차단됩니다.<br>
             <span style="color:#38bdf8;">Firebase DB의 siteConfig/maintenance 값을 변경합니다.</span>
@@ -91,11 +428,18 @@
             <span class="dot" style="background:#334155;"></span>
             <span style="color:#64748b;">상태 불러오는 중...</span>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🕐 시장 운영 시간 관리 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
-        <h1>🕐 시장 운영 시간 관리</h1>
+        <div class="accordion-header">
+            <h1>🕐 시장 운영 시간 관리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">
             <b>전체 오픈 시간</b> — 거래 가능, 비실시간(30초 폴링) 모드<br>
             <b>정규장 시간</b> — 전체 오픈 시간 내에서 실시간 거래 모드<br>
@@ -148,7 +492,7 @@
                     <div style="font-size:18px; color:#334155; margin-top:18px;">→</div>
                     <div style="flex:1;">
                         <div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">정규장 종료</div>
-                        <input type="time" id="regular-close" value="24:00"
+                        <input type="time" id="regular-close" value="00:00"
                             style="width:100%; background:#1e293b; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
                     </div>
                 </div>
@@ -161,23 +505,29 @@
 
         <!-- 현재 상태 -->
         <div id="market-hours-status" style="font-size:13px; color:#94a3b8; margin-top:10px;"></div>
+        </div>
+        </div>
     </div>
 
     <!-- 🏆 랭킹 TOP5 관리 -->
     <div class="container" style="display:block; border-color: #a855f7;">
-        <h1>🏆 랭킹 TOP5 관리</h1>
+        <div class="accordion-header">
+            <h1>🏆 랭킹 TOP5 초기화</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">
-            모든 유저의 보유 주식을 집계하여 <b>/rankings/top5</b> 경로에 저장합니다.<br>
-            메인 페이지는 이 경로만 구독하므로, <span style="color:#38bdf8">users/ 전체를 읽지 않아도 됩니다.</span><br>
-            거래량이 많을 때 수동으로 눌러 최신 상태를 반영하세요.
+            장 재오픈 시 랭킹을 0부터 다시 집계하고 싶을 때 사용합니다.<br>
+            <span style="color:#ef4444;">초기화 시 거래량 TOP5 · 순매수 TOP5 · 순매도 TOP5 데이터가 모두 삭제됩니다.</span>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <span style="font-size:13px; color:#94a3b8;">저장된 TOP5 상태:</span>
             <span id="ranking-status" class="status-chip loading">불러오는 중...</span>
         </div>
         <div style="display:flex; gap:10px;">
-            <button class="btn-success" style="flex:1;" onclick="previewRankings()">🔍 집계 미리보기</button>
-            <button class="btn-primary" style="flex:2; margin-top:0;" onclick="saveRankingsToFirebase()">💾 TOP5 저장 (DB 반영)</button>
+            <button class="btn-success" style="flex:1;" onclick="previewRankings()">🔍 현재 TOP5 확인</button>
+            <button class="btn-primary" style="flex:2; margin-top:0; background:#ef4444;" onclick="resetRankings()">🗑️ 랭킹 초기화</button>
         </div>
         <div class="ranking-preview" id="ranking-preview-table">
             <table>
@@ -185,11 +535,18 @@
                 <tbody id="ranking-preview-body"></tbody>
             </table>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🔍 개별 종목 관리 -->
     <div class="container" style="display:block">
-        <h1>🔍 개별 종목 관리</h1>
+        <div class="accordion-header">
+            <h1>🔍 개별 종목 관리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="data-status-bar">
             <span>종목 데이터: <b id="stocks-load-status">로딩 중...</b></span>
             <button class="btn-success" onclick="reloadStocks()" style="padding:6px 14px; font-size:12px;">🔄 새로고침</button>
@@ -198,11 +555,18 @@
         <input type="text" id="admin-search" placeholder="스트리머 검색..."
             style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box; margin-bottom:15px;">
         <div id="admin-stock-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;"></div>
+        </div>
+        </div>
     </div>
 
     <!-- 🛠 종목 상세 정보 수정 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
-        <h1>🛠 종목 상세 정보 수정</h1>
+        <div class="accordion-header">
+            <h1>🛠 종목 상세 정보 수정</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">닉네임을 입력하고 '불러오기'를 누르면 현재 저장된 모든 정보를 수정할 수 있습니다.</div>
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
             <input type="text" id="edit-search-name" placeholder="수정할 스트리머 닉네임"
@@ -227,16 +591,25 @@
                     style="flex:1; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:9px; border-radius:8px; font-weight:800; font-size:13px; cursor:pointer;">🎁 무료</button>
             </div>
             <button class="btn-primary" style="background: #f59e0b; color: #0f172a;" onclick="updateStockData()">정보 최종 수정하기</button>
+            <button class="btn-danger" style="width:100%; margin-top:2px; background:#7f1d1d; color:white; border:none; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;"
+                onclick="deleteBannerFromStock()">🗑 이 종목 배너 삭제</button>
+        </div>
+        </div>
         </div>
     </div>
 
     <!-- 📺 차트 하단 배너 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
-        <h1>📺 차트 하단 배너 관리</h1>
+        <div class="accordion-header">
+            <h1>📺 차트 하단 배너 관리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">
             차트창 하단에 단독 노출되는 광고 배너를 설정합니다.<br>
             <span style="color:#38bdf8;">배너 사이즈: 720 × 150px · 이미지 및 GIF 지원</span><br>
-            <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 무료 체험 없음 · 별풍선 50개/일</span>
+            <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 무료 체험 없음 · 별풍선 80개/일</span>
         </div>
         <div class="chart-banner-info-row">
             <span>현재 배너 상태:</span>
@@ -273,21 +646,39 @@
             <div style="font-size:12px; color:#64748b; text-align:right; margin-top:-6px;" id="cb-enddate-preview"></div>
             <button class="btn-primary" onclick="saveChartBanner()" style="margin-top:5px;">📺 차트 배너 등록 / 교체</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 📈 주가 일괄 조정 -->
     <div class="container" style="display:block">
-        <h1>📈 주가 일괄 조정 (% 단위)</h1>
+        <div class="accordion-header">
+            <h1>📈 주가 일괄 조정 (% 단위)</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">주가 상위 100위 이내 종목만 입력한 수치만큼 주가를 변동시킵니다.</div>
         <div class="batch-control">
             <input type="number" id="percent-input" placeholder="예: 10 또는 -5">
             <button class="btn-success" onclick="adjustAllPrices()">일괄 적용</button>
         </div>
+            <div style="margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
+            <div class="info-box" style="background:rgba(239,68,68,0.08); border-color:#ef4444;">⚠️ 모든 종목의 주가를 10,000원으로 초기화합니다. 되돌릴 수 없습니다.</div>
+            <button class="btn-danger" style="width:100%; margin-top:8px;" onclick="resetAllPrices()">🔄 전체 주가 초기화 (10,000원)</button>
+        </div>
+        </div>
+        </div>
     </div>
 
     <!-- ✂️ 액면분할 -->
     <div class="container" style="display:block; border-color: #a855f7;">
-        <h1>✂️ 액면분할</h1>
+        <div class="accordion-header">
+            <h1>✂️ 액면분할</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">
             주가를 낮추고 유저 보유량을 비례해서 늘립니다.<br>
             <span style="color:#a855f7;">유저 손익 변화 없이 주가만 낮아집니다.</span><br>
@@ -325,18 +716,32 @@
             <button class="btn-success" style="flex:1;" onclick="previewSplit()">🔍 미리보기</button>
             <button class="btn-primary" style="flex:2; margin-top:0; background:#a855f7; color:white;" onclick="executeSplit()">✂️ 액면분할 실행</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🧹 데이터 무결성 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
-        <h1>🧹 데이터 무결성 관리</h1>
+        <div class="accordion-header">
+            <h1>🧹 데이터 무결성 관리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box" style="color: #fca5a5;">이미 상장된 종목 중 중복된 닉네임을 찾아 정리합니다. (최초 상장본 유지)</div>
         <button class="btn-primary" style="background: #ef4444; color: white;" onclick="cleanupDuplicateStocks()">중복 닉네임 일괄 정리</button>
+        </div>
+        </div>
     </div>
 
     <!-- 🗑 미거래 유저 데이터 정리 -->
     <div class="container" style="display:block; border-color: #f97316;">
-        <h1>🗑 미거래 유저 데이터 정리</h1>
+        <div class="accordion-header">
+            <h1>🗑 미거래 유저 데이터 정리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box" style="color: #fed7aa;">
             한 번도 거래하지 않은 유저(잔고 1,000,000원 &amp; 보유 주식 없음)의 데이터를 삭제합니다.<br>
             <span style="color:#38bdf8;">Firebase 저장 용량과 랭킹 집계 속도를 개선합니다.</span>
@@ -346,22 +751,36 @@
             <button class="btn-success" style="flex:1;" onclick="previewInactiveUsers()">🔍 미거래 유저 집계</button>
             <button class="btn-primary" style="flex:2; margin-top:0; background:#f97316; color:white;" onclick="cleanupInactiveUsers()">🗑 미거래 유저 삭제</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🚀 스트리머 상장 및 삭제 -->
     <div class="container" style="display:block">
-        <h1>🚀 스트리머 상장 및 삭제</h1>
+        <div class="accordion-header">
+            <h1>🚀 스트리머 상장 및 삭제</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요. <br>상장은 신규 추가, 삭제는 목록에서 제거합니다.</div>
         <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
         <div style="display: flex; gap: 10px;">
             <button class="btn-primary" onclick="uploadStocks()">일괄 상장 실행</button>
             <button class="btn-primary" style="background: #64748b;" onclick="deleteStocks()">일괄 삭제 실행</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 📺 방송국 배너 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
-        <h1>📺 방송국 배너 관리</h1>
+        <div class="accordion-header">
+            <h1>📺 방송국 배너 관리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">
             닉네임이 일치하는 종목에 배너를 설정합니다.<br>
             <span style="color:#38bdf8;">유료: 기간 설정 필수 · 무료: 기간 없이 AD 표시 · 유료가 항상 상단 노출</span>
@@ -392,11 +811,18 @@
             <div id="banner-enddate-preview" style="font-size:12px; color:#64748b; text-align:right; margin-top:-4px;"></div>
             <button class="btn-primary" id="banner-submit-btn" onclick="window.addBannerToStock()">💰 유료 배너 등록</button>
         </div>
+        </div>
+        </div>
     </div>
 
     <!-- 🔄 배너 데이터 마이그레이션 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
-        <h1>🔄 배너 데이터 마이그레이션</h1>
+        <div class="accordion-header">
+            <h1>🔄 배너 데이터 마이그레이션</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
         <div class="info-box">
             기존 <b>stocks/</b>에 저장된 배너 데이터를 <b>stocksBanner/</b> 경로로 복사합니다.<br>
             <span style="color:#38bdf8;">최초 1회 실행 후 이후 배너 등록/수정은 자동으로 양쪽에 저장됩니다.</span>
@@ -405,6 +831,89 @@
         <button class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="runBannerMigration()">
             🔄 배너 데이터 복사 실행
         </button>
+        </div>
+        </div>
+    </div>
+
+    <!-- 📬 홍보 신청 검수 -->
+    <div class="container" style="display:block; border-color: #22c55e;">
+        <div class="accordion-header">
+            <h1>📬 홍보 신청 검수</h1>
+            <span class="accordion-arrow open">▼</span>
+        </div>
+        <div class="accordion-body open">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 배너 홍보 목록입니다. <b>수락</b> 시 stocksBanner에 자동 등록됩니다.
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadAdRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="ad-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
+    <!-- 📺 차트 배너 신청 검수 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <div class="accordion-header">
+            <h1>📺 차트 배너 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 차트 하단 배너 목록입니다. <b>수락</b> 시 chartBanner에 자동 등록됩니다.
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadChartAdRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="chart-ad-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
+    <!-- 📡 중계방 신청 검수 -->
+    <div class="container" style="display:block; border-color: #ef4444;">
+        <div class="accordion-header">
+            <h1>📡 중계방 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 중계방 목록입니다. <b>수락</b> 시 신청 시각부터 N시간 동안 중계방 탭에 노출됩니다.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>relayRequests</b> 경로를 변경합니다.</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadRelayRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="relay-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
+    <!-- 🗑 오래된 캔들 정리 -->
+    <div class="container" style="display:block; border-color: #64748b;">
+        <div class="accordion-header">
+            <h1>🗑 오래된 캔들 정리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            모든 종목의 분봉 데이터 중 <b>6시간(360분) 이전</b> 캔들을 Firebase에서 삭제합니다.<br>
+            <span style="color:#38bdf8;">candlesticks/{stockId} 경로의 오래된 데이터를 정리합니다.</span><br>
+            <span style="color:#f59e0b;">⚠️ 종목 수가 많을수록 시간이 걸릴 수 있습니다.</span>
+        </div>
+        <div class="data-status-bar" style="margin-bottom:12px;">
+            <span>상태: <b id="candle-prune-status" style="color:#94a3b8;">대기 중</b></span>
+            <span id="candle-prune-chip" class="status-chip none">미실행</span>
+        </div>
+        <div id="candle-prune-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:150px; overflow-y:auto; display:none;"></div>
+        <button class="btn-primary" style="background:#475569;" onclick="pruneAllCandles()">🗑 오래된 캔들 정리 실행</button>
+        </div>
+        </div>
     </div>
 
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
@@ -412,7 +921,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -427,6 +936,36 @@
     const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
+
+    // 인증 가드 헬퍼 — 모든 admin 함수 진입부에서 호출
+    function isAdmin() {
+        const user = auth.currentUser;
+        if (user && user.email === ADMIN_EMAIL) return true;
+        alert('⛔ 관리자 권한이 없습니다.');
+        return false;
+    }
+
+    // XSS 방어 — innerHTML 삽입 전 이스케이프
+    function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;');
+    }
+
+    // 사용자 페이지 배너 캐시 무효화 — bannerCacheVersion 증가
+    async function invalidateStaticCache() {
+        try {
+            const snap = await get(ref(db, 'siteConfig/bannerCacheVersion'));
+            const current = snap.exists() ? snap.val() : 0;
+            await set(ref(db, 'siteConfig/bannerCacheVersion'), current + 1);
+        } catch(e) {
+            console.warn('[cache] 버전 업데이트 실패:', e.message);
+        }
+    }
 
     let allStocksData = {};
 
@@ -444,7 +983,8 @@
             if (statusEl) statusEl.innerText = '로드 실패';
         }
     }
-    window.reloadStocks = async function() { await loadStocksOnce(); };
+    window.reloadStocks = async function() {
+        if (!isAdmin()) return; await loadStocksOnce(); };
 
     async function loadRankingStatus() {
         const statusEl = document.getElementById('ranking-status');
@@ -502,6 +1042,7 @@
     }
 
     window.saveChartBanner = async function() {
+        if (!isAdmin()) return;
         const name  = document.getElementById('cb-name').value.trim();
         const img   = document.getElementById('cb-img').value.trim();
         const link  = document.getElementById('cb-link').value.trim();
@@ -525,6 +1066,7 @@
     };
 
     window.deleteChartBanner = async function() {
+        if (!isAdmin()) return;
         if (!confirm('현재 차트 배너를 삭제하시겠습니까?')) return;
         try {
             await remove(ref(db, 'chartBanner'));
@@ -582,6 +1124,7 @@
     }
 
     window.toggleMaintenance = async function(isOn) {
+        if (!isAdmin()) return;
         const toggle = document.getElementById('maintenance-toggle');
         const msg = isOn
             ? '⚠️ 점검 모드를 켜시겠습니까?\n\n모든 유저에게 즉시 점검 오버레이가 표시되고 거래가 차단됩니다.'
@@ -633,30 +1176,37 @@
     }
 
     window.previewRankings = async function() {
+        if (!isAdmin()) return;
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading'; statusEl.innerText = '집계 중...';
         try {
             const top5 = await calcTop5();
             renderPreviewTable(top5);
-            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '⚠️ 미리보기 (아직 저장 안 됨)';
+            statusEl.className = 'status-chip unsaved'; statusEl.innerText = `현재 ${top5.length}개 종목`;
         } catch(e) { alert("집계 중 오류: " + e.message); statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생'; }
     };
 
-    window.saveRankingsToFirebase = async function(silent = false) {
+    window.resetRankings = async function() {
+        if (!isAdmin()) return;
+        if (!confirm('⚠️ 랭킹 전체를 초기화하시겠습니까?\n\n• 거래량 TOP5\n• 순매수 TOP5\n• 순매도 TOP5\n\n다음 거래부터 0부터 다시 집계됩니다.')) return;
         const statusEl = document.getElementById('ranking-status');
-        statusEl.className = 'status-chip loading'; statusEl.innerText = '저장 중...';
+        statusEl.className = 'status-chip loading'; statusEl.innerText = '초기화 중...';
         try {
-            const top5 = await calcTop5();
-            await set(ref(db, 'rankings/top5'), {
-                savedAt: new Date().toISOString(),
-                items: top5.map((s, i) => ({ rank: i + 1, id: s.id, name: s.name, price: s.price, totalQty: s.totalQty }))
-            });
-            renderPreviewTable(top5);
-            if (!silent) alert(`✅ /rankings/top5 저장 완료!\n\n` + top5.map((s, i) => `${i+1}위 ${s.name} (${s.totalQty.toLocaleString()}주)`).join('\n'));
-            await loadRankingStatus();
+            const empty = { items: [], savedAt: new Date().toISOString() };
+            await Promise.all([
+                set(ref(db, 'rankings/top5'),        empty),
+                set(ref(db, 'rankings/netBuyTop5'),  empty),
+                set(ref(db, 'rankings/netSellTop5'), empty),
+            ]);
+            const tbody = document.getElementById('ranking-preview-body');
+            const wrap  = document.getElementById('ranking-preview-table');
+            if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">초기화 완료 — 다음 거래부터 집계 시작</td></tr>`;
+            if (wrap)  wrap.style.display = 'block';
+            statusEl.className = 'status-chip'; statusEl.innerText = '✅ 초기화 완료';
+            alert('✅ 랭킹 3종 모두 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
         } catch(e) {
-            if (!silent) alert("저장 중 오류: " + e.message);
-            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '저장 실패';
+            alert('초기화 실패: ' + e.message);
+            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생';
         }
     };
 
@@ -686,6 +1236,7 @@
     }
 
     window.previewInactiveUsers = async function() {
+        if (!isAdmin()) return;
         const statusEl = document.getElementById('cleanup-status');
         statusEl.innerText = '집계 중...';
         try {
@@ -695,6 +1246,7 @@
     };
 
     window.cleanupInactiveUsers = async function() {
+        if (!isAdmin()) return;
         const statusEl = document.getElementById('cleanup-status');
         statusEl.innerText = '집계 중...';
         try {
@@ -737,6 +1289,7 @@
     }
 
     window.updateSinglePrice = async function(id) {
+        if (!isAdmin()) return;
         const newPrice = parseInt(document.getElementById(`input-${id}`).value);
         if (isNaN(newPrice)) return alert("정확한 가격을 입력해주세요.");
         const oldStock = allStocksData[id];
@@ -757,6 +1310,7 @@
     // ── 종목 상세 수정 유료/무료 탭 ──────────────────────────
     let editBannerIsPaid = true;
     window.switchEditBannerType = function(type) {
+        if (!isAdmin()) return;
         editBannerIsPaid = type === 'paid';
         const paidBtn = document.getElementById('edit-tab-paid');
         const freeBtn = document.getElementById('edit-tab-free');
@@ -770,6 +1324,7 @@
     };
 
     window.loadStockData = async function() {
+        if (!isAdmin()) return;
         const searchName = document.getElementById('edit-search-name').value.trim();
         if (!searchName) return alert("닉네임을 입력해주세요.");
         try {
@@ -779,6 +1334,17 @@
             let targetId = null, targetData = null;
             Object.entries(data).forEach(([id, stock]) => { if (stock.name === searchName) { targetId = id; targetData = stock; } });
             if (!targetId) return alert("해당 종목을 찾을 수 없습니다.");
+
+            // stocksBanner/ 에서 배너 데이터 추가 조회
+            const bannerSnap = await get(ref(db, `stocksBanner/${targetId}`));
+            if (bannerSnap.exists()) {
+                const b = bannerSnap.val();
+                targetData.bannerImg     = b.bannerImg     || targetData.bannerImg     || '';
+                targetData.link          = b.link          || targetData.link          || '';
+                targetData.bannerEndDate = b.bannerEndDate || targetData.bannerEndDate || '';
+                targetData.bannerIsPaid  = b.bannerIsPaid  !== undefined ? b.bannerIsPaid : targetData.bannerIsPaid;
+            }
+
             document.getElementById('edit-stock-id').innerText  = targetId;
             document.getElementById('edit-stock-price').value   = targetData.price || 0;
             document.getElementById('edit-stock-banner').value  = targetData.bannerImg || "";
@@ -791,6 +1357,7 @@
     };
 
     window.updateStockData = async function() {
+        if (!isAdmin()) return;
         const stockId = document.getElementById('edit-stock-id').innerText;
         if (stockId === "-") return;
         const newPrice  = parseInt(document.getElementById('edit-stock-price').value);
@@ -817,15 +1384,50 @@
         try {
             await update(ref(db, 'stocks/'), stocksUpdates);
             await update(ref(db, 'stocksBanner/'), bannerUpdates);
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
             alert(`✅ 종목 정보가 수정되었습니다!\n홍보 유형: ${editBannerIsPaid ? '💰 유료' : '🎁 무료'}`);
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-search-name').value = "";
         } catch (e) { alert("수정 실패: " + e.message); }
     };
 
+    window.deleteBannerFromStock = async function() {
+        if (!isAdmin()) return;
+        const stockId = document.getElementById('edit-stock-id').innerText;
+        if (stockId === '-') return;
+        if (!confirm(`이 종목의 배너를 삭제하시겠습니까?\n종목 ID: ${stockId}`)) return;
+
+        try {
+            // stocks/ 배너 필드 초기화
+            const stocksUpdates = {};
+            stocksUpdates[`${stockId}/bannerImg`]     = null;
+            stocksUpdates[`${stockId}/link`]          = null;
+            stocksUpdates[`${stockId}/bannerEndDate`] = null;
+            stocksUpdates[`${stockId}/bannerIsPaid`]  = null;
+
+            // stocksBanner/ 경로 전체 삭제
+            await Promise.all([
+                update(ref(db, 'stocks/'), stocksUpdates),
+                remove(ref(db, `stocksBanner/${stockId}`))
+            ]);
+
+            // 폼 입력값 초기화
+            document.getElementById('edit-stock-banner').value = '';
+            document.getElementById('edit-stock-link').value   = '';
+            document.getElementById('edit-stock-date').value   = '';
+            switchEditBannerType('paid');
+
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
+            alert('✅ 배너가 삭제되었습니다.');
+        } catch (e) {
+            alert('삭제 실패: ' + e.message);
+        }
+    };
+
     document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
 
     window.cleanupDuplicateStocks = async function() {
+        if (!isAdmin()) return;
         try {
             const snapshot = await get(ref(db, 'stocks/'));
             const data = snapshot.val();
@@ -868,6 +1470,7 @@
     };
 
     window.uploadStocks = async function() {
+        if (!isAdmin()) return;
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("이름을 입력해주세요.");
         const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
@@ -876,6 +1479,7 @@
         if (confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
             try {
                 await update(ref(db, 'stocks/'), stocks);
+                await set(ref(db, 'siteConfig/stockCacheVersion'), Date.now()); // 캐시 무효화
                 alert("🎉 상장이 완료되었습니다!");
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
@@ -884,6 +1488,7 @@
     };
 
     window.deleteStocks = async function() {
+        if (!isAdmin()) return;
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("삭제할 이름을 입력해주세요.");
         const namesToDelete = text.split('\n').map(n => n.trim()).filter(n => n !== "");
@@ -899,6 +1504,7 @@
             if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
             if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
                 await update(ref(db, 'stocks/'), deleteUpdates);
+                await set(ref(db, 'siteConfig/stockCacheVersion'), Date.now()); // 캐시 무효화
                 alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
@@ -910,6 +1516,7 @@
     let splitRatio = 2;
 
     window.selectSplitRatio = function(ratio) {
+        if (!isAdmin()) return;
         ['2','5','10','custom'].forEach(v => {
             const btn = document.getElementById(`split-btn-${v}`);
             if (btn) { btn.style.background = '#1e293b'; btn.style.color = '#94a3b8'; btn.style.border = '1px solid #334155'; }
@@ -936,6 +1543,7 @@
     }
 
     window.previewSplit = async function() {
+        if (!isAdmin()) return;
         const ratio    = getSelectedRatio();
         const statusEl = document.getElementById('split-status');
         if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
@@ -955,6 +1563,7 @@
     };
 
     window.executeSplit = async function() {
+        if (!isAdmin()) return;
         const ratio    = getSelectedRatio();
         const statusEl = document.getElementById('split-status');
         if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
@@ -1029,6 +1638,7 @@
 
     // ── 주가 일괄 조정 ───────────────────────────────────────
     window.adjustAllPrices = async function() {
+        if (!isAdmin()) return;
         const percent = parseFloat(document.getElementById('percent-input').value);
         if (isNaN(percent)) return alert("숫자를 입력해주세요.");
         try {
@@ -1056,6 +1666,26 @@
         } catch (e) { alert("오류 발생: " + e.message); }
     };
 
+    window.resetAllPrices = async function() {
+        if (!isAdmin()) return;
+        if (!confirm('⚠️ 모든 종목의 주가를 10,000원으로 초기화합니다.\n\n이 작업은 되돌릴 수 없습니다.\n계속하시겠습니까?')) return;
+        try {
+            const snapshot = await get(ref(db, 'stocks/'));
+            const data = snapshot.val();
+            if (!data) return alert('종목 데이터가 없습니다.');
+ 
+            const updates = {};
+            Object.keys(data).forEach(id => {
+                updates[`${id}/price`]   = 10000;
+                updates[`${id}/change`]  = '0.00';
+                updates[`${id}/volume`]  = 0;
+            });
+            await update(ref(db, 'stocks/'), updates);
+            alert(`✅ 전체 ${Object.keys(data).length}개 종목 주가가 10,000원으로 초기화됐습니다.`);
+            await loadStocksOnce();
+        } catch (e) { alert('초기화 실패: ' + e.message); }
+    };
+
     // ── 시장 운영 시간 ───────────────────────────────────────
     async function loadMarketHours() {
         const toggle   = document.getElementById('market-hours-toggle');
@@ -1072,7 +1702,7 @@
             document.getElementById('market-open').value    = data.open         || '18:00';
             document.getElementById('market-close').value   = data.close        || '06:00';
             document.getElementById('regular-open').value   = data.regularOpen  || '20:00';
-            document.getElementById('regular-close').value  = data.regularClose || '24:00';
+            document.getElementById('regular-close').value  = data.regularClose || '00:00';
             renderMarketHoursStatus(data);
         } catch (e) {
             if (statusEl) statusEl.innerText = '불러오기 실패';
@@ -1097,7 +1727,7 @@
         const [oh,  om]  = (data.open         || '18:00').split(':').map(Number);
         const [ch,  cm]  = (data.close        || '06:00').split(':').map(Number);
         const [roh, rom] = (data.regularOpen  || '20:00').split(':').map(Number);
-        const [rch, rcm] = (data.regularClose || '24:00').split(':').map(Number);
+        const [rch, rcm] = (data.regularClose || '00:00').split(':').map(Number);
 
         const openMins    = oh  * 60 + om;
         const closeMins   = ch  * 60 + cm;
@@ -1122,10 +1752,11 @@
     }
 
     window.toggleMarketHours = async function(enabled) {
+        if (!isAdmin()) return;
         const toggle = document.getElementById('market-hours-toggle');
         try {
             const snap    = await get(ref(db, 'siteConfig/marketHours'));
-            const current = snap.exists() ? snap.val() : { open: '18:00', close: '06:00', regularOpen: '20:00', regularClose: '24:00' };
+            const current = snap.exists() ? snap.val() : { open: '18:00', close: '06:00', regularOpen: '20:00', regularClose: '00:00' };
             await set(ref(db, 'siteConfig/marketHours'), { ...current, enabled });
             renderMarketHoursStatus({ ...current, enabled });
             alert(enabled
@@ -1138,6 +1769,7 @@
     };
 
     window.saveMarketHours = async function() {
+        if (!isAdmin()) return;
         const open         = document.getElementById('market-open').value;
         const close        = document.getElementById('market-close').value;
         const regularOpen  = document.getElementById('regular-open').value;
@@ -1175,6 +1807,7 @@
     // ── 배너 탭 전환 ─────────────────────────────────────────
     let bannerMode = 'paid';
     window.switchBannerTab = function(mode) {
+        if (!isAdmin()) return;
         bannerMode = mode;
         const paidBtn    = document.getElementById('tab-paid');
         const freeBtn    = document.getElementById('tab-free');
@@ -1212,6 +1845,7 @@
     });
 
     window.addBannerToStock = async function() {
+        if (!isAdmin()) return;
         const targetNickname = document.getElementById('banner-nickname').value.trim();
         const imgUrl         = document.getElementById('banner-img-url').value.trim();
         const linkUrl        = document.getElementById('banner-link-url').value.trim();
@@ -1251,6 +1885,7 @@
     };
     // ── 배너 마이그레이션: stocks/ → stocksBanner/ ───────────
     window.runBannerMigration = async function() {
+        if (!isAdmin()) return;
         const statusEl = document.getElementById('migration-status');
         if (!confirm('stocks/의 배너 데이터를 stocksBanner/로 복사합니다.\n계속하시겠습니까?')) return;
         statusEl.style.color = '#f59e0b';
@@ -1283,6 +1918,700 @@
             statusEl.innerText   = '❌ 오류: ' + e.message;
         }
     };
+    // ── 홍보 신청 검수 ────────────────────────────────────────
+    window.loadAdRequests = async function() {
+        if (!isAdmin()) return;
+        const listEl = document.getElementById('ad-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'adRequests/'));
+            if (!snap.exists()) {
+                listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>';
+                return;
+            }
+            const data = snap.val();
+            const items = Object.entries(data).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([reqId, req]) => {
+                const date = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+                const card = document.createElement('div');
+                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                        <img src="${req.imgUrl}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#1e293b;"
+                            onerror="this.style.display='none'">
+                        <div style="flex:1;">
+                            <div style="font-weight:700; color:#f8fafc;">${req.nickname}</div>
+                            <div style="font-size:12px; color:#64748b;">${req.soopId} · ${req.days}일 · 별풍선 ${req.cost}개</div>
+                            <div style="font-size:11px; color:#475569; margin-top:2px;">${date}</div>
+                        </div>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end;">
+                        <button onclick="approveAdRequest('${reqId}', ${req.days}, '${req.nickname}')"
+                            style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px; white-space:nowrap;">수락</button>
+                        <button onclick="rejectAdRequest('${reqId}')"
+                            style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    window.approveAdRequest = async function(reqId, days, nickname) {
+        if (!isAdmin()) return;
+        // stocks/ 에서 닉네임으로 종목 ID 자동 검색
+        const stocksSnap = await get(ref(db, 'stocks/'));
+        if (!stocksSnap.exists()) { alert('종목 데이터를 불러올 수 없습니다.'); return; }
+
+        let stockId = null;
+        stocksSnap.forEach(child => {
+            if (child.val().name === nickname) stockId = child.key;
+        });
+
+        if (!stockId) {
+            alert(`❌ "${nickname}" 종목을 찾을 수 없습니다.\n종목명과 닉네임이 일치하는지 확인해주세요.`);
+            return;
+        }
+
+        // 오늘부터 days일 후 만료일 자동 계산
+        const endDateObj = new Date();
+        endDateObj.setDate(endDateObj.getDate() + days);
+        const endDate = endDateObj.toISOString().split('T')[0];
+
+        try {
+            const snap = await get(ref(db, `adRequests/${reqId}`));
+            if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
+            const req = snap.val();
+
+            const bannerData = {
+                name:          req.nickname,
+                bannerImg:     req.imgUrl,
+                link:          req.link,
+                bannerEndDate: endDate,
+                bannerIsPaid:  true
+            };
+
+            // stocks/ + stocksBanner/ + adRequests/ 동시 쓰기
+            await Promise.all([
+                update(ref(db, `stocks/${stockId}`), {
+                    bannerImg:     req.imgUrl,
+                    link:          req.link,
+                    bannerEndDate: endDate,
+                    bannerIsPaid:  true
+                }),
+                update(ref(db, `stocksBanner/${stockId}`), bannerData),
+                update(ref(db, `adRequests/${reqId}`), {
+                    status:     'approved',
+                    stockId,
+                    endDate,
+                    approvedAt: Date.now()
+                })
+            ]);
+
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
+            alert(`✅ ${req.nickname} 수락 완료!\n종목 ID: ${stockId}\n만료일: ${endDate}`);
+            loadAdRequests();
+        } catch(e) {
+            alert('수락 실패: ' + e.message);
+        }
+    };
+
+    window.rejectAdRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `adRequests/${reqId}`), {
+                status:     'rejected',
+                rejectedAt: Date.now()
+            });
+            loadAdRequests();
+        } catch(e) {
+            alert('거절 실패: ' + e.message);
+        }
+    };
+
+    // ── 차트 배너 신청 검수 ───────────────────────────────────
+    window.loadChartAdRequests = async function() {
+        if (!isAdmin()) return;
+        const listEl = document.getElementById('chart-ad-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'chartAdRequests/'));
+            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
+            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([reqId, req]) => {
+                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+                const card = document.createElement('div');
+                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.innerHTML = `
+                    <div style="margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-weight:700; color:#f8fafc;">${req.nickname}</span>
+                            <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                        </div>
+                        <div style="font-size:12px; color:#64748b;">${req.days}일 · 별풍선 ${req.cost}개 · ${date}</div>
+                        <div style="font-size:11px; color:#475569; margin-top:4px; word-break:break-all;">${req.link}</div>
+                    </div>
+                    <!-- 배너 미리보기 -->
+                    <div style="background:#0a1628; border-radius:6px; overflow:hidden; border:1px solid #1e293b; margin-bottom:10px; position:relative;">
+                        <img src="${req.imgUrl}" style="width:100%; aspect-ratio:720/150; object-fit:cover; display:block;"
+                            onerror="this.parentElement.innerHTML='<div style=\'padding:10px; color:#475569; font-size:12px;\'>이미지 로드 실패</div>'">
+                        <div style="position:absolute;top:4px;right:6px;background:rgba(0,0,0,0.5);color:#94a3b8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">AD</div>
+                    </div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <button onclick="approveChartAdRequest('${reqId}', ${req.days})"
+                            style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>
+                        <button onclick="rejectChartAdRequest('${reqId}')"
+                            style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    window.approveChartAdRequest = async function(reqId, days) {
+        if (!isAdmin()) return;
+        try {
+            const snap = await get(ref(db, `chartAdRequests/${reqId}`));
+            if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
+            const req = snap.val();
+
+            const endDateObj = new Date();
+            endDateObj.setDate(endDateObj.getDate() + days);
+            const endDate = endDateObj.toISOString().split('T')[0];
+
+            await set(ref(db, 'chartBanner'), {
+                img:     req.imgUrl,
+                link:    req.link,
+                endDate: endDate
+            });
+            await update(ref(db, `chartAdRequests/${reqId}`), {
+                status: 'approved', approvedAt: Date.now(), endDate
+            });
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
+            alert(`✅ ${req.nickname} 차트 배너 수락 완료!\n만료일: ${endDate}`);
+            loadChartAdRequests();
+        } catch(e) {
+            alert('수락 실패: ' + e.message);
+        }
+    };
+
+    window.rejectChartAdRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `chartAdRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
+            loadChartAdRequests();
+        } catch(e) {
+            alert('거절 실패: ' + e.message);
+        }
+    };
+
+    // ── 매도 하락 가중치 설정 ──────────────────────────────────
+    let autoModeTimer = null;
+
+    async function loadSellConfig() {
+        try {
+            const snap = await get(ref(db, 'siteConfig/sellConfig'));
+            const chip = document.getElementById('sell-config-chip');
+            const statusEl = document.getElementById('sell-config-status');
+
+            if (!snap.exists()) {
+                chip.className = 'status-chip none';
+                chip.textContent = '기본값 사용 중';
+                statusEl.textContent = 'basePrice: 10,000 / scalePrice: 90,000';
+                return;
+            }
+            const d = snap.val();
+            if (d.basePrice  !== undefined) document.getElementById('sell-base-price').value  = d.basePrice;
+            if (d.scalePrice !== undefined) document.getElementById('sell-scale-price').value = d.scalePrice;
+            if (d.impact     !== undefined) document.getElementById('sell-impact').value      = d.impact;
+            if (d.spread     !== undefined) document.getElementById('sell-spread').value      = d.spread;
+            if (d.fee        !== undefined) document.getElementById('sell-fee').value         = d.fee;
+
+            chip.className = 'status-chip active';
+            chip.textContent = '커스텀 적용 중';
+            statusEl.textContent = `base: ${Number(d.basePrice).toLocaleString()}원 / scale: ${Number(d.scalePrice).toLocaleString()}원`;
+
+            // 자동모드 저장 상태 복원 (ON/OFF 관계없이 설정값 항상 복원)
+            if (d.autoMode) {
+                if (d.autoMode.interval) document.getElementById('auto-interval').value = d.autoMode.interval;
+                if (d.autoMode.ranges)   restoreAutoRanges(d.autoMode.ranges);
+                if (d.autoMode.enabled) {
+                    document.getElementById('auto-mode-toggle').checked = true;
+                    startAutoMode(d.autoMode.interval, d.autoMode.ranges);
+                }
+            }
+        } catch(e) {
+            document.getElementById('sell-config-chip').className = 'status-chip expired';
+            document.getElementById('sell-config-chip').textContent = '오류';
+        }
+    }
+
+    window.saveSellConfig = async function() {
+        if (!isAdmin()) return;
+        const basePrice  = Number(document.getElementById('sell-base-price').value);
+        const scalePrice = Number(document.getElementById('sell-scale-price').value);
+        const impact     = Number(document.getElementById('sell-impact').value);
+        const spread     = Number(document.getElementById('sell-spread').value);
+        const fee        = Number(document.getElementById('sell-fee').value);
+
+        if (!basePrice || !scalePrice || scalePrice <= 0) {
+            alert('기준 주가와 가중치 구간은 0보다 커야 합니다.'); return;
+        }
+        try {
+            const snap = await get(ref(db, 'siteConfig/sellConfig'));
+            const current = snap.exists() ? snap.val() : {};
+            await set(ref(db, 'siteConfig/sellConfig'), {
+                ...current,
+                basePrice, scalePrice, impact, spread, fee,
+                updatedAt: Date.now()
+            });
+            document.getElementById('sell-config-chip').className = 'status-chip active';
+            document.getElementById('sell-config-chip').textContent = '커스텀 적용 중';
+            document.getElementById('sell-config-status').textContent = `base: ${basePrice.toLocaleString()}원 / scale: ${scalePrice.toLocaleString()}원`;
+            alert('✅ 하락 가중치 설정이 저장되었습니다.');
+        } catch(e) {
+            alert('저장 실패: ' + e.message);
+        }
+    };
+
+    window.runSimulator = function() {
+        const price      = Number(document.getElementById('sim-price').value);
+        const qty        = Number(document.getElementById('sim-qty').value);
+        const basePrice  = Number(document.getElementById('sell-base-price').value)  || 10000;
+        const scalePrice = Number(document.getElementById('sell-scale-price').value) || 90000;
+        const impact     = Number(document.getElementById('sell-impact').value)      || 0.0005;
+        const resultEl   = document.getElementById('sim-result');
+
+        if (!price || !qty) { resultEl.textContent = '주가와 수량을 입력하세요.'; resultEl.style.color = '#64748b'; return; }
+
+        const sellPressure = 1 + (Math.max(0, price - basePrice) / scalePrice);
+        const impactVal    = impact * Math.log2(1 + qty) * sellPressure;
+        const dropAmt      = Math.round(price * impactVal);
+
+        resultEl.style.color = '#f8fafc';
+        resultEl.innerHTML = `
+            <div style="display:grid; grid-template-columns:auto 1fr; gap:4px 12px; line-height:1.8;">
+                <span style="color:#94a3b8;">sellPressure</span><span style="color:#ef4444; font-weight:700;">${sellPressure.toFixed(4)}배</span>
+                <span style="color:#94a3b8;">impact 수치</span><span style="color:#fca5a5;">${(impactVal * 100).toFixed(4)}%</span>
+                <span style="color:#94a3b8;">예상 하락폭</span><span style="color:#ef4444; font-weight:700;">▼ ${dropAmt.toLocaleString()}원</span>
+                <span style="color:#94a3b8;">매도 후 예상가</span><span style="color:#f8fafc; font-weight:700;">${Math.max(0, price - dropAmt).toLocaleString()}원</span>
+            </div>
+        `;
+    };
+
+    window.toggleAutoMode = async function(enabled) {
+        if (!isAdmin()) return;
+        if (enabled) {
+            const interval = Number(document.getElementById('auto-interval').value) || 60;
+            if (interval < 10) {
+                alert('변동 주기는 최소 10초 이상이어야 합니다.');
+                document.getElementById('auto-mode-toggle').checked = false;
+                return;
+            }
+            const ranges = getAutoRanges();
+            const activeCount = Object.values(ranges).filter(r => r.on).length;
+            if (activeCount === 0) {
+                alert('변동할 항목을 최소 1개 이상 활성화하세요.');
+                document.getElementById('auto-mode-toggle').checked = false;
+                return;
+            }
+            // 범위 유효성 검사
+            for (const [key, r] of Object.entries(ranges)) {
+                if (r.on && r.min >= r.max) {
+                    alert(`${key}: 최솟값은 최댓값보다 작아야 합니다.`);
+                    document.getElementById('auto-mode-toggle').checked = false;
+                    return;
+                }
+            }
+            await saveAutoModeConfig(true, interval, ranges);
+            startAutoMode(interval, ranges);
+        } else {
+            stopAutoMode();
+            const interval = Number(document.getElementById('auto-interval').value) || 60;
+            const ranges = getAutoRanges();
+            await saveAutoModeConfig(false, interval, ranges);
+        }
+    };
+
+    function getAutoRanges() {
+        return {
+            impact:     { on: document.getElementById('auto-impact-on').checked,     min: Number(document.getElementById('auto-impact-min').value),     max: Number(document.getElementById('auto-impact-max').value) },
+            basePrice:  { on: document.getElementById('auto-baseprice-on').checked,  min: Number(document.getElementById('auto-baseprice-min').value),  max: Number(document.getElementById('auto-baseprice-max').value) },
+            scalePrice: { on: document.getElementById('auto-scaleprice-on').checked, min: Number(document.getElementById('auto-scaleprice-min').value), max: Number(document.getElementById('auto-scaleprice-max').value) },
+            spread:     { on: document.getElementById('auto-spread-on').checked,     min: Number(document.getElementById('auto-spread-min').value),     max: Number(document.getElementById('auto-spread-max').value) },
+            fee:        { on: document.getElementById('auto-fee-on').checked,        min: Number(document.getElementById('auto-fee-min').value),        max: Number(document.getElementById('auto-fee-max').value) },
+        };
+    }
+
+    function restoreAutoRanges(ranges) {
+        if (!ranges) return;
+        const map = {
+            impact:     ['auto-impact-on',     'auto-impact-min',     'auto-impact-max'],
+            basePrice:  ['auto-baseprice-on',  'auto-baseprice-min',  'auto-baseprice-max'],
+            scalePrice: ['auto-scaleprice-on', 'auto-scaleprice-min', 'auto-scaleprice-max'],
+            spread:     ['auto-spread-on',     'auto-spread-min',     'auto-spread-max'],
+            fee:        ['auto-fee-on',        'auto-fee-min',        'auto-fee-max'],
+        };
+        for (const [key, [onId, minId, maxId]] of Object.entries(map)) {
+            if (!ranges[key]) continue;
+            document.getElementById(onId).checked    = ranges[key].on ?? false;
+            document.getElementById(minId).value     = ranges[key].min;
+            document.getElementById(maxId).value     = ranges[key].max;
+        }
+    }
+
+    async function saveAutoModeConfig(enabled, interval, ranges) {
+        try {
+            const snap = await get(ref(db, 'siteConfig/sellConfig'));
+            const current = snap.exists() ? snap.val() : {};
+            await set(ref(db, 'siteConfig/sellConfig'), {
+                ...current,
+                autoMode: enabled ? { enabled: true, interval, ranges } : { enabled: false, interval: interval ?? current.autoMode?.interval, ranges: ranges ?? current.autoMode?.ranges },
+                updatedAt: Date.now()
+            });
+        } catch(e) {
+            alert('자동모드 설정 저장 실패: ' + e.message);
+        }
+    }
+
+    function randInRange(min, max, decimals) {
+        const val = min + Math.random() * (max - min);
+        return Math.round(val * Math.pow(10, decimals)) / Math.pow(10, decimals);
+    }
+
+    function startAutoMode(interval, ranges) {
+        stopAutoMode();
+        const statusEl = document.getElementById('auto-mode-status');
+
+        const tick = async () => {
+            const updates = {};
+            const labels  = [];
+            if (ranges.impact?.on)     { const v = randInRange(ranges.impact.min,     ranges.impact.max,     4); updates.impact     = v; labels.push(`impact=${v}`);                   document.getElementById('sell-impact').value      = v; }
+            if (ranges.basePrice?.on)  { const v = randInRange(ranges.basePrice.min,  ranges.basePrice.max,  0); updates.basePrice   = v; labels.push(`base=${v.toLocaleString()}원`);  document.getElementById('sell-base-price').value  = v; }
+            if (ranges.scalePrice?.on) { const v = randInRange(ranges.scalePrice.min, ranges.scalePrice.max, 0); updates.scalePrice  = v; labels.push(`scale=${v.toLocaleString()}원`); document.getElementById('sell-scale-price').value = v; }
+            if (ranges.spread?.on)     { const v = randInRange(ranges.spread.min,     ranges.spread.max,     4); updates.spread      = v; labels.push(`spread=${v}`);                   document.getElementById('sell-spread').value      = v; }
+            if (ranges.fee?.on)        { const v = randInRange(ranges.fee.min,        ranges.fee.max,        4); updates.fee         = v; labels.push(`fee=${v}`);                      document.getElementById('sell-fee').value         = v; }
+
+            try {
+                const snap = await get(ref(db, 'siteConfig/sellConfig'));
+                const current = snap.exists() ? snap.val() : {};
+                await set(ref(db, 'siteConfig/sellConfig'), { ...current, ...updates, updatedAt: Date.now() });
+                const now = new Date().toLocaleTimeString('ko-KR');
+                statusEl.style.color = '#22c55e';
+                statusEl.textContent = `✅ ${now} → ${labels.join(' / ')}`;
+            } catch(e) {
+                statusEl.style.color = '#ef4444';
+                statusEl.textContent = `❌ 변동 실패: ${e.message}`;
+            }
+        };
+
+        tick();
+        autoModeTimer = setInterval(tick, interval * 1000);
+
+        // 카운트다운
+        let countdown = interval;
+        const countdownTimer = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) countdown = interval;
+            if (!document.getElementById('auto-mode-toggle').checked) { clearInterval(countdownTimer); return; }
+            const base = document.getElementById('auto-mode-status').textContent.split(' |')[0];
+            document.getElementById('auto-mode-status').textContent = `${base} | 다음: ${countdown}초`;
+        }, 1000);
+    }
+
+    function stopAutoMode() {
+        if (autoModeTimer) { clearInterval(autoModeTimer); autoModeTimer = null; }
+        const statusEl = document.getElementById('auto-mode-status');
+        statusEl.style.color = '#64748b';
+        statusEl.textContent = '자동모드 꺼짐';
+    }
+
+    loadSellConfig();
+
+    // ── 공지 관리 ─────────────────────────────────────────────
+    async function loadNotice() {
+        try {
+            const snap = await get(ref(db, 'siteConfig/notice'));
+            const data = snap.exists() ? snap.val() : null;
+            const text = data?.text || '';
+            const enabled = data?.enabled ?? false;
+
+            document.getElementById('notice-input').value = text;
+            document.getElementById('notice-toggle').checked = enabled;
+            updateNoticeCharCount();
+            updateNoticeStatusUI(text, enabled);
+        } catch(e) {
+            document.getElementById('notice-current-text').textContent = '불러오기 실패';
+            document.getElementById('notice-active-chip').className = 'status-chip expired';
+            document.getElementById('notice-active-chip').textContent = '오류';
+        }
+    }
+
+    function updateNoticeStatusUI(text, enabled) {
+        const chip = document.getElementById('notice-active-chip');
+        const currentEl = document.getElementById('notice-current-text');
+        if (!text) {
+            currentEl.textContent = '(없음)';
+            chip.className = 'status-chip none';
+            chip.textContent = '비어있음';
+        } else if (enabled) {
+            currentEl.textContent = text.length > 30 ? text.slice(0, 30) + '...' : text;
+            chip.className = 'status-chip active';
+            chip.textContent = '표시 중';
+        } else {
+            currentEl.textContent = text.length > 30 ? text.slice(0, 30) + '...' : text;
+            chip.className = 'status-chip expired';
+            chip.textContent = '숨김';
+        }
+    }
+
+    function updateNoticeCharCount() {
+        const val = document.getElementById('notice-input').value;
+        const countEl = document.getElementById('notice-char-count');
+        countEl.textContent = `${val.length} / 200자`;
+        countEl.style.color = val.length > 200 ? '#ef4444' : '#64748b';
+    }
+
+    document.getElementById('notice-input').addEventListener('input', updateNoticeCharCount);
+
+    window.toggleNotice = async function(enabled) {
+        if (!isAdmin()) return;
+        try {
+            const snap = await get(ref(db, 'siteConfig/notice'));
+            const current = snap.exists() ? snap.val() : {};
+            await update(ref(db, 'siteConfig/notice'), { ...current, enabled });
+            updateNoticeStatusUI(current.text || '', enabled);
+        } catch(e) {
+            alert('토글 변경 실패: ' + e.message);
+            document.getElementById('notice-toggle').checked = !enabled;
+        }
+    };
+
+    window.saveNotice = async function() {
+        if (!isAdmin()) return;
+        const text = document.getElementById('notice-input').value.trim();
+        if (text.length > 200) { alert('공지는 200자 이내로 입력해주세요.'); return; }
+        const enabled = document.getElementById('notice-toggle').checked;
+        try {
+            await set(ref(db, 'siteConfig/notice'), { text, enabled, updatedAt: Date.now() });
+            updateNoticeStatusUI(text, enabled);
+            alert('✅ 공지가 저장되었습니다.');
+        } catch(e) {
+            alert('저장 실패: ' + e.message);
+        }
+    };
+
+    window.clearNotice = async function() {
+        if (!isAdmin()) return;
+        if (!confirm('공지를 삭제하시겠습니까?')) return;
+        try {
+            await set(ref(db, 'siteConfig/notice'), { text: '', enabled: false, updatedAt: Date.now() });
+            document.getElementById('notice-input').value = '';
+            document.getElementById('notice-toggle').checked = false;
+            updateNoticeCharCount();
+            updateNoticeStatusUI('', false);
+            alert('🗑 공지가 삭제되었습니다.');
+        } catch(e) {
+            alert('삭제 실패: ' + e.message);
+        }
+    };
+
+    loadNotice();
+
+    // ── 중계방 신청 검수 ─────────────────────────────────────
+    window.loadRelayRequests = async function() {
+        if (!isAdmin()) return;
+        const listEl = document.getElementById('relay-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'relayRequests/'));
+            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
+            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([reqId, req]) => {
+                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+                const expireStr   = req.expireAt ? new Date(req.expireAt).toLocaleString('ko-KR') : '-';
+                const card = document.createElement('div');
+                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div>
+                            <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req.nickname)}</span>
+                            <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req.soopId)}</span>
+                        </div>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    <div style="font-size:12px; color:#64748b; margin-bottom:6px;">
+                        ${req.hours}시간 · 별풍선 ${req.cost}개 · ${date}
+                    </div>
+                    ${req.status === 'approved' ? `<div style="font-size:11px; color:#22c55e; margin-bottom:8px;">만료: ${expireStr}</div>` : ''}
+                    <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top:8px;">
+                        <a href="https://www.sooplive.co.kr/${escapeHtml(req.soopId)}" target="_blank"
+                            style="font-size:11px; color:#38bdf8; text-decoration:none;">🔗 방송국 바로가기</a>
+                        <div style="display:flex; gap:8px;">
+                            ${req.status !== 'approved' ? `<button onclick="approveRelayRequest('${reqId}')"
+                                style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>` : ''}
+                            ${req.status !== 'rejected' ? `<button onclick="rejectRelayRequest('${reqId}')"
+                                style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
+                            <button onclick="deleteRelayRequest('${reqId}')"
+                                style="background:#334155; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
+                        </div>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    window.approveRelayRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        try {
+            const snap = await get(ref(db, `relayRequests/${reqId}`));
+            if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
+            const req = snap.val();
+
+            // 현재 수락된 슬롯 수 확인
+            const allSnap = await get(ref(db, 'relayRequests/'));
+            const allData = allSnap.exists() ? allSnap.val() : {};
+            const now = Date.now();
+            const activeCount = Object.values(allData).filter(
+                v => v.status === 'approved' && v.expireAt && v.expireAt > now
+            ).length;
+            if (activeCount >= 3) {
+                alert('⚠️ 슬롯이 가득 찼습니다. (최대 3개)\n기존 중계가 만료된 후 수락해주세요.');
+                return;
+            }
+
+            const approvedAt = Date.now();
+            const expireAt   = approvedAt + (req.hours * 3600000);
+            await update(ref(db, `relayRequests/${reqId}`), {
+                status: 'approved', approvedAt, expireAt
+            });
+            alert(`✅ ${req.nickname} 수락 완료!\n만료: ${new Date(expireAt).toLocaleString('ko-KR')}`);
+            loadRelayRequests();
+        } catch(e) {
+            alert('수락 실패: ' + e.message);
+        }
+    };
+
+    window.rejectRelayRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `relayRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
+            loadRelayRequests();
+        } catch(e) {
+            alert('거절 실패: ' + e.message);
+        }
+    };
+
+    window.deleteRelayRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 삭제하시겠습니까?')) return;
+        try {
+            await set(ref(db, `relayRequests/${reqId}`), null);
+            loadRelayRequests();
+        } catch(e) {
+            alert('삭제 실패: ' + e.message);
+        }
+    };
+
+    // ── 오래된 캔들 정리 ──────────────────────────────────────
+    window.pruneAllCandles = async function() {
+        if (!isAdmin()) return;
+        if (!confirm('모든 종목의 6시간 이전 캔들을 삭제합니다. 계속하시겠습니까?')) return;
+
+        const statusEl = document.getElementById('candle-prune-status');
+        const chipEl   = document.getElementById('candle-prune-chip');
+        const logEl    = document.getElementById('candle-prune-log');
+
+        statusEl.textContent = '실행 중...';
+        statusEl.style.color = '#f59e0b';
+        chipEl.className     = 'status-chip loading';
+        chipEl.textContent   = '실행 중';
+        logEl.style.display  = 'block';
+        logEl.innerHTML      = '';
+
+        const MAX_CANDLE_MINUTES = 360;
+        const cutoff = (Math.floor(Date.now() / 60000) - MAX_CANDLE_MINUTES) * 60;
+
+        let totalDeleted = 0;
+        let stockCount   = 0;
+
+        try {
+            const snap = await get(ref(db, 'candlesticks/'));
+            if (!snap.exists()) {
+                statusEl.textContent = '삭제할 데이터 없음';
+                statusEl.style.color = '#64748b';
+                chipEl.className     = 'status-chip none';
+                chipEl.textContent   = '데이터 없음';
+                return;
+            }
+
+            const allStocks = snap.val();
+            const stockIds  = Object.keys(allStocks);
+
+            for (const stockId of stockIds) {
+                const candles   = allStocks[stockId];
+                const toDelete  = Object.keys(candles).filter(ts => parseInt(ts) < cutoff);
+                if (toDelete.length === 0) continue;
+
+                for (const ts of toDelete) {
+                    await set(ref(db, `candlesticks/${stockId}/${ts}`), null);
+                    totalDeleted++;
+                }
+                stockCount++;
+                logEl.innerHTML += `<div style="color:#94a3b8;">${stockId}: ${toDelete.length}개 삭제</div>`;
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+
+            const now = new Date().toLocaleString('ko-KR');
+            statusEl.textContent = `완료 (${now})`;
+            statusEl.style.color = '#22c55e';
+            chipEl.className     = 'status-chip active';
+            chipEl.textContent   = '완료';
+            logEl.innerHTML += `<div style="color:#22c55e; margin-top:6px;">✅ 총 ${stockCount}개 종목 / ${totalDeleted}개 캔들 삭제 완료</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+
+        } catch(e) {
+            statusEl.textContent = '오류 발생';
+            statusEl.style.color = '#ef4444';
+            chipEl.className     = 'status-chip expired';
+            chipEl.textContent   = '오류';
+            logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${e.message}</div>`;
+        }
+    };
+
+
+    // ── 아코디언 토글 ─────────────────────────────────────────
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const body  = header.nextElementSibling;
+            const arrow = header.querySelector('.accordion-arrow');
+            const isOpen = body.classList.contains('open');
+            body.classList.toggle('open', !isOpen);
+            arrow.classList.toggle('open', !isOpen);
+        });
+    });
+
 </script>
 </body>
 </html>
