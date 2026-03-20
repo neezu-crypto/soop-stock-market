@@ -1625,7 +1625,7 @@ function renderRelayPanel(data) {
         const hLeft  = Math.floor(remain / 3600000);
         const mLeft  = Math.floor((remain % 3600000) / 60000);
         const timeStr = hLeft > 0 ? `${hLeft}시간 ${mLeft}분 남음` : `${mLeft}분 남음`;
-        return `<a class="relay-item" href="https://www.sooplive.co.kr/${v.soopId}" target="_blank">
+        return `<a class="relay-item" href="https://www.sooplive.co.kr/station/${v.soopId}" target="_blank">
             <div class="relay-item-name">${v.nickname}</div>
             <div class="relay-item-sub">🔴 라이브 중 · ${timeStr}</div>
         </a>`;
