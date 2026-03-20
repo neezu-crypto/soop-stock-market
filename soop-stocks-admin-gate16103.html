@@ -2446,8 +2446,7 @@
                 v => v.status === 'approved' && v.expireAt && v.expireAt > now
             ).length;
             if (activeCount >= 3) {
-                alert('⚠️ 슬롯이 가득 찼습니다. (최대 3개)
-기존 중계가 만료된 후 수락해주세요.');
+                alert('⚠️ 슬롯이 가득 찼습니다. (최대 3개)\n기존 중계가 만료된 후 수락해주세요.');
                 return;
             }
 
@@ -2456,8 +2455,7 @@
             await update(ref(db, `relayRequests/${reqId}`), {
                 status: 'approved', approvedAt, expireAt
             });
-            alert(`✅ ${req.nickname} 수락 완료!
-만료: ${new Date(expireAt).toLocaleString('ko-KR')}`);
+            alert(`✅ ${req.nickname} 수락 완료!\n만료: ${new Date(expireAt).toLocaleString('ko-KR')}`);
             loadRelayRequests();
         } catch(e) {
             alert('수락 실패: ' + e.message);
