@@ -292,8 +292,8 @@
                 gap: 15px;
             }
             .banner-circle {
-                width: 75px;
-                height: 75px;
+                width: 55px;
+                height: 55px;
             }
             .banner-name { font-size: 11px; }
         }
@@ -2238,36 +2238,30 @@ async function checkCircuitBreaker(stockId, candles) {
     const low       = Math.min(...recentCandles.map(c => c.l));
     const variation = ((high - low) / low) * 100;
 
-    if (variation >= 30) {
+    if (variation >= 20) {
         if (state.pendingTimer) return; // 이미 예약됨
-
-        // 45~90초 랜덤 딜레이 (선착순 매매 방지)
-        const delay = Math.floor(Math.random() * 45000) + 45000;
 
         state.pendingTimer = setTimeout(async () => {
             state.lastTriggered = Date.now();
             state.pendingTimer  = null;
 
-            const frozenUntil = Date.now() + 60000; // 1분 동결
+            const frozenUntil = Date.now() + 180000; // 3분 동결
             try {
-                // siteConfig/frozenStocks/{stockId}에 write
-                // → 모든 접속자의 siteConfig/ 구독 콜백 즉시 실행
                 await set(ref(db, `siteConfig/frozenStocks/${stockId}`), frozenUntil);
-                // 1분 후 자동 삭제
+                // 3분 후 자동 삭제
                 setTimeout(async () => {
                     try { await set(ref(db, `siteConfig/frozenStocks/${stockId}`), null); }
                     catch(e) {}
-                }, 60000);
+                }, 180000);
             } catch(e) {
                 console.warn('[CB] Firebase write 실패, 로컬만 적용:', e.message);
-                // Firebase 실패 시 로컬 fallback
                 circuitBreakerState[stockId].frozenUntil = frozenUntil;
                 updateUI(true);
-                alert(`⚠️ [서킷브레이커] ${stockId} 종목이 1분간 거래 동결됩니다.`);
+                alert(`⚠️ [서킷브레이커] ${stockId} 종목이 3분간 거래 동결됩니다.`);
             }
-        }, delay);
+        }, 0);
 
-        console.log(`[CB] ${stockId} 서킷브레이커 예약: ${delay / 1000}초 후 발동`);
+        console.log(`[CB] ${stockId} 서킷브레이커 즉시 발동`);
     }
 }
 
@@ -2851,6 +2845,18 @@ window.trade = async function (id, type, qty = 1) {
     if (qty < 1 || qty > 100 || !Number.isInteger(qty)) {
         alert('거래 수량은 1~100주 사이여야 합니다.');
         return;
+    }
+
+    // 보유 종목 10종목 제한 — 매수 시 신규 종목 체크
+    if (type === 'buy') {
+        const currentQtyOfStock = myData?.stocks?.[id]?.qty || 0;
+        if (currentQtyOfStock === 0) {
+            const ownedStockCount = Object.values(myData?.stocks || {}).filter(s => s.qty > 0).length;
+            if (ownedStockCount >= 10) {
+                alert('보유 종목은 최대 10종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.');
+                return;
+            }
+        }
     }
 
     // ── 1억원 한도 사전 체크 ─────────────────────────────────
