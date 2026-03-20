@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>SOOP STOCK - 실시간 주가 랭킹</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Pretendard', sans-serif; background: #0f172a; color: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* ── 헤더 ── */
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 24px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            flex-shrink: 0;
+        }
+        .header-left  { display: flex; align-items: center; gap: 12px; }
+        .header-title { font-size: 18px; font-weight: 800; color: #f8fafc; }
+        .header-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: #64748b; }
+
+        .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: live-blink 1s infinite; }
+        .live-badge { display: flex; align-items: center; gap: 6px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #ef4444; }
+        @keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* ── 컨트롤 바 ── */
+        .control-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 24px;
+            background: #0f172a;
+            border-bottom: 1px solid #1e293b;
+            flex-shrink: 0;
+        }
+        .control-left  { display: flex; gap: 8px; align-items: center; }
+        .control-right { font-size: 12px; color: #64748b; }
+        button { cursor: pointer; border: none; border-radius: 8px; font-weight: 700; transition: 0.2s; font-family: 'Pretendard', sans-serif; }
+        button:hover { opacity: 0.85; transform: translateY(-1px); }
+        .btn-start  { background: #22c55e; color: white; padding: 8px 16px; font-size: 13px; }
+        .btn-stop   { background: #ef4444; color: white; padding: 8px 16px; font-size: 13px; }
+        .btn-back   { background: #334155; color: #94a3b8; padding: 8px 14px; font-size: 12px; }
+
+        /* ── 랭킹 테이블 ── */
+        .table-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 24px 24px;
+        }
+        .table-wrap::-webkit-scrollbar { width: 6px; }
+        .table-wrap::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+        thead th {
+            background: #1e293b; color: #38bdf8;
+            padding: 12px 16px; text-align: left;
+            font-weight: 800; font-size: 12px;
+            position: sticky; top: 0; z-index: 10;
+            border-bottom: 1px solid #334155;
+        }
+        tbody tr { border-bottom: 1px solid #1e293b; transition: background 0.15s; }
+        tbody tr:hover { background: rgba(56,189,248,0.05); }
+        tbody td { padding: 10px 16px; }
+
+        .rank-no    { width: 48px; font-weight: 800; color: #64748b; font-size: 13px; }
+        .rank-no.top3 { color: #f59e0b; font-size: 18px; }
+        .stock-name { font-weight: 700; font-size: 15px; }
+        .price      { text-align: right; font-weight: 700; font-size: 15px; }
+        .change     { text-align: right; font-weight: 700; font-size: 13px; }
+        .volume     { text-align: right; color: #64748b; font-size: 13px; }
+        .price-up   { color: #ef4444; }
+        .price-down { color: #3b82f6; }
+        .price-flat { color: #64748b; }
+
+        /* ── 상태 ── */
+        .status-empty { text-align: center; padding: 60px 0; color: #475569; font-size: 15px; }
+
+        /* ── 로그인 화면 ── */
+        #login-section {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 16px;
+        }
+        .login-box { background: #1e293b; padding: 40px; border-radius: 16px; border: 1px solid #334155; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+        .btn-google { background: white; color: #334155; display: flex; align-items: center; gap: 10px; font-size: 15px; padding: 12px 20px; }
+
+        #main-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    </style>
+</head>
+<body>
+
+<!-- 로그인 -->
+<div id="login-section">
+    <div class="login-box">
+        <div style="font-size:22px; font-weight:800; color:#38bdf8;">📊 실시간 주가 랭킹</div>
+        <p style="color:#94a3b8; font-size:14px;">관리자 계정으로 로그인하세요.</p>
+        <button class="btn-google" onclick="login()">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20">
+            Google로 로그인
+        </button>
+    </div>
+</div>
+
+<!-- 메인 -->
+<div id="main-section">
+    <div class="header">
+        <div class="header-left">
+            <div class="header-title">📊 SOOP STOCK 실시간 주가 랭킹</div>
+            <div class="live-badge" id="live-badge" style="display:none;">
+                <span class="live-dot"></span> LIVE
+            </div>
+        </div>
+        <div class="header-right">
+            <span id="update-time">-</span>
+            <span id="stock-count" style="color:#38bdf8; font-weight:700;">-</span>
+        </div>
+    </div>
+
+    <div class="control-bar">
+        <div class="control-left">
+            <button class="btn-start" onclick="startRanking()">▶ 구독 시작</button>
+            <button class="btn-stop"  onclick="stopRanking()">■ 구독 중단</button>
+            <button class="btn-back"  onclick="window.close()">✕ 닫기</button>
+        </div>
+        <div class="control-right" id="status-text">구독 시작 버튼을 눌러주세요</div>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:48px;">순위</th>
+                    <th>종목</th>
+                    <th style="text-align:right;">현재가</th>
+                    <th style="text-align:right;">등락률</th>
+                    <th style="text-align:right;">거래량</th>
+                </tr>
+            </thead>
+            <tbody id="ranking-tbody">
+                <tr><td colspan="5" class="status-empty">구독 시작 버튼을 눌러주세요</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
+        authDomain: "soop-stock-market.firebaseapp.com",
+        databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
+        projectId: "soop-stock-market",
+        appId: "1:997788925900:web:cb613d438efec019a3a769"
+    };
+    const app      = initializeApp(firebaseConfig);
+    const db       = getDatabase(app);
+    const auth     = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    const ADMIN_EMAIL = "skftodwocks2@gmail.com";
+
+    let rankingUnsub = null;
+
+    onAuthStateChanged(auth, (user) => {
+        if (user && user.email === ADMIN_EMAIL) {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('main-section').style.display  = 'flex';
+        } else {
+            document.getElementById('login-section').style.display = 'flex';
+            document.getElementById('main-section').style.display  = 'none';
+            stopRanking();
+        }
+    });
+
+    window.login = async function() {
+        try { await signInWithPopup(auth, provider); }
+        catch(e) { if (e.code !== 'auth/popup-closed-by-user') alert('로그인 실패: ' + e.message); }
+    };
+
+    window.startRanking = function() {
+        if (rankingUnsub) return;
+        const tbody      = document.getElementById('ranking-tbody');
+        const statusEl   = document.getElementById('status-text');
+        const badge      = document.getElementById('live-badge');
+        const updateEl   = document.getElementById('update-time');
+        const countEl    = document.getElementById('stock-count');
+
+        tbody.innerHTML = '<tr><td colspan="5" class="status-empty">불러오는 중...</td></tr>';
+        statusEl.textContent = '구독 중...';
+        badge.style.display  = 'flex';
+
+        rankingUnsub = onValue(ref(db, 'stocks/'), (snap) => {
+            if (!snap.exists()) {
+                tbody.innerHTML = '<tr><td colspan="5" class="status-empty">데이터 없음</td></tr>';
+                return;
+            }
+            const stocks = Object.entries(snap.val())
+                .map(([id, s]) => ({ id, ...s }))
+                .filter(s => s.price && s.name)
+                .sort((a, b) => (b.price || 0) - (a.price || 0))
+                .slice(0, 100);
+
+            const now = new Date().toLocaleTimeString('ko-KR');
+            updateEl.textContent = `갱신: ${now}`;
+            countEl.textContent  = `${stocks.length}종목`;
+            statusEl.textContent = '실시간 구독 중';
+
+            tbody.innerHTML = stocks.map((s, i) => {
+                const rank     = i + 1;
+                const change   = parseFloat(s.change) || 0;
+                const changeCls = change > 0 ? 'price-up' : change < 0 ? 'price-down' : 'price-flat';
+                const changeStr = change > 0 ? `+${change.toFixed(2)}%` : `${change.toFixed(2)}%`;
+                const medal    = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+                const rankCls  = rank <= 3 ? 'top3' : '';
+                return `<tr>
+                    <td class="rank-no ${rankCls}">${medal}</td>
+                    <td class="stock-name">${s.name || s.id}</td>
+                    <td class="price ${changeCls}">${(s.price || 0).toLocaleString()}원</td>
+                    <td class="change ${changeCls}">${changeStr}</td>
+                    <td class="volume">${(s.volume || 0).toLocaleString()}</td>
+                </tr>`;
+            }).join('');
+        });
+    };
+
+    window.stopRanking = function() {
+        if (rankingUnsub) { rankingUnsub(); rankingUnsub = null; }
+        const badge    = document.getElementById('live-badge');
+        const statusEl = document.getElementById('status-text');
+        const tbody    = document.getElementById('ranking-tbody');
+        if (badge)    badge.style.display = 'none';
+        if (statusEl) statusEl.textContent = '구독 중단됨';
+        if (tbody)    tbody.innerHTML = '<tr><td colspan="5" class="status-empty">구독이 중단되었습니다</td></tr>';
+    };
+</script>
+</body>
+</html>
