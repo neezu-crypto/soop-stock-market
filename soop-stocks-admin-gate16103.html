@@ -83,6 +83,18 @@
         .live-ranking-container::-webkit-scrollbar { width: 4px; }
         .live-ranking-container::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
 
+        /* ── 신청 카드 pending 강조 ── */
+        .request-card { background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px; transition: border-color 0.3s, box-shadow 0.3s; }
+        .request-card.pending {
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 4px 12px rgba(245,158,11,0.12);
+            animation: pending-pulse 2.5s ease-in-out infinite;
+        }
+        @keyframes pending-pulse {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 4px 12px rgba(245,158,11,0.12); }
+            50%       { box-shadow: 0 0 0 1px rgba(245,158,11,0.4), 0 4px 16px rgba(245,158,11,0.25); }
+        }
+
         /* ── 아코디언 ── */
         .accordion-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -1203,6 +1215,11 @@
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
             await loadMarketHours();
+            // 신청 목록 자동 로드
+            loadAdRequests();
+            loadChartAdRequests();
+            loadRelayRequests();
+            loadSubscribeRequests();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -1990,7 +2007,7 @@
                 const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
                 const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
                 const card = document.createElement('div');
-                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
                 card.innerHTML = `
                     <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
                         <img src="${req.imgUrl}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#1e293b;"
@@ -2104,7 +2121,7 @@
                 const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
                 const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
                 const card = document.createElement('div');
-                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
                 card.innerHTML = `
                     <div style="margin-bottom:10px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -2501,7 +2518,7 @@
                 const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
                 const expireStr   = req.expireAt ? new Date(req.expireAt).toLocaleString('ko-KR') : '-';
                 const card = document.createElement('div');
-                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
                 card.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <div>
@@ -2739,7 +2756,7 @@
                 const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'expired' ? '#64748b' : '#f59e0b';
                 const statusText  = req.status === 'approved' ? '✅ 승인됨' : req.status === 'expired' ? '⬛ 만료됨' : '⏳ 대기중';
                 const card = document.createElement('div');
-                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
                 card.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <div>
