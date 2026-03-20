@@ -43,6 +43,111 @@
         .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background: #2a3a50; }
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
+        .stock-card.rebound-signal { border-color: #facc15 !important; box-shadow: 0 0 10px rgba(250,204,21,0.2); }
+
+        /* ── 중계방 탭 ── */
+        #relay-tab {
+            display: none;
+        }
+        @media (max-width: 1300px) {
+            #relay-tab {
+                display: flex;
+                position: fixed;
+                left: 0; top: calc(50% + 80px);
+                transform: translateY(-50%);
+                z-index: 2400;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                background: var(--card-bg);
+                border: 1px solid #334155;
+                border-left: none;
+                border-radius: 0 10px 10px 0;
+                padding: 12px 6px;
+                cursor: pointer;
+                transition: background 0.2s, border-color 0.6s ease, box-shadow 0.6s ease;
+                box-shadow: 3px 0 12px rgba(0,0,0,0.3);
+            }
+            #relay-tab:hover { background: rgba(56,189,248,0.1); }
+            #relay-tab.has-relay {
+                border-color: #ef4444;
+                box-shadow: 3px 0 14px rgba(239,68,68,0.3);
+                animation: relay-pulse 2s ease-in-out infinite;
+            }
+            @keyframes relay-pulse {
+                0%, 100% { box-shadow: 3px 0 14px rgba(239,68,68,0.3); }
+                50%       { box-shadow: 3px 0 20px rgba(239,68,68,0.55); }
+            }
+            #relay-tab .tab-icon { font-size: 16px; }
+            #relay-tab .tab-label {
+                font-size: 10px; font-weight: 800;
+                color: var(--primary);
+                writing-mode: vertical-rl;
+                text-orientation: mixed;
+                letter-spacing: 1px;
+            }
+            #relay-tab.has-relay .tab-label { color: #ef4444; }
+        }
+        /* 중계방 패널 */
+        .relay-container {
+            display: none;
+        }
+        @media (max-width: 1300px) {
+            .relay-container {
+                display: flex;
+                position: fixed;
+                left: 0; top: 0;
+                transform: translateX(-100%);
+                height: 100vh; max-height: 100vh;
+                width: 260px;
+                background: var(--card-bg);
+                border-radius: 0 20px 20px 0;
+                border: 1px solid #334155;
+                border-left: none;
+                flex-direction: column;
+                padding: 20px 16px 15px 16px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                z-index: 2500;
+                transition: transform 0.3s ease;
+                box-sizing: border-box;
+            }
+            .relay-container.mobile-open {
+                transform: translateX(0);
+            }
+        }
+        .relay-title { font-size: 16px; font-weight: 800; color: #ef4444; margin-bottom: 14px; border-bottom: 1px solid #334155; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .relay-list  { display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto; }
+        .relay-item  { background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: background 0.2s; text-decoration: none; display: block; }
+        .relay-item:hover { background: rgba(239,68,68,0.12); }
+        .relay-item-name { font-size: 13px; font-weight: 800; color: #f8fafc; margin-bottom: 3px; }
+        .relay-item-sub  { font-size: 11px; color: #94a3b8; }
+        .relay-empty { font-size: 12px; color: #64748b; text-align: center; padding: 16px 0; }
+        .relay-apply-btn { width: 100%; margin-top: 12px; background: #ef4444; color: white; border: none; border-radius: 10px; padding: 11px; font-size: 13px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
+        .relay-apply-btn:hover { opacity: 0.85; }
+        /* PC에서도 패널 보이게 */
+        @media (min-width: 1301px) {
+            .relay-container {
+                display: flex;
+                position: fixed;
+                right: 20px; top: 50%;
+                transform: translateY(-50%) translateY(120px);
+                width: 200px;
+                background: var(--card-bg);
+                border-radius: 16px;
+                border: 1px solid #334155;
+                flex-direction: column;
+                padding: 16px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                z-index: 1000;
+                max-height: 60vh;
+                transition: border-color 0.6s ease, box-shadow 0.6s ease;
+            }
+            .relay-container.has-relay {
+                border-color: rgba(239,68,68,0.5);
+                box-shadow: 0 10px 30px rgba(239,68,68,0.15);
+            }
+        }
         .trade-btns { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
         .btn-buy-multi  { background: #991b1b; color: white; padding: 6px 8px; font-size: 11px; }
         .btn-sell-multi { background: #1e3a8a; color: white; padding: 6px 8px; font-size: 11px; }
@@ -778,6 +883,24 @@
 <!-- 배경 딤 -->
 <div id="portfolio-dim" onclick="closePortfolio()"></div>
 
+<!-- 중계방 탭 버튼 -->
+<div id="relay-tab" onclick="toggleRelay()">
+    <span class="tab-icon">📡</span>
+    <span class="tab-label">중계방</span>
+</div>
+
+<!-- 중계방 패널 -->
+<div class="relay-container" id="relay-container">
+    <div class="relay-title">
+        <span>📡 중계방</span>
+        <span id="relay-slot-count" style="font-size:12px; color:#94a3b8; font-weight:400;">0/3</span>
+    </div>
+    <div class="relay-list" id="relay-list">
+        <div class="relay-empty">현재 진행 중인 중계가 없습니다.</div>
+    </div>
+    <button class="relay-apply-btn" id="relay-apply-btn" onclick="openRelayApplyModal()">📺 중계 신청하기</button>
+</div>
+
 <div class="my-stocks-container" id="my-stocks-container">
     <div class="my-stocks-title">
         <span>내 보유 주식</span>
@@ -787,6 +910,38 @@
         <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
     </div>
     <div class="my-stocks-guide">💡 클릭 시 즉시 검색됩니다</div>
+</div>
+
+<!-- ── 중계 신청 모달 ── -->
+<div id="relay-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header"><h2>📡 중계방 신청</h2></div>
+        <div style="font-size:13px; color:#94a3b8; line-height:1.6; margin-bottom:14px; padding:10px 12px; background:rgba(239,68,68,0.06); border-radius:8px; border:1px dashed rgba(239,68,68,0.2);">
+            현재 주식사이트를 중계 중인 스트리머라면 이곳에 자신의 방송을 홍보해보세요!
+        </div>
+        <ul class="promo-info-list" style="margin-bottom:16px;">
+            <li>📍 <b>위치:</b> 포트폴리오 패널 중계방 탭</li>
+            <li>⏱ <b>단위:</b> 시간당 별풍선 10개</li>
+            <li>✅ <b>노출:</b> 관리자 수락 시점부터 신청 시간만큼</li>
+            <li>📺 <b>슬롯:</b> 최대 3개 (마감 시 신청 불가)</li>
+        </ul>
+        <div id="relay-form" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+            <input id="relay-nickname" type="text" placeholder="방송인 닉네임"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;">
+            <input id="relay-soop-id" type="text" placeholder="SOOP 아이디"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;">
+            <div style="font-size:12px; color:#94a3b8; margin-bottom:2px;">신청 시간 (시간 단위)</div>
+            <input id="relay-hours" type="number" min="1" max="24" placeholder="예: 3"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;"
+                oninput="updateRelayCost()">
+            <div id="relay-cost" style="font-size:13px; color:#38bdf8; text-align:right;"></div>
+        </div>
+        <div id="relay-msg" style="min-height:20px; font-size:13px; text-align:center; margin-bottom:10px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="closeRelayModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button onclick="submitRelayRequest()" style="flex:2; background:#ef4444; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">신청하기</button>
+        </div>
+    </div>
 </div>
 
 <!-- ── 프로모 모달 ── -->
@@ -1186,11 +1341,11 @@ const auth = getAuth(app);
 let siteConfig      = {};
 let siteConfigReady = true; // 점검창 기본 표시 방식으로 변경 — siteConfig 불필요
 
-// siteConfig 실시간 구독 (관리자 전용 — 시장 운영 시간 등 참조용)
-onValue(ref(db, 'siteConfig/'), (snap) => {
-    siteConfig = snap.val() || {};
+// siteConfig 초기 1회 로드
+get(ref(db, 'siteConfig/')).then(snap => {
+    siteConfig = snap.exists() ? snap.val() : {};
     applyMarketState();
-}).catch?.(() => {});
+}).catch(() => {});
 
 // ── 점검창 카운트다운 즉시 시작 ──────────────────────────────
 (function startCountdown() {
@@ -1434,6 +1589,136 @@ window.addEventListener('beforeunload', () => {
     if (Object.keys(rankingBuffer).length > 0) flushRankingBuffer();
 });
 
+// ── 중계방 로직 ──────────────────────────────────────────────
+function renderRelayPanel(data) {
+    const list     = document.getElementById('relay-list');
+    const applyBtn = document.getElementById('relay-apply-btn');
+    const slotEl   = document.getElementById('relay-slot-count');
+    const tab      = document.getElementById('relay-tab');
+    const container= document.getElementById('relay-container');
+    if (!list) return;
+
+    const now = Date.now();
+    // 현재 유효한 (수락됨 + 만료 안 됨) 항목만 필터
+    const active = Object.entries(data)
+        .filter(([, v]) => v.status === 'approved' && v.expireAt && v.expireAt > now)
+        .sort((a, b) => a[1].approvedAt - b[1].approvedAt)
+        .slice(0, 3);
+
+    slotEl.textContent = `${active.length}/3`;
+
+    // 탭/컨테이너 글로우
+    const hasRelay = active.length > 0;
+    tab?.classList.toggle('has-relay', hasRelay);
+    container?.classList.toggle('has-relay', hasRelay);
+
+    // 슬롯 꽉 차면 신청 버튼 숨김
+    if (applyBtn) applyBtn.style.display = active.length >= 3 ? 'none' : 'block';
+
+    if (active.length === 0) {
+        list.innerHTML = '<div class="relay-empty">현재 진행 중인 중계가 없습니다.</div>';
+        return;
+    }
+
+    list.innerHTML = active.map(([, v]) => {
+        const remain = v.expireAt - now;
+        const hLeft  = Math.floor(remain / 3600000);
+        const mLeft  = Math.floor((remain % 3600000) / 60000);
+        const timeStr = hLeft > 0 ? `${hLeft}시간 ${mLeft}분 남음` : `${mLeft}분 남음`;
+        return `<a class="relay-item" href="https://www.sooplive.co.kr/${v.soopId}" target="_blank">
+            <div class="relay-item-name">${v.nickname}</div>
+            <div class="relay-item-sub">🔴 라이브 중 · ${timeStr}</div>
+        </a>`;
+    }).join('');
+
+    // 만료 타이머 — 가장 빨리 끝나는 항목 기준
+    const earliest = Math.min(...active.map(([, v]) => v.expireAt));
+    const delay = earliest - now;
+    if (delay > 0) {
+        setTimeout(() => {
+            const cached = localStorage.getItem('relayData');
+            if (cached) renderRelayPanel(JSON.parse(cached));
+        }, delay + 1000);
+    }
+}
+
+// 초기 로드 — 로컬스토리지 우선, 없으면 Firebase
+(function initRelay() {
+    const cached = localStorage.getItem('relayData');
+    if (cached) {
+        try { renderRelayPanel(JSON.parse(cached)); } catch(e) {}
+    }
+})();
+
+window.toggleRelay = function() {
+    const container = document.getElementById('relay-container');
+    const dim       = document.getElementById('portfolio-dim');
+    const isOpen    = container.classList.contains('mobile-open');
+    // 포트폴리오 패널 닫기
+    document.getElementById('my-stocks-container')?.classList.remove('mobile-open');
+    container.classList.toggle('mobile-open', !isOpen);
+    dim.classList.toggle('active', !isOpen);
+};
+
+window.openRelayApplyModal = function() {
+    document.getElementById('relay-modal').classList.add('active');
+};
+
+window.closeRelayModal = function() {
+    document.getElementById('relay-modal').classList.remove('active');
+    document.getElementById('relay-msg').textContent = '';
+    document.getElementById('relay-form').style.opacity = '1';
+    document.getElementById('relay-form').style.pointerEvents = 'auto';
+};
+
+window.updateRelayCost = function() {
+    const hours = parseInt(document.getElementById('relay-hours').value);
+    const costEl = document.getElementById('relay-cost');
+    if (!costEl) return;
+    costEl.textContent = hours > 0 ? `총 별풍선 ${hours * 10}개 (${(hours * 10 * 110).toLocaleString()}원)` : '';
+};
+
+window.submitRelayRequest = async function() {
+    const nickname = document.getElementById('relay-nickname').value.trim();
+    const soopId   = document.getElementById('relay-soop-id').value.trim();
+    const hours    = parseInt(document.getElementById('relay-hours').value);
+    const msgEl    = document.getElementById('relay-msg');
+
+    if (!nickname)                            { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임을 입력해주세요.'; return; }
+    if (!soopId)                              { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디를 입력해주세요.'; return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(soopId))     { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
+    if (!hours || hours < 1 || hours > 24)    { msgEl.style.color='#ef4444'; msgEl.textContent='신청 시간을 1~24시간으로 입력해주세요.'; return; }
+
+    const uid = auth.currentUser?.uid;
+    if (!uid) { msgEl.style.color='#ef4444'; msgEl.textContent='로그인이 필요합니다.'; return; }
+
+    msgEl.style.color = '#94a3b8';
+    msgEl.textContent = '신청 중...';
+    try {
+        const reqId = `relay_${uid}_${Date.now()}`;
+        await set(ref(db, `relayRequests/${reqId}`), {
+            nickname, soopId, hours, uid,
+            status: 'pending',
+            createdAt: Date.now(),
+            cost: hours * 10
+        });
+        msgEl.style.color = '#22c55e';
+        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${hours}시간 × 별풍선 10개 = ${hours * 10}개)`;
+        document.getElementById('relay-form').style.opacity = '0.5';
+        document.getElementById('relay-form').style.pointerEvents = 'none';
+        // 후원 창 자동 오픈
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        if (isMobile) {
+            window.open(`https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${Math.random()}`, '_blank');
+        } else {
+            window.open(`https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
+        }
+    } catch(e) {
+        msgEl.style.color = '#ef4444';
+        msgEl.textContent = '신청 실패: ' + e.message;
+    }
+};
+
 // ── rankings/top5 — 접속 시 1회만 로드 ──────────────────────
 get(ref(db, 'rankings/top5')).then(snap => {
     if (!snap.exists()) {
@@ -1531,51 +1816,55 @@ setInterval(() => {
     }
 }, 30000);
 
-// ── siteConfig 실시간 구독 ───────────────────────────────────
-onValue(ref(db, 'siteConfig/'), (snap) => {
-    const prev = siteConfig;
-    siteConfig = snap.val() || {};
+// ── siteConfig 초기 로드 + maintenance/frozenStocks 실시간 구독 ──
+get(ref(db, 'siteConfig/')).then(snap => {
+    siteConfig = snap.exists() ? snap.val() : {};
     siteConfigReady = true;
+    applyMarketState();
+    tryCloseIntro();
+}).catch(() => {});
 
-    // frozenStocks 변경 감지 → 서킷브레이커 UI 반영
-    const frozenStocks = siteConfig.frozenStocks || {};
+// 점검 모드 실시간 구독
+onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
+    siteConfig.maintenance = snap.val() ?? false;
+    applyMarketState();
+});
+
+// 중계방 실시간 구독 (신규 수락/만료 감지)
+onValue(ref(db, 'relayRequests'), (snap) => {
+    const data = snap.exists() ? snap.val() : {};
+    // 로컬스토리지에 저장
+    localStorage.setItem('relayData', JSON.stringify(data));
+    renderRelayPanel(data);
+});
+
+// 서킷브레이커 실시간 구독
+onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
+    const prev = siteConfig.frozenStocks || {};
+    siteConfig.frozenStocks = snap.val() || {};
     const now = Date.now();
-    Object.entries(frozenStocks).forEach(([stockId, frozenUntil]) => {
+    Object.entries(siteConfig.frozenStocks).forEach(([stockId, frozenUntil]) => {
         if (frozenUntil > now) {
-            // 새로 동결된 종목만 처리 (이전에 없던 것)
-            const wasNotFrozen = !prev?.frozenStocks?.[stockId] ||
-                                  prev.frozenStocks[stockId] <= now;
+            const wasNotFrozen = !prev[stockId] || prev[stockId] <= now;
             if (wasNotFrozen) {
                 const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
                 alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
 
                 // 동결 중 구독 일시 중단 (데이터 절약)
-                if (favoriteUnsubs[stockId]) {
-                    favoriteUnsubs[stockId]();
-                    delete favoriteUnsubs[stockId];
-                }
-                if (ownedUnsubs[stockId]) {
-                    ownedUnsubs[stockId]();
-                    delete ownedUnsubs[stockId];
-                }
-                if (favPollTimers[stockId]) {
-                    clearInterval(favPollTimers[stockId]);
-                    delete favPollTimers[stockId];
-                }
+                if (favoriteUnsubs[stockId]) { favoriteUnsubs[stockId](); delete favoriteUnsubs[stockId]; }
+                if (ownedUnsubs[stockId])    { ownedUnsubs[stockId]();    delete ownedUnsubs[stockId]; }
+                if (favPollTimers[stockId])  { clearInterval(favPollTimers[stockId]); delete favPollTimers[stockId]; }
 
                 // 동결 해제 시점에 재구독
                 const remaining = frozenUntil - now;
                 setTimeout(() => {
                     if (favorites[stockId])   subscribeToFavorite(stockId);
                     if (ownedStocks[stockId]) subscribeToOwned(stockId);
-                }, remaining + 500); // 해제 후 0.5초 여유
+                }, remaining + 500);
             }
         }
     });
-
-    updateUI(true); // 카드 동결 UI 갱신
-    applyMarketState();
-    tryCloseIntro();
+    updateUI(true);
 });
 
 // 현재 시각이 전체 오픈 시간 이내인지 여부 반환
@@ -2870,16 +3159,9 @@ window.submitChartAdRequest = async function() {
         const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
         if (isMobile) {
             const r = Math.random();
-            window.open(
-                `https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`,
-                '_blank'
-            );
+            window.open(`https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`, '_blank');
         } else {
-            window.open(
-                `https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`,
-                '_blank',
-                'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes'
-            );
+            window.open(`https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
         }
     } catch(e) {
         msgEl.style.color = '#ef4444';
@@ -2954,16 +3236,9 @@ window.submitPromoRequest = async function() {
         const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
         if (isMobile) {
             const r = Math.random();
-            window.open(
-                `https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`,
-                '_blank'
-            );
+            window.open(`https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`, '_blank');
         } else {
-            window.open(
-                `https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`,
-                '_blank',
-                'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes'
-            );
+            window.open(`https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
         }
     } catch(e) {
         msgEl.style.color = '#ef4444';
@@ -3063,6 +3338,24 @@ function sanitizeUrl(url, fallback) {
 }
 
 // ── 스파크라인 ───────────────────────────────────────────────
+// 하락 후 비슷한 속도로 반등하는 패턴 감지
+function detectRebound(history) {
+    if (history.length < 5) return false;
+    const recent = history.slice(-5);
+    const changes = [];
+    for (let i = 1; i < recent.length; i++) {
+        changes.push((recent[i] - recent[i - 1]) / recent[i - 1]);
+    }
+    const falling = changes[0] < 0 && changes[1] < 0;
+    const rising  = changes[2] > 0 && changes[3] > 0;
+    if (!falling || !rising) return false;
+    const avgFall = (Math.abs(changes[0]) + Math.abs(changes[1])) / 2;
+    const avgRise = (Math.abs(changes[2]) + Math.abs(changes[3])) / 2;
+    if (avgFall < 0.001) return false;
+    const ratio = avgRise / avgFall;
+    return ratio >= 0.8 && ratio <= 1.2;
+}
+
 // sparklinePriceCache 우선 — 없으면 현재가 flat line
 function createSparkline(stockId, fallbackPrice, isUp) {
     const history = (sparklinePriceCache[stockId]?.length >= 2)
@@ -3074,7 +3367,19 @@ function createSparkline(stockId, fallbackPrice, isUp) {
     const range = max - min || 1;
     const last  = history.length - 1;
     const pts   = history.map((v, i) => `${(i / last) * 80},${35 - ((v - min) / range * 35)}`).join(' ');
-    return `<svg class="chart-container"><polyline class="sparkline ${isUp ? 'up' : 'down'}" points="${pts}" /></svg>`;
+
+    const lastX = 80;
+    const lastY = 35 - ((history[last] - min) / range * 35);
+    const isRebound = detectRebound(history);
+
+    const reboundDot = isRebound ? `
+        <circle cx="${lastX}" cy="${lastY}" r="5" fill="none" stroke="#facc15" stroke-width="1.5" opacity="0.5">
+            <animate attributeName="r" values="4;8;4" dur="1.2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.6;0;0.6" dur="1.2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="${lastX}" cy="${lastY}" r="3" fill="#facc15"/>` : '';
+
+    return `<svg class="chart-container">${reboundDot}<polyline class="sparkline ${isUp ? 'up' : 'down'}" points="${pts}" /></svg>`;
 }
 
 // ── 주식 목록 렌더링 ─────────────────────────────────────────
@@ -3211,6 +3516,7 @@ function updateCardContent(card, s, userStock) {
 
     const chartWrap = card.querySelector('.chart-wrap');
     if (chartWrap) chartWrap.innerHTML = createSparkline(s.id, s.price, isUp);
+    card.classList.toggle('rebound-signal', detectRebound(sparklinePriceCache[s.id] || []));
 
     const buyBtn  = card.querySelector('.btn-trade-buy');
     const sellBtn = card.querySelector('.btn-trade-sell');
