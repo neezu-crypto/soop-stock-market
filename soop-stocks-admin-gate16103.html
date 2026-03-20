@@ -65,6 +65,24 @@
         .toggle-switch-sm input:checked + .toggle-slider { background: #22c55e; }
         .toggle-switch-sm input:checked + .toggle-slider:before { transform: translateX(16px); }
 
+        
+        .live-ranking-wrap { max-width: 600px; width: 100%; }
+        .live-ranking-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .live-ranking-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .live-ranking-table th { background: #0f172a; color: #38bdf8; padding: 10px 12px; text-align: left; font-weight: 700; position: sticky; top: 0; }
+        .live-ranking-table td { padding: 9px 12px; border-top: 1px solid #1e293b; color: #f8fafc; }
+        .live-ranking-table tr:hover td { background: rgba(56,189,248,0.05); }
+        .live-ranking-table .rank-no { color: #64748b; font-weight: 700; width: 36px; }
+        .live-ranking-table .rank-no.top3 { color: #f59e0b; }
+        .live-ranking-table .price-up   { color: #ef4444; font-weight: 700; }
+        .live-ranking-table .price-down { color: #3b82f6; font-weight: 700; }
+        .live-ranking-table .price-flat { color: #64748b; }
+        .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 6px; animation: live-blink 1s infinite; }
+        @keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .live-ranking-container { max-height: 600px; overflow-y: auto; border-radius: 10px; border: 1px solid #334155; }
+        .live-ranking-container::-webkit-scrollbar { width: 4px; }
+        .live-ranking-container::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
+
         /* ── 아코디언 ── */
         .accordion-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -89,6 +107,15 @@
 </div>
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
+
+    <!-- 📊 실시간 랭킹 바로가기 -->
+    <div style="margin-bottom:20px;">
+        <button onclick="window.open('soop-stocks-ranking-live.html', '_blank', 'width=1200,height=800')"
+            style="width:100%; background:#22c55e; color:white; border:none; padding:14px; border-radius:12px; font-size:15px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:opacity 0.2s;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:white; animation:live-blink 1s infinite;"></span>
+            📊 실시간 주가 랭킹 TOP 100 열기
+        </button>
+    </div>
 
     <!-- 📢 공지 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
@@ -894,7 +921,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -2572,6 +2599,7 @@
             logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${e.message}</div>`;
         }
     };
+
 
     // ── 아코디언 토글 ─────────────────────────────────────────
     document.querySelectorAll('.accordion-header').forEach(header => {
