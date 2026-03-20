@@ -866,6 +866,29 @@
         </div>
     </div>
 
+    <!-- 🗑 오래된 캔들 정리 -->
+    <div class="container" style="display:block; border-color: #64748b;">
+        <div class="accordion-header">
+            <h1>🗑 오래된 캔들 정리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            모든 종목의 분봉 데이터 중 <b>6시간(360분) 이전</b> 캔들을 Firebase에서 삭제합니다.<br>
+            <span style="color:#38bdf8;">candlesticks/{stockId} 경로의 오래된 데이터를 정리합니다.</span><br>
+            <span style="color:#f59e0b;">⚠️ 종목 수가 많을수록 시간이 걸릴 수 있습니다.</span>
+        </div>
+        <div class="data-status-bar" style="margin-bottom:12px;">
+            <span>상태: <b id="candle-prune-status" style="color:#94a3b8;">대기 중</b></span>
+            <span id="candle-prune-chip" class="status-chip none">미실행</span>
+        </div>
+        <div id="candle-prune-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:150px; overflow-y:auto; display:none;"></div>
+        <button class="btn-primary" style="background:#475569;" onclick="pruneAllCandles()">🗑 오래된 캔들 정리 실행</button>
+        </div>
+        </div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -2481,6 +2504,72 @@
             loadRelayRequests();
         } catch(e) {
             alert('삭제 실패: ' + e.message);
+        }
+    };
+
+    // ── 오래된 캔들 정리 ──────────────────────────────────────
+    window.pruneAllCandles = async function() {
+        if (!isAdmin()) return;
+        if (!confirm('모든 종목의 6시간 이전 캔들을 삭제합니다. 계속하시겠습니까?')) return;
+
+        const statusEl = document.getElementById('candle-prune-status');
+        const chipEl   = document.getElementById('candle-prune-chip');
+        const logEl    = document.getElementById('candle-prune-log');
+
+        statusEl.textContent = '실행 중...';
+        statusEl.style.color = '#f59e0b';
+        chipEl.className     = 'status-chip loading';
+        chipEl.textContent   = '실행 중';
+        logEl.style.display  = 'block';
+        logEl.innerHTML      = '';
+
+        const MAX_CANDLE_MINUTES = 360;
+        const cutoff = (Math.floor(Date.now() / 60000) - MAX_CANDLE_MINUTES) * 60;
+
+        let totalDeleted = 0;
+        let stockCount   = 0;
+
+        try {
+            const snap = await get(ref(db, 'candlesticks/'));
+            if (!snap.exists()) {
+                statusEl.textContent = '삭제할 데이터 없음';
+                statusEl.style.color = '#64748b';
+                chipEl.className     = 'status-chip none';
+                chipEl.textContent   = '데이터 없음';
+                return;
+            }
+
+            const allStocks = snap.val();
+            const stockIds  = Object.keys(allStocks);
+
+            for (const stockId of stockIds) {
+                const candles   = allStocks[stockId];
+                const toDelete  = Object.keys(candles).filter(ts => parseInt(ts) < cutoff);
+                if (toDelete.length === 0) continue;
+
+                for (const ts of toDelete) {
+                    await set(ref(db, `candlesticks/${stockId}/${ts}`), null);
+                    totalDeleted++;
+                }
+                stockCount++;
+                logEl.innerHTML += `<div style="color:#94a3b8;">${stockId}: ${toDelete.length}개 삭제</div>`;
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+
+            const now = new Date().toLocaleString('ko-KR');
+            statusEl.textContent = `완료 (${now})`;
+            statusEl.style.color = '#22c55e';
+            chipEl.className     = 'status-chip active';
+            chipEl.textContent   = '완료';
+            logEl.innerHTML += `<div style="color:#22c55e; margin-top:6px;">✅ 총 ${stockCount}개 종목 / ${totalDeleted}개 캔들 삭제 완료</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+
+        } catch(e) {
+            statusEl.textContent = '오류 발생';
+            statusEl.style.color = '#ef4444';
+            chipEl.className     = 'status-chip expired';
+            chipEl.textContent   = '오류';
+            logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${e.message}</div>`;
         }
     };
 
