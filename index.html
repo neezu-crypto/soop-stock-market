@@ -2380,28 +2380,9 @@ async function flushCandlestick(stockId) {
 
     // 거래 발생 시마다 서킷브레이커 감지 (차트 모달 없이도 실시간 체크)
     checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId));
-
-    pruneOldCandles(stockId);
 }
 
-/**
- * 360분 이전 캔들 삭제
- */
-async function pruneOldCandles(stockId) {
-    const cutoff  = (Math.floor(Date.now() / 60000) - MAX_CANDLE_MINUTES) * 60;
-    const oldRef  = ref(db, `candlesticks/${stockId}`);
-    try {
-        const snap = await get(oldRef);
-        if (!snap.exists()) return;
-        const data = snap.val();
-        const toDelete = Object.keys(data).filter(ts => parseInt(ts) < cutoff);
-        for (const ts of toDelete) {
-            await set(ref(db, `candlesticks/${stockId}/${ts}`), null);
-        }
-    } catch (e) {
-        // 정리 실패는 무시 (다음 거래 때 재시도)
-    }
-}
+// pruneOldCandles — 관리자 페이지에서만 실행 (클라이언트 제거)
 
 /**
  * n분봉으로 집계: 1분봉 배열 → n분봉 배열
