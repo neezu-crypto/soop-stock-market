@@ -846,6 +846,26 @@
         </div>
     </div>
 
+    <!-- 📡 중계방 신청 검수 -->
+    <div class="container" style="display:block; border-color: #ef4444;">
+        <div class="accordion-header">
+            <h1>📡 중계방 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 중계방 목록입니다. <b>수락</b> 시 신청 시각부터 N시간 동안 중계방 탭에 노출됩니다.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>relayRequests</b> 경로를 변경합니다.</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadRelayRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="relay-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -2361,6 +2381,110 @@
     };
 
     loadNotice();
+
+    // ── 중계방 신청 검수 ─────────────────────────────────────
+    window.loadRelayRequests = async function() {
+        if (!isAdmin()) return;
+        const listEl = document.getElementById('relay-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'relayRequests/'));
+            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
+            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([reqId, req]) => {
+                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+                const expireStr   = req.expireAt ? new Date(req.expireAt).toLocaleString('ko-KR') : '-';
+                const card = document.createElement('div');
+                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div>
+                            <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req.nickname)}</span>
+                            <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req.soopId)}</span>
+                        </div>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    <div style="font-size:12px; color:#64748b; margin-bottom:6px;">
+                        ${req.hours}시간 · 별풍선 ${req.cost}개 · ${date}
+                    </div>
+                    ${req.status === 'approved' ? `<div style="font-size:11px; color:#22c55e; margin-bottom:8px;">만료: ${expireStr}</div>` : ''}
+                    <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top:8px;">
+                        <a href="https://www.sooplive.co.kr/${escapeHtml(req.soopId)}" target="_blank"
+                            style="font-size:11px; color:#38bdf8; text-decoration:none;">🔗 방송국 바로가기</a>
+                        <div style="display:flex; gap:8px;">
+                            ${req.status !== 'approved' ? `<button onclick="approveRelayRequest('${reqId}')"
+                                style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>` : ''}
+                            ${req.status !== 'rejected' ? `<button onclick="rejectRelayRequest('${reqId}')"
+                                style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
+                            <button onclick="deleteRelayRequest('${reqId}')"
+                                style="background:#334155; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
+                        </div>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    window.approveRelayRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        try {
+            const snap = await get(ref(db, `relayRequests/${reqId}`));
+            if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
+            const req = snap.val();
+
+            // 현재 수락된 슬롯 수 확인
+            const allSnap = await get(ref(db, 'relayRequests/'));
+            const allData = allSnap.exists() ? allSnap.val() : {};
+            const now = Date.now();
+            const activeCount = Object.values(allData).filter(
+                v => v.status === 'approved' && v.expireAt && v.expireAt > now
+            ).length;
+            if (activeCount >= 3) {
+                alert('⚠️ 슬롯이 가득 찼습니다. (최대 3개)
+기존 중계가 만료된 후 수락해주세요.');
+                return;
+            }
+
+            const approvedAt = Date.now();
+            const expireAt   = approvedAt + (req.hours * 3600000);
+            await update(ref(db, `relayRequests/${reqId}`), {
+                status: 'approved', approvedAt, expireAt
+            });
+            alert(`✅ ${req.nickname} 수락 완료!
+만료: ${new Date(expireAt).toLocaleString('ko-KR')}`);
+            loadRelayRequests();
+        } catch(e) {
+            alert('수락 실패: ' + e.message);
+        }
+    };
+
+    window.rejectRelayRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `relayRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
+            loadRelayRequests();
+        } catch(e) {
+            alert('거절 실패: ' + e.message);
+        }
+    };
+
+    window.deleteRelayRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 삭제하시겠습니까?')) return;
+        try {
+            await set(ref(db, `relayRequests/${reqId}`), null);
+            loadRelayRequests();
+        } catch(e) {
+            alert('삭제 실패: ' + e.message);
+        }
+    };
 
     // ── 아코디언 토글 ─────────────────────────────────────────
     document.querySelectorAll('.accordion-header').forEach(header => {
