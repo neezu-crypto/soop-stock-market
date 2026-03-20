@@ -363,6 +363,27 @@
         .no-stock-msg { text-align: center; color: var(--text-sub); font-size: 12px; padding: 20px 0; }
         .my-stocks-guide { font-size: 13px; color: var(--text-sub); text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(51, 65, 85, 0.5); opacity: 0.8; pointer-events: none; }
 
+        /* ── 포트폴리오 탭 전환 ── */
+        .portfolio-tabs { display: flex; gap: 0; margin-bottom: 14px; border-bottom: 1px solid #334155; }
+        .portfolio-tab-btn { flex: 1; background: none; border: none; padding: 8px 0; font-size: 12px; font-weight: 700; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.2s; }
+        .portfolio-tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .portfolio-tab-btn.rank-tab.active { color: #f59e0b; border-bottom-color: #f59e0b; }
+
+        /* ── 구독 안내 ── */
+        .subscribe-gate { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 8px; }
+        .subscribe-gate-icon { font-size: 28px; }
+        .subscribe-gate-title { font-size: 14px; font-weight: 800; color: #f8fafc; text-align: center; line-height: 1.5; }
+        .subscribe-gate-desc { font-size: 12px; color: #64748b; text-align: center; line-height: 1.6; }
+        .subscribe-gate-form { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+        .subscribe-gate-form input { width: 100%; background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 9px 12px; border-radius: 8px; font-size: 13px; outline: none; box-sizing: border-box; }
+        .subscribe-gate-form input:focus { border-color: #f59e0b; }
+        .subscribe-gate-btns { display: flex; gap: 8px; width: 100%; }
+        .btn-subscribe-apply { flex: 2; background: #f59e0b; color: #0f172a; border: none; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
+        .btn-subscribe-apply:hover { opacity: 0.85; }
+        .btn-subscribe-soop { flex: 1; background: #1e293b; color: #38bdf8; border: 1px solid #334155; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+        .btn-subscribe-soop:hover { opacity: 0.85; }
+        .subscribe-status { font-size: 12px; text-align: center; min-height: 16px; }
+
         /* 모바일 슬라이드 패널 */
         @media (max-width: 1300px) {
             .my-stocks-container {
@@ -905,13 +926,51 @@
 
 <div class="my-stocks-container" id="my-stocks-container">
     <div class="my-stocks-title">
-        <span>내 보유 주식</span>
+        <span>내 포트폴리오</span>
         <span id="total-assets" style="font-size: 14px; color: var(--text-sub); align-self: flex-end;">평가중...</span>
     </div>
-    <div id="my-stocks-list" class="my-stocks-list">
-        <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
+    <!-- 탭 버튼 -->
+    <div class="portfolio-tabs">
+        <button class="portfolio-tab-btn active" id="tab-btn-stocks" onclick="switchPortfolioTab('stocks')">📈 내 주식</button>
+        <button class="portfolio-tab-btn rank-tab" id="tab-btn-ranking" onclick="switchPortfolioTab('ranking')">👑 자산 랭킹</button>
     </div>
-    <div class="my-stocks-guide">💡 클릭 시 즉시 검색됩니다</div>
+    <!-- 내 주식 탭 -->
+    <div id="portfolio-panel-stocks">
+        <div id="my-stocks-list" class="my-stocks-list">
+            <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
+        </div>
+        <div class="my-stocks-guide">💡 클릭 시 즉시 검색됩니다</div>
+    </div>
+    <!-- 자산 랭킹 탭 -->
+    <div id="portfolio-panel-ranking" style="display:none;">
+        <!-- 구독 미인증 상태 -->
+        <div id="ranking-gate" class="subscribe-gate">
+            <div class="subscribe-gate-icon">👑</div>
+            <div class="subscribe-gate-title">자산 랭킹은<br>구독자 전용 기능입니다</div>
+            <div class="subscribe-gate-desc">SOOP 구독 후 닉네임과 아이디를 입력하면<br>관리자 승인 후 이용 가능합니다.</div>
+            <div class="subscribe-gate-form">
+                <input type="text" id="sub-nickname" placeholder="닉네임 (방송에서 사용하는 이름)">
+                <input type="text" id="sub-soop-id"  placeholder="SOOP 아이디">
+                <div id="sub-status" class="subscribe-status"></div>
+                <div class="subscribe-gate-btns">
+                    <button class="btn-subscribe-soop" onclick="window.open('https://www.sooplive.co.kr/station/skftodwocks2','_blank')">🔗 구독하러 가기</button>
+                    <button class="btn-subscribe-apply" onclick="submitSubscribeRequest()">신청하기</button>
+                </div>
+            </div>
+        </div>
+        <!-- 승인 대기 상태 -->
+        <div id="ranking-pending" style="display:none;" class="subscribe-gate">
+            <div class="subscribe-gate-icon">⏳</div>
+            <div class="subscribe-gate-title">승인 대기 중입니다</div>
+            <div class="subscribe-gate-desc">관리자 확인 후 승인되면<br>자동으로 활성화됩니다.</div>
+        </div>
+        <!-- 승인 완료 — 랭킹 표시 -->
+        <div id="ranking-content" style="display:none;">
+            <div style="font-size:12px; color:#64748b; text-align:center; padding:20px 0;">
+                🚧 랭킹 기능 준비 중
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- ── 중계 신청 모달 ── -->
@@ -3051,6 +3110,69 @@ const impact = impactCoef * Math.log2(1 + qty) * sellPressure;
 };
 
 // ── 모바일 보유 주식 패널 슬라이드 ──────────────────────────
+// ── 포트폴리오 탭 전환 ──────────────────────────────────────
+window.switchPortfolioTab = function(tab) {
+    document.getElementById('portfolio-panel-stocks').style.display  = tab === 'stocks'  ? 'flex' : 'none';
+    document.getElementById('portfolio-panel-ranking').style.display = tab === 'ranking' ? 'block' : 'none';
+    document.getElementById('portfolio-panel-stocks').style.flexDirection = 'column';
+    document.getElementById('tab-btn-stocks').classList.toggle('active', tab === 'stocks');
+    document.getElementById('tab-btn-ranking').classList.toggle('active', tab === 'ranking');
+
+    if (tab === 'ranking') checkSubscribeStatus();
+};
+
+async function checkSubscribeStatus() {
+    if (!userUID) return;
+    try {
+        const snap = await get(ref(db, `subscribeRequests/${userUID}`));
+        if (!snap.exists()) {
+            // 미신청
+            document.getElementById('ranking-gate').style.display    = 'flex';
+            document.getElementById('ranking-pending').style.display  = 'none';
+            document.getElementById('ranking-content').style.display  = 'none';
+            return;
+        }
+        const data = snap.val();
+        if (data.status === 'approved') {
+            document.getElementById('ranking-gate').style.display    = 'none';
+            document.getElementById('ranking-pending').style.display  = 'none';
+            document.getElementById('ranking-content').style.display  = 'block';
+        } else {
+            // pending
+            document.getElementById('ranking-gate').style.display    = 'none';
+            document.getElementById('ranking-pending').style.display  = 'flex';
+            document.getElementById('ranking-content').style.display  = 'none';
+        }
+    } catch(e) {}
+}
+
+window.submitSubscribeRequest = async function() {
+    const nickname = document.getElementById('sub-nickname').value.trim();
+    const soopId   = document.getElementById('sub-soop-id').value.trim();
+    const statusEl = document.getElementById('sub-status');
+
+    if (!nickname) { statusEl.style.color = '#ef4444'; statusEl.textContent = '닉네임을 입력해주세요.'; return; }
+    if (!soopId)   { statusEl.style.color = '#ef4444'; statusEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(soopId)) { statusEl.style.color = '#ef4444'; statusEl.textContent = 'SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
+    if (!userUID) { statusEl.style.color = '#ef4444'; statusEl.textContent = '로그인이 필요합니다.'; return; }
+
+    statusEl.style.color = '#94a3b8';
+    statusEl.textContent = '신청 중...';
+    try {
+        await set(ref(db, `subscribeRequests/${userUID}`), {
+            nickname, soopId, uid: userUID,
+            status: 'pending',
+            createdAt: Date.now()
+        });
+        statusEl.style.color = '#22c55e';
+        statusEl.textContent = '✅ 신청 완료! 승인 후 자동 활성화됩니다.';
+        setTimeout(() => checkSubscribeStatus(), 1500);
+    } catch(e) {
+        statusEl.style.color = '#ef4444';
+        statusEl.textContent = '신청 실패: ' + e.message;
+    }
+};
+
 window.togglePortfolio = function() {
     const panel     = document.getElementById('my-stocks-container');
     const dim       = document.getElementById('portfolio-dim');
