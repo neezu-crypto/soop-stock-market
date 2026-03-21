@@ -2936,8 +2936,7 @@
         const statusEl  = document.getElementById('expire-status');
         if (!text) { statusEl.style.color = '#ef4444'; statusEl.textContent = '닉네임을 입력해주세요.'; return; }
 
-        const nicknames = text.split('
-').map(n => n.trim()).filter(n => n.length > 0);
+        const nicknames = text.split('\n').map(n => n.trim()).filter(n => n.length > 0);
         if (nicknames.length === 0) return;
 
         statusEl.style.color = '#94a3b8';
