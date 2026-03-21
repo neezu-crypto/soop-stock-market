@@ -992,6 +992,10 @@
                 <input type="checkbox" id="auto-run-candle" checked style="accent-color:#6366f1;">
                 🗑 오래된 캔들 정리
             </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="auto-run-reset-ranking" checked style="accent-color:#6366f1;">
+                🔄 랭킹 TOP5 초기화
+            </label>
         </div>
         <div class="data-status-bar">
             <span>마지막 자동 실행: <b id="auto-daily-last" style="color:#f8fafc;">-</b></span>
@@ -1307,9 +1311,9 @@
         } catch(e) { alert("집계 중 오류: " + e.message); statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생'; }
     };
 
-    window.resetRankings = async function() {
+    window.resetRankings = async function(silent = false) {
         if (!isAdmin()) return;
-        if (!confirm('⚠️ 랭킹 전체를 초기화하시겠습니까?\n\n• 거래량 TOP5\n• 순매수 TOP5\n• 순매도 TOP5\n\n다음 거래부터 0부터 다시 집계됩니다.')) return;
+        if (!silent && !confirm('⚠️ 랭킹 전체를 초기화하시겠습니까?\n\n• 거래량 TOP5\n• 순매수 TOP5\n• 순매도 TOP5\n\n다음 거래부터 0부터 다시 집계됩니다.')) return;
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading'; statusEl.innerText = '초기화 중...';
         try {
@@ -1324,7 +1328,7 @@
             if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">초기화 완료 — 다음 거래부터 집계 시작</td></tr>`;
             if (wrap)  wrap.style.display = 'block';
             statusEl.className = 'status-chip'; statusEl.innerText = '✅ 초기화 완료';
-            alert('✅ 랭킹 3종 모두 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
+            if (!silent) alert('✅ 랭킹 3종 모두 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
         } catch(e) {
             alert('초기화 실패: ' + e.message);
             statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생';
@@ -2760,11 +2764,13 @@
             chipEl.className   = 'status-chip loading';
             chipEl.textContent = '실행 중';
 
-            const runRanking = document.getElementById('auto-run-ranking').checked;
-            const runCandle  = document.getElementById('auto-run-candle').checked;
+            const runRanking      = document.getElementById('auto-run-ranking').checked;
+            const runCandle       = document.getElementById('auto-run-candle').checked;
+            const runResetRanking = document.getElementById('auto-run-reset-ranking').checked;
 
-            if (runRanking) await calcAssetRanking(true);
-            if (runCandle)  await pruneAllCandles(true);
+            if (runRanking)      await calcAssetRanking(true);
+            if (runCandle)       await pruneAllCandles(true);
+            if (runResetRanking) await resetRankings(true);
 
             const doneStr = new Date().toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
             lastEl.textContent = doneStr;
