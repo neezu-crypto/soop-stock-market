@@ -228,14 +228,27 @@
             z-index: 999; transition: opacity 0.5s ease;
         }
         .intro-content {
-            text-align: center; max-width: 400px; padding: 40px;
+            text-align: center; max-width: 420px; width: 90%;
+            padding: 32px 32px 28px;
             background: var(--card-bg); border-radius: 24px; border: 1px solid var(--primary);
             box-shadow: 0 0 30px rgba(56, 189, 248, 0.2);
+            max-height: 90vh; overflow-y: auto;
         }
-        .intro-logo { margin-bottom: 20px; display: flex; justify-content: center; align-items: center; }
+        .intro-content::-webkit-scrollbar { width: 4px; }
+        .intro-content::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+        .intro-logo { margin-bottom: 16px; display: flex; justify-content: center; align-items: center; }
         .intro-logo img { width: 60px; height: 60px; object-fit: contain; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
-        .intro-desc  { color: var(--text-sub); line-height: 1.6; margin-bottom: 25px; }
+        .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 8px; }
+        .intro-desc  { color: var(--text-sub); line-height: 1.6; margin-bottom: 20px; font-size: 13px; }
+        .intro-update { text-align: left; background: #0f172a; border-radius: 14px; padding: 16px; margin-bottom: 20px; border: 1px solid #1e3a5f; }
+        .intro-update-title { font-size: 12px; font-weight: 800; color: #f59e0b; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+        .intro-update-list { display: flex; flex-direction: column; gap: 8px; }
+        .intro-update-item { display: flex; gap: 10px; align-items: flex-start; }
+        .intro-update-badge { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+        .intro-update-badge.new  { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+        .intro-update-badge.improved { background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); }
+        .intro-update-text { font-size: 12px; color: #cbd5e1; line-height: 1.5; }
+        .intro-update-text b { color: #f8fafc; }
         .loader { width: 30px; height: 30px; border: 3px solid #334155; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .hidden { opacity: 0; pointer-events: none; }
@@ -711,14 +724,18 @@
         #maintenance-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #0f172a;
-            display: flex; justify-content: center; align-items: center;
+            display: flex; justify-content: center; align-items: flex-start;
             z-index: 9999;
+            overflow-y: auto;
+            padding: 32px 16px;
+            box-sizing: border-box;
         }
         .maintenance-content {
-            text-align: center; max-width: 420px; padding: 50px 40px;
+            text-align: center; max-width: 480px; width: 100%; padding: 40px 36px;
             background: #1e293b; border-radius: 24px;
             border: 1px solid #334155;
             box-shadow: 0 0 40px rgba(0,0,0,0.5);
+            margin: auto 0;
         }
         .maintenance-icon { font-size: 52px; margin-bottom: 20px; }
         .maintenance-title { font-size: 22px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
@@ -859,36 +876,75 @@
 
 <!-- ── 정기점검 오버레이 ── -->
 <div id="maintenance-overlay" style="display:flex;" tabindex="0">
-    <div class="maintenance-content" style="max-width: 480px;"> <div class="maintenance-icon">🚀</div>
-        <div class="maintenance-title">시스템 안정화 및 보안 강화 안내</div>
-        
-        <div class="maintenance-desc" style="text-align: left; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
+    <div class="maintenance-content" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
+        <div class="maintenance-icon">🎉</div>
+        <div class="maintenance-title">스트리머 주식시장 재오픈 예정</div>
+
+        <div class="maintenance-desc" style="text-align: left; background: rgba(255,255,255,0.03); padding: 16px 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 16px;">
             안녕하세요, <b>스트리머 주식시장 운영진</b>입니다.<br><br>
-            현재 저희 서비스는 더욱 강력한 보안 체계 구축과 쾌적한 거래 환경 제공을 위해 대대적인 시스템 정비 기간을 갖고 있습니다.<br><br>
-            유저분들의 소중한 데이터를 보호하고, 한층 강화된 보안 로직을 적용하여 더 나은 거래 경험을 드리기 위한 결정이오니 넓은 양해를 부탁드립니다.
+            시스템 안정화 및 보안 강화 작업을 마무리하고<br>
+            <b style="color:#38bdf8;">2026년 4월 1일(수)</b> 정식 재오픈 예정입니다.<br>
+            기다려주신 모든 분들께 감사드립니다! 🙏
         </div>
 
-        <div class="maintenance-time-badge" style="margin-top: 20px;">🗓️ 재오픈 예정일: 2026년 4월 1일(수)</div>
-
-        <div class="maintenance-desc" style="text-align: left; font-size: 13px; color: #94a3b8; margin-top: 10px;">
-            <b style="color: #f8fafc;">[안내 사항]</b><br>
-            • <b>재오픈 일시:</b> 2026년 4월 1일(수) 정식 재개장<br>
-            • <b>홍보 배너 연장:</b> 현재 홍보 중인 모든 배너는 서비스 중단 기간만큼 차감 없이 보호됩니다. 각 배너별 잔여 기간에 맞춰 재오픈 시점에 유효 기간을 모두 연장해 드릴 예정입니다.
+        <!-- 업데이트 소식 -->
+        <div style="text-align:left; background:#0f172a; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #1e3a5f;">
+            <div style="font-size:12px; font-weight:800; color:#f59e0b; margin-bottom:12px; display:flex; align-items:center; gap:6px;">🆕 이번 업데이트 주요 변경사항</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">📡 중계방 탭</b> — 주식사이트를 중계 중인 스트리머 방송을 바로 시청할 수 있습니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">👑 구독자 전용 자산 랭킹</b> — 개발자를 구독으로 후원해주시면 상위 100명의 유저 자산 랭킹을 확인 가능합니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">🎰 정규장 연장 이벤트</b> — 별풍선 33개 후원 시 25% 확률로 정규장 1시간 즉시 연장! 실시간 라이브 방송 시 후원 가능!</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">📋 스트리머 상장 신청</b> — 원하는 스트리머가 없다면 검색 후 상장 신청이 가능합니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">⭐ 즐겨찾기 기능</b> — 관심 스트리머를 즐겨찾기하고 실시간 주가를 바로 확인할 수 있습니다. 상위 100위 전체 표시 대신 실시간 주가 랭킹은 개발자가 직접 라이브 스트리밍할 예정입니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">📢 배너 광고 신청</b> — 배너 영역 광고 신청을 페이지 내에서 직접 요청 가능하고, 신청하기 버튼으로 즉시 후원창이 열립니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">개선</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">📈 반등 신호 감지</b> — 하락 후 반등 종목 카드에 노란 pulse 신호가 표시됩니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">⚡ 서킷브레이커</b> — 10분 내 20% 변동 시 즉시 발동, 3분 거래 동결로 시세 조작을 방지합니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">개선</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">🛡️ 보안 강화</b> — 다층 보안 로직 적용 및 데이터 최적화로 더 안정적인 환경이 됐습니다.</div>
+                </div>
+            </div>
         </div>
 
-        <div class="maintenance-desc" style="margin-top: 15px; font-style: italic; color: #38bdf8;">
-            "더욱 신뢰할 수 있는 모습으로 4월 1일 다시 뵙겠습니다."
+        <div style="font-size:12px; color:#64748b; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px 16px; margin-bottom:16px; text-align:left; line-height:1.7;">
+            ⚠️ <b style="color:#94a3b8;">안내사항</b><br>
+            재오픈 후 서버 안정화를 위한 테스트가 진행될 수 있습니다.<br>
+            테스트 중 일시적인 오류나 데이터 초기화가 발생할 수 있으니 양해 부탁드립니다.
         </div>
 
-		<div style="margin-top: 25px;">
-    <a href="https://www.sooplive.co.kr/station/skftodwocks2" target="_blank" 
-       style="display: inline-block; background: #9146FF; color: white; padding: 12px 24px; border-radius: 12px; font-weight: 800; text-decoration: none; transition: 0.2s; box-shadow: 0 4px 15px rgba(145, 70, 255, 0.3);">
-       📺 개발자 SOOP 방송국
-    </a>
-</div>
+        <div style="margin-bottom: 20px;">
+            <a href="https://www.sooplive.co.kr/station/skftodwocks2" target="_blank"
+               style="display:inline-block; background:#9146FF; color:white; padding:12px 24px; border-radius:12px; font-weight:800; text-decoration:none; box-shadow:0 4px 15px rgba(145,70,255,0.3);">
+               📺 개발자 SOOP 방송국
+            </a>
+        </div>
 
         <div class="maintenance-countdown" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            새로운 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
+            재오픈까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
         </div>
     </div>
 </div>
@@ -902,9 +958,44 @@
         <div class="intro-title">스트리머 주식시장</div>
         <div class="intro-desc">
             숲 주식 시장에 오신 것을 환영합니다!<br>
-            선호하는 스트리머의 가치를 투자하고<br>
-            수익을 창출해보세요.
+            선호하는 스트리머의 가치를 투자하고 수익을 창출해보세요.
         </div>
+
+        <!-- 업데이트 노트 -->
+        <div class="intro-update">
+            <div class="intro-update-title">🎉 업데이트 소식</div>
+            <div class="intro-update-list">
+                <div class="intro-update-item">
+                    <span class="intro-update-badge new">NEW</span>
+                    <div class="intro-update-text"><b>📡 중계방 탭</b> — 현재 주식사이트를 중계 중인 스트리머 방송을 바로 시청할 수 있습니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge new">NEW</span>
+                    <div class="intro-update-text"><b>👑 구독자 전용 자산 랭킹</b> — SOOP 구독자는 전체 유저 자산 순위를 확인할 수 있습니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge new">NEW</span>
+                    <div class="intro-update-text"><b>🎰 정규장 연장 이벤트</b> — 별풍선 33개 후원 시 25% 확률로 정규장 1시간 즉시 연장!</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge new">NEW</span>
+                    <div class="intro-update-text"><b>📋 스트리머 상장 신청</b> — 원하는 스트리머가 없다면 검색 후 상장 신청이 가능합니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge improved">개선</span>
+                    <div class="intro-update-text"><b>📈 반등 신호 감지</b> — 하락 후 반등하는 종목 카드에 노란 pulse 신호가 표시됩니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge improved">개선</span>
+                    <div class="intro-update-text"><b>⚡ 서킷브레이커 강화</b> — 10분 내 20% 변동 시 즉시 발동, 3분 거래 동결로 변경됐습니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge improved">개선</span>
+                    <div class="intro-update-text"><b>📊 포트폴리오 탭 전환</b> — 내 주식 / 자산 랭킹 탭으로 분리됐습니다.</div>
+                </div>
+            </div>
+        </div>
+
         <div id="login-status">
             <div class="loader"></div>
             <p style="font-size: 13px; color: var(--primary); margin-top: 15px;">익명 보안 로그인 중...</p>
