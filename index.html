@@ -52,6 +52,14 @@
         .btn-listing-request { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:11px 20px; border-radius:10px; font-size:13px; font-weight:800; cursor:pointer; transition:opacity 0.2s; }
         .btn-listing-request:hover { opacity:0.85; }
 
+        /* ── 정규장 연장 요청 버튼 ── */
+        .extend-request-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(245,158,11,0.06); border:1px dashed rgba(245,158,11,0.25); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
+        .extend-request-bar.off-peak { background:rgba(56,189,248,0.06); border-color:rgba(56,189,248,0.25); }
+        .extend-request-desc { font-size:12px; color:#94a3b8; line-height:1.5; }
+        .btn-extend-request { background:#f59e0b; color:#0f172a; border:none; padding:8px 14px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; transition:opacity 0.2s; flex-shrink:0; }
+        .btn-extend-request.off-peak { background:#38bdf8; }
+        .btn-extend-request:hover { opacity:0.85; }
+
         /* ── 중계방 탭 ── */
         #relay-tab {
             display: none;
@@ -999,6 +1007,28 @@
     </div>
 </div>
 
+<!-- ── 정규장 연장 요청 안내 모달 ── -->
+<div id="extend-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header"><h2 id="extend-modal-title">🎰 정규장 연장 요청</h2></div>
+        <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:14px; margin-bottom:16px;">
+            <div style="font-size:13px; color:#f8fafc; font-weight:800; margin-bottom:8px;">💡 이벤트 안내</div>
+            <div style="font-size:13px; color:#cbd5e1; line-height:1.8;" id="extend-modal-desc">
+                개발자 스트리밍 방송에서 <b style="color:#f59e0b;">별풍선 33개</b>로 후원하면<br>
+                룰렛을 통해 <b style="color:#f59e0b;">25% 확률</b>로<br>
+                <b style="color:#22c55e;">정규장 1시간 즉시 연장</b>이 가능합니다!
+            </div>
+        </div>
+        <div style="font-size:12px; color:#64748b; text-align:center; margin-bottom:16px;">
+            ⚠️ 연장은 관리자가 방송 중 룰렛 결과 확인 후 직접 처리합니다.
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="closeExtendModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button onclick="goToLiveStream()" style="flex:2; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">📺 방송 바로가기</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── 상장 신청 모달 ── -->
 <div id="listing-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
@@ -1328,6 +1358,9 @@
         text-align:center;
         box-shadow: 0 2px 12px rgba(0,0,0,0.3);">
     </div>
+    <!-- 정규장 연장 요청 바 -->
+    <div id="extend-request-bar" style="display:none;"></div>
+
     <header>
         <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
         <p style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
@@ -1985,12 +2018,14 @@ get(ref(db, 'siteConfig/')).then(snap => {
     siteConfigReady = true;
     applyMarketState();
     tryCloseIntro();
+    updateExtendRequestBar();
 }).catch(() => {});
 
 // 점검 모드 실시간 구독
 onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
     siteConfig.maintenance = snap.val() ?? false;
     applyMarketState();
+    updateExtendRequestBar();
 });
 
 // 중계방 실시간 구독 (신규 수락/만료 감지)
@@ -3317,6 +3352,88 @@ async function loadAssetRanking() {
         listEl.innerHTML = `<div style="font-size:12px; color:#ef4444; text-align:center; padding:16px 0;">오류: ${e.message}</div>`;
     }
 }
+
+// ── 정규장 연장 요청 ─────────────────────────────────────────
+function updateExtendRequestBar() {
+    const bar = document.getElementById('extend-request-bar');
+    if (!bar) return;
+
+    const mh = siteConfig?.marketHours;
+    if (!mh || !mh.enabled) { bar.style.display = 'none'; return; }
+
+    const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+
+    // 전체 오픈 여부 확인
+    const [oh, om] = (mh.open  || '00:00').split(':').map(Number);
+    const [ch, cm] = (mh.close || '23:59').split(':').map(Number);
+    const openMins  = oh * 60 + om;
+    const closeMins = ch * 60 + cm;
+    const isOpen = openMins < closeMins
+        ? nowMins >= openMins && nowMins < closeMins
+        : nowMins >= openMins || nowMins < closeMins;
+
+    if (!isOpen) { bar.style.display = 'none'; return; }
+
+    // 정규장 여부 확인
+    const isRegular = isRegularMarket();
+
+    // 정규장 남은 시간 계산
+    let remainText = '';
+    if (isRegular && mh.regularClose) {
+        const [rch, rcm] = mh.regularClose.split(':').map(Number);
+        const rCloseMins  = rch * 60 + rcm;
+        let remain = (rCloseMins - nowMins + 1440) % 1440;
+        if (remain === 0) remain = 1440;
+        const rh = Math.floor(remain / 60);
+        const rm = remain % 60;
+        remainText = rh > 0 ? `종료까지 ${rh}시간 ${rm}분` : `종료까지 ${rm}분`;
+    }
+
+    if (isRegular) {
+        bar.style.display = 'flex';
+        bar.innerHTML = `
+            <div class="extend-request-bar">
+                <div class="extend-request-desc">
+                    ⚡ <b style="color:#f59e0b;">정규장 진행 중</b> · ${remainText}<br>
+                    별풍선 33개 후원으로 연장 도전!
+                </div>
+                <button class="btn-extend-request" onclick="openExtendModal(true)">🎰 연장 요청</button>
+            </div>`;
+    } else {
+        bar.style.display = 'flex';
+        bar.innerHTML = `
+            <div class="extend-request-bar off-peak">
+                <div class="extend-request-desc">
+                    📉 <b style="color:#38bdf8;">비정규장</b> 진행 중<br>
+                    별풍선 33개 후원으로 정규장을 열어보세요!
+                </div>
+                <button class="btn-extend-request off-peak" onclick="openExtendModal(false)">🎰 정규장 요청</button>
+            </div>`;
+    }
+}
+
+window.openExtendModal = function(isRegular) {
+    const titleEl = document.getElementById('extend-modal-title');
+    const descEl  = document.getElementById('extend-modal-desc');
+    if (isRegular) {
+        titleEl.textContent = '🎰 정규장 연장 요청';
+        descEl.innerHTML = `개발자 스트리밍 방송에서 <b style="color:#f59e0b;">별풍선 33개</b>로 후원하면<br>룰렛을 통해 <b style="color:#f59e0b;">25% 확률</b>로<br><b style="color:#22c55e;">정규장 1시간 즉시 연장</b>이 가능합니다!`;
+    } else {
+        titleEl.textContent = '🎰 정규장 시작 요청';
+        descEl.innerHTML = `개발자 스트리밍 방송에서 <b style="color:#38bdf8;">별풍선 33개</b>로 후원하면<br>룰렛을 통해 <b style="color:#38bdf8;">25% 확률</b>로<br><b style="color:#22c55e;">정규장 1시간 즉시 시작</b>이 가능합니다!`;
+    }
+    document.getElementById('extend-modal').classList.add('active');
+};
+
+window.closeExtendModal = function() {
+    document.getElementById('extend-modal').classList.remove('active');
+};
+
+window.goToLiveStream = function() {
+    window.open('https://play.sooplive.co.kr/skftodwocks2', '_blank');
+    closeExtendModal();
+};
 
 // ── 상장 신청 ──────────────────────────────────────────────
 window.openListingRequestModal = function(prefillName = '') {
