@@ -953,7 +953,14 @@
                 <input type="text" id="sub-soop-id"  placeholder="SOOP 아이디">
                 <div id="sub-status" class="subscribe-status"></div>
                 <div class="subscribe-gate-btns">
-                    <button class="btn-subscribe-soop" onclick="window.open('https://www.sooplive.co.kr/station/skftodwocks2','_blank')">🔗 구독하러 가기</button>
+                    <button class="btn-subscribe-soop" onclick="
+                        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+                        if (isMobile) {
+                            window.open('https://m.sooplive.co.kr/station/skftodwocks2', '_blank');
+                        } else {
+                            window.open('https://st.sooplive.co.kr/app/gift_subscription.php?bjId=skftodwocks2&sysType=web&location=station&tierType=1', '_blank', 'width=542,height=600,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
+                        }
+                    ">🔗 구독하러 가기</button>
                     <button class="btn-subscribe-apply" onclick="submitSubscribeRequest()">신청하기</button>
                 </div>
             </div>
