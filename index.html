@@ -45,6 +45,13 @@
         .sparkline { stroke-width: 2.5; fill: none; }
         .stock-card.rebound-signal { border-color: #facc15 !important; box-shadow: 0 0 10px rgba(250,204,21,0.2); }
 
+        /* ── 상장 신청 ── */
+        .listing-request-box { display:flex; flex-direction:column; align-items:center; gap:12px; padding:30px 20px; text-align:center; }
+        .listing-request-title { font-size:14px; font-weight:700; color:var(--text-main); }
+        .listing-request-desc  { font-size:12px; color:var(--text-sub); line-height:1.7; }
+        .btn-listing-request { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:11px 20px; border-radius:10px; font-size:13px; font-weight:800; cursor:pointer; transition:opacity 0.2s; }
+        .btn-listing-request:hover { opacity:0.85; }
+
         /* ── 중계방 탭 ── */
         #relay-tab {
             display: none;
@@ -988,6 +995,29 @@
             <div id="asset-ranking-list" style="display:flex; flex-direction:column; gap:4px; max-height:300px; overflow-y:auto;">
                 <div style="font-size:12px; color:#64748b; text-align:center; padding:16px 0;">불러오는 중...</div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── 상장 신청 모달 ── -->
+<div id="listing-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header"><h2>📋 스트리머 상장 신청</h2></div>
+        <div style="font-size:13px; color:#94a3b8; line-height:1.6; margin-bottom:16px; padding:10px 12px; background:rgba(99,102,241,0.06); border-radius:8px; border:1px dashed rgba(99,102,241,0.3);">
+            상장을 원하는 SOOP 스트리머를 신청해주세요.<br>관리자 검토 후 순차적으로 등록됩니다.
+        </div>
+        <div id="listing-form" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+            <input id="listing-streamer-name" type="text" placeholder="스트리머 닉네임"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;">
+            <input id="listing-soop-id" type="text" placeholder="SOOP 아이디"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;">
+            <textarea id="listing-reason" placeholder="신청 사유 (선택)" rows="3"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none; resize:none; font-family:inherit;"></textarea>
+        </div>
+        <div id="listing-msg" style="min-height:20px; font-size:13px; text-align:center; margin-bottom:10px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="closeListingModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button onclick="submitListingRequest()" style="flex:2; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">신청하기</button>
         </div>
     </div>
 </div>
@@ -3249,6 +3279,51 @@ async function loadAssetRanking() {
     }
 }
 
+// ── 상장 신청 ──────────────────────────────────────────────
+window.openListingRequestModal = function(prefillName = '') {
+    document.getElementById('listing-streamer-name').value = prefillName;
+    document.getElementById('listing-soop-id').value       = '';
+    document.getElementById('listing-reason').value        = '';
+    document.getElementById('listing-msg').textContent     = '';
+    document.getElementById('listing-form').style.opacity  = '1';
+    document.getElementById('listing-form').style.pointerEvents = 'auto';
+    document.getElementById('listing-modal').classList.add('active');
+};
+
+window.closeListingModal = function() {
+    document.getElementById('listing-modal').classList.remove('active');
+};
+
+window.submitListingRequest = async function() {
+    const name   = document.getElementById('listing-streamer-name').value.trim();
+    const soopId = document.getElementById('listing-soop-id').value.trim();
+    const reason = document.getElementById('listing-reason').value.trim();
+    const msgEl  = document.getElementById('listing-msg');
+
+    if (!name)   { msgEl.style.color='#ef4444'; msgEl.textContent='스트리머 닉네임을 입력해주세요.'; return; }
+    if (!soopId) { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디를 입력해주세요.'; return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(soopId)) { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
+    if (!userUID) { msgEl.style.color='#ef4444'; msgEl.textContent='로그인이 필요합니다.'; return; }
+
+    msgEl.style.color = '#94a3b8';
+    msgEl.textContent = '신청 중...';
+    try {
+        const reqId = `listing_${userUID}_${Date.now()}`;
+        await set(ref(db, `listingRequests/${reqId}`), {
+            name, soopId, reason, uid: userUID,
+            status: 'pending',
+            createdAt: Date.now()
+        });
+        msgEl.style.color = '#22c55e';
+        msgEl.textContent = `✅ 신청 완료! 검토 후 순차적으로 등록됩니다.`;
+        document.getElementById('listing-form').style.opacity = '0.5';
+        document.getElementById('listing-form').style.pointerEvents = 'none';
+    } catch(e) {
+        msgEl.style.color = '#ef4444';
+        msgEl.textContent = '신청 실패: ' + e.message;
+    }
+};
+
 window.submitSubscribeRequest = async function() {
     const nickname = document.getElementById('sub-nickname').value.trim();
     const soopId   = document.getElementById('sub-soop-id').value.trim();
@@ -4335,7 +4410,14 @@ function renderSearchResults() {
         .sort((a, b) => (b.price || 0) - (a.price || 0));
 
     if (items.length === 0) {
-        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">검색 결과가 없습니다.</div>`;
+        const q2 = document.getElementById('search-input')?.value?.trim() || '';
+        listDiv.innerHTML = `
+            <div class="listing-request-box">
+                <div style="font-size:36px;">🔍</div>
+                <div class="listing-request-title">"${q2}"에 대한 검색 결과가 없습니다.</div>
+                <div class="listing-request-desc">아직 상장되지 않은 스트리머입니다.<br>상장 신청을 하면 검토 후 등록됩니다.</div>
+                <button class="btn-listing-request" onclick="openListingRequestModal('${q2.replace(/'/g, "\'")}')">📋 상장 신청하기</button>
+            </div>`;
         if (emptyDiv) emptyDiv.style.display = 'none';
         return;
     }
