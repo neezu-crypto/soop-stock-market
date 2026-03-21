@@ -83,6 +83,19 @@
         .btn-google { background: white; color: #334155; display: flex; align-items: center; gap: 10px; font-size: 15px; padding: 12px 20px; }
 
         #main-section { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+
+        /* ── 자동 스크롤 상태 표시 ── */
+        .auto-scroll-badge {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3);
+            padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #22c55e;
+            cursor: pointer; transition: 0.2s;
+        }
+        .auto-scroll-badge.paused {
+            background: rgba(100,116,139,0.1); border-color: rgba(100,116,139,0.3); color: #64748b;
+        }
+        .auto-scroll-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: live-blink 1s infinite; }
+        .auto-scroll-badge.paused .auto-scroll-dot { background: #64748b; animation: none; }
     </style>
 </head>
 <body>
@@ -111,6 +124,10 @@
         <div class="header-right">
             <span id="update-time">-</span>
             <span id="stock-count" style="color:#38bdf8; font-weight:700;">-</span>
+            <div class="auto-scroll-badge" id="auto-scroll-badge" onclick="toggleAutoScroll()">
+                <span class="auto-scroll-dot"></span>
+                <span id="auto-scroll-label">자동 스크롤</span>
+            </div>
         </div>
     </div>
 
@@ -232,6 +249,101 @@
         if (statusEl) statusEl.textContent = '구독 중단됨';
         if (tbody)    tbody.innerHTML = '<tr><td colspan="5" class="status-empty">구독이 중단되었습니다</td></tr>';
     };
+
+    // ── 자동 스크롤 ──────────────────────────────────────────
+    let autoScrollEnabled  = true;
+    let autoScrollTimer    = null;
+    let userScrollTimer    = null;
+    let scrollDirection    = 1; // 1: 아래, -1: 위
+    const SCROLL_SPEED     = 1;    // px per tick
+    const SCROLL_INTERVAL  = 30;   // ms
+    const PAUSE_ON_INTERACT = 4000; // 조작 후 재개까지 대기(ms)
+    const BOTTOM_PAUSE     = 2000; // 하단 도달 후 방향 전환 대기(ms)
+
+    function startAutoScroll() {
+        stopAutoScrollTimer();
+        const wrap = document.querySelector('.table-wrap');
+        if (!wrap) return;
+
+        autoScrollTimer = setInterval(() => {
+            if (!autoScrollEnabled) return;
+            const atBottom = wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 2;
+            const atTop    = wrap.scrollTop <= 0;
+
+            if (scrollDirection === 1 && atBottom) {
+                // 하단 도달 → 잠깐 멈췄다 위로
+                stopAutoScrollTimer();
+                setTimeout(() => {
+                    scrollDirection = -1;
+                    startAutoScroll();
+                }, BOTTOM_PAUSE);
+                return;
+            }
+            if (scrollDirection === -1 && atTop) {
+                // 상단 도달 → 잠깐 멈췄다 아래로
+                stopAutoScrollTimer();
+                setTimeout(() => {
+                    scrollDirection = 1;
+                    startAutoScroll();
+                }, BOTTOM_PAUSE);
+                return;
+            }
+            wrap.scrollTop += SCROLL_SPEED * scrollDirection;
+        }, SCROLL_INTERVAL);
+    }
+
+    function stopAutoScrollTimer() {
+        if (autoScrollTimer) { clearInterval(autoScrollTimer); autoScrollTimer = null; }
+    }
+
+    function updateAutoScrollBadge() {
+        const badge = document.getElementById('auto-scroll-badge');
+        const label = document.getElementById('auto-scroll-label');
+        if (!badge || !label) return;
+        if (autoScrollEnabled) {
+            badge.classList.remove('paused');
+            label.textContent = '자동 스크롤';
+        } else {
+            badge.classList.add('paused');
+            label.textContent = '스크롤 정지';
+        }
+    }
+
+    window.toggleAutoScroll = function() {
+        autoScrollEnabled = !autoScrollEnabled;
+        updateAutoScrollBadge();
+        if (autoScrollEnabled) startAutoScroll();
+        else stopAutoScrollTimer();
+    };
+
+    // 유저가 직접 스크롤하면 자동 스크롤 일시 중단 후 재개
+    document.querySelector('.table-wrap')?.addEventListener('wheel', () => {
+        if (!autoScrollEnabled) return;
+        stopAutoScrollTimer();
+        clearTimeout(userScrollTimer);
+        userScrollTimer = setTimeout(() => {
+            if (autoScrollEnabled) startAutoScroll();
+        }, PAUSE_ON_INTERACT);
+    }, { passive: true });
+
+    document.querySelector('.table-wrap')?.addEventListener('touchmove', () => {
+        if (!autoScrollEnabled) return;
+        stopAutoScrollTimer();
+        clearTimeout(userScrollTimer);
+        userScrollTimer = setTimeout(() => {
+            if (autoScrollEnabled) startAutoScroll();
+        }, PAUSE_ON_INTERACT);
+    }, { passive: true });
+
+    // 구독 시작 시 자동 스크롤도 시작
+    const _origStart = window.startRanking;
+    window.startRanking = function() {
+        _origStart();
+        setTimeout(() => startAutoScroll(), 500);
+    };
+
+    // 페이지 로드 시 초기화
+    updateAutoScrollBadge();
 </script>
 </body>
 </html>
