@@ -750,6 +750,10 @@
         .maintenance-countdown {
             font-size: 13px; color: #64748b; margin-top: 16px;
         }
+        @keyframes event-pulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(245,158,11,0.3); }
+            50%       { box-shadow: 0 4px 25px rgba(245,158,11,0.6); }
+        }
         .maintenance-countdown span { color: #38bdf8; font-weight: 700; }
 
         /* ── 계정 초기화 안내 모달 ── */
@@ -936,10 +940,14 @@
             테스트 중 일시적인 오류나 데이터 초기화가 발생할 수 있으니 양해 부탁드립니다.
         </div>
 
-        <div style="margin-bottom: 20px;">
+        <div style="margin-bottom: 20px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
             <a href="https://www.sooplive.co.kr/station/skftodwocks2" target="_blank"
                style="display:inline-block; background:#9146FF; color:white; padding:12px 24px; border-radius:12px; font-weight:800; text-decoration:none; box-shadow:0 4px 15px rgba(145,70,255,0.3);">
                📺 개발자 SOOP 방송국
+            </a>
+            <a href="https://www.sooplive.co.kr/station/skftodwocks2/post/190426505" target="_blank"
+               style="display:inline-block; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; padding:12px 24px; border-radius:12px; font-weight:800; text-decoration:none; box-shadow:0 4px 15px rgba(245,158,11,0.3); animation:event-pulse 2s ease-in-out infinite;">
+               🎉 이벤트 진행중
             </a>
         </div>
 
