@@ -1005,6 +1005,26 @@
         </div>
     </div>
 
+    <!-- 📋 상장 신청 검수 -->
+    <div class="container" style="display:block; border-color: #6366f1;">
+        <div class="accordion-header">
+            <h1>📋 상장 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 스트리머 상장 목록입니다. 검토 후 직접 종목을 추가해주세요.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>listingRequests</b> 경로에서 관리됩니다.</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadListingRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="listing-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
     <!-- 👑 구독자 신청 검수 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
         <div class="accordion-header">
@@ -1275,6 +1295,7 @@
             loadChartAdRequests();
             loadRelayRequests();
             loadSubscribeRequests();
+            loadListingRequests();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -2858,6 +2879,76 @@
             chipEl.textContent = '오류';
             logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${e.message}</div>`;
         }
+    };
+
+    // ── 상장 신청 검수 ───────────────────────────────────────
+    window.loadListingRequests = async function() {
+        if (!isAdmin()) return;
+        const listEl = document.getElementById('listing-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'listingRequests/'));
+            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
+            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([reqId, req]) => {
+                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'done' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusText  = req.status === 'done' ? '✅ 등록완료' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+                const card = document.createElement('div');
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div>
+                            <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req.name)}</span>
+                            <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req.soopId)}</span>
+                        </div>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    ${req.reason ? `<div style="font-size:12px; color:#94a3b8; margin-bottom:8px; padding:8px; background:#0f172a; border-radius:6px;">${escapeHtml(req.reason)}</div>` : ''}
+                    <div style="font-size:11px; color:#475569; margin-bottom:10px;">${date}</div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
+                            style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
+                        ${req.status !== 'done' ? `<button onclick="doneListingRequest('${reqId}')"
+                            style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">등록완료</button>` : ''}
+                        ${req.status !== 'rejected' ? `<button onclick="rejectListingRequest('${reqId}')"
+                            style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
+                        <button onclick="deleteListingRequest('${reqId}')"
+                            style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    window.doneListingRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        try {
+            await update(ref(db, `listingRequests/${reqId}`), { status: 'done', doneAt: Date.now() });
+            loadListingRequests();
+        } catch(e) { alert('처리 실패: ' + e.message); }
+    };
+
+    window.rejectListingRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `listingRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
+            loadListingRequests();
+        } catch(e) { alert('거절 실패: ' + e.message); }
+    };
+
+    window.deleteListingRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 삭제하시겠습니까?')) return;
+        try {
+            await set(ref(db, `listingRequests/${reqId}`), null);
+            loadListingRequests();
+        } catch(e) { alert('삭제 실패: ' + e.message); }
     };
 
     // ── 구독자 신청 검수 ─────────────────────────────────────
