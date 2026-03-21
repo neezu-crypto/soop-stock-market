@@ -1031,7 +1031,7 @@
         </div>
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 포트폴리오 패널 중계방 탭</li>
-            <li>⏱ <b>단위:</b> 시간당 별풍선 10개</li>
+            <li>⏱ <b>단위:</b> 비정규장 시간당 10개 / 정규장 시간당 15개</li>
             <li>✅ <b>노출:</b> 관리자 수락 시점부터 신청 시간만큼</li>
             <li>📺 <b>슬롯:</b> 최대 3개 (마감 시 신청 불가)</li>
         </ul>
@@ -1795,11 +1795,49 @@ window.closeRelayModal = function() {
     document.getElementById('relay-form').style.pointerEvents = 'auto';
 };
 
+// 신청 시점부터 N시간 중 정규장 구간 계산
+function calcRelayCost(hours) {
+    const mh = siteConfig?.marketHours;
+    if (!mh || !mh.enabled || !mh.regularOpen || !mh.regularClose) {
+        // 정규장 미설정 → 전체 비정규장 단가
+        return { regular: 0, offPeak: hours, total: hours * 10 };
+    }
+    const [roh, rom] = mh.regularOpen.split(':').map(Number);
+    const [rch, rcm] = mh.regularClose.split(':').map(Number);
+    const rOpenMins  = roh * 60 + rom;
+    const rCloseMins = rch * 60 + rcm;
+
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    let regularMins = 0;
+
+    for (let i = 0; i < hours * 60; i++) {
+        const t = (now.getHours() * 60 + now.getMinutes() + i) % (24 * 60);
+        const inRegular = rOpenMins < rCloseMins
+            ? t >= rOpenMins && t < rCloseMins
+            : t >= rOpenMins || t < rCloseMins;
+        if (inRegular) regularMins++;
+    }
+
+    const regularHours = regularMins / 60;
+    const offPeakHours = hours - regularHours;
+    const total = Math.round(regularHours * 15 + offPeakHours * 10);
+    return { regular: regularHours, offPeak: offPeakHours, total };
+}
+
 window.updateRelayCost = function() {
     const hours = parseInt(document.getElementById('relay-hours').value);
     const costEl = document.getElementById('relay-cost');
     if (!costEl) return;
-    costEl.textContent = hours > 0 ? `총 별풍선 ${hours * 10}개 (${(hours * 10 * 110).toLocaleString()}원)` : '';
+    if (!hours || hours <= 0) { costEl.textContent = ''; return; }
+
+    const { regular, offPeak, total } = calcRelayCost(hours);
+    let detail = '';
+    if (regular > 0 && offPeak > 0) {
+        detail = ` (정규장 ${regular.toFixed(1)}h×15 + 비정규장 ${offPeak.toFixed(1)}h×10)`;
+    } else if (regular > 0) {
+        detail = ` (전구간 정규장)`;
+    }
+    costEl.textContent = `총 별풍선 ${total}개 (${(total * 110).toLocaleString()}원)${detail}`;
 };
 
 window.submitRelayRequest = async function() {
@@ -1820,14 +1858,15 @@ window.submitRelayRequest = async function() {
     msgEl.textContent = '신청 중...';
     try {
         const reqId = `relay_${uid}_${Date.now()}`;
+        const { total: totalCost } = calcRelayCost(hours);
         await set(ref(db, `relayRequests/${reqId}`), {
             nickname, soopId, hours, uid,
             status: 'pending',
             createdAt: Date.now(),
-            cost: hours * 10
+            cost: totalCost
         });
         msgEl.style.color = '#22c55e';
-        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${hours}시간 × 별풍선 10개 = ${hours * 10}개)`;
+        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (총 별풍선 ${totalCost}개)`;
         document.getElementById('relay-form').style.opacity = '0.5';
         document.getElementById('relay-form').style.pointerEvents = 'none';
         // 후원 창 자동 오픈
