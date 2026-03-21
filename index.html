@@ -1202,7 +1202,9 @@
             <div>
                 <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">신청 기간 (일)</div>
                 <input id="promo-days" type="number" min="1" max="30" placeholder="예: 7"
-                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;"
+                    oninput="updatePromoCost()">
+                <div id="promo-cost" style="font-size:13px; color:#38bdf8; text-align:right; margin-top:6px;"></div>
             </div>
             <!-- 미리보기 -->
             <div id="promo-preview" style="display:none; align-items:center; gap:12px; background:#0f172a; padding:12px; border-radius:8px; border:1px solid #334155;">
@@ -3641,7 +3643,8 @@ window.openPromoModal = () => {
     document.getElementById('promo-soop-id').value  = '';
     document.getElementById('promo-days').value     = '';
     document.getElementById('promo-preview').style.display = 'none';
-    document.getElementById('promo-msg').textContent = '';
+    document.getElementById('promo-msg').textContent  = '';
+    document.getElementById('promo-cost').textContent = '';
     document.getElementById('promo-modal').classList.add('active');
 };
 window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
@@ -3754,6 +3757,13 @@ document.addEventListener('input', (e) => {
 });
 
 // ── 홍보 신청 제출 ───────────────────────────────────────────
+window.updatePromoCost = function() {
+    const days   = parseInt(document.getElementById('promo-days').value);
+    const costEl = document.getElementById('promo-cost');
+    if (!costEl) return;
+    costEl.textContent = days > 0 ? `총 별풍선 ${(days * 20).toLocaleString()}개 (${(days * 20 * 110).toLocaleString()}원)` : '';
+};
+
 window.submitPromoRequest = async function() {
     const nickname = document.getElementById('promo-nickname').value.trim();
     const soopId   = document.getElementById('promo-soop-id').value.trim();
