@@ -4195,6 +4195,11 @@ function pauseAllSubscriptions() {
     document.addEventListener(evt, onUserActive, { passive: true });
 });
 
+// 탭 전환 감지 — 포그라운드 복귀 시 활동 재개
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) onUserActive();
+});
+
 // 정규장/비정규장/마감 상태에 따라 구독 방식(실시간/폴링/중단) 결정
 function applyStocksMode() {
     const mh      = siteConfig.marketHours;
