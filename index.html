@@ -3570,6 +3570,12 @@ window.openTerms = function() {
 window.closeTerms = function() {
     document.getElementById('terms-modal').classList.remove('active');
 };
+window.openPrivacy = function() {
+    document.getElementById('privacy-modal').classList.add('active');
+};
+window.closePrivacy = function() {
+    document.getElementById('privacy-modal').classList.remove('active');
+};
 
 // ── 상장 신청 ──────────────────────────────────────────────
 window.openListingRequestModal = function(prefillName = '') {
@@ -4908,9 +4914,46 @@ document.addEventListener('keydown', (e) => {
     </div>
 </div>
 
+<!-- ── 개인정보 처리방침 모달 ── -->
+<div id="privacy-modal" class="terms-modal-overlay" onclick="if(event.target===this)closePrivacy()">
+    <div class="terms-modal-content">
+        <h2>🔒 개인정보 처리방침</h2>
+
+        <h3>제1조 수집하는 정보</h3>
+        <p><b style="color:#f8fafc;">자동 수집</b> — 익명 로그인 시 Firebase가 자동 생성하는 익명 UID가 부여됩니다. 실제 개인정보는 수집되지 않습니다.<br><br>
+        <b style="color:#f8fafc;">구글 계정 연동 시</b> — 구글 계정 이메일 주소가 수집됩니다. 계정 식별 및 관리자 권한 구분에만 사용됩니다.<br><br>
+        <b style="color:#f8fafc;">직접 입력 정보</b> — 구독자 인증, 중계방, 배너 광고, 상장 신청 시 닉네임과 SOOP 아이디가 수집됩니다.</p>
+
+        <h3>제2조 수집 목적</h3>
+        <p>게임 자산 및 거래 내역 관리, 유료 서비스 신청 처리, 구독자 인증 및 권한 관리, 어뷰징 방지 및 서비스 보호 목적으로만 사용됩니다.</p>
+
+        <h3>제3조 정보 보관</h3>
+        <p>모든 데이터는 Firebase Realtime Database에 저장됩니다. 서비스 운영 기간 동안 보관되며 서비스 종료 시 전체 삭제됩니다.</p>
+
+        <h3>제4조 제3자 제공</h3>
+        <p>수집된 정보는 어떠한 경우에도 제3자에게 제공되지 않습니다. Firebase(Google) 서버에 저장되며 Google의 개인정보 처리방침을 따릅니다.</p>
+
+        <h3>제5조 자산 랭킹 공개 범위</h3>
+        <p>자산 랭킹은 순위와 자산 금액만 익명으로 표시됩니다. 닉네임, UID 등 개인 식별 정보는 랭킹에 포함되지 않습니다.</p>
+
+        <h3>제6조 로컬 저장소 사용</h3>
+        <p>브라우저 로컬스토리지에 즐겨찾기 종목, 중계방 캐시 데이터가 저장됩니다. 서버로 전송되지 않으며 브라우저 캐시 삭제 시 함께 삭제됩니다.</p>
+
+        <h3>제7조 정보 삭제 요청</h3>
+        <p>본인의 데이터 삭제를 원하실 경우 운영진 SOOP 방송국을 통해 요청하실 수 있습니다. 익명 계정의 경우 UID를 식별할 수 없어 삭제가 어려울 수 있습니다.</p>
+
+        <h3>제8조 방침 변경</h3>
+        <p>개인정보 처리방침이 변경될 경우 서비스 내 공지를 통해 안내합니다.</p>
+
+        <button class="terms-close-btn" onclick="closePrivacy()">확인</button>
+    </div>
+</div>
+
 <!-- ── 이용약관 푸터 ── -->
 <div class="terms-footer">
     <a onclick="openTerms()">이용약관</a>
+    <span style="color:#1e293b; margin:0 8px;">|</span>
+    <a onclick="openPrivacy()">개인정보 처리방침</a>
 </div>
 
 </body>
