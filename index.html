@@ -3585,34 +3585,61 @@ function updateExtendRequestBar() {
     const isRegular = isRegularMarket();
 
     // 정규장 남은 시간 계산
+    let remainMins = 0;
     let remainText = '';
     if (isRegular && mh.regularClose) {
         const [rch, rcm] = mh.regularClose.split(':').map(Number);
         const rCloseMins  = rch * 60 + rcm;
-        let remain = (rCloseMins - nowMins + 1440) % 1440;
-        if (remain === 0) remain = 1440;
-        const rh = Math.floor(remain / 60);
-        const rm = remain % 60;
+        remainMins = (rCloseMins - nowMins + 1440) % 1440;
+        if (remainMins === 0) remainMins = 1440;
+        const rh = Math.floor(remainMins / 60);
+        const rm = remainMins % 60;
         remainText = rh > 0 ? `종료까지 ${rh}시간 ${rm}분` : `종료까지 ${rm}분`;
     }
 
+    // 전체 장 남은 시간 계산
+    let closeRemainMins = (closeMins - nowMins + 1440) % 1440;
+    if (closeRemainMins === 0) closeRemainMins = 1440;
+
+    // 임박 여부 (10분 이내)
+    const regularClosing = isRegular && remainMins > 0 && remainMins <= 10;
+    const marketClosing  = !isRegular && closeRemainMins <= 10;
+
     if (isRegular) {
+        const closingStyle = regularClosing
+            ? 'background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.4);'
+            : '';
+        const closingLabel = regularClosing
+            ? `⚠️ <b style="color:#ef4444;">정규장 마감 임박!</b> · ${remainText}`
+            : `⚡ <b style="color:#f59e0b;">정규장 진행 중</b> · ${remainText}`;
+        const closingDesc = regularClosing
+            ? '지금 연장하지 않으면 곧 비정규장으로 전환됩니다!'
+            : '별풍선 33개 후원으로 연장 도전!';
         bar.style.display = 'flex';
         bar.innerHTML = `
-            <div class="extend-request-bar">
+            <div class="extend-request-bar" style="${closingStyle}">
                 <div class="extend-request-desc">
-                    ⚡ <b style="color:#f59e0b;">정규장 진행 중</b> · ${remainText}<br>
-                    별풍선 33개 후원으로 연장 도전!
+                    ${closingLabel}<br>
+                    ${closingDesc}
                 </div>
                 <button class="btn-extend-request" onclick="openExtendModal(true)">🎰 연장 요청</button>
             </div>`;
     } else {
+        const closingStyle = marketClosing
+            ? 'background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.4);'
+            : '';
+        const closingLabel = marketClosing
+            ? `⚠️ <b style="color:#ef4444;">장 마감 임박!</b> · ${closeRemainMins}분 후 마감`
+            : `📉 <b style="color:#38bdf8;">비정규장</b> 진행 중`;
+        const closingDesc = marketClosing
+            ? '곧 거래가 종료됩니다. 마지막 거래 기회입니다!'
+            : '별풍선 33개 후원으로 정규장을 열어보세요!';
         bar.style.display = 'flex';
         bar.innerHTML = `
-            <div class="extend-request-bar off-peak">
+            <div class="extend-request-bar off-peak" style="${closingStyle}">
                 <div class="extend-request-desc">
-                    📉 <b style="color:#38bdf8;">비정규장</b> 진행 중<br>
-                    별풍선 33개 후원으로 정규장을 열어보세요!
+                    ${closingLabel}<br>
+                    ${closingDesc}
                 </div>
                 <button class="btn-extend-request off-peak" onclick="openExtendModal(false)">🎰 정규장 요청</button>
             </div>`;
