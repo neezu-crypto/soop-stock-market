@@ -2201,17 +2201,49 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
                 const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
                 alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
 
+                // 즐겨찾기/보유 종목이면 브라우저 알림 발송
+                const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
+                if (isMyStock && notifPermission && Notification.permission === 'granted') {
+                    const remaining = Math.ceil((frozenUntil - now) / 1000);
+                    new Notification(`⚡ ${stockName} 서킷브레이커 발동!`, {
+                        body: `거래가 ${remaining}초간 동결됩니다. 해제 시 알림을 드립니다.`,
+                        icon: 'https://stimg.sooplive.co.kr/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+                    });
+                }
+
                 // 동결 중 구독 일시 중단 (데이터 절약)
                 if (favoriteUnsubs[stockId]) { favoriteUnsubs[stockId](); delete favoriteUnsubs[stockId]; }
                 if (ownedUnsubs[stockId])    { ownedUnsubs[stockId]();    delete ownedUnsubs[stockId]; }
                 if (favPollTimers[stockId])  { clearInterval(favPollTimers[stockId]); delete favPollTimers[stockId]; }
 
-                // 동결 해제 시점에 재구독
+                // 동결 해제 시점에 재구독 + 해제 알림
                 const remaining = frozenUntil - now;
                 setTimeout(() => {
                     if (favorites[stockId])   subscribeToFavorite(stockId);
                     if (ownedStocks[stockId]) subscribeToOwned(stockId);
+
+                    // 해제 알림 — 즐겨찾기/보유 종목만
+                    if (isMyStock && notifPermission && Notification.permission === 'granted') {
+                        new Notification(`✅ ${stockName} 거래 재개!`, {
+                            body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
+                            icon: 'https://stimg.sooplive.co.kr/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+                        });
+                    }
                 }, remaining + 500);
+            }
+        }
+    });
+
+    // 이전에 동결됐다가 해제된 종목 감지 (Firebase에서 삭제된 경우)
+    Object.keys(prev).forEach(stockId => {
+        if (!siteConfig.frozenStocks[stockId] && prev[stockId] > now) {
+            const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
+            const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
+            if (isMyStock && notifPermission && Notification.permission === 'granted') {
+                new Notification(`✅ ${stockName} 거래 재개!`, {
+                    body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
+                    icon: 'https://stimg.sooplive.co.kr/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+                });
             }
         }
     });
