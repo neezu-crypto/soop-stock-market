@@ -37,7 +37,7 @@
             cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
         }
         .stock-card .info-group   { grid-area: info; }
-        .stock-card .price-group  { grid-area: price; }
+        .stock-card .price-group  { grid-area: price; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
         .stock-card .chart-wrap   { grid-area: chart; }
         .stock-card .trade-input-wrap { grid-area: trade; }
         .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background: #2a3a50; }
@@ -211,7 +211,7 @@
                     "chart chart"
                     "trade trade";
             }
-            .stock-card .price-group { text-align: right; }
+            .stock-card .price-group { text-align: right; align-items:flex-end; }
             .stock-card .chart-wrap  { display: flex; justify-content: center; }
             .stock-card .chart-wrap .chart-container { width: 100%; height: 40px; }
             .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
@@ -838,8 +838,8 @@
         /* ── 알림 버튼 ── */
         .btn-alert {
             background: none; border: none; cursor: pointer;
-            font-size: 16px; padding: 4px; border-radius: 6px;
-            transition: transform 0.2s; line-height: 1;
+            font-size: 16px; padding: 4px 6px; border-radius: 6px;
+            transition: transform 0.2s; line-height: 1; min-width:28px; text-align:center;
         }
         .btn-alert:hover { transform: scale(1.2); }
 
@@ -860,10 +860,11 @@
         .alert-modal-btns button { flex:1; padding:11px; border-radius:10px; border:none; font-weight:800; font-size:14px; cursor:pointer; transition:opacity 0.2s; }
         .alert-modal-btns button:hover { opacity:0.85; }
 
+        .price-btn-group { display:flex; align-items:center; gap:2px; margin-top:2px; }
         .btn-favorite {
             background: none; border: none; cursor: pointer;
             font-size: 18px; padding: 4px 6px; line-height: 1;
-            transition: transform 0.15s;
+            transition: transform 0.15s; min-width:28px; text-align:center;
         }
         .btn-favorite:hover { transform: scale(1.2); }
 
@@ -3707,11 +3708,15 @@ window.openAlertModal = async function(stockId, stockName) {
     document.getElementById('alert-fall-val').value = setting.fall || 15;
 
     if (!notifPermission) {
+        document.getElementById('alert-modal-sub').style.color = '#ef4444';
         document.getElementById('alert-modal-sub').textContent = '⚠️ 브라우저 알림 권한이 없습니다. 브라우저 설정에서 허용해주세요.';
         document.getElementById('alert-enabled-toggle').disabled = true;
     } else {
-        document.getElementById('alert-modal-sub').textContent = '주가 변동 시 브라우저 알림을 받습니다.';
-        document.getElementById('alert-enabled-toggle').disabled = false;
+        const enabledCount = Object.values(alertSettings).filter(s => s.enabled).length;
+        const isThisEnabled = alertSettings[stockId]?.enabled;
+        document.getElementById('alert-modal-sub').style.color = '#64748b';
+        document.getElementById('alert-modal-sub').textContent = `알림 설정 ${enabledCount}/3 · 주가 변동 시 브라우저 알림을 받습니다.`;
+        document.getElementById('alert-enabled-toggle').disabled = !isThisEnabled && enabledCount >= 3;
     }
 
     document.getElementById('alert-modal').classList.add('active');
@@ -3727,6 +3732,18 @@ window.saveAlertSetting = function() {
     const enabled = document.getElementById('alert-enabled-toggle').checked;
     const rise    = parseInt(document.getElementById('alert-rise-val').value) || 15;
     const fall    = parseInt(document.getElementById('alert-fall-val').value) || 15;
+
+    // 3개 제한 체크
+    if (enabled) {
+        const currentEnabled = Object.entries(alertSettings)
+            .filter(([id, s]) => s.enabled && id !== alertStockId).length;
+        if (currentEnabled >= 3) {
+            document.getElementById('alert-modal-sub').style.color = '#ef4444';
+            document.getElementById('alert-modal-sub').textContent = '⚠️ 알림은 최대 3개 종목까지 설정 가능합니다.';
+            return;
+        }
+    }
+
     alertSettings[alertStockId] = { enabled, rise, fall };
     saveAlertSettings();
 
@@ -4526,15 +4543,18 @@ function onUserActive() {
 
 // 비활동 10초 후 주가·분봉 구독 전부 일시 중단
 function pauseAllSubscriptions() {
-    // 실시간 구독 해제
+    // 실시간 구독 해제 (알림 설정 종목 예외)
     Object.keys(favoriteUnsubs).forEach(id => {
+        if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
     });
     Object.keys(ownedUnsubs).forEach(id => {
+        if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         if (ownedUnsubs[id]) { ownedUnsubs[id](); delete ownedUnsubs[id]; }
     });
-    // 폴링 타이머 해제
+    // 폴링 타이머 해제 (알림 설정 종목 예외)
     Object.keys(favPollTimers).forEach(id => {
+        if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         clearInterval(favPollTimers[id]); delete favPollTimers[id];
     });
     // 절전 모드 오버레이 표시
@@ -4856,16 +4876,24 @@ function renderFavoriteList() {
         favBtn.textContent = s.isFavorite ? '⭐' : '☆';
 
         // 알림 버튼 추가
-        let alertBtn = card.querySelector('.btn-alert');
-        if (!alertBtn) {
-            alertBtn = document.createElement('button');
+        // 버튼 그룹 (즐겨찾기 + 알림)
+        let btnGroup = card.querySelector('.price-btn-group');
+        if (!btnGroup) {
+            btnGroup = document.createElement('div');
+            btnGroup.className = 'price-btn-group';
+            // favBtn을 그룹으로 이동
+            if (favBtn.parentNode) favBtn.parentNode.removeChild(favBtn);
+            btnGroup.appendChild(favBtn);
+            // 알림 버튼 생성
+            const alertBtn = document.createElement('button');
             alertBtn.className = 'btn-alert';
             alertBtn.dataset.id = s.id;
             alertBtn.onclick = (e) => { e.stopPropagation(); openAlertModal(s.id, s.name || s.id); };
-            card.querySelector('.price-group')?.appendChild(alertBtn);
+            btnGroup.appendChild(alertBtn);
+            card.querySelector('.price-group')?.appendChild(btnGroup);
         }
-        alertBtn.textContent = getAlertIcon(s.id);
-        alertBtn.title = '알림 설정';
+        const alertBtnEl = btnGroup.querySelector('.btn-alert');
+        if (alertBtnEl) { alertBtnEl.textContent = getAlertIcon(s.id); alertBtnEl.title = '알림 설정'; }
 
         fragment.appendChild(card);
     });
