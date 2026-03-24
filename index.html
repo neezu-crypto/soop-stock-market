@@ -2627,7 +2627,7 @@ async function checkCircuitBreaker(stockId, candles) {
     const low       = Math.min(...recentCandles.map(c => c.l));
     const variation = ((high - low) / low) * 100;
 
-    if (variation >= 20) {
+    if (variation >= 30) {
         if (state.pendingTimer) return; // 이미 예약됨
 
         state.pendingTimer = setTimeout(async () => {
