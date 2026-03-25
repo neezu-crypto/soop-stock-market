@@ -365,6 +365,15 @@
         }
         .promo-modal-content button:hover { filter: brightness(1.1); transform: translateY(-1px); transition: all 0.2s; }
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
+        /* ── 개인정보 동의 체크박스 ── */
+        .privacy-agree {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.2);
+            border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+        }
+        .privacy-agree input[type="checkbox"] { width: 16px; height: 16px; accent-color: #38bdf8; flex-shrink: 0; cursor: pointer; }
+        .privacy-agree label { font-size: 12px; color: #94a3b8; cursor: pointer; line-height: 1.5; }
+        .privacy-agree label a { color: #38bdf8; text-decoration: underline; }
         .promo-benefit-box { background: rgba(56,189,248,0.1); padding: 15px; border-radius: 12px; border: 1px dashed var(--primary); margin-bottom: 20px; }
         .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }
         .btn-confirm-contact { width: 100%; background: var(--primary); color: #0f172a; border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 15px; }
@@ -1125,6 +1134,10 @@
                 <input type="text" id="sub-nickname" placeholder="닉네임 (방송에서 사용하는 이름)">
                 <input type="text" id="sub-soop-id"  placeholder="SOOP 아이디">
                 <div id="sub-status" class="subscribe-status"></div>
+                <div class="privacy-agree">
+                    <input type="checkbox" id="sub-privacy-agree">
+                    <label for="sub-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 구독자 인증 목적으로 수집됩니다.</label>
+                </div>
                 <div class="subscribe-gate-btns">
                     <button class="btn-subscribe-soop" onclick="
                         const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -1203,6 +1216,10 @@
                 style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none; resize:none; font-family:inherit;"></textarea>
         </div>
         <div id="listing-msg" style="min-height:20px; font-size:13px; text-align:center; margin-bottom:10px;"></div>
+        <div class="privacy-agree">
+            <input type="checkbox" id="listing-privacy-agree">
+            <label for="listing-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 상장 신청 목적으로 수집됩니다.</label>
+        </div>
         <div style="display:flex; gap:10px;">
             <button onclick="closeListingModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button onclick="submitListingRequest()" style="flex:2; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">신청하기</button>
@@ -1235,6 +1252,10 @@
             <div id="relay-cost" style="font-size:13px; color:#38bdf8; text-align:right;"></div>
         </div>
         <div id="relay-msg" style="min-height:20px; font-size:13px; text-align:center; margin-bottom:10px;"></div>
+        <div class="privacy-agree">
+            <input type="checkbox" id="relay-privacy-agree">
+            <label for="relay-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 중계방 신청 목적으로 수집됩니다.</label>
+        </div>
         <div style="display:flex; gap:10px;">
             <button onclick="closeRelayModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button onclick="submitRelayRequest()" style="flex:2; background:#ef4444; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">신청하기</button>
@@ -1284,6 +1305,10 @@
             <div id="promo-msg" style="font-size:12px; min-height:16px;"></div>
         </div>
 
+        <div class="privacy-agree">
+            <input type="checkbox" id="promo-privacy-agree">
+            <label for="promo-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 배너 홍보 신청 목적으로 수집됩니다.</label>
+        </div>
         <div style="display:flex; gap:8px;">
             <button onclick="closePromoModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button onclick="window.open('https://www.sooplive.com/station/skftodwocks2','_blank')" style="flex:1; background:#6366f1; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">개발자</button>
@@ -1435,6 +1460,10 @@
             <div id="chart-ad-msg" style="font-size:12px; min-height:16px;"></div>
         </div>
 
+        <div class="privacy-agree">
+            <input type="checkbox" id="chart-ad-privacy-agree">
+            <label for="chart-ad-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임이 차트 배너 신청 목적으로 수집됩니다.</label>
+        </div>
         <div style="display:flex; gap:8px;">
             <button onclick="closeChartAdModal()"
                 style="flex:1; background:#334155; color:white; border:none; padding:13px; border-radius:10px; cursor:pointer; font-weight:700; font-size:14px;">닫기</button>
@@ -1990,6 +2019,14 @@ window.toggleRelay = function() {
 };
 
 window.openRelayApplyModal = function() {
+    document.getElementById('relay-nickname').value = '';
+    document.getElementById('relay-soop-id').value  = '';
+    document.getElementById('relay-hours').value    = '';
+    document.getElementById('relay-msg').textContent = '';
+    document.getElementById('relay-cost').textContent = '';
+    document.getElementById('relay-form').style.opacity = '1';
+    document.getElementById('relay-form').style.pointerEvents = 'auto';
+    document.getElementById('relay-privacy-agree').checked = false;
     document.getElementById('relay-modal').classList.add('active');
 };
 
@@ -2051,6 +2088,7 @@ window.submitRelayRequest = async function() {
     const hours    = parseInt(document.getElementById('relay-hours').value);
     const msgEl    = document.getElementById('relay-msg');
 
+    if (!document.getElementById('relay-privacy-agree').checked) { msgEl.style.color='#ef4444'; msgEl.textContent='개인정보 처리방침에 동의해주세요.'; return; }
     if (!nickname)                            { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임을 입력해주세요.'; return; }
     if (!soopId)                              { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디를 입력해주세요.'; return; }
     if (!/^[a-zA-Z0-9_]+$/.test(soopId))     { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
@@ -3879,10 +3917,21 @@ window.openTerms = function() {
 window.closeTerms = function() {
     document.getElementById('terms-modal').classList.remove('active');
 };
+const PRIVACY_HIDE_KEY = 'soop_privacy_hide';
+
 window.openPrivacy = function() {
+    if (localStorage.getItem(PRIVACY_HIDE_KEY)) return; // 다시 열지 않기 설정 시 스킵
+    document.getElementById('privacy-modal').classList.add('active');
+};
+// 체크박스 링크에서 호출 — 다시 열지 않기 여부와 무관하게 항상 열림
+window.openPrivacyModal = function() {
     document.getElementById('privacy-modal').classList.add('active');
 };
 window.closePrivacy = function() {
+    document.getElementById('privacy-modal').classList.remove('active');
+};
+window.closePrivacyForever = function() {
+    localStorage.setItem(PRIVACY_HIDE_KEY, '1');
     document.getElementById('privacy-modal').classList.remove('active');
 };
 
@@ -3894,6 +3943,7 @@ window.openListingRequestModal = function(prefillName = '') {
     document.getElementById('listing-msg').textContent     = '';
     document.getElementById('listing-form').style.opacity  = '1';
     document.getElementById('listing-form').style.pointerEvents = 'auto';
+    document.getElementById('listing-privacy-agree').checked = false;
     document.getElementById('listing-modal').classList.add('active');
 };
 
@@ -3907,6 +3957,7 @@ window.submitListingRequest = async function() {
     const reason = document.getElementById('listing-reason').value.trim();
     const msgEl  = document.getElementById('listing-msg');
 
+    if (!document.getElementById('listing-privacy-agree').checked) { msgEl.style.color='#ef4444'; msgEl.textContent='개인정보 처리방침에 동의해주세요.'; return; }
     if (!name)   { msgEl.style.color='#ef4444'; msgEl.textContent='스트리머 닉네임을 입력해주세요.'; return; }
     if (!soopId) { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디를 입력해주세요.'; return; }
     if (!/^[a-zA-Z0-9_]+$/.test(soopId)) { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
@@ -3936,6 +3987,7 @@ window.submitSubscribeRequest = async function() {
     const soopId   = document.getElementById('sub-soop-id').value.trim();
     const statusEl = document.getElementById('sub-status');
 
+    if (!document.getElementById('sub-privacy-agree').checked) { statusEl.style.color = '#ef4444'; statusEl.textContent = '개인정보 처리방침에 동의해주세요.'; return; }
     if (!nickname) { statusEl.style.color = '#ef4444'; statusEl.textContent = '닉네임을 입력해주세요.'; return; }
     if (!soopId)   { statusEl.style.color = '#ef4444'; statusEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
     if (!/^[a-zA-Z0-9_]+$/.test(soopId)) { statusEl.style.color = '#ef4444'; statusEl.textContent = 'SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
@@ -3996,13 +4048,13 @@ window.closePortfolio = function() {
 
 // ── 모달 ─────────────────────────────────────────────────────
 window.openPromoModal = () => {
-    // 폼 초기화
     document.getElementById('promo-nickname').value = '';
     document.getElementById('promo-soop-id').value  = '';
     document.getElementById('promo-days').value     = '';
     document.getElementById('promo-preview').style.display = 'none';
     document.getElementById('promo-msg').textContent  = '';
     document.getElementById('promo-cost').textContent = '';
+    document.getElementById('promo-privacy-agree').checked = false;
     document.getElementById('promo-modal').classList.add('active');
 };
 window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
@@ -4018,6 +4070,7 @@ window.openChartAdModal = () => {
     if (msg)  msg.textContent  = '';
     if (cost) cost.textContent = '';
     if (form) { form.style.opacity = '1'; form.style.pointerEvents = 'auto'; }
+    document.getElementById('chart-ad-privacy-agree').checked = false;
     closeChartModal();
     document.getElementById('chart-ad-modal').classList.add('active');
 };
@@ -4051,6 +4104,7 @@ window.submitChartAdRequest = async function() {
     const days     = parseInt(document.getElementById('chart-ad-days').value);
     const msgEl    = document.getElementById('chart-ad-msg');
 
+    if (!document.getElementById('chart-ad-privacy-agree').checked) { msgEl.style.color='#ef4444'; msgEl.textContent='개인정보 처리방침에 동의해주세요.'; return; }
     if (!nickname)                  { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임을 입력해주세요.'; return; }
     if (nickname.length > 50)       { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임은 50자 이내로 입력해주세요.'; return; }
     if (!imgUrl)                    { msgEl.style.color='#ef4444'; msgEl.textContent='배너 이미지 URL을 입력해주세요.'; return; }
@@ -4128,6 +4182,7 @@ window.submitPromoRequest = async function() {
     const days     = parseInt(document.getElementById('promo-days').value);
     const msgEl    = document.getElementById('promo-msg');
 
+    if (!document.getElementById('promo-privacy-agree').checked) { msgEl.style.color = '#ef4444'; msgEl.textContent = '개인정보 처리방침에 동의해주세요.'; return; }
     if (!nickname)              { msgEl.style.color = '#ef4444'; msgEl.textContent = '닉네임을 입력해주세요.'; return; }
     if (nickname.length > 50)   { msgEl.style.color = '#ef4444'; msgEl.textContent = '닉네임은 50자 이내로 입력해주세요.'; return; }
     if (!soopId)                { msgEl.style.color = '#ef4444'; msgEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
@@ -5325,6 +5380,10 @@ document.addEventListener('keydown', (e) => {
         <p>개인정보 처리방침이 변경될 경우 서비스 내 공지를 통해 안내합니다.</p>
 
         <button class="terms-close-btn" onclick="closePrivacy()">확인</button>
+        <button class="terms-close-btn" onclick="closePrivacyForever()"
+            style="background:#1e293b; color:#64748b; border:1px solid #334155; margin-top:8px; font-size:12px;">
+            다시 열지 않기
+        </button>
     </div>
 </div>
 
