@@ -911,9 +911,63 @@
             letter-spacing: 0.5px;
         }
         .power-save-desc  { font-size: 13px; color: #94a3b8; }
+
+		/* 리셋 위크 이동 배너 스타일 */
+.header-challenge-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 70, 255, 0.1); /* 리셋 위크 블루 반투명 */
+    padding: 8px 16px;
+    border-radius: 50px;
+    text-decoration: none;
+    color: #4da3ff; /* 밝은 블루 */
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    border: 1px solid rgba(0, 70, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.header-challenge-banner:hover {
+    background: rgba(0, 70, 255, 0.2);
+    transform: translateY(-2px);
+    border-color: #0046ff;
+    color: #ffffff;
+}
+
+.badge-challenge {
+    background: #0046ff;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.header-challenge-banner i {
+    font-size: 0.9rem;
+}
+
+/* 모바일 대응 */
+@media (max-width: 600px) {
+    .header-challenge-banner {
+        font-size: 0.75rem;
+        padding: 6px 12px;
+        margin-bottom: 15px;
+    }
+}
     </style>
 </head>
-<body>
+<body><header>
+        <a href="https://neezu-crypto.github.io/streamer-challenge-reset-week-official/" target="_blank" class="header-challenge-banner">
+            <span class="badge-challenge">CHALLENGE</span>
+            <i class="fa-solid fa-trophy"></i> 
+            스트리머의 도전: 리셋 위크 챌린지 바로가기
+            <i class="fa-solid fa-chevron-right"></i>
+        </a>
+
+        </header>
 
 <!-- ── 계정 초기화 안내 모달 ── -->
 <div id="account-warn-overlay">
