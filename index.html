@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOOP STOCK - 거래소</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -37,13 +38,28 @@
             cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
         }
         .stock-card .info-group   { grid-area: info; }
-        .stock-card .price-group  { grid-area: price; }
+        .stock-card .price-group  { grid-area: price; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
         .stock-card .chart-wrap   { grid-area: chart; }
         .stock-card .trade-input-wrap { grid-area: trade; }
         .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background: #2a3a50; }
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
         .stock-card.rebound-signal { border-color: #facc15 !important; box-shadow: 0 0 10px rgba(250,204,21,0.2); }
+
+        /* ── 상장 신청 ── */
+        .listing-request-box { display:flex; flex-direction:column; align-items:center; gap:12px; padding:30px 20px; text-align:center; }
+        .listing-request-title { font-size:14px; font-weight:700; color:var(--text-main); }
+        .listing-request-desc  { font-size:12px; color:var(--text-sub); line-height:1.7; }
+        .btn-listing-request { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:11px 20px; border-radius:10px; font-size:13px; font-weight:800; cursor:pointer; transition:opacity 0.2s; }
+        .btn-listing-request:hover { opacity:0.85; }
+
+        /* ── 정규장 연장 요청 버튼 ── */
+        .extend-request-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(245,158,11,0.06); border:1px dashed rgba(245,158,11,0.25); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
+        .extend-request-bar.off-peak { background:rgba(56,189,248,0.06); border-color:rgba(56,189,248,0.25); }
+        .extend-request-desc { font-size:12px; color:#94a3b8; line-height:1.5; }
+        .btn-extend-request { background:#f59e0b; color:#0f172a; border:none; padding:8px 14px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; transition:opacity 0.2s; flex-shrink:0; }
+        .btn-extend-request.off-peak { background:#38bdf8; }
+        .btn-extend-request:hover { opacity:0.85; }
 
         /* ── 중계방 탭 ── */
         #relay-tab {
@@ -196,7 +212,7 @@
                     "chart chart"
                     "trade trade";
             }
-            .stock-card .price-group { text-align: right; }
+            .stock-card .price-group { text-align: right; align-items:flex-end; }
             .stock-card .chart-wrap  { display: flex; justify-content: center; }
             .stock-card .chart-wrap .chart-container { width: 100%; height: 40px; }
             .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
@@ -213,17 +229,45 @@
             z-index: 999; transition: opacity 0.5s ease;
         }
         .intro-content {
-            text-align: center; max-width: 400px; padding: 40px;
+            text-align: center; max-width: 420px; width: 90%;
+            padding: 32px 32px 28px;
             background: var(--card-bg); border-radius: 24px; border: 1px solid var(--primary);
             box-shadow: 0 0 30px rgba(56, 189, 248, 0.2);
+            max-height: 90vh; overflow-y: auto;
         }
-        .intro-logo { margin-bottom: 20px; display: flex; justify-content: center; align-items: center; }
+        .intro-content::-webkit-scrollbar { width: 4px; }
+        .intro-content::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+        .intro-logo { margin-bottom: 16px; display: flex; justify-content: center; align-items: center; }
         .intro-logo img { width: 60px; height: 60px; object-fit: contain; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 10px; }
-        .intro-desc  { color: var(--text-sub); line-height: 1.6; margin-bottom: 25px; }
+        .intro-title { font-size: 24px; font-weight: 800; color: var(--primary); margin-bottom: 8px; }
+        .intro-desc  { color: var(--text-sub); line-height: 1.6; margin-bottom: 20px; font-size: 13px; }
+        .intro-update { text-align: left; background: #0f172a; border-radius: 14px; padding: 16px; margin-bottom: 20px; border: 1px solid #1e3a5f; }
+        .intro-update-title { font-size: 12px; font-weight: 800; color: #f59e0b; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+        .intro-update-list { display: flex; flex-direction: column; gap: 8px; }
+        .intro-update-item { display: flex; gap: 10px; align-items: flex-start; }
+        .intro-update-badge { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+        .intro-update-badge.new  { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+        .intro-update-badge.improved { background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); }
+        .intro-update-text { font-size: 12px; color: #cbd5e1; line-height: 1.5; }
+        .intro-update-text b { color: #f8fafc; }
         .loader { width: 30px; height: 30px; border: 3px solid #334155; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .hidden { opacity: 0; pointer-events: none; }
+
+        /* ── 이용약관 ── */
+        .terms-footer { text-align:center; padding:20px 0 40px; }
+        .terms-footer a { font-size:11px; color:#334155; text-decoration:none; cursor:pointer; transition:color 0.2s; }
+        .terms-footer a:hover { color:#64748b; }
+        .terms-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+        .terms-modal-overlay.active { opacity:1; pointer-events:all; }
+        .terms-modal-content { background:#1e293b; border-radius:16px; border:1px solid #334155; padding:28px; max-width:480px; width:90%; max-height:80vh; overflow-y:auto; }
+        .terms-modal-content::-webkit-scrollbar { width:4px; }
+        .terms-modal-content::-webkit-scrollbar-thumb { background:#334155; border-radius:4px; }
+        .terms-modal-content h2 { font-size:16px; font-weight:800; color:#38bdf8; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid #334155; }
+        .terms-modal-content h3 { font-size:13px; font-weight:800; color:#f8fafc; margin:16px 0 6px; }
+        .terms-modal-content p { font-size:12px; color:#94a3b8; line-height:1.8; }
+        .terms-close-btn { width:100%; background:#334155; color:#f8fafc; border:none; padding:12px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; margin-top:20px; transition:opacity 0.2s; }
+        .terms-close-btn:hover { opacity:0.8; }
 
         /* ── 랭킹 바 ── */
         .ranking-bar {
@@ -322,6 +366,15 @@
         }
         .promo-modal-content button:hover { filter: brightness(1.1); transform: translateY(-1px); transition: all 0.2s; }
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
+        /* ── 개인정보 동의 체크박스 ── */
+        .privacy-agree {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(56,189,248,0.06); border: 1px solid rgba(56,189,248,0.2);
+            border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+        }
+        .privacy-agree input[type="checkbox"] { width: 16px; height: 16px; accent-color: #38bdf8; flex-shrink: 0; cursor: pointer; }
+        .privacy-agree label { font-size: 12px; color: #94a3b8; cursor: pointer; line-height: 1.5; }
+        .privacy-agree label a { color: #38bdf8; text-decoration: underline; }
         .promo-benefit-box { background: rgba(56,189,248,0.1); padding: 15px; border-radius: 12px; border: 1px dashed var(--primary); margin-bottom: 20px; }
         .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }
         .btn-confirm-contact { width: 100%; background: var(--primary); color: #0f172a; border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 15px; }
@@ -359,9 +412,48 @@
         .my-stock-info { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
         .my-stock-name   { font-weight: 700; color: var(--text-main); }
         .my-stock-profit { font-weight: 700; font-size: 12px; }
+
+        /* ── 자산 히스토리 모달 ── */
+        .asset-history-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+        .asset-history-modal-overlay.active { opacity:1; pointer-events:all; }
+        .asset-history-modal-box { background:#1e293b; border-radius:16px; border:1px solid #334155; padding:24px; width:90%; max-width:380px; }
+        .asset-history-modal-box h3 { font-size:15px; font-weight:800; color:#f8fafc; margin-bottom:16px; }
+        .asset-summary-row { display:flex; justify-content:space-between; align-items:center; background:#0f172a; border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+        .asset-summary-label { font-size:12px; color:#64748b; }
+        .asset-summary-value { font-size:14px; font-weight:800; }
+        .asset-chart-wrap { margin:16px 0 10px; }
+        .asset-chart-label { font-size:11px; color:#64748b; margin-bottom:6px; }
+        .asset-day-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+        .asset-day-label { font-size:11px; color:#64748b; width:36px; flex-shrink:0; }
+        .asset-day-bar-wrap { flex:1; background:#0f172a; border-radius:4px; height:14px; overflow:hidden; }
+        .asset-day-bar { height:100%; border-radius:4px; transition:width 0.4s; }
+        .asset-day-val { font-size:11px; font-weight:700; width:80px; text-align:right; flex-shrink:0; }
+        #total-assets { cursor:pointer; transition:color 0.2s; }
+        #total-assets:hover { color:var(--primary) !important; }
         .my-stock-details { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sub); }
         .no-stock-msg { text-align: center; color: var(--text-sub); font-size: 12px; padding: 20px 0; }
         .my-stocks-guide { font-size: 13px; color: var(--text-sub); text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(51, 65, 85, 0.5); opacity: 0.8; pointer-events: none; }
+
+        /* ── 포트폴리오 탭 전환 ── */
+        .portfolio-tabs { display: flex; gap: 0; margin-bottom: 14px; border-bottom: 1px solid #334155; }
+        .portfolio-tab-btn { flex: 1; background: none; border: none; padding: 8px 0; font-size: 12px; font-weight: 700; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.2s; }
+        .portfolio-tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .portfolio-tab-btn.rank-tab.active { color: #f59e0b; border-bottom-color: #f59e0b; }
+
+        /* ── 구독 안내 ── */
+        .subscribe-gate { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 8px; }
+        .subscribe-gate-icon { font-size: 28px; }
+        .subscribe-gate-title { font-size: 14px; font-weight: 800; color: #f8fafc; text-align: center; line-height: 1.5; }
+        .subscribe-gate-desc { font-size: 12px; color: #64748b; text-align: center; line-height: 1.6; }
+        .subscribe-gate-form { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+        .subscribe-gate-form input { width: 100%; background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 9px 12px; border-radius: 8px; font-size: 13px; outline: none; box-sizing: border-box; }
+        .subscribe-gate-form input:focus { border-color: #f59e0b; }
+        .subscribe-gate-btns { display: flex; gap: 8px; width: 100%; }
+        .btn-subscribe-apply { flex: 2; background: #f59e0b; color: #0f172a; border: none; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
+        .btn-subscribe-apply:hover { opacity: 0.85; }
+        .btn-subscribe-soop { flex: 1; background: #1e293b; color: #38bdf8; border: 1px solid #334155; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+        .btn-subscribe-soop:hover { opacity: 0.85; }
+        .subscribe-status { font-size: 12px; text-align: center; min-height: 16px; }
 
         /* 모바일 슬라이드 패널 */
         @media (max-width: 1300px) {
@@ -675,14 +767,18 @@
         #maintenance-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #0f172a;
-            display: flex; justify-content: center; align-items: center;
+            display: flex; justify-content: center; align-items: flex-start;
             z-index: 9999;
+            overflow-y: auto;
+            padding: 32px 16px;
+            box-sizing: border-box;
         }
         .maintenance-content {
-            text-align: center; max-width: 420px; padding: 50px 40px;
+            text-align: center; max-width: 480px; width: 100%; padding: 40px 36px;
             background: #1e293b; border-radius: 24px;
             border: 1px solid #334155;
             box-shadow: 0 0 40px rgba(0,0,0,0.5);
+            margin: auto 0;
         }
         .maintenance-icon { font-size: 52px; margin-bottom: 20px; }
         .maintenance-title { font-size: 22px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
@@ -696,6 +792,10 @@
         }
         .maintenance-countdown {
             font-size: 13px; color: #64748b; margin-top: 16px;
+        }
+        @keyframes event-pulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(245,158,11,0.3); }
+            50%       { box-shadow: 0 4px 25px rgba(245,158,11,0.6); }
         }
         .maintenance-countdown span { color: #38bdf8; font-weight: 700; }
 
@@ -745,10 +845,36 @@
         }
         .btn-skip-login:hover { color: #94a3b8; }
         /* ── 즐겨찾기 ── */
+        /* ── 알림 버튼 ── */
+        .btn-alert {
+            background: none; border: none; cursor: pointer;
+            font-size: 16px; padding: 4px 6px; border-radius: 6px;
+            transition: transform 0.2s; line-height: 1; min-width:28px; text-align:center;
+        }
+        .btn-alert:hover { transform: scale(1.2); }
+
+        /* ── 알림 설정 모달 ── */
+        .alert-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:10000; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+        .alert-modal-overlay.active { opacity:1; pointer-events:all; }
+        .alert-modal-box { background:#1e293b; border-radius:16px; border:1px solid #334155; padding:24px; width:88%; max-width:340px; }
+        .alert-modal-box h3 { font-size:15px; font-weight:800; color:#f8fafc; margin-bottom:4px; }
+        .alert-modal-box .sub { font-size:12px; color:#64748b; margin-bottom:16px; }
+        .alert-row { display:flex; align-items:center; justify-content:space-between; background:#0f172a; border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+        .alert-row-label { font-size:13px; color:#94a3b8; }
+        .alert-row-input { display:flex; align-items:center; gap:6px; }
+        .alert-row-input input { width:52px; background:#1e293b; border:1px solid #475569; color:#38bdf8; padding:6px 8px; border-radius:8px; font-size:14px; font-weight:700; text-align:center; outline:none; }
+        .alert-row-input span { font-size:13px; color:#64748b; }
+        .alert-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:#94a3b8; background:#0f172a; border-radius:10px; padding:12px 14px; margin-bottom:16px; }
+        .alert-toggle input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#38bdf8; }
+        .alert-modal-btns { display:flex; gap:8px; }
+        .alert-modal-btns button { flex:1; padding:11px; border-radius:10px; border:none; font-weight:800; font-size:14px; cursor:pointer; transition:opacity 0.2s; }
+        .alert-modal-btns button:hover { opacity:0.85; }
+
+        .price-btn-group { display:flex; align-items:center; gap:2px; margin-top:2px; }
         .btn-favorite {
             background: none; border: none; cursor: pointer;
             font-size: 18px; padding: 4px 6px; line-height: 1;
-            transition: transform 0.15s;
+            transition: transform 0.15s; min-width:28px; text-align:center;
         }
         .btn-favorite:hover { transform: scale(1.2); }
 
@@ -786,9 +912,63 @@
             letter-spacing: 0.5px;
         }
         .power-save-desc  { font-size: 13px; color: #94a3b8; }
+
+		/* 리셋 위크 이동 배너 스타일 */
+.header-challenge-banner {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 70, 255, 0.1); /* 리셋 위크 블루 반투명 */
+    padding: 8px 16px;
+    border-radius: 50px;
+    text-decoration: none;
+    color: #4da3ff; /* 밝은 블루 */
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    border: 1px solid rgba(0, 70, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.header-challenge-banner:hover {
+    background: rgba(0, 70, 255, 0.2);
+    transform: translateY(-2px);
+    border-color: #0046ff;
+    color: #ffffff;
+}
+
+.badge-challenge {
+    background: #0046ff;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.header-challenge-banner i {
+    font-size: 0.9rem;
+}
+
+/* 모바일 대응 */
+@media (max-width: 600px) {
+    .header-challenge-banner {
+        font-size: 0.75rem;
+        padding: 6px 12px;
+        margin-bottom: 15px;
+    }
+}
     </style>
 </head>
-<body>
+<body><header>
+        <a href="https://neezu-crypto.github.io/streamer-challenge-reset-week-official/" target="_blank" class="header-challenge-banner">
+            <span class="badge-challenge">CHALLENGE</span>
+            <i class="fa-solid fa-trophy"></i> 
+            스트리머의 도전: 리셋 위크 챌린지 바로가기
+            <i class="fa-solid fa-chevron-right"></i>
+        </a>
+
+        </header>
 
 <!-- ── 계정 초기화 안내 모달 ── -->
 <div id="account-warn-overlay">
@@ -823,36 +1003,79 @@
 
 <!-- ── 정기점검 오버레이 ── -->
 <div id="maintenance-overlay" style="display:flex;" tabindex="0">
-    <div class="maintenance-content" style="max-width: 480px;"> <div class="maintenance-icon">🚀</div>
-        <div class="maintenance-title">시스템 안정화 및 보안 강화 안내</div>
-        
-        <div class="maintenance-desc" style="text-align: left; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);">
+    <div class="maintenance-content" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
+        <div class="maintenance-icon">🎉</div>
+        <div class="maintenance-title">스트리머 주식시장 재오픈 예정</div>
+
+        <div class="maintenance-desc" style="text-align: left; background: rgba(255,255,255,0.03); padding: 16px 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 16px;">
             안녕하세요, <b>스트리머 주식시장 운영진</b>입니다.<br><br>
-            현재 저희 서비스는 더욱 강력한 보안 체계 구축과 쾌적한 거래 환경 제공을 위해 대대적인 시스템 정비 기간을 갖고 있습니다.<br><br>
-            유저분들의 소중한 데이터를 보호하고, 한층 강화된 보안 로직을 적용하여 더 나은 거래 경험을 드리기 위한 결정이오니 넓은 양해를 부탁드립니다.
+            시스템 안정화 및 보안 강화 작업을 마무리하고<br>
+            <b style="color:#38bdf8;">2026년 4월 1일(수)</b> 정식 재오픈 예정입니다.<br>
+            기다려주신 모든 분들께 감사드립니다! 🙏
         </div>
 
-        <div class="maintenance-time-badge" style="margin-top: 20px;">🗓️ 재오픈 예정일: 2026년 4월 1일(수)</div>
-
-        <div class="maintenance-desc" style="text-align: left; font-size: 13px; color: #94a3b8; margin-top: 10px;">
-            <b style="color: #f8fafc;">[안내 사항]</b><br>
-            • <b>재오픈 일시:</b> 2026년 4월 1일(수) 정식 재개장<br>
-            • <b>홍보 배너 연장:</b> 현재 홍보 중인 모든 배너는 서비스 중단 기간만큼 차감 없이 보호됩니다. 각 배너별 잔여 기간에 맞춰 재오픈 시점에 유효 기간을 모두 연장해 드릴 예정입니다.
+        <!-- 업데이트 소식 -->
+        <div style="text-align:left; background:#0f172a; border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid #1e3a5f;">
+            <div style="font-size:12px; font-weight:800; color:#f59e0b; margin-bottom:12px; display:flex; align-items:center; gap:6px;">🆕 이번 업데이트 주요 변경사항</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">📡 중계방 탭</b> — 주식사이트를 중계 중인 스트리머 방송을 바로 시청할 수 있습니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">👑 구독자 전용 자산 랭킹</b> — 개발자를 구독으로 후원해주시면 상위 100명의 유저 자산 랭킹을 확인 가능합니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">🎰 정규장 연장 이벤트</b> — 별풍선 33개 후원 시 25% 확률로 정규장 1시간 즉시 연장! 개발자가 라이브 방송 시 후원 가능!</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">📋 스트리머 상장 신청</b> — 원하는 스트리머가 없다면 검색 후 상장 신청이 가능합니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">⭐ 즐겨찾기 기능</b> — 관심 스트리머를 즐겨찾기하고 실시간 주가를 바로 확인할 수 있습니다. 상위 100위 전체 표시 대신 실시간 주가 랭킹은 개발자가 직접 라이브 스트리밍할 예정입니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">📢 배너 광고 신청</b> — 배너 영역 광고 신청을 페이지 내에서 직접 요청 가능하고, 신청하기 버튼으로 즉시 후원창이 열립니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">개선</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">📈 반등 신호 감지</b> — 하락 후 반등 종목 카드에 노란 pulse 신호가 표시됩니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">⚡ 서킷브레이커</b> — 10분 내 20% 변동 시 즉시 발동, 3분 거래 동결로 시세 조작을 방지합니다.</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">개선</span>
+                    <div style="font-size:12px; color:#cbd5e1; line-height:1.5;"><b style="color:#f8fafc;">🛡️ 보안 강화</b> — 다층 보안 로직 적용 및 데이터 최적화로 더 안정적인 환경이 됐습니다.</div>
+                </div>
+            </div>
         </div>
 
-        <div class="maintenance-desc" style="margin-top: 15px; font-style: italic; color: #38bdf8;">
-            "더욱 신뢰할 수 있는 모습으로 4월 1일 다시 뵙겠습니다."
+        <div style="font-size:12px; color:#64748b; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px 16px; margin-bottom:16px; text-align:left; line-height:1.7;">
+            ⚠️ <b style="color:#94a3b8;">안내사항</b><br>
+            재오픈 후 서버 안정화를 위한 테스트가 진행될 수 있습니다.<br>
+            테스트 중 일시적인 오류나 데이터 초기화가 발생할 수 있으니 양해 부탁드립니다.
         </div>
 
-		<div style="margin-top: 25px;">
-    <a href="https://www.sooplive.co.kr/station/skftodwocks2" target="_blank" 
-       style="display: inline-block; background: #9146FF; color: white; padding: 12px 24px; border-radius: 12px; font-weight: 800; text-decoration: none; transition: 0.2s; box-shadow: 0 4px 15px rgba(145, 70, 255, 0.3);">
-       📺 개발자 SOOP 방송국
-    </a>
-</div>
+        <div style="margin-bottom: 20px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+            <a href="https://www.sooplive.com/station/skftodwocks2" target="_blank"
+               style="display:inline-block; background:#9146FF; color:white; padding:12px 24px; border-radius:12px; font-weight:800; text-decoration:none; box-shadow:0 4px 15px rgba(145,70,255,0.3);">
+               📺 개발자 SOOP 방송국
+            </a>
+            <a href="https://www.sooplive.com/station/skftodwocks2/post/190426505" target="_blank"
+               style="display:inline-block; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; padding:12px 24px; border-radius:12px; font-weight:800; text-decoration:none; box-shadow:0 4px 15px rgba(245,158,11,0.3); animation:event-pulse 2s ease-in-out infinite;">
+               🎉 이벤트 진행중
+            </a>
+        </div>
 
         <div class="maintenance-countdown" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            새로운 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
+            재오픈까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
         </div>
     </div>
 </div>
@@ -861,14 +1084,49 @@
 <div id="intro-overlay">
     <div class="intro-content">
         <div class="intro-logo">
-            <img src="https://stimg.sooplive.co.kr/LOGO/sk/skftodwocks2/skftodwocks2.jpg" alt="숲 주식 시장 로고">
+            <img src="https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg" alt="숲 주식 시장 로고">
         </div>
         <div class="intro-title">스트리머 주식시장</div>
         <div class="intro-desc">
             숲 주식 시장에 오신 것을 환영합니다!<br>
-            선호하는 스트리머의 가치를 투자하고<br>
-            수익을 창출해보세요.
+            선호하는 스트리머의 가치를 투자하고 수익을 창출해보세요.
         </div>
+
+        <!-- 업데이트 노트 -->
+        <div class="intro-update">
+            <div class="intro-update-title">🎉 업데이트 소식</div>
+            <div class="intro-update-list">
+                <div class="intro-update-item">
+                    <span class="intro-update-badge new">NEW</span>
+                    <div class="intro-update-text"><b>📡 중계방 탭</b> — 현재 주식사이트를 중계 중인 스트리머 방송을 바로 시청할 수 있습니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge new">NEW</span>
+                    <div class="intro-update-text"><b>👑 구독자 전용 자산 랭킹</b> — SOOP 구독자는 전체 유저 자산 순위를 확인할 수 있습니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge new">NEW</span>
+                    <div class="intro-update-text"><b>🎰 정규장 연장 이벤트</b> — 별풍선 33개 후원 시 25% 확률로 정규장 1시간 즉시 연장!</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge new">NEW</span>
+                    <div class="intro-update-text"><b>📋 스트리머 상장 신청</b> — 원하는 스트리머가 없다면 검색 후 상장 신청이 가능합니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge improved">개선</span>
+                    <div class="intro-update-text"><b>📈 반등 신호 감지</b> — 하락 후 반등하는 종목 카드에 노란 pulse 신호가 표시됩니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge improved">개선</span>
+                    <div class="intro-update-text"><b>⚡ 서킷브레이커 강화</b> — 10분 내 20% 변동 시 즉시 발동, 3분 거래 동결로 변경됐습니다.</div>
+                </div>
+                <div class="intro-update-item">
+                    <span class="intro-update-badge improved">개선</span>
+                    <div class="intro-update-text"><b>📊 포트폴리오 탭 전환</b> — 내 주식 / 자산 랭킹 탭으로 분리됐습니다.</div>
+                </div>
+            </div>
+        </div>
+
         <div id="login-status">
             <div class="loader"></div>
             <p style="font-size: 13px; color: var(--primary); margin-top: 15px;">익명 보안 로그인 중...</p>
@@ -905,13 +1163,127 @@
 
 <div class="my-stocks-container" id="my-stocks-container">
     <div class="my-stocks-title">
-        <span>내 보유 주식</span>
-        <span id="total-assets" style="font-size: 14px; color: var(--text-sub); align-self: flex-end;">평가중...</span>
+        <span>내 포트폴리오</span>
+        <span id="total-assets" style="font-size: 14px; color: var(--text-sub); align-self: flex-end;" onclick="openAssetHistory()" title="최근 7일 자산 변화 보기">평가중...</span>
     </div>
-    <div id="my-stocks-list" class="my-stocks-list">
-        <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
+    <!-- 탭 버튼 -->
+    <div class="portfolio-tabs">
+        <button class="portfolio-tab-btn active" id="tab-btn-stocks" onclick="switchPortfolioTab('stocks')">📈 내 주식</button>
+        <button class="portfolio-tab-btn rank-tab" id="tab-btn-ranking" disabled
+            style="opacity:0.45; cursor:not-allowed; position:relative;">
+            👑 자산 랭킹
+            <span style="position:absolute; top:-6px; right:-2px; background:#f59e0b; color:#0f172a; font-size:9px; font-weight:800; padding:1px 5px; border-radius:6px; white-space:nowrap;">준비중</span>
+        </button>
     </div>
-    <div class="my-stocks-guide">💡 클릭 시 즉시 검색됩니다</div>
+    <!-- 내 주식 탭 -->
+    <div id="portfolio-panel-stocks">
+        <div id="my-stocks-list" class="my-stocks-list">
+            <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
+        </div>
+        <div class="my-stocks-guide">💡 클릭 시 즉시 검색됩니다</div>
+    </div>
+    <!-- 자산 랭킹 탭 -->
+    <div id="portfolio-panel-ranking" style="display:none;">
+        <!-- 구독 미인증 상태 -->
+        <div id="ranking-gate" class="subscribe-gate">
+            <div class="subscribe-gate-icon">👑</div>
+            <div class="subscribe-gate-title">자산 랭킹은<br>구독자 전용 기능입니다</div>
+            <div class="subscribe-gate-desc">SOOP 구독 후 닉네임과 아이디를 입력하면<br>관리자 승인 후 이용 가능합니다.</div>
+            <div class="subscribe-gate-form">
+                <input type="text" id="sub-nickname" placeholder="닉네임 (방송에서 사용하는 이름)">
+                <input type="text" id="sub-soop-id"  placeholder="SOOP 아이디">
+                <div id="sub-status" class="subscribe-status"></div>
+                <div class="privacy-agree">
+                    <input type="checkbox" id="sub-privacy-agree">
+                    <label for="sub-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 구독자 인증 목적으로 수집됩니다.</label>
+                </div>
+                <div class="subscribe-gate-btns">
+                    <button class="btn-subscribe-soop" onclick="
+                        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+                        if (isMobile) {
+                            window.open('https://item.m.sooplive.com/subscription/a/buy?ticket=.A32.pxqRXFPZNcY9Qg1.SuSAypURBNVSRQsr-IbTgtFCncZ4vcVS7mAfaTXO7HyC3MmvGIsx_W76mR9GkQGjZ0wNZIU0hZJL9rOkGH-dODc-rGjNND4d3YgKMR8IMIyJILtGEYkhAzJ-ihhApOAoGgRqV_aEFT5yrnhLHvtT8tKJnEBgUf_VNaj_5nG2-C7NFULCt8tBqjfKaNsoU7DiJPkw80dcxUaEDDvJQypb5GVToHcGbaQYatI-cKxMpLqtiTsYkE-3Es7jCHsqLjFHSpoOXPz1axvnGFVkyYaZuLrqvNv6dED38PzwcGE4YoyfPvhelavSvqmgYDVmaBtpZyfP2rXxuBxtPAySCvq74CgVJPOyO2VhsIg7SZFOqGtbrBmycxsDwfIoWt-Cee5eP20VgKuFKFxNEf9d8u419hqJckSLYNPLSrd9uayXnsniyoDUjkkjd67uHkBSXY_R5UD-ygeP-Mmr0bfBBdoFzjiYW9RG-nTezzIRtCyIK_v_ysOqdjUO3bkNgmRns2udYziKO4sUgg9_gKmttoVlX2x2E_7Kg8IDBMpV5sF3x6cKDMrxVBg3LRXtgHP66pKhyRFkaRN4PjPWPEUuaXDDuMGngDWP6a1elSOLnIvDQgiVPONpVuhVP7ZmBlnyli0lOZdB9PqmMWziO1hOSdJEnzZQwrgQfJZZHONwx-NlzsqqKuv8azXkB21hm653XNJS&device_type=2&device_version=8.10.0&device_model=SM-S711N&receive_id=skftodwocks2&receive_nick=%EC%98%A4%EB%AA%A9%EC%A7%80%EB%A9%B4%EC%8B%9C%EA%B7%B8&os=aos&sys_type=app&location=station&payment_type=station&store=O', '_blank');
+                        } else {
+                            window.open('https://st.sooplive.com/app/gift_subscription.php?bjId=skftodwocks2&sysType=web&location=station&tierType=1', '_blank', 'width=542,height=600,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
+                        }
+                    ">🔗 구독하러 가기</button>
+                    <button class="btn-subscribe-apply" onclick="submitSubscribeRequest()">신청하기</button>
+                </div>
+            </div>
+        </div>
+        <!-- 승인 대기 상태 -->
+        <div id="ranking-pending" style="display:none;" class="subscribe-gate">
+            <div class="subscribe-gate-icon">⏳</div>
+            <div class="subscribe-gate-title">승인 대기 중입니다</div>
+            <div class="subscribe-gate-desc">관리자 확인 후 승인되면<br>자동으로 활성화됩니다.</div>
+        </div>
+        <!-- 승인 완료 — 랭킹 표시 -->
+        <div id="ranking-content" style="display:none;">
+            <!-- 내 순위 카드 -->
+            <div id="my-rank-card" style="background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(245,158,11,0.04)); border:1px solid rgba(245,158,11,0.3); border-radius:12px; padding:14px; margin-bottom:12px; text-align:center;">
+                <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">내 자산 순위</div>
+                <div id="my-rank-number" style="font-size:28px; font-weight:800; color:#f59e0b;">-</div>
+                <div id="my-rank-asset" style="font-size:12px; color:#64748b; margin-top:4px;">-</div>
+                <div id="my-rank-context" style="font-size:11px; color:#475569; margin-top:6px;">-</div>
+            </div>
+            <!-- 상위 100위 목록 -->
+            <div style="font-size:11px; color:#64748b; margin-bottom:6px; display:flex; justify-content:space-between;">
+                <span>TOP 100 자산 랭킹</span>
+                <span id="ranking-updated-at">-</span>
+            </div>
+            <div id="asset-ranking-list" style="display:flex; flex-direction:column; gap:4px; max-height:300px; overflow-y:auto;">
+                <div style="font-size:12px; color:#64748b; text-align:center; padding:16px 0;">불러오는 중...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── 정규장 연장 요청 안내 모달 ── -->
+<div id="extend-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header"><h2 id="extend-modal-title">🎰 정규장 연장 요청</h2></div>
+        <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:14px; margin-bottom:16px;">
+            <div style="font-size:13px; color:#f8fafc; font-weight:800; margin-bottom:8px;">💡 이벤트 안내</div>
+            <div style="font-size:13px; color:#cbd5e1; line-height:1.8;" id="extend-modal-desc">
+                개발자 스트리밍 방송에서 <b style="color:#f59e0b;">별풍선 33개</b>로 후원하면<br>
+                룰렛을 통해 <b style="color:#f59e0b;">25% 확률</b>로<br>
+                <b style="color:#22c55e;">정규장 1시간 즉시 연장</b>이 가능합니다!
+            </div>
+        </div>
+        <div style="font-size:12px; color:#64748b; text-align:center; margin-bottom:16px;">
+            ⚠️ 연장은 관리자가 방송 중 룰렛 결과 확인 후 직접 처리합니다.
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="closeExtendModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button onclick="goToLiveStream()" style="flex:2; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">📺 방송 바로가기</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── 상장 신청 모달 ── -->
+<div id="listing-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header"><h2>📋 스트리머 상장 신청</h2></div>
+        <div style="font-size:13px; color:#94a3b8; line-height:1.6; margin-bottom:16px; padding:10px 12px; background:rgba(99,102,241,0.06); border-radius:8px; border:1px dashed rgba(99,102,241,0.3);">
+            상장을 원하는 SOOP 스트리머를 신청해주세요.<br>관리자 검토 후 순차적으로 등록됩니다.
+        </div>
+        <div id="listing-form" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+            <input id="listing-streamer-name" type="text" placeholder="스트리머 닉네임"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;">
+            <input id="listing-soop-id" type="text" placeholder="SOOP 아이디"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;">
+            <textarea id="listing-reason" placeholder="신청 사유 (선택)" rows="3"
+                style="background:#0f172a; border:1px solid #334155; color:white; padding:12px; border-radius:10px; font-size:14px; outline:none; resize:none; font-family:inherit;"></textarea>
+        </div>
+        <div id="listing-msg" style="min-height:20px; font-size:13px; text-align:center; margin-bottom:10px;"></div>
+        <div class="privacy-agree">
+            <input type="checkbox" id="listing-privacy-agree">
+            <label for="listing-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 상장 신청 목적으로 수집됩니다.</label>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="closeListingModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button onclick="submitListingRequest()" style="flex:2; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">신청하기</button>
+        </div>
+    </div>
 </div>
 
 <!-- ── 중계 신청 모달 ── -->
@@ -923,7 +1295,7 @@
         </div>
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 포트폴리오 패널 중계방 탭</li>
-            <li>⏱ <b>단위:</b> 시간당 별풍선 10개</li>
+            <li>⏱ <b>단위:</b> 비정규장 시간당 10개 / 정규장 시간당 15개</li>
             <li>✅ <b>노출:</b> 관리자 수락 시점부터 신청 시간만큼</li>
             <li>📺 <b>슬롯:</b> 최대 3개 (마감 시 신청 불가)</li>
         </ul>
@@ -939,6 +1311,10 @@
             <div id="relay-cost" style="font-size:13px; color:#38bdf8; text-align:right;"></div>
         </div>
         <div id="relay-msg" style="min-height:20px; font-size:13px; text-align:center; margin-bottom:10px;"></div>
+        <div class="privacy-agree">
+            <input type="checkbox" id="relay-privacy-agree">
+            <label for="relay-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 중계방 신청 목적으로 수집됩니다.</label>
+        </div>
         <div style="display:flex; gap:10px;">
             <button onclick="closeRelayModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button onclick="submitRelayRequest()" style="flex:2; background:#ef4444; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">신청하기</button>
@@ -973,7 +1349,9 @@
             <div>
                 <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">신청 기간 (일)</div>
                 <input id="promo-days" type="number" min="1" max="30" placeholder="예: 7"
-                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
+                    style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;"
+                    oninput="updatePromoCost()">
+                <div id="promo-cost" style="font-size:13px; color:#38bdf8; text-align:right; margin-top:6px;"></div>
             </div>
             <!-- 미리보기 -->
             <div id="promo-preview" style="display:none; align-items:center; gap:12px; background:#0f172a; padding:12px; border-radius:8px; border:1px solid #334155;">
@@ -986,9 +1364,13 @@
             <div id="promo-msg" style="font-size:12px; min-height:16px;"></div>
         </div>
 
+        <div class="privacy-agree">
+            <input type="checkbox" id="promo-privacy-agree">
+            <label for="promo-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 배너 홍보 신청 목적으로 수집됩니다.</label>
+        </div>
         <div style="display:flex; gap:8px;">
             <button onclick="closePromoModal()" style="flex:1; background:#334155; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
-            <button onclick="window.open('https://www.sooplive.co.kr/station/skftodwocks2','_blank')" style="flex:1; background:#6366f1; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">개발자</button>
+            <button onclick="window.open('https://www.sooplive.com/station/skftodwocks2','_blank')" style="flex:1; background:#6366f1; color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">개발자</button>
             <button onclick="submitPromoRequest()" style="flex:2; background:#38bdf8; color:#0f172a; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">신청하기</button>
         </div>
     </div>
@@ -1125,7 +1507,7 @@
             </div>
             <div>
                 <div style="font-size:12px; color:#94a3b8; margin-bottom:5px;">클릭 시 이동할 링크 URL</div>
-                <input id="chart-ad-link" type="text" placeholder="https://www.sooplive.co.kr/station/..."
+                <input id="chart-ad-link" type="text" placeholder="https://www.sooplive.com/station/..."
                     style="width:100%; box-sizing:border-box; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:10px 12px; border-radius:8px; font-size:14px; outline:none;">
             </div>
             <div>
@@ -1137,6 +1519,10 @@
             <div id="chart-ad-msg" style="font-size:12px; min-height:16px;"></div>
         </div>
 
+        <div class="privacy-agree">
+            <input type="checkbox" id="chart-ad-privacy-agree">
+            <label for="chart-ad-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임이 차트 배너 신청 목적으로 수집됩니다.</label>
+        </div>
         <div style="display:flex; gap:8px;">
             <button onclick="closeChartAdModal()"
                 style="flex:1; background:#334155; color:white; border:none; padding:13px; border-radius:10px; cursor:pointer; font-weight:700; font-size:14px;">닫기</button>
@@ -1220,6 +1606,9 @@
         text-align:center;
         box-shadow: 0 2px 12px rgba(0,0,0,0.3);">
     </div>
+    <!-- 정규장 연장 요청 바 -->
+    <div id="extend-request-bar" style="display:none;"></div>
+
     <header>
         <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
         <p style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
@@ -1238,6 +1627,18 @@
     <div class="ranking-bar">
         <div class="ranking-title">📉 순매도 TOP 5</div>
         <div id="net-sell-rankers" class="ranking-list">불러오는 중...</div>
+    </div>
+
+    <!-- 실시간 주가 랭킹 바로가기 -->
+    <div style="display:flex; align-items:center; justify-content:space-between; background:var(--card-bg); border-radius:12px; padding:12px 16px; margin-bottom:20px; border:1px dashed #334155;">
+        <div style="font-size:13px; color:var(--text-sub); line-height:1.5;">
+            📊 <b style="color:var(--text-main);">실시간 주가 랭킹</b>은 개발자가 라이브 방송으로 직접 공개합니다.
+        </div>
+        <button onclick="window.open('https://play.sooplive.com/skftodwocks2','_blank')"
+            style="flex-shrink:0; margin-left:12px; background:linear-gradient(135deg,#ef4444,#f97316); color:white; border:none; padding:8px 14px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; transition:opacity 0.2s;"
+            onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+            📺 라이브 보러가기
+        </button>
     </div>
 
 	<!-- 공지 안내 영역 -->
@@ -1627,9 +2028,13 @@ function renderRelayPanel(data) {
         const hLeft  = Math.floor(remain / 3600000);
         const mLeft  = Math.floor((remain % 3600000) / 60000);
         const timeStr = hLeft > 0 ? `${hLeft}시간 ${mLeft}분 남음` : `${mLeft}분 남음`;
-        return `<a class="relay-item" href="https://www.sooplive.co.kr/station/${v.soopId}" target="_blank">
-            <div class="relay-item-name">${v.nickname}</div>
-            <div class="relay-item-sub">🔴 라이브 중 · ${timeStr}</div>
+        const soopIdRaw = String(v.soopId || '').trim();
+        const stationHref = soopIdRaw
+            ? `https://www.sooplive.com/station/${encodeURIComponent(soopIdRaw)}`
+            : '#';
+        return `<a class="relay-item" href="${stationHref}" target="_blank" rel="noopener noreferrer">
+            <div class="relay-item-name">${escapeHtml(v.nickname)}</div>
+            <div class="relay-item-sub">🔴 라이브 중 · ${escapeHtml(timeStr)}</div>
         </a>`;
     }).join('');
 
@@ -1677,6 +2082,14 @@ window.toggleRelay = function() {
 };
 
 window.openRelayApplyModal = function() {
+    document.getElementById('relay-nickname').value = '';
+    document.getElementById('relay-soop-id').value  = '';
+    document.getElementById('relay-hours').value    = '';
+    document.getElementById('relay-msg').textContent = '';
+    document.getElementById('relay-cost').textContent = '';
+    document.getElementById('relay-form').style.opacity = '1';
+    document.getElementById('relay-form').style.pointerEvents = 'auto';
+    document.getElementById('relay-privacy-agree').checked = false;
     document.getElementById('relay-modal').classList.add('active');
 };
 
@@ -1687,11 +2100,49 @@ window.closeRelayModal = function() {
     document.getElementById('relay-form').style.pointerEvents = 'auto';
 };
 
+// 신청 시점부터 N시간 중 정규장 구간 계산
+function calcRelayCost(hours) {
+    const mh = siteConfig?.marketHours;
+    if (!mh || !mh.enabled || !mh.regularOpen || !mh.regularClose) {
+        // 정규장 미설정 → 전체 비정규장 단가
+        return { regular: 0, offPeak: hours, total: hours * 10 };
+    }
+    const [roh, rom] = mh.regularOpen.split(':').map(Number);
+    const [rch, rcm] = mh.regularClose.split(':').map(Number);
+    const rOpenMins  = roh * 60 + rom;
+    const rCloseMins = rch * 60 + rcm;
+
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    let regularMins = 0;
+
+    for (let i = 0; i < hours * 60; i++) {
+        const t = (now.getHours() * 60 + now.getMinutes() + i) % (24 * 60);
+        const inRegular = rOpenMins < rCloseMins
+            ? t >= rOpenMins && t < rCloseMins
+            : t >= rOpenMins || t < rCloseMins;
+        if (inRegular) regularMins++;
+    }
+
+    const regularHours = regularMins / 60;
+    const offPeakHours = hours - regularHours;
+    const total = Math.round(regularHours * 15 + offPeakHours * 10);
+    return { regular: regularHours, offPeak: offPeakHours, total };
+}
+
 window.updateRelayCost = function() {
     const hours = parseInt(document.getElementById('relay-hours').value);
     const costEl = document.getElementById('relay-cost');
     if (!costEl) return;
-    costEl.textContent = hours > 0 ? `총 별풍선 ${hours * 10}개 (${(hours * 10 * 110).toLocaleString()}원)` : '';
+    if (!hours || hours <= 0) { costEl.textContent = ''; return; }
+
+    const { regular, offPeak, total } = calcRelayCost(hours);
+    let detail = '';
+    if (regular > 0 && offPeak > 0) {
+        detail = ` (정규장 ${regular.toFixed(1)}h×15 + 비정규장 ${offPeak.toFixed(1)}h×10)`;
+    } else if (regular > 0) {
+        detail = ` (전구간 정규장)`;
+    }
+    costEl.textContent = `총 별풍선 ${total}개 (${(total * 110).toLocaleString()}원)${detail}`;
 };
 
 window.submitRelayRequest = async function() {
@@ -1700,6 +2151,7 @@ window.submitRelayRequest = async function() {
     const hours    = parseInt(document.getElementById('relay-hours').value);
     const msgEl    = document.getElementById('relay-msg');
 
+    if (!document.getElementById('relay-privacy-agree').checked) { msgEl.style.color='#ef4444'; msgEl.textContent='개인정보 처리방침에 동의해주세요.'; return; }
     if (!nickname)                            { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임을 입력해주세요.'; return; }
     if (!soopId)                              { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디를 입력해주세요.'; return; }
     if (!/^[a-zA-Z0-9_]+$/.test(soopId))     { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
@@ -1712,22 +2164,23 @@ window.submitRelayRequest = async function() {
     msgEl.textContent = '신청 중...';
     try {
         const reqId = `relay_${uid}_${Date.now()}`;
+        const { total: totalCost } = calcRelayCost(hours);
         await set(ref(db, `relayRequests/${reqId}`), {
             nickname, soopId, hours, uid,
             status: 'pending',
             createdAt: Date.now(),
-            cost: hours * 10
+            cost: totalCost
         });
         msgEl.style.color = '#22c55e';
-        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${hours}시간 × 별풍선 10개 = ${hours * 10}개)`;
+        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (총 별풍선 ${totalCost}개)`;
         document.getElementById('relay-form').style.opacity = '0.5';
         document.getElementById('relay-form').style.pointerEvents = 'none';
         // 후원 창 자동 오픈
         const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
         if (isMobile) {
-            window.open(`https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${Math.random()}`, '_blank');
+            window.open(`https://m.sooplive.com/item/a/starballoongift?szBjId=skftodwocks2&r=${Math.random()}`, '_blank');
         } else {
-            window.open(`https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
+            window.open(`https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
         }
     } catch(e) {
         msgEl.style.color = '#ef4444';
@@ -1838,12 +2291,14 @@ get(ref(db, 'siteConfig/')).then(snap => {
     siteConfigReady = true;
     applyMarketState();
     tryCloseIntro();
+    updateExtendRequestBar();
 }).catch(() => {});
 
 // 점검 모드 실시간 구독
 onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
     siteConfig.maintenance = snap.val() ?? false;
     applyMarketState();
+    updateExtendRequestBar();
 });
 
 // 중계방 실시간 구독 (신규 수락/만료 감지)
@@ -1866,17 +2321,49 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
                 const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
                 alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
 
+                // 즐겨찾기/보유 종목이면 브라우저 알림 발송
+                const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
+                if (isMyStock && notifPermission && Notification.permission === 'granted') {
+                    const remaining = Math.ceil((frozenUntil - now) / 1000);
+                    new Notification(`⚡ ${stockName} 서킷브레이커 발동!`, {
+                        body: `거래가 ${remaining}초간 동결됩니다. 해제 시 알림을 드립니다.`,
+                        icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+                    });
+                }
+
                 // 동결 중 구독 일시 중단 (데이터 절약)
                 if (favoriteUnsubs[stockId]) { favoriteUnsubs[stockId](); delete favoriteUnsubs[stockId]; }
                 if (ownedUnsubs[stockId])    { ownedUnsubs[stockId]();    delete ownedUnsubs[stockId]; }
                 if (favPollTimers[stockId])  { clearInterval(favPollTimers[stockId]); delete favPollTimers[stockId]; }
 
-                // 동결 해제 시점에 재구독
+                // 동결 해제 시점에 재구독 + 해제 알림
                 const remaining = frozenUntil - now;
                 setTimeout(() => {
                     if (favorites[stockId])   subscribeToFavorite(stockId);
                     if (ownedStocks[stockId]) subscribeToOwned(stockId);
+
+                    // 해제 알림 — 즐겨찾기/보유 종목만
+                    if (isMyStock && notifPermission && Notification.permission === 'granted') {
+                        new Notification(`✅ ${stockName} 거래 재개!`, {
+                            body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
+                            icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+                        });
+                    }
                 }, remaining + 500);
+            }
+        }
+    });
+
+    // 이전에 동결됐다가 해제된 종목 감지 (Firebase에서 삭제된 경우)
+    Object.keys(prev).forEach(stockId => {
+        if (!siteConfig.frozenStocks[stockId] && prev[stockId] > now) {
+            const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
+            const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
+            if (isMyStock && notifPermission && Notification.permission === 'granted') {
+                new Notification(`✅ ${stockName} 거래 재개!`, {
+                    body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
+                    icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+                });
             }
         }
     });
@@ -2018,6 +2505,9 @@ function renderMyPortfolio() {
         portfolioDiv.appendChild(item);
     });
     if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
+    // 오늘 자산 스냅샷 저장
+    const totalWithCash = totalStockValue + (myData?.cash || 0);
+    saveAssetHistoryToday(totalWithCash);
 }
 
 // 종목명으로 검색창 자동 입력 후 포커스
@@ -2238,7 +2728,7 @@ async function checkCircuitBreaker(stockId, candles) {
     const low       = Math.min(...recentCandles.map(c => c.l));
     const variation = ((high - low) / low) * 100;
 
-    if (variation >= 20) {
+    if (variation >= 30) {
         if (state.pendingTimer) return; // 이미 예약됨
 
         state.pendingTimer = setTimeout(async () => {
@@ -2313,12 +2803,13 @@ async function updateCandlestick(stockId, tradePrice, qty) {
 // localStorage 캔들 캐시 (6시간 TTL)
 // ══════════════════════════════════════════════════════════════
 const CANDLE_CACHE_PREFIX = 'soop_candles_';
-const CANDLE_CACHE_TTL    = 6 * 60 * 60 * 1000; // 6시간
+const CANDLE_CACHE_TTL    = 6 * 60 * 60 * 1000; // 6시간 (데이터 보관)
+const CANDLE_STALE_MS     = 5 * 60 * 1000;       // 5분 (재접속 후 갱신 기준)
 
 function saveCandleToLocal(stockId, candle) {
     try {
         const key      = CANDLE_CACHE_PREFIX + stockId;
-        const existing = loadCandlesFromLocal(stockId);
+        const { data: existing } = loadCandlesFromLocal(stockId);
         const idx      = existing.findIndex(c => c.t === candle.t);
         if (idx >= 0) {
             existing[idx] = {
@@ -2340,14 +2831,14 @@ function saveCandleToLocal(stockId, candle) {
 function loadCandlesFromLocal(stockId) {
     try {
         const raw = localStorage.getItem(CANDLE_CACHE_PREFIX + stockId);
-        if (!raw) return [];
+        if (!raw) return { data: [], savedAt: 0 };
         const { ts, data } = JSON.parse(raw);
         if (Date.now() - ts > CANDLE_CACHE_TTL) {
             localStorage.removeItem(CANDLE_CACHE_PREFIX + stockId);
-            return [];
+            return { data: [], savedAt: 0 };
         }
-        return Array.isArray(data) ? data : [];
-    } catch(e) { return []; }
+        return { data: Array.isArray(data) ? data : [], savedAt: ts };
+    } catch(e) { return { data: [], savedAt: 0 }; }
 }
 
 async function flushCandlestick(stockId) {
@@ -2379,7 +2870,7 @@ async function flushCandlestick(stockId) {
     }
 
     // 거래 발생 시마다 서킷브레이커 감지 (차트 모달 없이도 실시간 체크)
-    checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId));
+    checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId).data);
 }
 
 // pruneOldCandles — 관리자 페이지에서만 실행 (클라이언트 제거)
@@ -2547,13 +3038,16 @@ async function fetchCandles(stockId) {
     }
 
     try {
-        // 1. localStorage 캐시 우선
-        const local = loadCandlesFromLocal(stockId);
-        if (local.length > 0) {
+        // 1. localStorage 캐시 확인
+        const { data: local, savedAt } = loadCandlesFromLocal(stockId);
+        const isStale = (Date.now() - savedAt) > CANDLE_STALE_MS; // 5분 경과 여부
+
+        if (local.length > 0 && !isStale) {
+            // 캐시 신선 → 바로 사용
             candleDataCache = local.sort((a, b) => a.t - b.t);
             checkCircuitBreaker(stockId, candleDataCache);
         } else {
-            // 2. 로컬 없으면 Firebase fallback
+            // 캐시 없거나 5분 경과 → Firebase 재조회
             const snap = await get(ref(db, `candlesticks/${stockId}`));
             if (snap.exists()) {
                 const raw = snap.val();
@@ -2564,7 +3058,7 @@ async function fetchCandles(stockId) {
                 // Firebase 데이터를 localStorage에 저장
                 candleDataCache.forEach(c => saveCandleToLocal(stockId, c));
             } else {
-                candleDataCache = [];
+                candleDataCache = local.length > 0 ? local : []; // Firebase도 없으면 기존 캐시라도 사용
             }
         }
     } catch (e) {
@@ -2727,7 +3221,8 @@ window.tradeFromModal = function(type) {
     if (!chartModalStockId) return;
     const input = document.getElementById('modal-qty-input');
     if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
-    const qty = Math.min(Math.max(1, parseInt(input.value) || 1), 100);
+    const qty = calcMaxQty(chartModalStockId, type, parseInt(input.value) || 1);
+    if (qty !== parseInt(input.value)) input.value = qty; // 자동 보정 시 입력값 갱신
     window.trade(chartModalStockId, type, qty);
 };
 
@@ -2735,9 +3230,29 @@ window.tradeFromModal = function(type) {
 window.tradeWithInput = function(id, type) {
     const input = document.getElementById(`qty-${id}`);
     if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
-    const qty = Math.min(Math.max(1, parseInt(input.value) || 1), 100);
+    const qty = calcMaxQty(id, type, parseInt(input.value) || 1);
+    if (qty !== parseInt(input.value)) input.value = qty; // 자동 보정 시 입력값 갱신
     window.trade(id, type, qty);
 };
+
+// ── 매매 가능 최대 수량 계산 ─────────────────────────────────
+// 입력값이 가능 범위 초과 시 자동으로 최대값으로 보정
+function calcMaxQty(stockId, type, inputQty) {
+    let v = Math.min(Math.max(1, inputQty), 100);
+    if (!myData) return v;
+
+    const stock     = favorites[stockId] || ownedStocks[stockId] || searchResults[stockId];
+    const userStock = myData.stocks?.[stockId] || { qty: 0 };
+
+    if (type === 'buy' && stock) {
+        const estPrice  = Math.round(stock.price * (1 + 0.0005));
+        const maxAfford = Math.floor((myData.cash || 0) / estPrice);
+        return Math.min(v, maxAfford, 100);
+    } else if (type === 'sell') {
+        return Math.min(v, userStock.qty, 100);
+    }
+    return v;
+}
 
 // ── 수량 입력 클램프 (1~100 범위 강제) ──────────────────────
 // 수량을 지울수있게 허용 — 거래 시점에만 유효성 검사
@@ -3051,6 +3566,538 @@ const impact = impactCoef * Math.log2(1 + qty) * sellPressure;
 };
 
 // ── 모바일 보유 주식 패널 슬라이드 ──────────────────────────
+// ── 포트폴리오 탭 전환 ──────────────────────────────────────
+window.switchPortfolioTab = function(tab) {
+    document.getElementById('portfolio-panel-stocks').style.display  = tab === 'stocks'  ? 'flex' : 'none';
+    document.getElementById('portfolio-panel-ranking').style.display = tab === 'ranking' ? 'block' : 'none';
+    document.getElementById('portfolio-panel-stocks').style.flexDirection = 'column';
+    document.getElementById('tab-btn-stocks').classList.toggle('active', tab === 'stocks');
+    document.getElementById('tab-btn-ranking').classList.toggle('active', tab === 'ranking');
+
+    if (tab === 'ranking') checkSubscribeStatus();
+};
+
+async function checkSubscribeStatus() {
+    if (!userUID) return;
+    try {
+        const snap = await get(ref(db, `subscribeRequests/${userUID}`));
+        if (!snap.exists()) {
+            // 미신청
+            document.getElementById('ranking-gate').style.display    = 'flex';
+            document.getElementById('ranking-pending').style.display  = 'none';
+            document.getElementById('ranking-content').style.display  = 'none';
+            return;
+        }
+        const data = snap.val();
+        if (data.status === 'approved') {
+            document.getElementById('ranking-gate').style.display    = 'none';
+            document.getElementById('ranking-pending').style.display  = 'none';
+            document.getElementById('ranking-content').style.display  = 'block';
+            loadAssetRanking();
+        } else {
+            // pending
+            document.getElementById('ranking-gate').style.display    = 'none';
+            document.getElementById('ranking-pending').style.display  = 'flex';
+            document.getElementById('ranking-content').style.display  = 'none';
+        }
+    } catch(e) {}
+}
+
+// ── 자산 랭킹 로드 ──────────────────────────────────────────
+async function loadAssetRanking() {
+    const listEl    = document.getElementById('asset-ranking-list');
+    const updatedEl = document.getElementById('ranking-updated-at');
+    const rankNoEl  = document.getElementById('my-rank-number');
+    const rankAssetEl  = document.getElementById('my-rank-asset');
+    const rankCtxEl = document.getElementById('my-rank-context');
+    if (!listEl) return;
+
+    try {
+        const snap = await get(ref(db, 'assetRanking/'));
+        if (!snap.exists()) {
+            listEl.innerHTML = '<div style="font-size:12px; color:#64748b; text-align:center; padding:16px 0;">집계된 데이터가 없습니다.<br>장 마감 후 관리자가 집계합니다.</div>';
+            return;
+        }
+        const data  = snap.val();
+        const items = data.items || [];
+        const total = data.totalUsers || 0;
+        const updatedAt = data.updatedAt ? new Date(data.updatedAt).toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'numeric',minute:'numeric'}) : '-';
+        if (updatedEl) updatedEl.textContent = updatedAt + ' 기준';
+
+        // 내 자산 계산
+        let myAsset = myData?.cash || 0;
+        if (myData?.stocks && allStocks.length > 0) {
+            Object.entries(myData.stocks).forEach(([id, s]) => {
+                if (!s.qty || s.qty <= 0) return;
+                const stock = allStocks.find(st => st.id === id);
+                if (stock) myAsset += stock.price * s.qty;
+            });
+        }
+        myAsset = Math.floor(myAsset);
+
+        // 내 순위 찾기 — items는 내림차순 정렬
+        let myRank = total; // 기본값: 전체 꼴찌
+        if (items.length > 0) {
+            if (myAsset >= items[0].totalAsset) {
+                // 1위보다 자산이 많거나 같음
+                myRank = 1;
+            } else if (myAsset < items[items.length - 1].totalAsset) {
+                // 100위보다 적음 → 100위 밖
+                myRank = total;
+            } else {
+                // items 내에서 순위 찾기
+                const myRankItem = items.find((item, i) => {
+                    const next = items[i + 1];
+                    return myAsset >= item.totalAsset && (!next || myAsset > next.totalAsset);
+                });
+                myRank = myRankItem ? myRankItem.rank : total;
+            }
+        }
+        const above = myRank - 1;
+        const below = total - myRank;
+
+        if (rankNoEl) {
+            if (myRank <= 100) {
+                rankNoEl.textContent = `${myRank}위`;
+                rankNoEl.style.color = myRank <= 3 ? '#f59e0b' : '#f8fafc';
+            } else {
+                rankNoEl.textContent = '100위 밖';
+                rankNoEl.style.color = '#64748b';
+            }
+        }
+        if (rankAssetEl) rankAssetEl.textContent = `내 자산: ${myAsset.toLocaleString()}원`;
+        if (rankCtxEl)   rankCtxEl.textContent   = `위로 ${above.toLocaleString()}명 · 아래로 ${below.toLocaleString()}명 · 전체 ${total.toLocaleString()}명`;
+
+        // TOP 100 목록
+        listEl.innerHTML = items.map(item => {
+            const isMine  = item.rank === myRank && myRank <= 100;
+            const medal   = item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : item.rank;
+            const bgColor = isMine ? 'rgba(245,158,11,0.1)' : 'transparent';
+            const border  = isMine ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent';
+            return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-radius:8px; background:${bgColor}; border:${border};">
+                <span style="font-size:13px; font-weight:${isMine?'800':'400'}; color:${isMine?'#f59e0b':'#94a3b8'}; width:36px;">${medal}</span>
+                <span style="flex:1; font-size:12px; color:${isMine?'#f8fafc':'#64748b'};">${isMine?'◀ 나':'　'}</span>
+                <span style="font-size:12px; font-weight:700; color:${isMine?'#f59e0b':'#94a3b8'};">${item.totalAsset.toLocaleString()}원</span>
+            </div>`;
+        }).join('');
+
+    } catch(e) {
+        listEl.innerHTML = `<div style="font-size:12px; color:#ef4444; text-align:center; padding:16px 0;">오류: ${e.message}</div>`;
+    }
+}
+
+// ── 정규장 연장 요청 ─────────────────────────────────────────
+function updateExtendRequestBar() {
+    const bar = document.getElementById('extend-request-bar');
+    if (!bar) return;
+
+    const mh = siteConfig?.marketHours;
+    if (!mh || !mh.enabled) { bar.style.display = 'none'; return; }
+
+    const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+
+    // 전체 오픈 여부 확인
+    const [oh, om] = (mh.open  || '00:00').split(':').map(Number);
+    const [ch, cm] = (mh.close || '23:59').split(':').map(Number);
+    const openMins  = oh * 60 + om;
+    const closeMins = ch * 60 + cm;
+    const isOpen = openMins < closeMins
+        ? nowMins >= openMins && nowMins < closeMins
+        : nowMins >= openMins || nowMins < closeMins;
+
+    if (!isOpen) { bar.style.display = 'none'; return; }
+
+    // 정규장 여부 확인
+    const isRegular = isRegularMarket();
+
+    // 정규장 남은 시간 계산
+    let remainMins = 0;
+    let remainText = '';
+    if (isRegular && mh.regularClose) {
+        const [rch, rcm] = mh.regularClose.split(':').map(Number);
+        const rCloseMins  = rch * 60 + rcm;
+        remainMins = (rCloseMins - nowMins + 1440) % 1440;
+        if (remainMins === 0) remainMins = 1440;
+        const rh = Math.floor(remainMins / 60);
+        const rm = remainMins % 60;
+        remainText = rh > 0 ? `종료까지 ${rh}시간 ${rm}분` : `종료까지 ${rm}분`;
+    }
+
+    // 전체 장 남은 시간 계산
+    let closeRemainMins = (closeMins - nowMins + 1440) % 1440;
+    if (closeRemainMins === 0) closeRemainMins = 1440;
+
+    // 임박 여부 (10분 이내)
+    const regularClosing = isRegular && remainMins > 0 && remainMins <= 10;
+    const marketClosing  = !isRegular && closeRemainMins <= 10;
+
+    if (isRegular) {
+        const closingStyle = regularClosing
+            ? 'background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.4);'
+            : '';
+        const closingLabel = regularClosing
+            ? `⚠️ <b style="color:#ef4444;">정규장 마감 임박!</b> · ${remainText}`
+            : `⚡ <b style="color:#f59e0b;">정규장 진행 중</b> · ${remainText}`;
+        const closingDesc = regularClosing
+            ? '지금 연장하지 않으면 곧 비정규장으로 전환됩니다!'
+            : '별풍선 33개 후원으로 연장 도전!';
+        bar.style.display = 'flex';
+        bar.innerHTML = `
+            <div class="extend-request-bar" style="${closingStyle}">
+                <div class="extend-request-desc">
+                    ${closingLabel}<br>
+                    ${closingDesc}
+                </div>
+                <button class="btn-extend-request" onclick="openExtendModal(true)">🎰 연장 요청</button>
+            </div>`;
+    } else {
+        const closingStyle = marketClosing
+            ? 'background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.4);'
+            : '';
+        const closingLabel = marketClosing
+            ? `⚠️ <b style="color:#ef4444;">장 마감 임박!</b> · ${closeRemainMins}분 후 마감`
+            : `📉 <b style="color:#38bdf8;">비정규장</b> 진행 중`;
+        const closingDesc = marketClosing
+            ? '곧 거래가 종료됩니다. 마지막 거래 기회입니다!'
+            : '별풍선 33개 후원으로 정규장을 열어보세요!';
+        bar.style.display = 'flex';
+        bar.innerHTML = `
+            <div class="extend-request-bar off-peak" style="${closingStyle}">
+                <div class="extend-request-desc">
+                    ${closingLabel}<br>
+                    ${closingDesc}
+                </div>
+                <button class="btn-extend-request off-peak" onclick="openExtendModal(false)">🎰 정규장 요청</button>
+            </div>`;
+    }
+}
+
+window.openExtendModal = function(isRegular) {
+    const titleEl = document.getElementById('extend-modal-title');
+    const descEl  = document.getElementById('extend-modal-desc');
+    if (isRegular) {
+        titleEl.textContent = '🎰 정규장 연장 요청';
+        descEl.innerHTML = `개발자 스트리밍 방송에서 <b style="color:#f59e0b;">별풍선 33개</b>로 후원하면<br>룰렛을 통해 <b style="color:#f59e0b;">25% 확률</b>로<br><b style="color:#22c55e;">정규장 1시간 즉시 연장</b>이 가능합니다!`;
+    } else {
+        titleEl.textContent = '🎰 정규장 시작 요청';
+        descEl.innerHTML = `개발자 스트리밍 방송에서 <b style="color:#38bdf8;">별풍선 33개</b>로 후원하면<br>룰렛을 통해 <b style="color:#38bdf8;">25% 확률</b>로<br><b style="color:#22c55e;">정규장 1시간 즉시 시작</b>이 가능합니다!`;
+    }
+    document.getElementById('extend-modal').classList.add('active');
+};
+
+window.closeExtendModal = function() {
+    document.getElementById('extend-modal').classList.remove('active');
+};
+
+window.goToLiveStream = function() {
+    window.open('https://play.sooplive.com/skftodwocks2', '_blank');
+    closeExtendModal();
+};
+
+// ── 알림 설정 ──────────────────────────────────────────────
+let alertSettings = {}; // { stockId: { enabled, rise, fall } }
+let alertStockId  = null;
+let notifPermission = false;
+
+function loadAlertSettings() {
+    try {
+        const raw = localStorage.getItem('soop_alert_settings');
+        alertSettings = raw ? JSON.parse(raw) : {};
+    } catch(e) { alertSettings = {}; }
+}
+
+function saveAlertSettings() {
+    try { localStorage.setItem('soop_alert_settings', JSON.stringify(alertSettings)); } catch(e) {}
+}
+
+function getAlertIcon(stockId) {
+    const s = alertSettings[stockId];
+    return (s && s.enabled) ? '🔔' : '⏰';
+}
+
+window.openAlertModal = async function(stockId, stockName) {
+    alertStockId = stockId;
+    document.getElementById('alert-modal-title').textContent = `⏰ ${stockName} 알림 설정`;
+
+    // 알림 권한 요청
+    if (Notification.permission === 'default') {
+        const perm = await Notification.requestPermission();
+        notifPermission = perm === 'granted';
+    } else {
+        notifPermission = Notification.permission === 'granted';
+    }
+
+    const setting = alertSettings[stockId] || { enabled: false, rise: 15, fall: 15 };
+    document.getElementById('alert-enabled-toggle').checked = setting.enabled && notifPermission;
+    document.getElementById('alert-rise-val').value = setting.rise || 15;
+    document.getElementById('alert-fall-val').value = setting.fall || 15;
+
+    if (!notifPermission) {
+        document.getElementById('alert-modal-sub').style.color = '#ef4444';
+        document.getElementById('alert-modal-sub').textContent = '⚠️ 브라우저 알림 권한이 없습니다. 브라우저 설정에서 허용해주세요.';
+        document.getElementById('alert-enabled-toggle').disabled = true;
+    } else {
+        const enabledCount = Object.values(alertSettings).filter(s => s.enabled).length;
+        const isThisEnabled = alertSettings[stockId]?.enabled;
+        document.getElementById('alert-modal-sub').style.color = '#64748b';
+        document.getElementById('alert-modal-sub').textContent = `알림 설정 ${enabledCount}/3 · 주가 변동 시 브라우저 알림을 받습니다.`;
+        document.getElementById('alert-enabled-toggle').disabled = !isThisEnabled && enabledCount >= 3;
+    }
+
+    document.getElementById('alert-modal').classList.add('active');
+};
+
+window.closeAlertModal = function() {
+    document.getElementById('alert-modal').classList.remove('active');
+    alertStockId = null;
+};
+
+window.saveAlertSetting = function() {
+    if (!alertStockId) return;
+    const enabled = document.getElementById('alert-enabled-toggle').checked;
+    const rise    = parseInt(document.getElementById('alert-rise-val').value) || 15;
+    const fall    = parseInt(document.getElementById('alert-fall-val').value) || 15;
+
+    // 3개 제한 체크
+    if (enabled) {
+        const currentEnabled = Object.entries(alertSettings)
+            .filter(([id, s]) => s.enabled && id !== alertStockId).length;
+        if (currentEnabled >= 3) {
+            document.getElementById('alert-modal-sub').style.color = '#ef4444';
+            document.getElementById('alert-modal-sub').textContent = '⚠️ 알림은 최대 3개 종목까지 설정 가능합니다.';
+            return;
+        }
+    }
+
+    alertSettings[alertStockId] = { enabled, rise, fall };
+    saveAlertSettings();
+
+    // 알림 버튼 아이콘 업데이트
+    document.querySelectorAll(`.btn-alert[data-id="${alertStockId}"]`).forEach(btn => {
+        btn.textContent = getAlertIcon(alertStockId);
+    });
+
+    closeAlertModal();
+};
+
+// 주가 변동 시 알림 체크
+function checkPriceAlert(stockId, stockName, prevPrice, newPrice) {
+    const setting = alertSettings[stockId];
+    if (!setting || !setting.enabled) return;
+    if (!notifPermission || Notification.permission !== 'granted') return;
+    if (!prevPrice || prevPrice === newPrice) return;
+
+    const changeRate = ((newPrice - prevPrice) / prevPrice) * 100;
+
+    if (changeRate >= setting.rise) {
+        new Notification(`📈 ${stockName} 급등!`, {
+            body: `+${changeRate.toFixed(1)}% 상승 · 현재가 ${newPrice.toLocaleString()}원`,
+            icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+        });
+    } else if (changeRate <= -setting.fall) {
+        new Notification(`📉 ${stockName} 급락!`, {
+            body: `${changeRate.toFixed(1)}% 하락 · 현재가 ${newPrice.toLocaleString()}원`,
+            icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+        });
+    }
+}
+
+// 초기 로드
+loadAlertSettings();
+if (Notification.permission === 'granted') notifPermission = true;
+
+// ── 자산 히스토리 ──────────────────────────────────────────
+const ASSET_HISTORY_KEY = 'soop_asset_history';
+
+function loadAssetHistory() {
+    try {
+        const raw = localStorage.getItem(ASSET_HISTORY_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch(e) { return {}; }
+}
+
+function saveAssetHistoryToday(totalAsset) {
+    if (!totalAsset || totalAsset <= 0) return;
+    const history = loadAssetHistory();
+    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+        .toISOString().slice(0, 10);
+    history[today] = totalAsset;
+    // 최근 30일만 유지
+    const keys = Object.keys(history).sort();
+    if (keys.length > 30) keys.slice(0, keys.length - 30).forEach(k => delete history[k]);
+    try { localStorage.setItem(ASSET_HISTORY_KEY, JSON.stringify(history)); } catch(e) {}
+}
+
+window.openAssetHistory = function() {
+    const history = loadAssetHistory();
+    const today   = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+
+    // 최근 7일 날짜 배열
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        days.push(d.toISOString().slice(0, 10));
+    }
+
+    const values = days.map(d => history[d] || null);
+    const validValues = values.filter(v => v !== null);
+    const maxVal = validValues.length > 0 ? Math.max(...validValues) : 1;
+    const minVal = validValues.length > 0 ? Math.min(...validValues) : 0;
+
+    // 오늘 vs 7일 전 비교
+    const todayVal  = history[days[6]] || null;
+    const week1Val  = validValues.length >= 2 ? validValues[0] : null;
+    const summaryEl = document.getElementById('asset-summary-rows');
+    const diff      = todayVal && week1Val ? todayVal - week1Val : null;
+    const diffRate  = diff && week1Val ? ((diff / week1Val) * 100).toFixed(1) : null;
+    const diffColor = !diff ? '#64748b' : diff > 0 ? '#ef4444' : '#3b82f6';
+    const diffSign  = !diff ? '' : diff > 0 ? '+' : '';
+
+    summaryEl.innerHTML = `
+        <div class="asset-summary-row">
+            <div class="asset-summary-label">현재 총 자산</div>
+            <div class="asset-summary-value" style="color:#f8fafc;">${todayVal ? todayVal.toLocaleString() + '원' : '-'}</div>
+        </div>
+        <div class="asset-summary-row">
+            <div class="asset-summary-label">7일 전 대비</div>
+            <div class="asset-summary-value" style="color:${diffColor};">${diff ? diffSign + diff.toLocaleString() + '원' : '-'}</div>
+        </div>
+        <div class="asset-summary-row">
+            <div class="asset-summary-label">7일 수익률</div>
+            <div class="asset-summary-value" style="color:${diffColor};">${diffRate ? diffSign + diffRate + '%' : '-'}</div>
+        </div>`;
+
+    // 일별 바 차트
+    const barsEl = document.getElementById('asset-day-bars');
+    barsEl.innerHTML = days.map((d, i) => {
+        const val = values[i];
+        const label = d.slice(5).replace('-', '/');
+        if (!val) return `
+            <div class="asset-day-row">
+                <div class="asset-day-label">${label}</div>
+                <div class="asset-day-bar-wrap"><div class="asset-day-bar" style="width:0%;background:#334155;"></div></div>
+                <div class="asset-day-val" style="color:#334155;">-</div>
+            </div>`;
+        const pct   = maxVal === minVal ? 100 : ((val - minVal) / (maxVal - minVal)) * 100;
+        const isUp  = i > 0 && values[i - 1] && val >= values[i - 1];
+        const color = i === 6 ? '#38bdf8' : isUp ? '#ef4444' : '#3b82f6';
+        return `
+            <div class="asset-day-row">
+                <div class="asset-day-label">${label}</div>
+                <div class="asset-day-bar-wrap"><div class="asset-day-bar" style="width:${Math.max(pct, 4)}%;background:${color};"></div></div>
+                <div class="asset-day-val" style="color:${color};">${val.toLocaleString()}</div>
+            </div>`;
+    }).join('');
+
+    document.getElementById('asset-history-modal').classList.add('active');
+};
+
+window.closeAssetHistory = function() {
+    document.getElementById('asset-history-modal').classList.remove('active');
+};
+
+// ── 이용약관 ──────────────────────────────────────────────
+window.openTerms = function() {
+    document.getElementById('terms-modal').classList.add('active');
+};
+window.closeTerms = function() {
+    document.getElementById('terms-modal').classList.remove('active');
+};
+const PRIVACY_HIDE_KEY = 'soop_privacy_hide';
+
+window.openPrivacy = function() {
+    if (localStorage.getItem(PRIVACY_HIDE_KEY)) return; // 다시 열지 않기 설정 시 스킵
+    document.getElementById('privacy-modal').classList.add('active');
+};
+// 체크박스 링크에서 호출 — 다시 열지 않기 여부와 무관하게 항상 열림
+window.openPrivacyModal = function() {
+    document.getElementById('privacy-modal').classList.add('active');
+};
+window.closePrivacy = function() {
+    document.getElementById('privacy-modal').classList.remove('active');
+};
+window.closePrivacyForever = function() {
+    localStorage.setItem(PRIVACY_HIDE_KEY, '1');
+    document.getElementById('privacy-modal').classList.remove('active');
+};
+
+// ── 상장 신청 ──────────────────────────────────────────────
+window.openListingRequestModal = function(prefillName = '') {
+    document.getElementById('listing-streamer-name').value = prefillName;
+    document.getElementById('listing-soop-id').value       = '';
+    document.getElementById('listing-reason').value        = '';
+    document.getElementById('listing-msg').textContent     = '';
+    document.getElementById('listing-form').style.opacity  = '1';
+    document.getElementById('listing-form').style.pointerEvents = 'auto';
+    document.getElementById('listing-privacy-agree').checked = false;
+    document.getElementById('listing-modal').classList.add('active');
+};
+
+window.closeListingModal = function() {
+    document.getElementById('listing-modal').classList.remove('active');
+};
+
+window.submitListingRequest = async function() {
+    const name   = document.getElementById('listing-streamer-name').value.trim();
+    const soopId = document.getElementById('listing-soop-id').value.trim();
+    const reason = document.getElementById('listing-reason').value.trim();
+    const msgEl  = document.getElementById('listing-msg');
+
+    if (!document.getElementById('listing-privacy-agree').checked) { msgEl.style.color='#ef4444'; msgEl.textContent='개인정보 처리방침에 동의해주세요.'; return; }
+    if (!name)   { msgEl.style.color='#ef4444'; msgEl.textContent='스트리머 닉네임을 입력해주세요.'; return; }
+    if (!soopId) { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디를 입력해주세요.'; return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(soopId)) { msgEl.style.color='#ef4444'; msgEl.textContent='SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
+    if (!userUID) { msgEl.style.color='#ef4444'; msgEl.textContent='로그인이 필요합니다.'; return; }
+
+    msgEl.style.color = '#94a3b8';
+    msgEl.textContent = '신청 중...';
+    try {
+        const reqId = `listing_${userUID}_${Date.now()}`;
+        await set(ref(db, `listingRequests/${reqId}`), {
+            name, soopId, reason, uid: userUID,
+            status: 'pending',
+            createdAt: Date.now()
+        });
+        msgEl.style.color = '#22c55e';
+        msgEl.textContent = `✅ 신청 완료! 검토 후 순차적으로 등록됩니다.`;
+        document.getElementById('listing-form').style.opacity = '0.5';
+        document.getElementById('listing-form').style.pointerEvents = 'none';
+    } catch(e) {
+        msgEl.style.color = '#ef4444';
+        msgEl.textContent = '신청 실패: ' + e.message;
+    }
+};
+
+window.submitSubscribeRequest = async function() {
+    const nickname = document.getElementById('sub-nickname').value.trim();
+    const soopId   = document.getElementById('sub-soop-id').value.trim();
+    const statusEl = document.getElementById('sub-status');
+
+    if (!document.getElementById('sub-privacy-agree').checked) { statusEl.style.color = '#ef4444'; statusEl.textContent = '개인정보 처리방침에 동의해주세요.'; return; }
+    if (!nickname) { statusEl.style.color = '#ef4444'; statusEl.textContent = '닉네임을 입력해주세요.'; return; }
+    if (!soopId)   { statusEl.style.color = '#ef4444'; statusEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(soopId)) { statusEl.style.color = '#ef4444'; statusEl.textContent = 'SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
+    if (!userUID) { statusEl.style.color = '#ef4444'; statusEl.textContent = '로그인이 필요합니다.'; return; }
+
+    statusEl.style.color = '#94a3b8';
+    statusEl.textContent = '신청 중...';
+    try {
+        await set(ref(db, `subscribeRequests/${userUID}`), {
+            nickname, soopId, uid: userUID,
+            status: 'pending',
+            createdAt: Date.now()
+        });
+        statusEl.style.color = '#22c55e';
+        statusEl.textContent = '✅ 신청 완료! 승인 후 자동 활성화됩니다.';
+        setTimeout(() => checkSubscribeStatus(), 1500);
+    } catch(e) {
+        statusEl.style.color = '#ef4444';
+        statusEl.textContent = '신청 실패: ' + e.message;
+    }
+};
+
 window.togglePortfolio = function() {
     const panel     = document.getElementById('my-stocks-container');
     const dim       = document.getElementById('portfolio-dim');
@@ -3089,12 +4136,13 @@ window.closePortfolio = function() {
 
 // ── 모달 ─────────────────────────────────────────────────────
 window.openPromoModal = () => {
-    // 폼 초기화
     document.getElementById('promo-nickname').value = '';
     document.getElementById('promo-soop-id').value  = '';
     document.getElementById('promo-days').value     = '';
     document.getElementById('promo-preview').style.display = 'none';
-    document.getElementById('promo-msg').textContent = '';
+    document.getElementById('promo-msg').textContent  = '';
+    document.getElementById('promo-cost').textContent = '';
+    document.getElementById('promo-privacy-agree').checked = false;
     document.getElementById('promo-modal').classList.add('active');
 };
 window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
@@ -3110,6 +4158,7 @@ window.openChartAdModal = () => {
     if (msg)  msg.textContent  = '';
     if (cost) cost.textContent = '';
     if (form) { form.style.opacity = '1'; form.style.pointerEvents = 'auto'; }
+    document.getElementById('chart-ad-privacy-agree').checked = false;
     closeChartModal();
     document.getElementById('chart-ad-modal').classList.add('active');
 };
@@ -3143,6 +4192,7 @@ window.submitChartAdRequest = async function() {
     const days     = parseInt(document.getElementById('chart-ad-days').value);
     const msgEl    = document.getElementById('chart-ad-msg');
 
+    if (!document.getElementById('chart-ad-privacy-agree').checked) { msgEl.style.color='#ef4444'; msgEl.textContent='개인정보 처리방침에 동의해주세요.'; return; }
     if (!nickname)                  { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임을 입력해주세요.'; return; }
     if (nickname.length > 50)       { msgEl.style.color='#ef4444'; msgEl.textContent='닉네임은 50자 이내로 입력해주세요.'; return; }
     if (!imgUrl)                    { msgEl.style.color='#ef4444'; msgEl.textContent='배너 이미지 URL을 입력해주세요.'; return; }
@@ -3171,9 +4221,9 @@ window.submitChartAdRequest = async function() {
         const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
         if (isMobile) {
             const r = Math.random();
-            window.open(`https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`, '_blank');
+            window.open(`https://m.sooplive.com/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`, '_blank');
         } else {
-            window.open(`https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
+            window.open(`https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
         }
     } catch(e) {
         msgEl.style.color = '#ef4444';
@@ -3185,7 +4235,7 @@ window.submitChartAdRequest = async function() {
 function getSoopImgUrl(soopId) {
     if (!soopId) return '';
     const prefix = soopId.substring(0, 2).toLowerCase();
-    return `https://stimg.sooplive.co.kr/LOGO/${prefix}/${soopId}/${soopId}.jpg`;
+    return `https://stimg.sooplive.com/LOGO/${prefix}/${soopId}/${soopId}.jpg`;
 }
 
 // ── SOOP ID 입력 시 미리보기 ────────────────────────────────
@@ -3202,17 +4252,25 @@ document.addEventListener('input', (e) => {
     document.getElementById('promo-preview-name').textContent =
         document.getElementById('promo-nickname').value.trim() || soopId;
     document.getElementById('promo-preview-url').textContent =
-        `sooplive.co.kr/station/${soopId}`;
+        `sooplive.com/station/${soopId}`;
     preview.style.display = 'flex';
 });
 
 // ── 홍보 신청 제출 ───────────────────────────────────────────
+window.updatePromoCost = function() {
+    const days   = parseInt(document.getElementById('promo-days').value);
+    const costEl = document.getElementById('promo-cost');
+    if (!costEl) return;
+    costEl.textContent = days > 0 ? `총 별풍선 ${(days * 20).toLocaleString()}개 (${(days * 20 * 110).toLocaleString()}원)` : '';
+};
+
 window.submitPromoRequest = async function() {
     const nickname = document.getElementById('promo-nickname').value.trim();
     const soopId   = document.getElementById('promo-soop-id').value.trim();
     const days     = parseInt(document.getElementById('promo-days').value);
     const msgEl    = document.getElementById('promo-msg');
 
+    if (!document.getElementById('promo-privacy-agree').checked) { msgEl.style.color = '#ef4444'; msgEl.textContent = '개인정보 처리방침에 동의해주세요.'; return; }
     if (!nickname)              { msgEl.style.color = '#ef4444'; msgEl.textContent = '닉네임을 입력해주세요.'; return; }
     if (nickname.length > 50)   { msgEl.style.color = '#ef4444'; msgEl.textContent = '닉네임은 50자 이내로 입력해주세요.'; return; }
     if (!soopId)                { msgEl.style.color = '#ef4444'; msgEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
@@ -3234,7 +4292,7 @@ window.submitPromoRequest = async function() {
             soopId,
             days,
             imgUrl,
-            link:      `https://www.sooplive.co.kr/station/${soopId}`,
+            link:      `https://www.sooplive.com/station/${soopId}`,
             uid,
             status:    'pending',  // pending / approved / rejected
             createdAt: Date.now(),
@@ -3248,9 +4306,9 @@ window.submitPromoRequest = async function() {
         const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
         if (isMobile) {
             const r = Math.random();
-            window.open(`https://m.sooplive.co.kr/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`, '_blank');
+            window.open(`https://m.sooplive.com/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`, '_blank');
         } else {
-            window.open(`https://st.sooplive.co.kr/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
+            window.open(`https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
         }
     } catch(e) {
         msgEl.style.color = '#ef4444';
@@ -3305,7 +4363,7 @@ function renderBanners() {
     activeBanners.forEach(s => {
         const dDayText = s.diffDays === Infinity ? "AD" : (s.diffDays === 0 ? "오늘만료" : `D-${s.diffDays}`);
         const a = document.createElement('a');
-        a.href = sanitizeUrl(s.link, `https://www.sooplive.co.kr/station/${s.id}`);
+        a.href = sanitizeUrl(s.link, `https://www.sooplive.com/station/${s.id}`);
         a.target = "_blank";
         a.className = "banner-item promo-active";
         const imgSrc   = s.bannerImg.startsWith('images/') ? './' + s.bannerImg : s.bannerImg;
@@ -3628,15 +4686,18 @@ function onUserActive() {
 
 // 비활동 10초 후 주가·분봉 구독 전부 일시 중단
 function pauseAllSubscriptions() {
-    // 실시간 구독 해제
+    // 실시간 구독 해제 (알림 설정 종목 예외)
     Object.keys(favoriteUnsubs).forEach(id => {
+        if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
     });
     Object.keys(ownedUnsubs).forEach(id => {
+        if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         if (ownedUnsubs[id]) { ownedUnsubs[id](); delete ownedUnsubs[id]; }
     });
-    // 폴링 타이머 해제
+    // 폴링 타이머 해제 (알림 설정 종목 예외)
     Object.keys(favPollTimers).forEach(id => {
+        if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         clearInterval(favPollTimers[id]); delete favPollTimers[id];
     });
     // 절전 모드 오버레이 표시
@@ -3646,6 +4707,11 @@ function pauseAllSubscriptions() {
 // 마우스/터치/키보드 이벤트 감지
 ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
     document.addEventListener(evt, onUserActive, { passive: true });
+});
+
+// 탭 전환 감지 — 포그라운드 복귀 시 활동 재개
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) onUserActive();
 });
 
 // 정규장/비정규장/마감 상태에 따라 구독 방식(실시간/폴링/중단) 결정
@@ -3846,7 +4912,7 @@ function subscribeToFavorite(stockId) {
     if (!snap.exists()) return;
     const data = { ...snap.val(), id: stockId };
 
-    // 주가 변동 → 스파크라인 캐시 누적
+    // 주가 변동 → 스파크라인 캐시 누적 + 알림 체크
     const prevPrice = favorites[stockId]?.price;
     if (prevPrice !== undefined) {
         // 기준값이 없으면 prevPrice로 초기화 후 누적
@@ -3854,6 +4920,7 @@ function subscribeToFavorite(stockId) {
         if (prevPrice !== data.price) {
             sparklinePriceCache[stockId].push(data.price);
             if (sparklinePriceCache[stockId].length > 20) sparklinePriceCache[stockId].shift();
+            checkPriceAlert(stockId, data.name || stockId, prevPrice, data.price);
         }
     } else {
         // 최초 구독 시 현재가로 초기값 설정
@@ -3950,6 +5017,27 @@ function renderFavoriteList() {
         }
         favBtn.title       = s.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가';
         favBtn.textContent = s.isFavorite ? '⭐' : '☆';
+
+        // 알림 버튼 추가
+        // 버튼 그룹 (즐겨찾기 + 알림)
+        let btnGroup = card.querySelector('.price-btn-group');
+        if (!btnGroup) {
+            btnGroup = document.createElement('div');
+            btnGroup.className = 'price-btn-group';
+            // favBtn을 그룹으로 이동
+            if (favBtn.parentNode) favBtn.parentNode.removeChild(favBtn);
+            btnGroup.appendChild(favBtn);
+            // 알림 버튼 생성
+            const alertBtn = document.createElement('button');
+            alertBtn.className = 'btn-alert';
+            alertBtn.dataset.id = s.id;
+            alertBtn.onclick = (e) => { e.stopPropagation(); openAlertModal(s.id, s.name || s.id); };
+            btnGroup.appendChild(alertBtn);
+            card.querySelector('.price-group')?.appendChild(btnGroup);
+        }
+        const alertBtnEl = btnGroup.querySelector('.btn-alert');
+        if (alertBtnEl) { alertBtnEl.textContent = getAlertIcon(s.id); alertBtnEl.title = '알림 설정'; }
+
         fragment.appendChild(card);
     });
     // 더 이상 필요 없는 카드 제거
@@ -4110,7 +5198,14 @@ function renderSearchResults() {
         .sort((a, b) => (b.price || 0) - (a.price || 0));
 
     if (items.length === 0) {
-        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">검색 결과가 없습니다.</div>`;
+        const q2 = document.getElementById('search-input')?.value?.trim() || '';
+        listDiv.innerHTML = `
+            <div class="listing-request-box">
+                <div style="font-size:36px;">🔍</div>
+                <div class="listing-request-title">"${q2}"에 대한 검색 결과가 없습니다.</div>
+                <div class="listing-request-desc">아직 상장되지 않은 스트리머입니다.<br>상장 신청을 하면 검토 후 등록됩니다.</div>
+                <button class="btn-listing-request" onclick="openListingRequestModal('${q2.replace(/'/g, "\'")}')">📋 상장 신청하기</button>
+            </div>`;
         if (emptyDiv) emptyDiv.style.display = 'none';
         return;
     }
@@ -4219,9 +5314,20 @@ document.getElementById('search-input')?.addEventListener('input', (e) => {
 // ── ESC 키로 모달 닫기 ───────────────────────────────────────
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
-        if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
-        if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
+        const closeIfActive = (id, closeFn) => {
+            const el = document.getElementById(id);
+            if (el?.classList.contains('active')) closeFn();
+        };
+        closeIfActive('chart-modal-overlay', closeChartModal);
+        closeIfActive('promo-modal', () => window.closePromoModal());
+        closeIfActive('chart-ad-modal', () => window.closeChartAdModal());
+        closeIfActive('extend-modal', () => window.closeExtendModal());
+        closeIfActive('listing-modal', () => window.closeListingModal());
+        closeIfActive('relay-modal', () => window.closeRelayModal());
+        closeIfActive('asset-history-modal', () => window.closeAssetHistory());
+        closeIfActive('alert-modal', () => window.closeAlertModal());
+        closeIfActive('terms-modal', () => window.closeTerms());
+        closeIfActive('privacy-modal', () => window.closePrivacy());
     }
     // ── Ctrl+Enter: 관리자 구글 로그인 / 마감 안내창 우회 ────
     if (e.ctrlKey && e.key === 'Enter') {
@@ -4261,5 +5367,131 @@ document.addEventListener('keydown', (e) => {
 
 })();
 </script>
+
+<!-- ── 자산 히스토리 모달 ── -->
+<div id="asset-history-modal" class="asset-history-modal-overlay" onclick="if(event.target===this)closeAssetHistory()">
+    <div class="asset-history-modal-box">
+        <h3>📊 최근 7일 자산 변화</h3>
+        <div id="asset-summary-rows"></div>
+        <div class="asset-chart-wrap">
+            <div class="asset-chart-label">일별 총 자산</div>
+            <div id="asset-day-bars"></div>
+        </div>
+        <button onclick="closeAssetHistory()" style="width:100%; background:#334155; color:#f8fafc; border:none; padding:11px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; margin-top:8px;">닫기</button>
+    </div>
+</div>
+
+<!-- ── 알림 설정 모달 ── -->
+<div id="alert-modal" class="alert-modal-overlay" onclick="if(event.target===this)closeAlertModal()">
+    <div class="alert-modal-box">
+        <h3 id="alert-modal-title">⏰ 알림 설정</h3>
+        <div class="sub" id="alert-modal-sub">주가 변동 시 브라우저 알림을 받습니다.</div>
+        <div class="alert-toggle">
+            <input type="checkbox" id="alert-enabled-toggle">
+            <label for="alert-enabled-toggle">이 종목 알림 켜기</label>
+        </div>
+        <div id="alert-threshold-section">
+            <div class="alert-row">
+                <div class="alert-row-label">📈 급등 알림 기준</div>
+                <div class="alert-row-input">
+                    <input type="number" id="alert-rise-val" value="15" min="1" max="50">
+                    <span>% 이상</span>
+                </div>
+            </div>
+            <div class="alert-row">
+                <div class="alert-row-label">📉 급락 알림 기준</div>
+                <div class="alert-row-input">
+                    <input type="number" id="alert-fall-val" value="15" min="1" max="50">
+                    <span>% 이상</span>
+                </div>
+            </div>
+        </div>
+        <div class="alert-modal-btns">
+            <button onclick="closeAlertModal()" style="background:#334155; color:#f8fafc;">취소</button>
+            <button onclick="saveAlertSetting()" style="background:#38bdf8; color:#0f172a;">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── 이용약관 모달 ── -->
+<div id="terms-modal" class="terms-modal-overlay" onclick="if(event.target===this)closeTerms()">
+    <div class="terms-modal-content">
+        <h2>📋 스트리머 주식시장 이용약관</h2>
+        <p>본 서비스는 SOOP 스트리머를 종목으로 삼아 거래하는 <b style="color:#f8fafc;">가상 주식 게임</b>입니다.</p>
+
+        <h3>제1조 서비스 성격</h3>
+        <p>본 서비스에서 사용되는 모든 자산, 주가, 거래 내역은 현실의 금융 자산과 무관한 가상의 게임 데이터입니다. 실제 투자, 재산 증식, 금전적 이익과 관계가 없습니다.</p>
+
+        <h3>제2조 이용 조건</h3>
+        <p>본 서비스는 별도 회원가입 없이 누구나 이용 가능합니다. 구글 계정 연동 시 기기 간 자산 동기화가 지원됩니다. 미성년자도 이용 가능하나 별풍선 후원은 SOOP 플랫폼 정책을 따릅니다.</p>
+
+        <h3>제3조 게임 자산</h3>
+        <p>초기 지급되는 가상 자산 100만원은 게임 내에서만 유효합니다. 게임 자산은 현금으로 환전되거나 양도될 수 없습니다. 서비스 점검, 오류, 운영 정책 변경으로 인해 자산이 변동될 수 있습니다.</p>
+
+        <h3>제4조 후원 및 유료 서비스</h3>
+        <p>배너 광고, 중계방 등록, 구독자 인증 등 유료 서비스는 SOOP 별풍선을 통해 운영됩니다. 별풍선 후원은 SOOP 플랫폼 정책에 따라 처리되며 환불은 SOOP 환불 정책을 따릅니다. 유료 서비스 이용 기간은 운영진 승인 시점부터 산정됩니다. 서비스 점검으로 인한 노출 기간 손실은 운영진 판단에 따라 보전될 수 있습니다.</p>
+
+        <h3>제5조 운영 정책</h3>
+        <p>운영진은 서비스 안정성을 위해 사전 고지 없이 점검, 종목 조정, 주가 수정을 진행할 수 있습니다. 어뷰징, 비정상적 거래, 운영 방해 행위가 확인될 경우 제재 없이 계정이 초기화될 수 있습니다. 운영진의 모든 결정은 최종적이며 별도 이의 제기 절차가 없습니다.</p>
+
+        <h3>제6조 면책</h3>
+        <p>본 서비스는 가상 게임으로 운영되며 서비스 중단, 데이터 손실, 게임 자산 변동에 대한 법적 책임을 지지 않습니다. 유저 간 분쟁, 스트리머 관련 분쟁에 운영진은 개입하지 않습니다.</p>
+
+        <h3>제7조 저작권</h3>
+        <p>본 서비스의 디자인, 코드, 운영 구조에 대한 저작권은 운영진에게 있습니다. 무단 복제, 배포, 상업적 이용을 금지합니다.</p>
+
+        <h3>제8조 약관 변경</h3>
+        <p>운영진은 필요에 따라 약관을 변경할 수 있으며 변경 시 서비스 내 공지를 통해 안내합니다.</p>
+
+        <button class="terms-close-btn" onclick="closeTerms()">확인</button>
+    </div>
+</div>
+
+<!-- ── 개인정보 처리방침 모달 ── -->
+<div id="privacy-modal" class="terms-modal-overlay" onclick="if(event.target===this)closePrivacy()">
+    <div class="terms-modal-content">
+        <h2>🔒 개인정보 처리방침</h2>
+
+        <h3>제1조 수집하는 정보</h3>
+        <p><b style="color:#f8fafc;">자동 수집</b> — 익명 로그인 시 Firebase가 자동 생성하는 익명 UID가 부여됩니다. 실제 개인정보는 수집되지 않습니다.<br><br>
+        <b style="color:#f8fafc;">구글 계정 연동 시</b> — 구글 계정 이메일 주소가 수집됩니다. 계정 식별 및 관리자 권한 구분에만 사용됩니다.<br><br>
+        <b style="color:#f8fafc;">직접 입력 정보</b> — 구독자 인증, 중계방, 배너 광고, 상장 신청 시 닉네임과 SOOP 아이디가 수집됩니다.</p>
+
+        <h3>제2조 수집 목적</h3>
+        <p>게임 자산 및 거래 내역 관리, 유료 서비스 신청 처리, 구독자 인증 및 권한 관리, 어뷰징 방지 및 서비스 보호 목적으로만 사용됩니다.</p>
+
+        <h3>제3조 정보 보관</h3>
+        <p>모든 데이터는 Firebase Realtime Database에 저장됩니다. 서비스 운영 기간 동안 보관되며 서비스 종료 시 전체 삭제됩니다.</p>
+
+        <h3>제4조 제3자 제공</h3>
+        <p>수집된 정보는 어떠한 경우에도 제3자에게 제공되지 않습니다. Firebase(Google) 서버에 저장되며 Google의 개인정보 처리방침을 따릅니다.</p>
+
+        <h3>제5조 자산 랭킹 공개 범위</h3>
+        <p>자산 랭킹은 순위와 자산 금액만 익명으로 표시됩니다. 닉네임, UID 등 개인 식별 정보는 랭킹에 포함되지 않습니다.</p>
+
+        <h3>제6조 로컬 저장소 사용</h3>
+        <p>브라우저 로컬스토리지에 즐겨찾기 종목, 중계방 캐시 데이터가 저장됩니다. 서버로 전송되지 않으며 브라우저 캐시 삭제 시 함께 삭제됩니다.</p>
+
+        <h3>제7조 정보 삭제 요청</h3>
+        <p>본인의 데이터 삭제를 원하실 경우 운영진 SOOP 방송국을 통해 요청하실 수 있습니다. 익명 계정의 경우 UID를 식별할 수 없어 삭제가 어려울 수 있습니다.</p>
+
+        <h3>제8조 방침 변경</h3>
+        <p>개인정보 처리방침이 변경될 경우 서비스 내 공지를 통해 안내합니다.</p>
+
+        <button class="terms-close-btn" onclick="closePrivacy()">확인</button>
+        <button class="terms-close-btn" onclick="closePrivacyForever()"
+            style="background:#1e293b; color:#64748b; border:1px solid #334155; margin-top:8px; font-size:12px;">
+            다시 열지 않기
+        </button>
+    </div>
+</div>
+
+<!-- ── 이용약관 푸터 ── -->
+<div class="terms-footer">
+    <a onclick="openTerms()">이용약관</a>
+    <span style="color:#1e293b; margin:0 8px;">|</span>
+    <a onclick="openPrivacy()">개인정보 처리방침</a>
+</div>
+
 </body>
 </html>
