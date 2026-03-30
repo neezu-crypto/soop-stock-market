@@ -83,6 +83,18 @@
         .live-ranking-container::-webkit-scrollbar { width: 4px; }
         .live-ranking-container::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
 
+        /* ── 신청 카드 pending 강조 ── */
+        .request-card { background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px; transition: border-color 0.3s, box-shadow 0.3s; }
+        .request-card.pending {
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 4px 12px rgba(245,158,11,0.12);
+            animation: pending-pulse 2.5s ease-in-out infinite;
+        }
+        @keyframes pending-pulse {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 4px 12px rgba(245,158,11,0.12); }
+            50%       { box-shadow: 0 0 0 1px rgba(245,158,11,0.4), 0 4px 16px rgba(245,158,11,0.25); }
+        }
+
         /* ── 아코디언 ── */
         .accordion-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -911,7 +923,135 @@
             <span id="candle-prune-chip" class="status-chip none">미실행</span>
         </div>
         <div id="candle-prune-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:150px; overflow-y:auto; display:none;"></div>
-        <button class="btn-primary" style="background:#475569;" onclick="pruneAllCandles()">🗑 오래된 캔들 정리 실행</button>
+        <button class="btn-primary" style="background:#475569; margin-bottom:12px;" onclick="pruneAllCandles()">🗑 오래된 캔들 정리 실행</button>
+        </div>
+        </div>
+    </div>
+
+    <!-- 📊 자산 랭킹 집계 -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <div class="accordion-header">
+            <h1>📊 자산 랭킹 집계</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            전체 유저의 자산(현금+보유주식 평가금)을 계산해 상위 100위를 <b>assetRanking/</b> 경로에 저장합니다.<br>
+            <span style="color:#f59e0b;">⚠️ 유저 수가 많을수록 시간이 걸립니다. 장 마감 후 실행을 권장합니다.</span>
+        </div>
+        <div class="data-status-bar" style="margin-bottom:12px;">
+            <span>마지막 집계: <b id="asset-rank-last" style="color:#f8fafc;">-</b></span>
+            <span id="asset-rank-chip" class="status-chip none">미실행</span>
+        </div>
+        <div id="asset-rank-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:120px; overflow-y:auto; display:none;"></div>
+        <button class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="calcAssetRanking()">📊 자산 랭킹 집계 실행</button>
+        </div>
+        </div>
+    </div>
+
+    <!-- ⏰ 일일 자동 실행 설정 -->
+    <div class="container" style="display:block; border-color: #6366f1;">
+        <div class="accordion-header">
+            <h1>⏰ 일일 자동 실행 설정</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            매일 지정한 시각에 <b>자산 랭킹 집계</b>와 <b>오래된 캔들 정리</b>를 자동 실행합니다.<br>
+            <span style="color:#f59e0b;">⚠️ 관리자 페이지가 열려있는 동안만 동작합니다. 새 창으로 열어두세요.</span>
+        </div>
+        <div class="toggle-wrap" style="margin-bottom:12px;">
+            <div>
+                <div class="toggle-label">자동 실행</div>
+                <div class="toggle-sub" id="auto-daily-next">OFF 상태</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="auto-daily-toggle" onchange="toggleDailyAuto(this.checked)">
+                <span class="toggle-slider" style="--checked-color:#6366f1;"></span>
+            </label>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+            <div style="font-size:13px; color:#94a3b8;">실행 시각</div>
+            <input type="number" id="auto-daily-hour" min="0" max="23" value="0"
+                style="width:64px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
+                oninput="updateDailyAutoNext()">
+            <span style="color:#64748b;">시</span>
+            <input type="number" id="auto-daily-min" min="0" max="59" value="0"
+                style="width:64px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
+                oninput="updateDailyAutoNext()">
+            <span style="color:#64748b;">분</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="auto-run-ranking" checked style="accent-color:#6366f1;">
+                📊 자산 랭킹 집계
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="auto-run-candle" checked style="accent-color:#6366f1;">
+                🗑 오래된 캔들 정리
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="auto-run-reset-ranking" checked style="accent-color:#6366f1;">
+                🔄 랭킹 TOP5 초기화
+            </label>
+        </div>
+        <div class="data-status-bar">
+            <span>마지막 자동 실행: <b id="auto-daily-last" style="color:#f8fafc;">-</b></span>
+            <span id="auto-daily-chip" class="status-chip none">대기 중</span>
+        </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- 📋 상장 신청 검수 -->
+    <div class="container" style="display:block; border-color: #6366f1;">
+        <div class="accordion-header">
+            <h1>📋 상장 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 스트리머 상장 목록입니다. 검토 후 직접 종목을 추가해주세요.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>listingRequests</b> 경로에서 관리됩니다.</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadListingRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="listing-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
+    <!-- 👑 구독자 신청 검수 -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <div class="accordion-header">
+            <h1>👑 구독자 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 구독자 인증 목록입니다. SOOP에서 실제 구독 여부 확인 후 <b>수락</b>하면 자산 랭킹이 활성화됩니다.<br>
+            <span style="color:#38bdf8;">Firebase DB의 <b>subscribeRequests/{uid}</b> 경로를 변경합니다.</span>
+        </div>
+
+        <!-- 일괄 만료 처리 -->
+        <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155; margin-bottom:14px;">
+            <div style="font-size:13px; color:#f59e0b; font-weight:800; margin-bottom:8px;">📋 일괄 만료 처리</div>
+            <div style="font-size:12px; color:#64748b; margin-bottom:8px;">만료된 구독자 닉네임을 줄바꿈으로 구분하여 입력하세요.</div>
+            <textarea id="expire-nicknames" placeholder="닉네임1&#10;닉네임2&#10;닉네임3"
+                style="width:100%; height:80px; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:10px; border-radius:8px; font-size:13px; resize:none; box-sizing:border-box; margin-bottom:8px;"></textarea>
+            <div id="expire-status" style="font-size:12px; color:#64748b; margin-bottom:8px; min-height:16px;"></div>
+            <button class="btn-danger" style="width:100%; font-size:13px;" onclick="bulkExpireSubscribers()">🗑 일괄 만료 처리</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn-success" onclick="loadSubscribeRequests()">🔄 신청 목록 불러오기</button>
+        </div>
+        <div id="subscribe-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
         </div>
     </div>
@@ -1150,6 +1290,12 @@
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
             await loadMarketHours();
+            // 신청 목록 자동 로드
+            loadAdRequests();
+            loadChartAdRequests();
+            loadRelayRequests();
+            loadSubscribeRequests();
+            loadListingRequests();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -1186,9 +1332,9 @@
         } catch(e) { alert("집계 중 오류: " + e.message); statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생'; }
     };
 
-    window.resetRankings = async function() {
+    window.resetRankings = async function(silent = false) {
         if (!isAdmin()) return;
-        if (!confirm('⚠️ 랭킹 전체를 초기화하시겠습니까?\n\n• 거래량 TOP5\n• 순매수 TOP5\n• 순매도 TOP5\n\n다음 거래부터 0부터 다시 집계됩니다.')) return;
+        if (!silent && !confirm('⚠️ 랭킹 전체를 초기화하시겠습니까?\n\n• 거래량 TOP5\n• 순매수 TOP5\n• 순매도 TOP5\n\n다음 거래부터 0부터 다시 집계됩니다.')) return;
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading'; statusEl.innerText = '초기화 중...';
         try {
@@ -1203,7 +1349,7 @@
             if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">초기화 완료 — 다음 거래부터 집계 시작</td></tr>`;
             if (wrap)  wrap.style.display = 'block';
             statusEl.className = 'status-chip'; statusEl.innerText = '✅ 초기화 완료';
-            alert('✅ 랭킹 3종 모두 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
+            if (!silent) alert('✅ 랭킹 3종 모두 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
         } catch(e) {
             alert('초기화 실패: ' + e.message);
             statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생';
@@ -1937,7 +2083,7 @@
                 const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
                 const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
                 const card = document.createElement('div');
-                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
                 card.innerHTML = `
                     <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
                         <img src="${req.imgUrl}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#1e293b;"
@@ -2051,7 +2197,7 @@
                 const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
                 const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
                 const card = document.createElement('div');
-                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
                 card.innerHTML = `
                     <div style="margin-bottom:10px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -2448,7 +2594,7 @@
                 const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
                 const expireStr   = req.expireAt ? new Date(req.expireAt).toLocaleString('ko-KR') : '-';
                 const card = document.createElement('div');
-                card.style.cssText = 'background:#0f172a; border:1px solid #334155; border-radius:10px; padding:14px;';
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
                 card.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <div>
@@ -2535,9 +2681,9 @@
     };
 
     // ── 오래된 캔들 정리 ──────────────────────────────────────
-    window.pruneAllCandles = async function() {
+    window.pruneAllCandles = async function(silent = false) {
         if (!isAdmin()) return;
-        if (!confirm('모든 종목의 6시간 이전 캔들을 삭제합니다. 계속하시겠습니까?')) return;
+        if (!silent && !confirm('모든 종목의 6시간 이전 캔들을 삭제합니다. 계속하시겠습니까?')) return;
 
         const statusEl = document.getElementById('candle-prune-status');
         const chipEl   = document.getElementById('candle-prune-chip');
@@ -2600,6 +2746,322 @@
         }
     };
 
+
+    // ── 일일 자동 실행 ────────────────────────────────────────
+    let dailyAutoTimer = null;
+
+    window.toggleDailyAuto = function(enabled) {
+        if (enabled) {
+            scheduleDailyAuto();
+        } else {
+            clearTimeout(dailyAutoTimer);
+            dailyAutoTimer = null;
+            document.getElementById('auto-daily-next').textContent = 'OFF 상태';
+            document.getElementById('auto-daily-chip').className   = 'status-chip none';
+            document.getElementById('auto-daily-chip').textContent = '대기 중';
+        }
+    };
+
+    function scheduleDailyAuto() {
+        clearTimeout(dailyAutoTimer);
+        const hour = parseInt(document.getElementById('auto-daily-hour').value) || 0;
+        const min  = parseInt(document.getElementById('auto-daily-min').value)  || 0;
+
+        const now   = new Date();
+        const next  = new Date();
+        next.setHours(hour, min, 0, 0);
+        if (next <= now) next.setDate(next.getDate() + 1); // 이미 지난 시각이면 다음 날
+
+        const delay = next.getTime() - now.getTime();
+        const nextStr = next.toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
+
+        document.getElementById('auto-daily-next').textContent    = `다음 실행: ${nextStr}`;
+        document.getElementById('auto-daily-chip').className      = 'status-chip loading';
+        document.getElementById('auto-daily-chip').textContent    = '예약됨';
+
+        dailyAutoTimer = setTimeout(async () => {
+            const lastEl  = document.getElementById('auto-daily-last');
+            const chipEl  = document.getElementById('auto-daily-chip');
+            chipEl.className   = 'status-chip loading';
+            chipEl.textContent = '실행 중';
+
+            const runRanking      = document.getElementById('auto-run-ranking').checked;
+            const runCandle       = document.getElementById('auto-run-candle').checked;
+            const runResetRanking = document.getElementById('auto-run-reset-ranking').checked;
+
+            if (runRanking)      await calcAssetRanking(true);
+            if (runCandle)       await pruneAllCandles(true);
+            if (runResetRanking) await resetRankings(true);
+
+            const doneStr = new Date().toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
+            lastEl.textContent = doneStr;
+            chipEl.className   = 'status-chip active';
+            chipEl.textContent = '완료';
+
+            // 다음 날 재예약
+            if (document.getElementById('auto-daily-toggle').checked) {
+                scheduleDailyAuto();
+            }
+        }, delay);
+    }
+
+    window.updateDailyAutoNext = function() {
+        if (document.getElementById('auto-daily-toggle').checked) {
+            scheduleDailyAuto();
+        }
+    };
+
+    // ── 자산 랭킹 집계 ────────────────────────────────────────
+    window.calcAssetRanking = async function(silent = false) {
+        if (!isAdmin()) return;
+        if (!silent && !confirm('전체 유저 자산 랭킹을 집계합니다. 계속하시겠습니까?')) return;
+
+        const chipEl   = document.getElementById('asset-rank-chip');
+        const lastEl   = document.getElementById('asset-rank-last');
+        const logEl    = document.getElementById('asset-rank-log');
+
+        chipEl.className   = 'status-chip loading';
+        chipEl.textContent = '집계 중';
+        logEl.style.display = 'block';
+        logEl.innerHTML    = '';
+
+        try {
+            // 1. 전체 유저 데이터 읽기
+            logEl.innerHTML += '<div>유저 데이터 읽는 중...</div>';
+            const usersSnap = await get(ref(db, 'users/'));
+            if (!usersSnap.exists()) { logEl.innerHTML += '<div style="color:#ef4444;">유저 데이터 없음</div>'; return; }
+            const users = usersSnap.val();
+
+            // 2. 전체 종목 현재가 읽기
+            logEl.innerHTML += '<div>종목 현재가 읽는 중...</div>';
+            const stocksSnap = await get(ref(db, 'stocks/'));
+            const stocks = stocksSnap.exists() ? stocksSnap.val() : {};
+
+            // 3. 유저별 자산 계산
+            logEl.innerHTML += '<div>자산 계산 중...</div>';
+            const assetList = Object.entries(users).map(([uid, u]) => {
+                let total = Math.floor(u.cash || 0);
+                if (u.stocks) {
+                    Object.entries(u.stocks).forEach(([stockId, s]) => {
+                        if (!s.qty || s.qty <= 0) return;
+                        const price = stocks[stockId]?.price || 0;
+                        total += Math.floor(price * s.qty);
+                    });
+                }
+                return { uid, totalAsset: total };
+            });
+
+            // 4. 정렬 후 TOP 100
+            assetList.sort((a, b) => b.totalAsset - a.totalAsset);
+            const top100 = assetList.slice(0, 100).map((item, i) => ({
+                rank: i + 1,
+                totalAsset: item.totalAsset
+            }));
+
+            // 5. Firebase 저장 (UID 제외, 순위+자산만)
+            const now = Date.now();
+            await set(ref(db, 'assetRanking/'), {
+                updatedAt:  now,
+                totalUsers: assetList.length,
+                items:      top100
+            });
+
+            const nowStr = new Date(now).toLocaleString('ko-KR');
+            chipEl.className   = 'status-chip active';
+            chipEl.textContent = '완료';
+            lastEl.textContent = nowStr;
+            logEl.innerHTML += `<div style="color:#22c55e;">✅ 완료 — 총 ${assetList.length}명 집계, TOP 100 저장 (${nowStr})</div>`;
+            logEl.innerHTML += `<div style="color:#94a3b8;">1위: ${top100[0]?.totalAsset.toLocaleString()}원 / 100위: ${top100[99]?.totalAsset.toLocaleString()}원</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+
+        } catch(e) {
+            chipEl.className   = 'status-chip expired';
+            chipEl.textContent = '오류';
+            logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${e.message}</div>`;
+        }
+    };
+
+    // ── 상장 신청 검수 ───────────────────────────────────────
+    window.loadListingRequests = async function() {
+        if (!isAdmin()) return;
+        const listEl = document.getElementById('listing-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'listingRequests/'));
+            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
+            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([reqId, req]) => {
+                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'done' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusText  = req.status === 'done' ? '✅ 등록완료' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+                const card = document.createElement('div');
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div>
+                            <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req.name)}</span>
+                            <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req.soopId)}</span>
+                        </div>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    ${req.reason ? `<div style="font-size:12px; color:#94a3b8; margin-bottom:8px; padding:8px; background:#0f172a; border-radius:6px;">${escapeHtml(req.reason)}</div>` : ''}
+                    <div style="font-size:11px; color:#475569; margin-bottom:10px;">${date}</div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
+                            style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
+                        ${req.status !== 'done' ? `<button onclick="doneListingRequest('${reqId}')"
+                            style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">등록완료</button>` : ''}
+                        ${req.status !== 'rejected' ? `<button onclick="rejectListingRequest('${reqId}')"
+                            style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
+                        <button onclick="deleteListingRequest('${reqId}')"
+                            style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    window.doneListingRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        try {
+            await update(ref(db, `listingRequests/${reqId}`), { status: 'done', doneAt: Date.now() });
+            loadListingRequests();
+        } catch(e) { alert('처리 실패: ' + e.message); }
+    };
+
+    window.rejectListingRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `listingRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
+            loadListingRequests();
+        } catch(e) { alert('거절 실패: ' + e.message); }
+    };
+
+    window.deleteListingRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 삭제하시겠습니까?')) return;
+        try {
+            await set(ref(db, `listingRequests/${reqId}`), null);
+            loadListingRequests();
+        } catch(e) { alert('삭제 실패: ' + e.message); }
+    };
+
+    // ── 구독자 신청 검수 ─────────────────────────────────────
+    window.loadSubscribeRequests = async function() {
+        if (!isAdmin()) return;
+        const listEl = document.getElementById('subscribe-request-list');
+        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
+        try {
+            const snap = await get(ref(db, 'subscribeRequests/'));
+            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
+            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
+            listEl.innerHTML = '';
+            items.forEach(([uid, req]) => {
+                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'expired' ? '#64748b' : '#f59e0b';
+                const statusText  = req.status === 'approved' ? '✅ 승인됨' : req.status === 'expired' ? '⬛ 만료됨' : '⏳ 대기중';
+                const card = document.createElement('div');
+                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div>
+                            <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req.nickname)}</span>
+                            <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req.soopId)}</span>
+                        </div>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    <div style="font-size:11px; color:#475569; margin-bottom:10px;">UID: ${uid} · ${date}</div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
+                            style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
+                        ${req.status !== 'approved' ? `<button onclick="approveSubscriber('${uid}')"
+                            style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>` : ''}
+                        ${req.status === 'approved' ? `<button onclick="expireSubscriber('${uid}')"
+                            style="background:#475569; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">만료</button>` : ''}
+                        <button onclick="deleteSubscribeRequest('${uid}')"
+                            style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        } catch(e) {
+            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
+        }
+    };
+
+    window.approveSubscriber = async function(uid) {
+        if (!isAdmin()) return;
+        try {
+            await update(ref(db, `subscribeRequests/${uid}`), { status: 'approved', approvedAt: Date.now() });
+            alert('✅ 승인 완료!');
+            loadSubscribeRequests();
+        } catch(e) { alert('승인 실패: ' + e.message); }
+    };
+
+    window.expireSubscriber = async function(uid) {
+        if (!isAdmin()) return;
+        if (!confirm('이 구독자를 만료 처리하시겠습니까?')) return;
+        try {
+            await update(ref(db, `subscribeRequests/${uid}`), { status: 'expired', expiredAt: Date.now() });
+            loadSubscribeRequests();
+        } catch(e) { alert('만료 처리 실패: ' + e.message); }
+    };
+
+    window.deleteSubscribeRequest = async function(uid) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 삭제하시겠습니까?')) return;
+        try {
+            await set(ref(db, `subscribeRequests/${uid}`), null);
+            loadSubscribeRequests();
+        } catch(e) { alert('삭제 실패: ' + e.message); }
+    };
+
+    window.bulkExpireSubscribers = async function() {
+        if (!isAdmin()) return;
+        const text      = document.getElementById('expire-nicknames').value.trim();
+        const statusEl  = document.getElementById('expire-status');
+        if (!text) { statusEl.style.color = '#ef4444'; statusEl.textContent = '닉네임을 입력해주세요.'; return; }
+
+        const nicknames = text.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+        if (nicknames.length === 0) return;
+
+        statusEl.style.color = '#94a3b8';
+        statusEl.textContent = `처리 중... (0/${nicknames.length})`;
+
+        try {
+            const snap = await get(ref(db, 'subscribeRequests/'));
+            if (!snap.exists()) { statusEl.style.color = '#ef4444'; statusEl.textContent = '데이터 없음'; return; }
+
+            const allData = snap.val();
+            let processed = 0, notFound = [];
+
+            for (const nickname of nicknames) {
+                const entry = Object.entries(allData).find(([, v]) => v.nickname === nickname);
+                if (entry) {
+                    const [uid] = entry;
+                    await update(ref(db, `subscribeRequests/${uid}`), { status: 'expired', expiredAt: Date.now() });
+                    processed++;
+                    statusEl.textContent = `처리 중... (${processed}/${nicknames.length})`;
+                } else {
+                    notFound.push(nickname);
+                }
+            }
+
+            let msg = `✅ ${processed}명 만료 처리 완료.`;
+            if (notFound.length > 0) msg += ` 미발견: ${notFound.join(', ')}`;
+            statusEl.style.color = processed > 0 ? '#22c55e' : '#f59e0b';
+            statusEl.textContent = msg;
+            if (processed > 0) loadSubscribeRequests();
+        } catch(e) {
+            statusEl.style.color = '#ef4444';
+            statusEl.textContent = '오류: ' + e.message;
+        }
+    };
 
     // ── 아코디언 토글 ─────────────────────────────────────────
     document.querySelectorAll('.accordion-header').forEach(header => {
