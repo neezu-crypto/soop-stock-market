@@ -1231,7 +1231,7 @@
         <div class="account-warn-icon">⚠️</div>
         <div class="account-warn-title">계정 데이터 보호 안내</div>
         <div class="account-warn-desc">
-            <span style="display:inline-block; background:rgba(16, 12, 12, 0.12); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-size:12px; font-weight:700; padding:5px 12px; border-radius:8px; margin-bottom:12px;">
+            <span style="display:inline-block; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-size:12px; font-weight:700; padding:5px 12px; border-radius:8px; margin-bottom:12px;">
                 🚨 현재 컴퓨터 재부팅 시 계정이 초기화되는 버그가 발생 중입니다.
             </span><br>
             현재 계정은 <b>브라우저 캐시 기반</b>으로 운영됩니다.<br>
@@ -1885,21 +1885,11 @@
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { 
-    initializeAuth, 
-    browserLocalPersistence, 
-    browserPopupRedirectResolver, 
-    signInAnonymously, 
-    onAuthStateChanged, 
-    signInWithPopup, 
-    linkWithPopup, 
-    GoogleAuthProvider, 
-    signOut 
-} from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider, signOut } 
+    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
 (function () {
 
@@ -1973,19 +1963,9 @@ const firebaseConfig = {
     projectId:   "soop-stock-market",
     appId:       "1:997788925900:web:cb613d438efec019a3a769"
 };
-const app = initializeApp(firebaseConfig);
-const db  = getDatabase(app);
-
-/** * [핵심 수정] getAuth(app) 대신 initializeAuth를 사용합니다.
- * 에러의 원인인 '클래스 정의 누락'을 방지하기 위해 persistence와 resolver를 명시적으로 주입합니다.
- */
-const auth = initializeAuth(app, {
-    persistence: browserLocalPersistence,
-    popupRedirectResolver: browserPopupRedirectResolver
-});
-
-const functions = getFunctions(app);
-const tradeCallable = httpsCallable(functions, 'trade');
+const app  = initializeApp(firebaseConfig);
+const db   = getDatabase(app);
+const auth = getAuth(app);
 
 // ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
@@ -2866,36 +2846,30 @@ function updateAuthStatusUI(user) {
 }
 
 window.loginWithGoogle = async function() {
-    console.log("LOG [A]: 구글 로그인 버튼 클릭됨");
     const provider = new GoogleAuthProvider();
-    
     try {
-        console.log("LOG [B]: 익명 계정 -> 구글 계정 연동(linkWithPopup) 시도");
-        // 이미 초기화 시점에 리졸버를 넣었으므로, 인자 없이 호출해도 안전합니다.
-        await linkWithPopup(auth, provider); 
-        console.log("LOG [C]: 연동 성공");
-        
+        // 1. 익명 계정에 구글 계정 연결 시도 — UID 유지, 자산 보존
+        await linkWithPopup(auth, provider);
         document.getElementById('account-warn-overlay')?.classList.remove('active');
-        alert('✅ 구글 계정 연동 완료!\n자산이 그대로 유지되며 다른 기기에서도 접속할 수 있습니다.');
+        alert('✅ 구글 계정 연동 완료!\n자산이 그대로 유지되며 다른 기기에서도 동일한 자산으로 접속할 수 있습니다.');
     } catch (err) {
-        console.warn("LOG [D]: 연동 중 예외 발생 - 에러 코드:", err.code);
+        if (err.code === 'auth/popup-closed-by-user' ||
+            err.code === 'auth/cancelled-popup-request') return;
 
-        if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
-            console.log("LOG [E]: 이미 가입된 구글 계정임 -> 일반 로그인(signInWithPopup)으로 전환");
+        if (err.code === 'auth/credential-already-in-use' ||
+            err.code === 'auth/email-already-in-use') {
+            // 이미 다른 기기에서 이 구글 계정으로 연동된 경우
+            // → 해당 구글 UID로 로그인 (기존 자산 사용)
             try {
                 await signInWithPopup(auth, provider);
-                console.log("LOG [F]: 구글 로그인 성공");
-                
                 document.getElementById('account-warn-overlay')?.classList.remove('active');
                 alert('✅ 기존 구글 계정으로 로그인됐습니다.\n이전에 연동된 자산으로 접속합니다.');
             } catch (err2) {
-                console.error("❌ LOG [ERR]: signInWithPopup 실패:", err2);
                 if (err2.code !== 'auth/popup-closed-by-user') {
                     alert('로그인 실패: ' + err2.message);
                 }
             }
-        } else if (err.code !== 'auth/popup-closed-by-user') {
-            console.error("❌ LOG [ERR]: 기타 로그인 오류:", err);
+        } else {
             alert('로그인 실패: ' + err.message);
         }
     }
@@ -2970,65 +2944,49 @@ async function setupPresenceSession(user) {
     subscribePresenceCountOnce();
 }
 
-// ── 인증 & 내 데이터 동기화 (최종 방어형 버전) ─────────────────────────────────
+// ── 인증 & 내 데이터 동기화 ─────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
-    console.log("LOG [1]: 인증 상태 변경 감지됨", user ? `UID: ${user.uid} (${user.isAnonymous ? '익명' : '구글'})` : "로그아웃 상태");
-
-    if (typeof syncOwnedSubscriptions === 'function') {
-        // 기존 구독 해제 로직 실행
-    }
-
-    if (user && user.uid) {
+    if (user) {
         userUID = user.uid;
-        const userPath = `users/${userUID}`;
-        console.log("LOG [2]: 유저 경로 설정 완료:", userPath);
+        const userRef  = ref(db, `users/${userUID}`);
+        if (!myData) myData = { cash: 1000000, stocks: {} };
+
+        // 로그인 상태 UI 업데이트
+        updateAuthStatusUI(user);
+
+        applyMarketState();
+        // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
+        tryCloseIntro();
+        applyStocksMode();
+        initFavorites();       // 즐겨찾기 초기 로드
+        loadStockNameCache();  // 종목 이름 캐시 로드 (검색 준비)
 
         try {
-            const userRef = ref(db, userPath);
-            console.log("LOG [3]: Firebase Reference 객체 생성 성공");
-
-            updateAuthStatusUI(user);
-
-            onValue(userRef, (snapshot) => {
-                console.log("LOG [4]: 서버 데이터(onValue) 수신 성공");
-                const serverData = snapshot.exists() ? snapshot.val() : null;
-                console.log("LOG [5]: 서버 데이터 존재 여부:", snapshot.exists());
-
-                myData = {
-                    cash: serverData?.cash ?? 1000000,
-                    stocks: serverData?.stocks || {}
-                };
-                console.log("LOG [6]: myData 객체 구성 완료:", myData);
-
-                if (myData) {
-                    console.log("LOG [7]: 종속 기능(UI 업데이트 등) 실행 시작");
-                    applyMarketState();
-                    tryCloseIntro();
-                    applyStocksMode();
-                    initFavorites();
-                    loadStockNameCache();
-                    updateUI(true);
-                    syncOwnedSubscriptions();
-                    console.log("LOG [8]: 모든 초기화 프로세스 완료");
-                } else {
-                    console.error("ERR: myData가 생성되지 않았습니다.");
-                }
-            }, (error) => {
-                console.error("❌ LOG [ERR]: 데이터 동기화 실패 (보안 규칙 문제 가능성):", error);
-            });
-
-            setupPresenceSession(user).catch(err => console.warn("Presence 설정 실패:", err));
-
-        } catch (err) {
-            console.error("❌ LOG [ERR]: Reference 생성 또는 초기화 중 오류:", err);
+            await setupPresenceSession(user);
+        } catch (e) {
+            const el = document.getElementById('online-count');
+            if (el) el.innerText = '?';
         }
 
+        onValue(userRef, (snapshot) => {
+            if (snapshot.exists()) {
+                const serverData = snapshot.val();
+                myData = {
+                    ...serverData,
+                    cash:   serverData.cash   ?? 1000000,
+                    stocks: serverData.stocks || {}
+                };
+            } else {
+                if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
+            }
+            updateUI(true);
+
+            // 보유 주식 구독 재계산 (보유량 변동 시마다)
+            syncOwnedSubscriptions();
+        });
     } else {
-        console.log("LOG [9]: 유저 정보 없음 -> 익명 로그인 시도");
-        userUID = null;
-        myData = null;
         await teardownPresenceSession();
-        signInAnonymously(auth).catch(err => console.error("❌ LOG [ERR]: 익명 로그인 실패:", err));
+        signInAnonymously(auth);
     }
 });
 
@@ -3208,8 +3166,26 @@ async function flushCandlestick(stockId) {
     // localStorage 캔들 캐시 저장 (6시간 TTL)
     saveCandleToLocal(stockId, { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts });
 
-    // Firebase write 제거: 분봉은 Cloud Functions에서만 집계/저장 (시장 조작 방지)
-    buf.v = 0;
+    // Firebase write (기존 유지)
+    const candleRef = ref(db, `candlesticks/${stockId}/${buf.ts}`);
+    try {
+        await runTransaction(candleRef, (current) => {
+            if (!current) {
+                return { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts };
+            }
+            return {
+                ...current,
+                h: Math.max(current.h, buf.h),
+                l: Math.min(current.l, buf.l),
+                c: buf.c,
+                v: current.v + buf.v,
+                t: buf.ts
+            };
+        });
+        buf.v = 0;
+    } catch (e) {
+        console.warn('[candle] flush 실패 (무시):', e.message);
+    }
 
     // 거래 발생 시마다 서킷브레이커 감지 (차트 모달 없이도 실시간 체크)
     checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId).data);
@@ -3721,35 +3697,159 @@ window.trade = async function (id, type, qty = 1) {
     updateUI(false);
 
     if (!myData.stocks) myData.stocks = {};
-    console.log("전송 데이터 확인:", { stockId: id, action: type, quantity: qty });
+
+const stockRef = ref(db, `stocks/${id}`);
+const userRef  = ref(db, `users/${userUID}`);
+
+// 현재 주가 정보 가져오기
+const currentStockData = favorites[id] || ownedStocks[id] || searchResults[id];
+const currentPrice = currentStockData?.price || 10000;
+
+// 20번마다 한 번씩 서버에서 설정값 로드
+if (!sellConfigCache || sellConfigFetchCount % 20 === 0) {
+    const cfgSnap = await get(ref(db, 'siteConfig/sellConfig'));
+    sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
+}
+sellConfigFetchCount++;
+
+const userPreSnap = await get(userRef);
+const preUser     = userPreSnap.exists() ? userPreSnap.val() : { cash: 1000000, stocks: {} };
+const preCash     = preUser.cash ?? 1000000;
+
+const basePrice  = sellConfigCache.basePrice  ?? 10000;
+const scalePrice = sellConfigCache.scalePrice ?? 90000;
+const impactCoef = sellConfigCache.impact     ?? 0.0005;
+const spread     = sellConfigCache.spread     ?? 0.001;
+const fee        = sellConfigCache.fee        ?? 0.003;
+
+// 매도 시 주가 비례 하락 가중치
+let sellPressure = 1;
+if (type === 'sell') {
+    sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
+}
+
+// 최종 영향력 계산 — 매수/매도 기본 변동폭은 동일, 매도만 sellPressure 적용
+const impact = impactCoef * Math.log2(1 + qty) * sellPressure;
+
+    let finalTradePrice = 0;
 
     try {
-    // 서버 index.js의 req.data.side와 req.data.qty 이름에 정확히 맞춰야 함
-    const res = await tradeCallable({ 
-        stockId: id, 
-        side: type,        // 서버가 req.data.side를 사용함
-        qty: Number(qty)   // 서버가 req.data.qty를 사용하며, 숫자형이어야 함
-    });
-    
-    const payload = res?.data || {};
+        const stockTxAbort = { reason: null };
 
-        // 사용자 데이터는 users/{uid} onValue로 곧 동기화되지만, UX를 위해 즉시 반응음만 처리
+        const stockTxResult = await runTransaction(stockRef, (currentStock) => {
+            if (!currentStock) return currentStock;
+
+            stockTxAbort.reason = null;
+            let newPrice;
+            const prevPrice = currentStock.price;
+
+            if (type === 'buy') {
+                newPrice        = Math.round(prevPrice * (1 + impact));
+                finalTradePrice = Math.round(newPrice * (1 + spread));
+                const totalBuyPrice = finalTradePrice * qty;
+
+                if (preCash < totalBuyPrice) {
+                    stockTxAbort.reason = "잔액부족";
+                    return;
+                }
+
+                const userStock  = preUser.stocks?.[id] || { qty: 0, avg: 0 };
+                if (userStock.qty === 0) {
+                    const ownedCount = Object.values(preUser.stocks || {}).filter(s => (s?.qty || 0) > 0).length;
+                    if (ownedCount >= 10) {
+                        stockTxAbort.reason = "종목한도";
+                        return;
+                    }
+                }
+            } else {
+                const userStock = preUser.stocks?.[id] || { qty: 0, avg: 0 };
+
+                if (userStock.qty < qty) {
+                    stockTxAbort.reason = "보유부족";
+                    return;
+                }
+
+                newPrice        = Math.round(prevPrice * (1 - impact));
+                finalTradePrice = Math.round(newPrice * (1 - spread));
+            }
+
+            const { history: _h, ...stockWithoutHistory } = currentStock;
+            const addBuy  = type === 'buy' ? qty : 0;
+            const addSell = type === 'sell' ? qty : 0;
+            return {
+                ...stockWithoutHistory,
+                price:   newPrice,
+                volume:  (currentStock.volume || 0) + qty,
+                buyVol:  (currentStock.buyVol || 0) + addBuy,
+                sellVol: (currentStock.sellVol || 0) + addSell,
+                change:  (((newPrice - prevPrice) / prevPrice) * 100).toFixed(2)
+            };
+        });
+
+        if (!stockTxResult.committed) {
+            if (stockTxAbort.reason === "잔액부족") throw new Error("잔액부족");
+            if (stockTxAbort.reason === "보유부족") throw new Error("보유부족");
+            if (stockTxAbort.reason === "종목한도") throw new Error("종목한도");
+            throw new Error("트랜잭션중단");
+        }
+
+        const userTxResult = await runTransaction(userRef, (current) => {
+            const c = current || { cash: 1000000, stocks: {} };
+            const cash = c.cash ?? 1000000;
+            const us = c.stocks?.[id] || { qty: 0, avg: 0 };
+            if (type === 'buy') {
+                const totalBuyPrice = finalTradePrice * qty;
+                if (cash < totalBuyPrice) return;
+                const totalCost = (us.qty * us.avg) + totalBuyPrice;
+                const newQty = us.qty + qty;
+                return {
+                    ...c,
+                    cash: cash - totalBuyPrice,
+                    stocks: { ...(c.stocks || {}), [id]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
+                    lastTradeTime: serverTimestamp()
+                };
+            }
+            if (us.qty < qty) return;
+            const totalSellAmount = Math.round(finalTradePrice * qty * (1 - fee));
+            const newQty = us.qty - qty;
+            const nextStocks = { ...(c.stocks || {}) };
+            if (newQty === 0) {
+                nextStocks[id] = null;
+            } else {
+                nextStocks[id] = { qty: newQty, avg: us.avg };
+            }
+            return {
+                ...c,
+                cash: cash + totalSellAmount,
+                stocks: nextStocks,
+                lastTradeTime: serverTimestamp()
+            };
+        });
+
+        if (!userTxResult.committed) throw new Error("유저동기화실패");
+
+        const nv = userTxResult.snapshot.val();
+        myData.cash = nv.cash ?? 1000000;
+        myData.stocks = nv.stocks || {};
+
+        if (finalTradePrice > 0) {
+            updateCandlestick(id, finalTradePrice, qty).catch(e => {
+                console.warn('[candle] 분봉 업데이트 실패 (무시):', e.message);
+            });
+        }
+
         const sound = type === 'buy' ? buySound : sellSound;
         sound.currentTime = 0;
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
+
     } catch (error) {
-        // 에러 상세 로그 확인 (400 에러의 구체적 원인 파악용)
-        console.error("거래 실패 상세:", error.code, error.message, error.details);
-        const msg = error?.message || '';
-        // Functions 에러는 메시지/코드 형태가 다를 수 있어 완화 처리
-        if (msg.includes('Maintenance')) alert('🔧 현재 점검 중입니다. 잠시 후 다시 이용해주세요.');
-        else if (msg.includes('Market closed')) alert('🕐 현재 시장 마감 시간입니다.');
-        else if (msg.includes('cash') || msg.includes('잔액')) alert('잔액이 부족합니다!');
-        else if (msg.includes('holdings') || msg.includes('보유')) alert('보유 주식이 부족합니다!');
-        else if (msg.includes('limit')) alert('1회 최대 거래 금액(1억원)을 초과합니다.');
-        else if (msg.includes('Circuit')) alert('🚫 서킷브레이커 발동 중입니다.');
+        if (error.message === "잔액부족") alert("잔액이 부족합니다!");
+        else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
+        else if (error.message === "종목한도") alert('보유 종목은 최대 10종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.');
+        else if (error.message === "트랜잭션중단") { /* 정상 중단 — 알림 없음 */ }
+        else if (error.message === "유저동기화실패") alert("잔고 동기화에 실패했습니다. 새로고침 후 다시 시도해주세요.");
         else alert("거래 중 오류가 발생했습니다.");
     } finally {
         setTimeout(() => {
