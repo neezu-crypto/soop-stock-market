@@ -1216,10 +1216,9 @@
             const card = document.createElement('div');
             const isHi = highlightIds && highlightIds.has(reqId);
             card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '') + (isHi ? ' just-arrived' : '');
-            const nickJson = JSON.stringify(req.nickname || '');
             card.innerHTML = `
                 <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-                    <img src="${req.imgUrl}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#1e293b;"
+                    <img src="${escapeHtml(String(req.imgUrl || ''))}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#1e293b;"
                         onerror="this.style.display='none'">
                     <div style="flex:1;">
                         <div style="font-weight:700; color:#f8fafc;">${escapeHtml(req.nickname)}${isHi ? '<span class="req-new-badge">NEW</span>' : ''}</div>
@@ -1229,13 +1228,15 @@
                     <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
                 </div>
                 <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end;">
-                    <button onclick="approveAdRequest('${reqId}', ${req.days}, ${nickJson})"
+                    <button type="button" class="btn-ad-approve"
                         style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px; white-space:nowrap;">수락</button>
-                    <button onclick="rejectAdRequest('${reqId}')"
+                    <button type="button" class="btn-ad-reject"
                         style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
                 </div>
             `;
             listEl.appendChild(card);
+            card.querySelector('.btn-ad-approve')?.addEventListener('click', () => window.approveAdRequest(reqId));
+            card.querySelector('.btn-ad-reject')?.addEventListener('click', () => window.rejectAdRequest(reqId));
             if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
         });
     }
@@ -1266,18 +1267,20 @@
                     <div style="font-size:11px; color:#475569; margin-top:4px; word-break:break-all;">${escapeHtml(req.link)}</div>
                 </div>
                 <div style="background:#0a1628; border-radius:6px; overflow:hidden; border:1px solid #1e293b; margin-bottom:10px; position:relative;">
-                    <img src="${req.imgUrl}" style="width:100%; aspect-ratio:720/150; object-fit:cover; display:block;"
+                    <img src="${escapeHtml(String(req.imgUrl || ''))}" style="width:100%; aspect-ratio:720/150; object-fit:cover; display:block;"
                         onerror="this.parentElement.innerHTML='<div style=\\'padding:10px; color:#475569; font-size:12px;\\'>이미지 로드 실패</div>'">
                     <div style="position:absolute;top:4px;right:6px;background:rgba(0,0,0,0.5);color:#94a3b8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">AD</div>
                 </div>
                 <div style="display:flex; gap:8px; justify-content:flex-end;">
-                    <button onclick="approveChartAdRequest('${reqId}', ${req.days})"
+                    <button type="button" class="btn-chart-ad-approve"
                         style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>
-                    <button onclick="rejectChartAdRequest('${reqId}')"
+                    <button type="button" class="btn-chart-ad-reject"
                         style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
                 </div>
             `;
             listEl.appendChild(card);
+            card.querySelector('.btn-chart-ad-approve')?.addEventListener('click', () => window.approveChartAdRequest(reqId));
+            card.querySelector('.btn-chart-ad-reject')?.addEventListener('click', () => window.rejectChartAdRequest(reqId));
             if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
         });
     }
@@ -1311,15 +1314,18 @@
                 <div style="display:flex; gap:8px; justify-content:flex-end;">
                     <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
                         style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
-                    ${req.status !== 'done' ? `<button onclick="doneListingRequest('${reqId}')"
+                    ${req.status !== 'done' ? `<button type="button" class="btn-listing-done"
                         style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">등록완료</button>` : ''}
-                    ${req.status !== 'rejected' ? `<button onclick="rejectListingRequest('${reqId}')"
+                    ${req.status !== 'rejected' ? `<button type="button" class="btn-listing-reject"
                         style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
-                    <button onclick="deleteListingRequest('${reqId}')"
+                    <button type="button" class="btn-listing-delete"
                         style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
                 </div>
             `;
             listEl.appendChild(card);
+            card.querySelector('.btn-listing-done')?.addEventListener('click', () => window.doneListingRequest(reqId));
+            card.querySelector('.btn-listing-reject')?.addEventListener('click', () => window.rejectListingRequest(reqId));
+            card.querySelector('.btn-listing-delete')?.addEventListener('click', () => window.deleteListingRequest(reqId));
             if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
         });
     }
@@ -1357,16 +1363,19 @@
                     <a href="https://www.sooplive.co.kr/${escapeHtml(req.soopId)}" target="_blank"
                         style="font-size:11px; color:#38bdf8; text-decoration:none;">🔗 방송국 바로가기</a>
                     <div style="display:flex; gap:8px;">
-                        ${req.status !== 'approved' ? `<button onclick="approveRelayRequest('${reqId}')"
+                        ${req.status !== 'approved' ? `<button type="button" class="btn-relay-approve"
                             style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>` : ''}
-                        ${req.status !== 'rejected' ? `<button onclick="rejectRelayRequest('${reqId}')"
+                        ${req.status !== 'rejected' ? `<button type="button" class="btn-relay-reject"
                             style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
-                        <button onclick="deleteRelayRequest('${reqId}')"
+                        <button type="button" class="btn-relay-delete"
                             style="background:#334155; color:#94a3b8; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
                     </div>
                 </div>
             `;
             listEl.appendChild(card);
+            card.querySelector('.btn-relay-approve')?.addEventListener('click', () => window.approveRelayRequest(reqId));
+            card.querySelector('.btn-relay-reject')?.addEventListener('click', () => window.rejectRelayRequest(reqId));
+            card.querySelector('.btn-relay-delete')?.addEventListener('click', () => window.deleteRelayRequest(reqId));
             if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
         });
     }
@@ -1399,15 +1408,18 @@
                 <div style="display:flex; gap:8px; justify-content:flex-end;">
                     <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
                         style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
-                    ${req.status !== 'approved' ? `<button onclick="approveSubscriber('${uid}')"
+                    ${req.status !== 'approved' ? `<button type="button" class="btn-sub-approve"
                         style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>` : ''}
-                    ${req.status === 'approved' ? `<button onclick="expireSubscriber('${uid}')"
+                    ${req.status === 'approved' ? `<button type="button" class="btn-sub-expire"
                         style="background:#475569; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">만료</button>` : ''}
-                    <button onclick="deleteSubscribeRequest('${uid}')"
+                    <button type="button" class="btn-sub-delete"
                         style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
                 </div>
             `;
             listEl.appendChild(card);
+            card.querySelector('.btn-sub-approve')?.addEventListener('click', () => window.approveSubscriber(uid));
+            card.querySelector('.btn-sub-expire')?.addEventListener('click', () => window.expireSubscriber(uid));
+            card.querySelector('.btn-sub-delete')?.addEventListener('click', () => window.deleteSubscribeRequest(uid));
             if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
         });
     }
@@ -2531,8 +2543,26 @@
         }
     };
     // ── 홍보 신청 검수 (목록은 startRealtimeRequestListeners 의 onValue) ──
-    window.approveAdRequest = async function(reqId, days, nickname) {
+    /** reqId만 전달 (닉네임/일수는 DB에서 조회) — onclick 문자열 이스케이프 깨짐 방지 */
+    window.approveAdRequest = async function(reqId) {
         if (!isAdmin()) return;
+        let req;
+        try {
+            const snap = await get(ref(db, `adRequests/${reqId}`));
+            if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
+            req = snap.val();
+        } catch (e) {
+            alert('신청 조회 실패: ' + e.message);
+            return;
+        }
+
+        const nickname = req.nickname || '';
+        const days = Number(req.days);
+        if (!Number.isFinite(days) || days < 1) {
+            alert('신청 일수(일)가 올바르지 않습니다.');
+            return;
+        }
+
         // stocks/ 에서 닉네임으로 종목 ID 자동 검색
         const stocksSnap = await get(ref(db, 'stocks/'));
         if (!stocksSnap.exists()) { alert('종목 데이터를 불러올 수 없습니다.'); return; }
@@ -2553,9 +2583,6 @@
         const endDate = endDateObj.toISOString().split('T')[0];
 
         try {
-            const snap = await get(ref(db, `adRequests/${reqId}`));
-            if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
-            const req = snap.val();
 
             const bannerData = {
                 name:          req.nickname,
@@ -2603,12 +2630,17 @@
     };
 
     // ── 차트 배너 신청 검수 (목록 onValue) ─────────────────────
-    window.approveChartAdRequest = async function(reqId, days) {
+    window.approveChartAdRequest = async function(reqId) {
         if (!isAdmin()) return;
         try {
             const snap = await get(ref(db, `chartAdRequests/${reqId}`));
             if (!snap.exists()) { alert('신청 정보를 찾을 수 없습니다.'); return; }
             const req = snap.val();
+            const days = Number(req.days);
+            if (!Number.isFinite(days) || days < 1) {
+                alert('신청 일수(일)가 올바르지 않습니다.');
+                return;
+            }
 
             const endDateObj = new Date();
             endDateObj.setDate(endDateObj.getDate() + days);
