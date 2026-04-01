@@ -1,0 +1,11 @@
+# 서버 라이브러리 무시
+node_modules/
+functions/node_modules/
+
+# 맥 전용 시스템 파일 무시
+.DS_Store
+
+# 로그 및 임시 파일
+npm-debug.log*
+firebase-debug.log*
+.firebase/
