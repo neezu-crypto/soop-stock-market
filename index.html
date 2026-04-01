@@ -594,7 +594,8 @@
         .promo-modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
-            z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+            /* 모바일 패널 딤(#portfolio-dim:2450)보다 위로 올려 입력 포커스/클릭 차단 방지 */
+            z-index: 6000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
         }
         .promo-modal-overlay.active { opacity: 1; pointer-events: auto; }
         .promo-modal-content {
@@ -2251,6 +2252,11 @@ window.toggleRelay = function() {
 };
 
 window.openRelayApplyModal = function() {
+    // 모바일에서 포트폴리오/중계 패널 딤이 모달 위를 덮는 이슈 방지
+    document.getElementById('portfolio-dim')?.classList.remove('active');
+    document.getElementById('my-stocks-container')?.classList.remove('mobile-open');
+    document.getElementById('relay-container')?.classList.remove('mobile-open');
+
     document.getElementById('relay-nickname').value = '';
     document.getElementById('relay-soop-id').value  = '';
     document.getElementById('relay-hours').value    = '';
@@ -2260,6 +2266,8 @@ window.openRelayApplyModal = function() {
     document.getElementById('relay-form').style.pointerEvents = 'auto';
     document.getElementById('relay-privacy-agree').checked = false;
     document.getElementById('relay-modal').classList.add('active');
+    // 첫 입력에 포커스
+    setTimeout(() => document.getElementById('relay-nickname')?.focus(), 0);
 };
 
 window.closeRelayModal = function() {
