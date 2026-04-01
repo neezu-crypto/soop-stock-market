@@ -1001,12 +1001,36 @@
             border-color: var(--primary);
         }
 
-        /* ── 정기점검 · 장마감 오버레이 (slate) ── */
+        /* ── 정기점검 · 장마감 오버레이 (slate) — 기본 표시로 첫 페인트 플리커 방지 ── */
         #maintenance-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #0f172a;
             display: flex; justify-content: center; align-items: center;
-            z-index: 9999;
+            z-index: 10050;
+        }
+        .maintenance-loading {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 16px; padding: 8px 0;
+        }
+        .maintenance-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(56,189,248,0.2);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: maintenance-spin 0.85s linear infinite;
+        }
+        @keyframes maintenance-spin { to { transform: rotate(360deg); } }
+        .maintenance-loading-text {
+            margin: 0; font-size: 14px; color: #94a3b8; font-weight: 600;
+        }
+        /* siteConfig 확인 전 거래 UI 숨김 (오버레이가 덮기 전 깜빡임 방지) */
+        body.market-state-pending > header,
+        body.market-state-pending #portfolio-tab,
+        body.market-state-pending #portfolio-dim,
+        body.market-state-pending #relay-tab,
+        body.market-state-pending #left-rail-unified,
+        body.market-state-pending .wrapper {
+            visibility: hidden !important;
         }
         .maintenance-content {
             text-align: center; max-width: 420px; padding: 50px 40px;
@@ -1190,7 +1214,7 @@
 }
     </style>
 </head>
-<body><header>
+<body class="market-state-pending"><header>
         <a href="https://neezu-crypto.github.io/streamer-challenge-reset-week-official/" target="_blank" class="header-challenge-banner">
             <span class="badge-challenge">CHALLENGE</span>
             <i class="fa-solid fa-trophy"></i> 
@@ -1231,22 +1255,28 @@
     <div class="power-save-desc">터치하거나 움직이면 해제됩니다</div>
 </div>
 
-<!-- ── 정기점검 · 장마감 오버레이 ── -->
-<div id="maintenance-overlay" style="display:none;" tabindex="0">
+<!-- ── 정기점검 · 장마감 오버레이 (기본 표시 → siteConfig 후 applyMarketState로 제어) ── -->
+<div id="maintenance-overlay" tabindex="0">
     <div class="maintenance-content">
-        <div class="maintenance-icon">🔔</div>
-        <div class="maintenance-title" id="maintenance-title">주식 시장 오픈 준비 중</div>
-        <div class="maintenance-desc" id="maintenance-desc-main">
-            현재는 원활한 거래를 위한 <b>장 시작 준비 시간</b>입니다.<br>
-            잠시 후 스트리머 주식시장이 개장됩니다.
+        <div id="maintenance-loading" class="maintenance-loading">
+            <div class="maintenance-spinner" aria-hidden="true"></div>
+            <p class="maintenance-loading-text">Checking market status…</p>
         </div>
-        <div class="maintenance-time-badge" id="maintenance-time-badge">🕒 시장 운영 시간: 09:00 ~ 익일 04:00</div>
-        <div class="maintenance-desc" id="maintenance-desc-sub" style="margin-bottom:0; font-size: 13px; color: #94a3b8;">
-            준비 시간 동안에는 거래가 제한되며,<br>
-            개장과 동시에 실시간 차트가 활성화됩니다.
-        </div>
-        <div class="maintenance-countdown" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            장 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
+        <div id="maintenance-body" style="display:none;">
+            <div class="maintenance-icon">🔔</div>
+            <div class="maintenance-title" id="maintenance-title">주식 시장 오픈 준비 중</div>
+            <div class="maintenance-desc" id="maintenance-desc-main">
+                현재는 원활한 거래를 위한 <b>장 시작 준비 시간</b>입니다.<br>
+                잠시 후 스트리머 주식시장이 개장됩니다.
+            </div>
+            <div class="maintenance-time-badge" id="maintenance-time-badge">🕒 시장 운영 시간: 09:00 ~ 익일 04:00</div>
+            <div class="maintenance-desc" id="maintenance-desc-sub" style="margin-bottom:0; font-size: 13px; color: #94a3b8;">
+                준비 시간 동안에는 거래가 제한되며,<br>
+                개장과 동시에 실시간 차트가 활성화됩니다.
+            </div>
+            <div class="maintenance-countdown" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+                장 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
+            </div>
         </div>
     </div>
 </div>
@@ -1938,7 +1968,7 @@ const auth = getAuth(app);
 
 // ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
-let siteConfigReady = true; // 점검창 기본 표시 방식으로 변경 — siteConfig 불필요
+let siteConfigReady = false; // 첫 get(siteConfig) 성공 후 true — 그 전에는 시장 오픈으로 간주하지 않음
 /** 클라이언트 전용 서킷 동결(관리자만 siteConfig/frozenStocks에 기록 가능) */
 let localCircuitFreeze = {};
 function getEffectiveFrozenUntil(stockId) {
@@ -1946,12 +1976,6 @@ function getEffectiveFrozenUntil(stockId) {
     const b = localCircuitFreeze[stockId] || 0;
     return Math.max(a, b);
 }
-
-// siteConfig 초기 1회 로드
-get(ref(db, 'siteConfig/')).then(snap => {
-    siteConfig = snap.exists() ? snap.val() : {};
-    applyMarketState();
-}).catch(() => {});
 
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
@@ -2403,7 +2427,12 @@ get(ref(db, 'siteConfig/')).then(snap => {
     applyMarketState();
     tryCloseIntro();
     updateExtendRequestBar();
-}).catch(() => {});
+}).catch(() => {
+    siteConfigReady = true;
+    applyMarketState();
+    tryCloseIntro();
+    updateExtendRequestBar();
+});
 
 // 점검 모드 실시간 구독
 onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
@@ -2517,19 +2546,36 @@ function isRegularMarket() {
     return nowMins >= rOpenMins || nowMins < rCloseMins;
 }
 
+function setMarketUiReady(ready) {
+    document.body.classList.toggle('market-state-pending', !ready);
+    document.body.classList.toggle('market-state-ready', ready);
+}
+
+function setMaintenanceLoading(show) {
+    const load = document.getElementById('maintenance-loading');
+    const body = document.getElementById('maintenance-body');
+    if (!load || !body) return;
+    if (show) {
+        load.style.display = 'flex';
+        body.style.display = 'none';
+    } else {
+        load.style.display = 'none';
+        body.style.display = 'block';
+    }
+}
+
 // 마감/점검 여부에 따라 오버레이 표시 및 시장 모드 배너 업데이트
 function applyMarketState() {
     const overlay = document.getElementById('maintenance-overlay');
     const timerEl = document.getElementById('maintenance-timer');
     if (!overlay) return;
 
-    const isAdminUser     = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-    const maintenance = !!siteConfig.maintenance;
-    const mh          = siteConfig.marketHours;
-    const marketOpen  = isMarketOpen();
+    const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
 
-    // ── 1. 관리자: 모든 제한 우회 ────────────────────────────
+    // ── 1. 관리자: siteConfig 대기 없이 즉시 우회 (실시간 유지) ──
     if (isAdminUser) {
+        setMarketUiReady(true);
+        setMaintenanceLoading(false);
         overlay.style.display = 'none';
         startStocksRealtime();
         if (marketCheckTimer) clearTimeout(marketCheckTimer);
@@ -2537,19 +2583,36 @@ function applyMarketState() {
         return;
     }
 
+    // ── 2. 일반: siteConfig 수신 전에는 로딩만 표시, 시장 오픈으로 간주하지 않음 ──
+    if (!siteConfigReady) {
+        setMarketUiReady(false);
+        setMaintenanceLoading(true);
+        overlay.style.display = 'flex';
+        if (marketCheckTimer) clearTimeout(marketCheckTimer);
+        marketCheckTimer = setTimeout(applyMarketState, 60000);
+        return;
+    }
+
+    setMaintenanceLoading(false);
+    setMarketUiReady(true);
+
+    const maintenance = !!siteConfig.maintenance;
+    const mh          = siteConfig.marketHours;
+    const marketOpen  = isMarketOpen();
+
     const title    = document.getElementById('maintenance-title');
     const descMain = document.getElementById('maintenance-desc-main');
     const descSub  = document.getElementById('maintenance-desc-sub');
     const badge    = document.getElementById('maintenance-time-badge');
 
-    // ── 2. 점검 중 또는 시장 마감 ────────────────────────────
+    // ── 3. 점검 중 또는 시장 마감 ────────────────────────────
     if (maintenance || (mh && mh.enabled && !marketOpen)) {
         stopAllStocksSubscriptions();
 
         overlay.style.display = 'flex';
         setTimeout(() => overlay.focus(), 100);
 
-        if (descSub) descSub.style.display = 'none';
+        if (descSub) descSub.style.display = maintenance ? 'none' : '';
 
         if (maintenance) {
             if (timerEl) timerEl.innerText = '관리자 점검 중';
@@ -2588,7 +2651,7 @@ function applyMarketState() {
             }
         }
     } else {
-        // ── 3. 시장 운영 중: 정규장 실시간 ↔ 비정규장 폴링 ───────
+        // ── 4. 시장 운영 중: 정규장 실시간 ↔ 비정규장 폴링 ───────
         overlay.style.display = 'none';
 
         if (isRegularMarket()) {
@@ -2598,7 +2661,7 @@ function applyMarketState() {
         }
     }
 
-    // ── 4. 시장 모드 안내 배너 ────────────────────────────────
+    // ── 5. 시장 모드 안내 배너 ────────────────────────────────
     const modeBanner = document.getElementById('market-mode-banner');
     if (modeBanner) {
         if (!mh || !mh.enabled || !marketOpen) {
@@ -2721,7 +2784,7 @@ let accountWarnShown = false;
 function tryCloseIntro() {
     const introOverlay  = document.getElementById('intro-overlay');
     const maintEl       = document.getElementById('maintenance-overlay');
-    const maintBlocking = maintEl && maintEl.style.display === 'flex';
+    const maintBlocking = maintEl && window.getComputedStyle(maintEl).display !== 'none';
 
     const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdminUser) {
