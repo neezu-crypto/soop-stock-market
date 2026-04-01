@@ -2950,51 +2950,55 @@ async function setupPresenceSession(user) {
     subscribePresenceCountOnce();
 }
 
-// ── 인증 & 내 데이터 동기화 (수정본) ─────────────────────────────────
+// ── 인증 & 내 데이터 동기화 (최종 방어형 버전) ─────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        userUID = user.uid;
-        // 1. 참조 생성 (경로가 확실할 때만)
-        const userRef = ref(db, `users/${userUID}`);
+    // 이전 구독들 안전하게 정리
+    if (typeof syncOwnedSubscriptions === 'function') {
+        // 기존 구독 해제 로직이 있다면 여기서 실행
+    }
 
-        // 2. 실시간 데이터 구독 시작
+    if (user && user.uid) {
+        userUID = user.uid; // 전역 변수 확실히 할당
+        
+        // 1. 참조 생성 전 경로 검증
+        const userPath = `users/${userUID}`;
+        const userRef = ref(db, userPath);
+
+        // 2. 로그인 상태 UI 즉시 업데이트
+        updateAuthStatusUI(user);
+
+        // 3. 데이터 로드 (onValue)
         onValue(userRef, (snapshot) => {
-            const serverData = snapshot.val();
+            // 데이터가 없는 신규 유저 대응
+            const serverData = snapshot.exists() ? snapshot.val() : null;
             
-            // 데이터가 없으면 초기값 세팅 (권한 수정했으니 이제 작동함)
-            if (!serverData) {
-                myData = { cash: 1000000, stocks: {} };
-                // 서버에 초기 데이터 생성 시도 (선택 사항)
-                // set(userRef, myData); 
-            } else {
-                myData = {
-                    ...serverData,
-                    cash:   serverData.cash   ?? 1000000,
-                    stocks: serverData.stocks || {}
-                };
+            myData = {
+                cash: serverData?.cash ?? 1000000,
+                stocks: serverData?.stocks || {}
+            };
+
+            // 4. 데이터 로드 완료 후 종속 기능 실행
+            // 모든 함수 실행 전 myData가 유효한지 재확인
+            if (myData) {
+                applyMarketState();
+                tryCloseIntro();
+                applyStocksMode();
+                initFavorites();
+                loadStockNameCache();
+                updateUI(true);
+                syncOwnedSubscriptions();
             }
-
-            // 3. 데이터가 확실히 로드된 후 UI 업데이트 실행 (중요!)
-            updateAuthStatusUI(user);
-            applyMarketState();
-            tryCloseIntro();
-            applyStocksMode();
-            initFavorites();
-            loadStockNameCache();
-            updateUI(true);
-            syncOwnedSubscriptions();
         }, (error) => {
-            console.error("데이터 로드 중 권한 에러:", error);
+            console.error("데이터 동기화 실패 (보안 규칙 확인 필요):", error);
         });
 
-        // Presence는 비동기로 별도 실행
-        setupPresenceSession(user).catch(() => {
-            const el = document.getElementById('online-count');
-            if (el) el.innerText = '?';
-        });
+        // Presence 세션은 별도 실행 (실패해도 메인 로직에 영향 없도록)
+        setupPresenceSession(user).catch(err => console.warn("Presence 설정 실패:", err));
 
     } else {
-        // 유저가 없으면 익명 로그인 실행
+        // 유저 정보가 없으면 익명 로그인 시도
+        userUID = null;
+        myData = null;
         await teardownPresenceSession();
         signInAnonymously(auth).catch(err => console.error("익명 로그인 실패:", err));
     }
