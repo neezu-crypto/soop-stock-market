@@ -290,7 +290,8 @@
                 top: 50%;
                 transform: translateY(-50%);
                 width: 220px;
-                max-height: 70vh;
+                height: auto;
+                max-height: 80vh;
                 z-index: 1000;
                 display: flex;
                 flex-direction: column;
@@ -313,9 +314,11 @@
             }
             .left-rail-panes {
                 display: grid;
-                grid-template: 1fr / 1fr;
-                flex: 1;
+                grid-template: minmax(0, 1fr) / 1fr;
+                flex: 1 1 auto;
                 min-height: 0;
+                max-height: calc(80vh - 52px);
+                overflow: hidden;
             }
             .left-rail-unified .my-stocks-container,
             .left-rail-unified .relay-container {
@@ -325,7 +328,7 @@
                 top: auto;
                 transform: none;
                 width: 100%;
-                max-height: none;
+                max-height: 100%;
                 margin: 0;
                 border-radius: 0;
                 border: none;
@@ -337,6 +340,7 @@
                 visibility: hidden;
                 pointer-events: none;
                 transition: opacity 0.16s ease, visibility 0.16s ease;
+                box-sizing: border-box;
             }
             .left-rail-unified .my-stocks-container {
                 display: flex;
@@ -352,14 +356,51 @@
                 visibility: visible;
                 pointer-events: auto;
                 overflow-y: auto;
+                overflow-x: hidden;
                 z-index: 1;
+                padding: 20px 18px 20px 20px;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(56, 189, 248, 0.5) rgba(15, 23, 42, 0.65);
             }
             .left-rail-unified[data-left-rail-pane="relay"] .relay-container {
                 opacity: 1;
                 visibility: visible;
                 pointer-events: auto;
                 overflow-y: auto;
+                overflow-x: hidden;
                 z-index: 1;
+                padding: 16px 18px 20px 18px;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(248, 113, 113, 0.5) rgba(15, 23, 42, 0.65);
+            }
+            .left-rail-unified[data-left-rail-pane="assets"] .my-stocks-container::-webkit-scrollbar,
+            .left-rail-unified[data-left-rail-pane="relay"] .relay-container::-webkit-scrollbar {
+                width: 6px;
+            }
+            .left-rail-unified[data-left-rail-pane="assets"] .my-stocks-container::-webkit-scrollbar-track,
+            .left-rail-unified[data-left-rail-pane="relay"] .relay-container::-webkit-scrollbar-track {
+                background: rgba(15, 23, 42, 0.55);
+                border-radius: 999px;
+                margin: 6px 0 10px 0;
+            }
+            .left-rail-unified[data-left-rail-pane="assets"] .my-stocks-container::-webkit-scrollbar-thumb {
+                background: linear-gradient(180deg, rgba(56, 189, 248, 0.45), rgba(34, 197, 94, 0.25));
+                border-radius: 999px;
+            }
+            .left-rail-unified[data-left-rail-pane="relay"] .relay-container::-webkit-scrollbar-thumb {
+                background: linear-gradient(180deg, rgba(248, 113, 113, 0.5), rgba(251, 146, 60, 0.3));
+                border-radius: 999px;
+            }
+            .left-rail-unified[data-left-rail-pane="assets"] .my-stocks-container::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(180deg, rgba(56, 189, 248, 0.65), rgba(34, 197, 94, 0.35));
+            }
+            .left-rail-unified[data-left-rail-pane="relay"] .relay-container::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(180deg, rgba(248, 113, 113, 0.7), rgba(251, 146, 60, 0.45));
+            }
+            .left-rail-unified[data-left-rail-pane="assets"] .my-stocks-list {
+                overflow-y: visible;
+                flex: 0 1 auto;
+                min-height: 0;
             }
         }
         .trade-btns { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }

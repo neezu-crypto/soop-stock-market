@@ -36,6 +36,15 @@
         .status-chip.active  { background: #14532d; color: #4ade80; }
         .status-chip.expired { background: #450a0a; color: #fca5a5; }
         .status-chip.none    { background: #1e293b; color: #64748b; border: 1px solid #334155; }
+        #daily-auto-save-indicator {
+            font-size: 12px;
+            font-weight: 700;
+            color: #86efac;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        #daily-auto-save-indicator.visible { opacity: 1; }
         .data-status-bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 15px; font-size: 13px; }
         .data-status-bar span { color: #94a3b8; }
         .data-status-bar b { color: #38bdf8; }
@@ -999,6 +1008,9 @@
             매일 지정한 시각에 <b>자산 랭킹 집계</b>와 <b>오래된 캔들 정리</b>를 자동 실행합니다.<br>
             <span style="color:#f59e0b;">⚠️ 관리자 페이지가 열려있는 동안만 동작합니다. 새 창으로 열어두세요.</span>
         </div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; min-height:22px;">
+            <span id="daily-auto-save-indicator">✓ Firebase에 저장됨</span>
+        </div>
         <div class="toggle-wrap" style="margin-bottom:12px;">
             <div>
                 <div class="toggle-label">자동 실행</div>
@@ -1013,24 +1025,24 @@
             <div style="font-size:13px; color:#94a3b8;">실행 시각</div>
             <input type="number" id="auto-daily-hour" min="0" max="23" value="0"
                 style="width:64px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
-                oninput="updateDailyAutoNext()">
+                oninput="updateDailyAutoNext()" onblur="flushDailyAutoPersist()">
             <span style="color:#64748b;">시</span>
             <input type="number" id="auto-daily-min" min="0" max="59" value="0"
                 style="width:64px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
-                oninput="updateDailyAutoNext()">
+                oninput="updateDailyAutoNext()" onblur="flushDailyAutoPersist()">
             <span style="color:#64748b;">분</span>
         </div>
         <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
             <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
-                <input type="checkbox" id="auto-run-ranking" checked style="accent-color:#6366f1;">
+                <input type="checkbox" id="auto-run-ranking" checked style="accent-color:#6366f1;" onchange="persistDailyAutoSettings()">
                 📊 자산 랭킹 집계
             </label>
             <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
-                <input type="checkbox" id="auto-run-candle" checked style="accent-color:#6366f1;">
+                <input type="checkbox" id="auto-run-candle" checked style="accent-color:#6366f1;" onchange="persistDailyAutoSettings()">
                 🗑 오래된 캔들 정리
             </label>
             <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
-                <input type="checkbox" id="auto-run-reset-ranking" checked style="accent-color:#6366f1;">
+                <input type="checkbox" id="auto-run-reset-ranking" checked style="accent-color:#6366f1;" onchange="persistDailyAutoSettings()">
                 🔄 랭킹 TOP5 초기화
             </label>
         </div>
@@ -1715,7 +1727,9 @@
             await loadMaintenanceStatus();
             await loadMarketHours();
             startRealtimeRequestListeners();
+            startDailyAutoSettingsListener();
         } else {
+            stopDailyAutoSettingsListener();
             stopRealtimeRequestListeners();
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -3057,10 +3071,134 @@
     };
 
 
-    // ── 일일 자동 실행 ────────────────────────────────────────
+    // ── 일일 자동 실행 (siteConfig/dailyAuto 에 영속 저장) ───
     let dailyAutoTimer = null;
+    let dailyAutoPersistTimer = null;
+    let dailyAutoApplyingFromServer = false;
+    let dailyAutoSettingsUnsub = null;
+    let dailyAutoSavedIndicatorTimer = null;
 
-    window.toggleDailyAuto = function(enabled) {
+    const DAILY_AUTO_DEFAULTS = {
+        enabled: false,
+        hour: 0,
+        minute: 0,
+        runRanking: true,
+        runCandle: true,
+        runResetRanking: true
+    };
+
+    function clampDailyAutoHourMin(v, lo, hi) {
+        const n = parseInt(v, 10);
+        if (Number.isNaN(n)) return lo;
+        return Math.min(hi, Math.max(lo, n));
+    }
+
+    function flashDailyAutoSaved() {
+        const el = document.getElementById('daily-auto-save-indicator');
+        if (!el) return;
+        el.classList.add('visible');
+        if (dailyAutoSavedIndicatorTimer) clearTimeout(dailyAutoSavedIndicatorTimer);
+        dailyAutoSavedIndicatorTimer = setTimeout(() => {
+            el.classList.remove('visible');
+            dailyAutoSavedIndicatorTimer = null;
+        }, 2000);
+    }
+
+    function isPlainDailyAutoExtra(x) {
+        return x && typeof x === 'object' && typeof x.preventDefault !== 'function';
+    }
+
+    window.persistDailyAutoSettings = async function(extra) {
+        if (!auth.currentUser || auth.currentUser.email !== ADMIN_EMAIL) return;
+        if (dailyAutoApplyingFromServer) return;
+        try {
+            const hourEl = document.getElementById('auto-daily-hour');
+            const minEl  = document.getElementById('auto-daily-min');
+            const extraPatch = isPlainDailyAutoExtra(extra) ? extra : {};
+            const payload = {
+                enabled: document.getElementById('auto-daily-toggle').checked,
+                hour: clampDailyAutoHourMin(hourEl?.value, 0, 23),
+                minute: clampDailyAutoHourMin(minEl?.value, 0, 59),
+                runRanking: document.getElementById('auto-run-ranking').checked,
+                runCandle: document.getElementById('auto-run-candle').checked,
+                runResetRanking: document.getElementById('auto-run-reset-ranking').checked,
+                updatedAt: Date.now(),
+                ...extraPatch
+            };
+            if (hourEl) hourEl.value = String(payload.hour);
+            if (minEl) minEl.value = String(payload.minute);
+            await update(ref(db, 'siteConfig/dailyAuto'), payload);
+            flashDailyAutoSaved();
+        } catch (e) {
+            alert('일일 자동 설정 저장 실패: ' + e.message);
+        }
+    };
+
+    function queuePersistDailyAuto(delayMs = 450) {
+        if (dailyAutoApplyingFromServer) return;
+        clearTimeout(dailyAutoPersistTimer);
+        dailyAutoPersistTimer = setTimeout(() => {
+            dailyAutoPersistTimer = null;
+            persistDailyAutoSettings();
+        }, delayMs);
+    }
+
+    window.flushDailyAutoPersist = function() {
+        clearTimeout(dailyAutoPersistTimer);
+        dailyAutoPersistTimer = null;
+        persistDailyAutoSettings();
+    };
+
+    function applyDailyAutoFromRemote(raw) {
+        const d = { ...DAILY_AUTO_DEFAULTS, ...(raw && typeof raw === 'object' ? raw : {}) };
+        dailyAutoApplyingFromServer = true;
+        try {
+            const hourEl = document.getElementById('auto-daily-hour');
+            const minEl  = document.getElementById('auto-daily-min');
+            const toggleEl = document.getElementById('auto-daily-toggle');
+            if (hourEl) hourEl.value = String(clampDailyAutoHourMin(d.hour, 0, 23));
+            if (minEl) minEl.value = String(clampDailyAutoHourMin(d.minute, 0, 59));
+            document.getElementById('auto-run-ranking').checked = d.runRanking !== false;
+            document.getElementById('auto-run-candle').checked = d.runCandle !== false;
+            document.getElementById('auto-run-reset-ranking').checked = d.runResetRanking !== false;
+            if (d.lastRunAt) {
+                document.getElementById('auto-daily-last').textContent =
+                    new Date(d.lastRunAt).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
+            }
+            const en = !!d.enabled;
+            if (toggleEl) toggleEl.checked = en;
+            clearTimeout(dailyAutoTimer);
+            dailyAutoTimer = null;
+            if (en) {
+                scheduleDailyAuto();
+            } else {
+                document.getElementById('auto-daily-next').textContent = 'OFF 상태';
+                document.getElementById('auto-daily-chip').className   = 'status-chip none';
+                document.getElementById('auto-daily-chip').textContent = '대기 중';
+            }
+        } finally {
+            dailyAutoApplyingFromServer = false;
+        }
+    }
+
+    function startDailyAutoSettingsListener() {
+        if (dailyAutoSettingsUnsub) return;
+        dailyAutoSettingsUnsub = onValue(ref(db, 'siteConfig/dailyAuto'), (snap) => {
+            const val = snap.exists() ? snap.val() : {};
+            applyDailyAutoFromRemote(val);
+        });
+    }
+
+    function stopDailyAutoSettingsListener() {
+        if (dailyAutoSettingsUnsub) {
+            dailyAutoSettingsUnsub();
+            dailyAutoSettingsUnsub = null;
+        }
+        clearTimeout(dailyAutoTimer);
+        dailyAutoTimer = null;
+    }
+
+    window.toggleDailyAuto = async function(enabled) {
         if (enabled) {
             scheduleDailyAuto();
         } else {
@@ -3070,12 +3208,13 @@
             document.getElementById('auto-daily-chip').className   = 'status-chip none';
             document.getElementById('auto-daily-chip').textContent = '대기 중';
         }
+        await persistDailyAutoSettings();
     };
 
     function scheduleDailyAuto() {
         clearTimeout(dailyAutoTimer);
-        const hour = parseInt(document.getElementById('auto-daily-hour').value) || 0;
-        const min  = parseInt(document.getElementById('auto-daily-min').value)  || 0;
+        const hour = clampDailyAutoHourMin(document.getElementById('auto-daily-hour').value, 0, 23);
+        const min  = clampDailyAutoHourMin(document.getElementById('auto-daily-min').value, 0, 59);
 
         const now   = new Date();
         const next  = new Date();
@@ -3103,10 +3242,16 @@
             if (runCandle)       await pruneAllCandles(true);
             if (runResetRanking) await resetRankings(true);
 
-            const doneStr = new Date().toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
+            const doneMs = Date.now();
+            const doneStr = new Date(doneMs).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
             lastEl.textContent = doneStr;
             chipEl.className   = 'status-chip active';
             chipEl.textContent = '완료';
+
+            try {
+                await update(ref(db, 'siteConfig/dailyAuto'), { lastRunAt: doneMs, updatedAt: doneMs });
+                flashDailyAutoSaved();
+            } catch (_) { /* 무시 */ }
 
             // 다음 날 재예약
             if (document.getElementById('auto-daily-toggle').checked) {
@@ -3119,6 +3264,7 @@
         if (document.getElementById('auto-daily-toggle').checked) {
             scheduleDailyAuto();
         }
+        queuePersistDailyAuto();
     };
 
     // ── 자산 랭킹 집계 ────────────────────────────────────────
