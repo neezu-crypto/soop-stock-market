@@ -2456,6 +2456,7 @@ function getStockSyncMode() {
 /**
  * stocks/ 전체 목록 동기화: 정규장=onValue, 비정규장(오픈 중)=30초 get, 마감/점검=중단
  * (즐겨찾기·보유 개별 구독은 applyStocksMode에서 처리)
+ * 관리자도 여기서 allStocks 캐시만 갱신 — 메인 카드 UI는 refreshMainStockListView(즐겨찾기+보유)로 제한
  */
 function applyMainStocksDataSync() {
     const mode = getStockSyncMode();
@@ -3007,11 +3008,11 @@ async function checkCircuitBreaker(stockId, candles) {
                 if (favorites[stockId])   subscribeToFavorite(stockId);
                 if (ownedStocks[stockId]) subscribeToOwned(stockId);
                 updateUI(true);
-                renderStocks(document.getElementById('search-input')?.value?.trim() || '');
+                refreshMainStockListView();
             }, frozenUntil - Date.now());
 
             updateUI(true);
-            renderStocks(document.getElementById('search-input')?.value?.trim() || '');
+            refreshMainStockListView();
         }, 0);
 
         console.log(`[CB] ${stockId} 서킷브레이커 즉시 발동`);
@@ -4772,51 +4773,28 @@ function createSparkline(stockId, fallbackPrice, isUp) {
 }
 
 // ── 주식 목록 렌더링 ─────────────────────────────────────────
+// allStocks 캐시는 processStocksSnap으로 유지(관리자·정규장 동기화용)하되,
+// 메인 리스트는 계정 유형과 무관하게 즐겨찾기+보유(또는 검색 결과)만 표시 — Top 100 전체 시세 뷰 없음.
+
+function refreshMainStockListView() {
+    const q = document.getElementById('search-input')?.value?.trim() || '';
+    if (!q) renderFavoriteList();
+    else renderSearchResults();
+}
+
+/** @deprecated 이름은 호환용. 전체 시세 Top 100 렌더링 제거됨 → refreshMainStockListView와 동일 역할 */
 function renderStocks(filter = "") {
-    const listDiv = document.getElementById('stock-list');
-    if (!listDiv || !myData) return;
-
-    const filtered = allStocks
-        .filter(s => s.name && s.name.includes(filter))
-        .sort((a, b) => (b.price || 0) - (a.price || 0))
-        .slice(0, 100);
-
-    listDiv.innerHTML = "";
-    stockElements = {};
-
-    filtered.forEach(s => {
-        const card = createStockCard(s);
-        
-        // ── [추가] 서킷브레이커 상태 확인 및 UI 반영 ──────────────
-        const frozenUntil = getEffectiveFrozenUntil(s.id);
-        const isFrozen    = frozenUntil && frozenUntil > Date.now();
-
-        if (isFrozen) {
-            const remain = Math.ceil((frozenUntil - Date.now()) / 1000);
-            
-            // 1. 카드 전체를 반투명하게 만들고 클릭 차단
-            card.style.opacity = "0.5";
-            card.style.filter = "grayscale(0.8)";
-            card.style.pointerEvents = "none"; // 클릭 불가 (상세창/거래 차단)
-            card.style.position = "relative";
-
-            // 2. 동결 안내 레이어 추가 (선택 사항)
-            // 카드 위에 "동결 중 (N초)" 메시지를 띄우고 싶다면 여기에 요소를 append 할 수 있습니다.
-            const badge = document.createElement('div');
-            badge.style.cssText = `
-                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                background: rgba(239, 68, 68, 0.9); color: white; padding: 4px 8px;
-                border-radius: 4px; font-size: 12px; font-weight: bold; z-index: 10;
-                white-space: nowrap; pointer-events: none;
-            `;
-            badge.textContent = `🚫 동결 중 (${remain}초)`;
-            card.appendChild(badge);
-        }
-        // ──────────────────────────────────────────────────
-
-        stockElements[s.id] = card;
-        listDiv.appendChild(card);
-    });
+    const q = (filter ?? "").trim();
+    if (!q) {
+        renderFavoriteList();
+        return;
+    }
+    const inputQ = document.getElementById('search-input')?.value?.trim() || '';
+    if (q === inputQ) {
+        renderSearchResults();
+        return;
+    }
+    renderFavoriteList();
 }
 
 // 종목 데이터로 주식 카드 DOM 엘리먼트 생성
@@ -4932,7 +4910,7 @@ function processStocksSnap(snap) {
 
     if (allStocks.length === 0) {
         allStocks = newStocks;
-        renderStocks();
+        refreshMainStockListView(); // 즐겨찾기+보유(또는 검색)만 — 관리자도 Top100 미표시
         tryCloseIntro(); // stocks 로드 완료 → 오픈 시간이면 인트로 닫기
     } else {
         newStocks.forEach(ns => {
