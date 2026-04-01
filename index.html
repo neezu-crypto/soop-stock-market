@@ -1885,20 +1885,11 @@
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, onValue, runTransaction, get, set, update, remove, onDisconnect, serverTimestamp }
-                                 from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-    import { 
-        initializeAuth, 
-        browserLocalPersistence, 
-        browserPopupRedirectResolver, 
-        signInAnonymously, 
-        onAuthStateChanged, 
-        signInWithPopup, 
-        GoogleAuthProvider, 
-        signOut 
-    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
+import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
+                             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider, signOut } 
+    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
 (function () {
 
@@ -1972,17 +1963,10 @@ const firebaseConfig = {
     projectId:   "soop-stock-market",
     appId:       "1:997788925900:web:cb613d438efec019a3a769"
 };
-const app = initializeApp(firebaseConfig);
-const db  = getDatabase(app);
+const app  = initializeApp(firebaseConfig);
+const db   = getDatabase(app);
+const auth = getAuth(app);
 
-// [중요] 여러 기기 동기화 및 리졸버 에러 방지를 위한 초기화
-const auth = initializeAuth(app, {
-    persistence: browserLocalPersistence,
-    popupRedirectResolver: browserPopupRedirectResolver
-});
-
-const functions = getFunctions(app);
-const tradeCallable = httpsCallable(functions, 'trade');
 // ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
 let siteConfigReady = false; // 첫 get(siteConfig) 성공 후 true — 그 전에는 시장 오픈으로 간주하지 않음
@@ -2861,24 +2845,33 @@ function updateAuthStatusUI(user) {
     }
 }
 
-// ── 구글 로그인 (기기 간 자산 동기화 방식) ──────────────────────
 window.loginWithGoogle = async function() {
-    console.log("LOG [A]: 구글 로그인 버튼 클릭됨");
     const provider = new GoogleAuthProvider();
-    
     try {
-        // [롤백 핵심] linkWithPopup 대신 signInWithPopup을 사용
-        // 이 방식은 익명 계정을 버리고 구글 계정 고유의 UID로 즉시 교체합니다.
-        // 덕분에 다른 PC, 모바일 어디서든 같은 구글 ID면 똑같은 자산이 보입니다.
-        await signInWithPopup(auth, provider); 
-        
-        console.log("LOG [C]: 로그인 성공");
+        // 1. 익명 계정에 구글 계정 연결 시도 — UID 유지, 자산 보존
+        await linkWithPopup(auth, provider);
         document.getElementById('account-warn-overlay')?.classList.remove('active');
-        alert('✅ 구글 로그인 성공! 모든 기기에서 자산이 동기화됩니다.');
+        alert('✅ 구글 계정 연동 완료!\n자산이 그대로 유지되며 다른 기기에서도 동일한 자산으로 접속할 수 있습니다.');
     } catch (err) {
-        if (err.code === 'auth/popup-closed-by-user') return;
-        console.error("❌ 로그 오류:", err);
-        alert('로그인 실패: ' + err.message);
+        if (err.code === 'auth/popup-closed-by-user' ||
+            err.code === 'auth/cancelled-popup-request') return;
+
+        if (err.code === 'auth/credential-already-in-use' ||
+            err.code === 'auth/email-already-in-use') {
+            // 이미 다른 기기에서 이 구글 계정으로 연동된 경우
+            // → 해당 구글 UID로 로그인 (기존 자산 사용)
+            try {
+                await signInWithPopup(auth, provider);
+                document.getElementById('account-warn-overlay')?.classList.remove('active');
+                alert('✅ 기존 구글 계정으로 로그인됐습니다.\n이전에 연동된 자산으로 접속합니다.');
+            } catch (err2) {
+                if (err2.code !== 'auth/popup-closed-by-user') {
+                    alert('로그인 실패: ' + err2.message);
+                }
+            }
+        } else {
+            alert('로그인 실패: ' + err.message);
+        }
     }
 };
 
@@ -2955,26 +2948,26 @@ async function setupPresenceSession(user) {
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         userUID = user.uid;
-        console.log(`LOG [1]: 인증 상태 변경 감지됨 UID: ${userUID} (${user.isAnonymous ? '익명' : '구글'})`);
-        
-        const userRef = ref(db, `users/${userUID}`);
-        
-        // [매도/매수 핵심] 서버(index.js)와 통신할 때 side와 qty를 사용해야 함
-        window.trade = async function(id, type, qty = 1) {
-            // ... (기존 trade 로직 중 호출 부분만 아래로 수정)
-            try {
-                const res = await tradeCallable({ 
-                    stockId: id, 
-                    side: type,        // 서버 index.js 규격 (buy/sell)
-                    qty: Number(qty)   // 서버 index.js 규격 (숫자형)
-                });
-                // ... (이하 동일)
-            } catch (e) {
-                console.error("거래 에러:", e.message);
-            }
-        };
+        const userRef  = ref(db, `users/${userUID}`);
+        if (!myData) myData = { cash: 1000000, stocks: {} };
 
-        // 실시간 데이터 동기화
+        // 로그인 상태 UI 업데이트
+        updateAuthStatusUI(user);
+
+        applyMarketState();
+        // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
+        tryCloseIntro();
+        applyStocksMode();
+        initFavorites();       // 즐겨찾기 초기 로드
+        loadStockNameCache();  // 종목 이름 캐시 로드 (검색 준비)
+
+        try {
+            await setupPresenceSession(user);
+        } catch (e) {
+            const el = document.getElementById('online-count');
+            if (el) el.innerText = '?';
+        }
+
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
@@ -2987,18 +2980,12 @@ onAuthStateChanged(auth, async (user) => {
                 if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
             }
             updateUI(true);
+
+            // 보유 주식 구독 재계산 (보유량 변동 시마다)
+            syncOwnedSubscriptions();
         });
-
-        // 접속자 수 체크 로직 (예전 버전 유지)
-        try {
-            const sessionID = Math.random().toString(36).substring(2, 9);
-            const myPresenceRef = ref(db, `presence/users/${userUID}/${sessionID}`);
-            await set(myPresenceRef, { connectedAt: Date.now() });
-            onDisconnect(myPresenceRef).remove();
-        } catch (e) { console.warn("접속자 집계 오류", e); }
-
     } else {
-        console.log("LOG [9]: 유저 정보 없음 -> 익명 로그인 시도");
+        await teardownPresenceSession();
         signInAnonymously(auth);
     }
 });
