@@ -150,7 +150,39 @@
                 transform: translateX(0);
             }
         }
-        .relay-title { font-size: 16px; font-weight: 800; color: var(--up-color); margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .relay-title { font-size: 16px; font-weight: 800; color: var(--up-color); margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .relay-title-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        @media (max-width: 1300px) {
+            .relay-panel-close {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                padding: 0;
+                border-radius: 8px;
+                border: 1px solid rgb(51 65 85);
+                background: rgba(15, 23, 42, 0.55);
+                color: rgb(148 163 184);
+                font-family: inherit;
+                font-size: 20px;
+                font-weight: 500;
+                line-height: 1;
+                cursor: pointer;
+                transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+            }
+            .relay-panel-close:hover {
+                background: rgba(51, 65, 85, 0.55);
+                color: rgb(226 232 240);
+                border-color: rgb(71 85 105);
+            }
+            .relay-panel-close:active {
+                background: rgba(30, 41, 59, 0.8);
+            }
+        }
+        @media (min-width: 1301px) {
+            .relay-panel-close { display: none !important; }
+        }
         .relay-list  { display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto; }
         .relay-item  { background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: background 0.2s; text-decoration: none; display: block; }
         .relay-item:hover { background: rgba(239,68,68,0.12); }
@@ -1170,7 +1202,10 @@
 <div class="relay-container" id="relay-container">
     <div class="relay-title">
         <span>📡 중계방</span>
-        <span id="relay-slot-count" style="font-size:12px; color:var(--text-sub); font-weight:400;">0/3</span>
+        <div class="relay-title-actions">
+            <span id="relay-slot-count" style="font-size:12px; color:var(--text-sub); font-weight:400;">0/3</span>
+            <button type="button" class="relay-panel-close" id="relay-panel-close" aria-label="중계방 닫기" onclick="closeRelayPanel()">×</button>
+        </div>
     </div>
     <div class="relay-list" id="relay-list">
         <div class="relay-empty">현재 진행 중인 중계가 없습니다.</div>
@@ -1855,7 +1890,7 @@ sellSound.volume = 0.2;
 const HOVER_POOL_SIZE = 3;
 const hoverPool = Array.from({ length: HOVER_POOL_SIZE }, () => {
     const a = new Audio("https://raw.githubusercontent.com/neezu-crypto/soop-stock-market/refs/heads/main/sound/scroll.mp3");
-    a.volume = 0.5;
+    a.volume = 0.2;
     return a;
 });
 let hoverPoolIdx  = 0;
@@ -1986,6 +2021,19 @@ function renderRelayPanel(data) {
     }
 })();
 
+/** 모바일 중계방 슬라이드 패널만 닫기 (딤·탭 위치 동기화) */
+window.closeRelayPanel = function() {
+    const container = document.getElementById('relay-container');
+    if (!container?.classList.contains('mobile-open')) return;
+    const dim       = document.getElementById('portfolio-dim');
+    const relayTab  = document.getElementById('relay-tab');
+    const portTab   = document.getElementById('portfolio-tab');
+    container.classList.remove('mobile-open');
+    dim?.classList.remove('active');
+    if (relayTab) relayTab.style.left = '0';
+    if (portTab)  portTab.style.left  = '0';
+};
+
 window.toggleRelay = function() {
     const container  = document.getElementById('relay-container');
     const dim        = document.getElementById('portfolio-dim');
@@ -1994,10 +2042,7 @@ window.toggleRelay = function() {
     const portPanel  = document.getElementById('my-stocks-container');
     const isOpen     = container.classList.contains('mobile-open');
     if (isOpen) {
-        container.classList.remove('mobile-open');
-        dim?.classList.remove('active');
-        if (relayTab) relayTab.style.left = '0';
-        if (portTab)  portTab.style.left  = '0';
+        closeRelayPanel();
     } else {
         // 포트폴리오 패널 닫기
         portPanel?.classList.remove('mobile-open');
@@ -4051,13 +4096,15 @@ window.togglePortfolio = function() {
     }
 };
 
-// 모바일 보유 주식 패널 닫기
+// 모바일 보유 주식 패널 닫기 (+ 중계방이 열려 있으면 함께 닫음 — 딤 클릭 공통)
 window.closePortfolio = function() {
-    const panel    = document.getElementById('my-stocks-container');
-    const dim      = document.getElementById('portfolio-dim');
-    const tab      = document.getElementById('portfolio-tab');
-    const relayTab = document.getElementById('relay-tab');
+    const panel      = document.getElementById('my-stocks-container');
+    const relayPanel = document.getElementById('relay-container');
+    const dim        = document.getElementById('portfolio-dim');
+    const tab        = document.getElementById('portfolio-tab');
+    const relayTab   = document.getElementById('relay-tab');
     panel?.classList.remove('mobile-open');
+    relayPanel?.classList.remove('mobile-open');
     dim?.classList.remove('active');
     if (tab) tab.style.left = '0';
     if (relayTab) relayTab.style.left = '0';
@@ -5241,23 +5288,35 @@ document.getElementById('search-input')?.addEventListener('input', (e) => {
     handleSearch(e.target.value);
 });
 
-// ── ESC 키로 모달 닫기 ───────────────────────────────────────
+// ── ESC 키로 모달·모바일 사이드 패널 닫기 ───────────────────
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         const closeIfActive = (id, closeFn) => {
             const el = document.getElementById(id);
-            if (el?.classList.contains('active')) closeFn();
+            if (el?.classList.contains('active')) {
+                closeFn();
+                return true;
+            }
+            return false;
         };
-        closeIfActive('chart-modal-overlay', closeChartModal);
-        closeIfActive('promo-modal', () => window.closePromoModal());
-        closeIfActive('chart-ad-modal', () => window.closeChartAdModal());
-        closeIfActive('extend-modal', () => window.closeExtendModal());
-        closeIfActive('listing-modal', () => window.closeListingModal());
-        closeIfActive('relay-modal', () => window.closeRelayModal());
-        closeIfActive('asset-history-modal', () => window.closeAssetHistory());
-        closeIfActive('alert-modal', () => window.closeAlertModal());
-        closeIfActive('terms-modal', () => window.closeTerms());
-        closeIfActive('privacy-modal', () => window.closePrivacy());
+        if (closeIfActive('chart-modal-overlay', closeChartModal)) return;
+        if (closeIfActive('promo-modal', () => window.closePromoModal())) return;
+        if (closeIfActive('chart-ad-modal', () => window.closeChartAdModal())) return;
+        if (closeIfActive('extend-modal', () => window.closeExtendModal())) return;
+        if (closeIfActive('listing-modal', () => window.closeListingModal())) return;
+        if (closeIfActive('relay-modal', () => window.closeRelayModal())) return;
+        if (closeIfActive('asset-history-modal', () => window.closeAssetHistory())) return;
+        if (closeIfActive('alert-modal', () => window.closeAlertModal())) return;
+        if (closeIfActive('terms-modal', () => window.closeTerms())) return;
+        if (closeIfActive('privacy-modal', () => window.closePrivacy())) return;
+        if (document.getElementById('relay-container')?.classList.contains('mobile-open')) {
+            window.closeRelayPanel();
+            return;
+        }
+        if (document.getElementById('my-stocks-container')?.classList.contains('mobile-open')) {
+            window.closePortfolio();
+            return;
+        }
     }
     // ── Ctrl+Enter: 관리자 구글 로그인 / 마감 안내창 우회 ────
     if (e.ctrlKey && e.key === 'Enter') {
