@@ -138,7 +138,7 @@ exports.trade = onCall({ cors: true }, async (req) => {
 
     if (side === "buy") {
       const total = tradePrice * qty;
-      if (cash < total && !isAdminAuth(auth)) return; // abort
+      if (cash < total && !isAdminAuth(auth)) return undefined; // abort
 
       // 10종목 제한 (admin bypass)
       if (!isAdminAuth(auth) && haveQty === 0) {
@@ -172,7 +172,7 @@ exports.trade = onCall({ cors: true }, async (req) => {
       stocks: nextStocks,
       lastTradeTime: admin.database.ServerValue.TIMESTAMP
     };
-  }, { applyLocally: false });
+  });
 
   if (!userTx.committed) {
     throw new HttpsError("failed-precondition", "User validation failed (cash/holdings/limits).");
@@ -195,7 +195,7 @@ exports.trade = onCall({ cors: true }, async (req) => {
       sellVol: (Number(cur.sellVol || 0) + addSell),
       change: prevPrice > 0 ? (((nextPrice - prevPrice) / prevPrice) * 100).toFixed(2) : "0.00"
     };
-  }, { applyLocally: false });
+  });
 
   // Candle aggregation per minute
   const ts = Math.floor(Date.now() / 60000) * 60; // seconds
@@ -212,7 +212,7 @@ exports.trade = onCall({ cors: true }, async (req) => {
       v: Number(cur.v || 0) + qty,
       t: ts
     };
-  }, { applyLocally: false });
+  });
 
   // Audit log (optional, helpful)
   const tradeId = db.ref("tradeHistory").push().key;
