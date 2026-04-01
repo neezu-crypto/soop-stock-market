@@ -191,28 +191,175 @@
         .relay-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 16px 0; }
         .relay-apply-btn { width: 100%; margin-top: 12px; background: var(--up-color); color: white; border: none; border-radius: 10px; padding: 11px; font-size: 13px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
         .relay-apply-btn:hover { opacity: 0.85; }
-        /* PC: 포트폴리오(좌)와 중계방(그 오른쪽) 나란히 — 동일 left 겹침 방지 */
+        /* PC: 좌측 단일 카드 + 상단 탭(내 자산 / 중계방), 모바일은 display:contents 체인으로 기존 서랍 유지 */
+        .left-rail-primary-tabs {
+            display: none;
+        }
+        .left-rail-tab {
+            flex: 1;
+            margin: 0;
+            padding: 10px 8px;
+            border: none;
+            border-bottom: 2px solid transparent;
+            background: rgba(15, 23, 42, 0.35);
+            color: var(--muted);
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+            white-space: nowrap;
+        }
+        .left-rail-tab:hover {
+            color: var(--text-main);
+            background: rgba(56, 189, 248, 0.08);
+        }
+        .left-rail-tab.active {
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.12);
+            border-bottom-color: var(--primary);
+        }
+        .left-rail-tab.left-rail-tab-relay {
+            position: relative;
+        }
+        .left-rail-tab.left-rail-tab-relay.active {
+            color: var(--up-color);
+            background: rgba(239, 68, 68, 0.1);
+            border-bottom-color: var(--up-color);
+        }
+        /* PC: 승인·미만료 중계 1건 이상일 때 탭 강조(실시간 onValue → renderRelayPanel) */
+        @keyframes left-rail-relay-tab-glow {
+            0%, 100% {
+                color: #f87171;
+                text-shadow: 0 0 8px rgba(248, 113, 113, 0.5);
+            }
+            50% {
+                color: #fdba74;
+                text-shadow: 0 0 16px rgba(251, 146, 60, 0.55);
+            }
+        }
+        @keyframes left-rail-relay-live-dot {
+            0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 6px rgba(251, 146, 60, 0.7); }
+            50%      { opacity: 0.85; transform: scale(1.08); box-shadow: 0 0 12px rgba(239, 68, 68, 0.85); }
+        }
+        @keyframes left-rail-shell-relay-accent {
+            0%, 100% {
+                border-color: rgba(248, 113, 113, 0.42);
+                box-shadow:
+                    0 10px 28px rgba(0, 0, 0, 0.48),
+                    0 0 0 1px rgba(239, 68, 68, 0.12);
+            }
+            50% {
+                border-color: rgba(251, 146, 60, 0.55);
+                box-shadow:
+                    0 10px 32px rgba(0, 0, 0, 0.52),
+                    0 0 22px rgba(251, 146, 60, 0.14);
+            }
+        }
         @media (min-width: 1301px) {
-            .relay-container {
-                display: flex;
+            .left-rail-tab.left-rail-tab-relay.has-relay {
+                animation: left-rail-relay-tab-glow 2.5s ease-in-out infinite;
+                background: rgba(239, 68, 68, 0.12);
+            }
+            .left-rail-tab.left-rail-tab-relay.has-relay.active {
+                animation: left-rail-relay-tab-glow 2.5s ease-in-out infinite;
+                background: rgba(239, 68, 68, 0.14);
+            }
+            .left-rail-tab.left-rail-tab-relay.has-relay::after {
+                content: '';
+                position: absolute;
+                top: 5px;
+                right: 5px;
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: #ef4444;
+                pointer-events: none;
+                animation: left-rail-relay-live-dot 1.6s ease-in-out infinite;
+            }
+        }
+        @media (max-width: 1300px) {
+            .left-rail-unified { display: contents; }
+            .left-rail-primary-tabs { display: none !important; }
+            .left-rail-panes { display: contents; }
+        }
+        @media (min-width: 1301px) {
+            .left-rail-unified {
                 position: fixed;
-                left: calc(80px + 220px + 16px);
+                left: 80px;
                 top: 50%;
                 transform: translateY(-50%);
                 width: 220px;
+                max-height: 70vh;
+                z-index: 1000;
+                display: flex;
+                flex-direction: column;
                 background: var(--card-bg);
                 border-radius: 20px;
-                border: 1px solid var(--border);
-                flex-direction: column;
-                padding: 16px 20px;
+                border: 1px solid var(--primary);
                 box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                z-index: 1001;
-                max-height: 50vh;
-                transition: border-color 0.6s ease, box-shadow 0.6s ease;
+                overflow: hidden;
+                transition: border-color 0.35s ease, box-shadow 0.35s ease;
             }
-            .relay-container.has-relay {
-                border-color: rgba(239,68,68,0.4);
-                box-shadow: 0 10px 30px rgba(239,68,68,0.15);
+            .left-rail-unified.has-relay-accent {
+                animation: left-rail-shell-relay-accent 2.8s ease-in-out infinite;
+            }
+            .left-rail-primary-tabs {
+                display: flex;
+                flex-shrink: 0;
+                gap: 0;
+                border-bottom: 1px solid var(--border);
+                background: var(--card-bg);
+            }
+            .left-rail-panes {
+                display: grid;
+                grid-template: 1fr / 1fr;
+                flex: 1;
+                min-height: 0;
+            }
+            .left-rail-unified .my-stocks-container,
+            .left-rail-unified .relay-container {
+                grid-area: 1 / 1;
+                position: relative;
+                left: auto;
+                top: auto;
+                transform: none;
+                width: 100%;
+                max-height: none;
+                margin: 0;
+                border-radius: 0;
+                border: none;
+                box-shadow: none;
+                z-index: auto;
+                min-height: 0;
+                flex-direction: column;
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+                transition: opacity 0.16s ease, visibility 0.16s ease;
+            }
+            .left-rail-unified .my-stocks-container {
+                display: flex;
+                overflow: hidden;
+            }
+            .left-rail-unified .relay-container {
+                display: flex;
+                padding: 16px 18px 14px 18px;
+                overflow: hidden;
+            }
+            .left-rail-unified[data-left-rail-pane="assets"] .my-stocks-container {
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+                overflow-y: auto;
+                z-index: 1;
+            }
+            .left-rail-unified[data-left-rail-pane="relay"] .relay-container {
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+                overflow-y: auto;
+                z-index: 1;
             }
         }
         .trade-btns { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
@@ -1199,21 +1346,14 @@
     <span class="tab-label">중계방</span>
 </div>
 
-<!-- 중계방 패널 -->
-<div class="relay-container" id="relay-container">
-    <div class="relay-title">
-        <span>📡 중계방</span>
-        <div class="relay-title-actions">
-            <span id="relay-slot-count" style="font-size:12px; color:var(--text-sub); font-weight:400;">0/3</span>
-            <button type="button" class="relay-panel-close" id="relay-panel-close" aria-label="중계방 닫기" onclick="closeRelayPanel()">×</button>
-        </div>
+<div id="left-rail-unified" class="left-rail-unified" data-left-rail-pane="assets">
+    <div class="left-rail-primary-tabs" id="left-rail-primary-tabs" role="tablist" aria-label="좌측 패널">
+        <button type="button" role="tab" class="left-rail-tab active" id="left-rail-tab-assets"
+            aria-selected="true" data-pane="assets" onclick="switchLeftRailPane('assets')">📈 My Assets</button>
+        <button type="button" role="tab" class="left-rail-tab left-rail-tab-relay" id="left-rail-tab-relay"
+            aria-selected="false" data-pane="relay" onclick="switchLeftRailPane('relay')">📡 Relay Room</button>
     </div>
-    <div class="relay-list" id="relay-list">
-        <div class="relay-empty">현재 진행 중인 중계가 없습니다.</div>
-    </div>
-    <button class="relay-apply-btn" id="relay-apply-btn" onclick="openRelayApplyModal()">📺 중계 신청하기</button>
-</div>
-
+    <div class="left-rail-panes">
 <div class="my-stocks-container" id="my-stocks-container">
     <div class="my-stocks-title">
         <span>내 포트폴리오</span>
@@ -1287,6 +1427,21 @@
                 <div style="font-size:12px; color:var(--muted); text-align:center; padding:16px 0;">불러오는 중...</div>
             </div>
         </div>
+    </div>
+</div>
+<div class="relay-container" id="relay-container">
+    <div class="relay-title">
+        <span>📡 중계방</span>
+        <div class="relay-title-actions">
+            <span id="relay-slot-count" style="font-size:12px; color:var(--text-sub); font-weight:400;">0/3</span>
+            <button type="button" class="relay-panel-close" id="relay-panel-close" aria-label="중계방 닫기" onclick="closeRelayPanel()">×</button>
+        </div>
+    </div>
+    <div class="relay-list" id="relay-list">
+        <div class="relay-empty">현재 진행 중인 중계가 없습니다.</div>
+    </div>
+    <button class="relay-apply-btn" id="relay-apply-btn" onclick="openRelayApplyModal()">📺 중계 신청하기</button>
+</div>
     </div>
 </div>
 
@@ -1966,19 +2121,31 @@ function renderRelayPanel(data) {
     const container= document.getElementById('relay-container');
     if (!list) return;
 
+    const raw = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
     const now = Date.now();
-    // 현재 유효한 (수락됨 + 만료 안 됨) 항목만 필터
-    const active = Object.entries(data)
-        .filter(([, v]) => v.status === 'approved' && v.expireAt && v.expireAt > now)
+    // 현재 유효한 (수락됨 + 만료 안 됨) 항목만 필터 — 소스: Firebase relayRequests onValue
+    const active = Object.entries(raw)
+        .filter(([, v]) => v && v.status === 'approved' && v.expireAt && v.expireAt > now)
         .sort((a, b) => a[1].approvedAt - b[1].approvedAt)
         .slice(0, 3);
 
     slotEl.textContent = `${active.length}/3`;
 
-    // 탭/컨테이너 글로우
+    // 탭/컨테이너 글로우 (모바일 #relay-tab · PC #left-rail-unified / #left-rail-tab-relay)
     const hasRelay = active.length > 0;
     tab?.classList.toggle('has-relay', hasRelay);
     container?.classList.toggle('has-relay', hasRelay);
+    const shell = document.getElementById('left-rail-unified');
+    shell?.classList.toggle('has-relay-accent', hasRelay);
+    shell?.setAttribute('data-relay-live', hasRelay ? '1' : '0');
+    const lrRelay = document.getElementById('left-rail-tab-relay');
+    lrRelay?.classList.toggle('has-relay', hasRelay);
+    if (lrRelay) lrRelay.setAttribute('data-relay-live', hasRelay ? '1' : '0');
+    if (lrRelay) {
+        lrRelay.title = hasRelay
+            ? '📡 Relay Room — LIVE 중계 진행 중 (승인·유효 슬롯 1건 이상)'
+            : 'Relay Room / 중계방';
+    }
 
     // 슬롯 꽉 차면 신청 버튼 숨김
     if (applyBtn) applyBtn.style.display = active.length >= 3 ? 'none' : 'block';
@@ -2028,12 +2195,33 @@ function isMobileDrawerLayout() {
 window.addEventListener('resize', function onDrawerLayoutBreakpoint() {
     if (!isMobileDrawerLayout()) {
         document.getElementById('portfolio-dim')?.classList.remove('active');
+        document.getElementById('my-stocks-container')?.classList.remove('mobile-open');
+        document.getElementById('relay-container')?.classList.remove('mobile-open');
         const pt = document.getElementById('portfolio-tab');
         const rt = document.getElementById('relay-tab');
         if (pt) pt.style.left = '';
         if (rt) rt.style.left = '';
     }
 });
+
+/** PC(≥1301px) 좌측 통합 패널: 내 자산 ↔ 중계방 탭 전환 (모바일에서는 무시) */
+window.switchLeftRailPane = function(pane) {
+    if (isMobileDrawerLayout()) return;
+    const shell = document.getElementById('left-rail-unified');
+    if (!shell) return;
+    const p = pane === 'relay' ? 'relay' : 'assets';
+    shell.setAttribute('data-left-rail-pane', p);
+    const tAssets = document.getElementById('left-rail-tab-assets');
+    const tRelay  = document.getElementById('left-rail-tab-relay');
+    if (tAssets) {
+        tAssets.classList.toggle('active', p === 'assets');
+        tAssets.setAttribute('aria-selected', p === 'assets' ? 'true' : 'false');
+    }
+    if (tRelay) {
+        tRelay.classList.toggle('active', p === 'relay');
+        tRelay.setAttribute('aria-selected', p === 'relay' ? 'true' : 'false');
+    }
+};
 
 /** 모바일 중계방 슬라이드 패널만 닫기 (딤·탭 위치 동기화) */
 window.closeRelayPanel = function() {
