@@ -3724,13 +3724,14 @@ window.trade = async function (id, type, qty = 1) {
     console.log("전송 데이터 확인:", { stockId: id, action: type, quantity: qty });
 
     try {
-        // 서버(Cloud Functions)에서 검증 + 집행
-        const res = await tradeCallable({ 
-    stockId: id, 
-    action: type,           // 'side' 대신 'action' 사용 (또는 서버 코드 확인)
-    quantity: Number(qty)   // 'qty' 대신 'quantity' 사용 및 숫자형 변환 보장
-});
-        const payload = res?.data || {};
+    // 서버 index.js의 req.data.side와 req.data.qty 이름에 정확히 맞춰야 함
+    const res = await tradeCallable({ 
+        stockId: id, 
+        side: type,        // 서버가 req.data.side를 사용함
+        qty: Number(qty)   // 서버가 req.data.qty를 사용하며, 숫자형이어야 함
+    });
+    
+    const payload = res?.data || {};
 
         // 사용자 데이터는 users/{uid} onValue로 곧 동기화되지만, UX를 위해 즉시 반응음만 처리
         const sound = type === 'buy' ? buySound : sellSound;
@@ -3739,6 +3740,8 @@ window.trade = async function (id, type, qty = 1) {
 
         lastTradeTime = Date.now();
     } catch (error) {
+        // 에러 상세 로그 확인 (400 에러의 구체적 원인 파악용)
+        console.error("거래 실패 상세:", error.code, error.message, error.details);
         const msg = error?.message || '';
         // Functions 에러는 메시지/코드 형태가 다를 수 있어 완화 처리
         if (msg.includes('Maintenance')) alert('🔧 현재 점검 중입니다. 잠시 후 다시 이용해주세요.');
