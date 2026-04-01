@@ -2003,6 +2003,7 @@ let favorites        = {};    // { stockId: { id, name, price, ... } }
 let favoriteUnsubs   = {};    // { stockId: unsubscribe함수 }
 let searchResults    = {};    // 검색 결과 캐시 { stockId: stockData }
 let searchUnsub      = null;  // 현재 검색 종목 구독 해제 함수
+let subscribeStatusUnsub = null; // subscribeRequests/{uid} 실시간 상태 구독 해제
 
 // ── 보유 주식 구독 상태 ──────────────────────────────────────
 let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
@@ -3915,33 +3916,62 @@ window.switchPortfolioTab = function(tab) {
     document.getElementById('tab-btn-stocks').classList.toggle('active', tab === 'stocks');
     document.getElementById('tab-btn-ranking').classList.toggle('active', tab === 'ranking');
 
-    if (tab === 'ranking') checkSubscribeStatus();
+    if (tab === 'ranking') {
+        startSubscribeStatusWatch();
+    } else {
+        stopSubscribeStatusWatch();
+    }
 };
 
-async function checkSubscribeStatus() {
+function renderSubscribeGateState(dataOrNull) {
+    const gate    = document.getElementById('ranking-gate');
+    const pending = document.getElementById('ranking-pending');
+    const content = document.getElementById('ranking-content');
+    if (!gate || !pending || !content) return;
+
+    if (!dataOrNull) {
+        // 미신청
+        gate.style.display    = 'flex';
+        pending.style.display = 'none';
+        content.style.display = 'none';
+        return;
+    }
+    if (dataOrNull.status === 'approved') {
+        gate.style.display    = 'none';
+        pending.style.display = 'none';
+        content.style.display = 'block';
+        loadAssetRanking();
+        return;
+    }
+    // pending / rejected / expired 등
+    gate.style.display    = 'none';
+    pending.style.display = 'flex';
+    content.style.display = 'none';
+}
+
+async function checkSubscribeStatusOnce() {
     if (!userUID) return;
     try {
         const snap = await get(ref(db, `subscribeRequests/${userUID}`));
-        if (!snap.exists()) {
-            // 미신청
-            document.getElementById('ranking-gate').style.display    = 'flex';
-            document.getElementById('ranking-pending').style.display  = 'none';
-            document.getElementById('ranking-content').style.display  = 'none';
-            return;
-        }
-        const data = snap.val();
-        if (data.status === 'approved') {
-            document.getElementById('ranking-gate').style.display    = 'none';
-            document.getElementById('ranking-pending').style.display  = 'none';
-            document.getElementById('ranking-content').style.display  = 'block';
-            loadAssetRanking();
-        } else {
-            // pending
-            document.getElementById('ranking-gate').style.display    = 'none';
-            document.getElementById('ranking-pending').style.display  = 'flex';
-            document.getElementById('ranking-content').style.display  = 'none';
-        }
-    } catch(e) {}
+        renderSubscribeGateState(snap.exists() ? snap.val() : null);
+    } catch (e) {}
+}
+
+function startSubscribeStatusWatch() {
+    if (!userUID) return;
+    if (subscribeStatusUnsub) return;
+    // 즉시 1회 적용 (초기 UI) + 이후 실시간 반영
+    checkSubscribeStatusOnce();
+    subscribeStatusUnsub = onValue(ref(db, `subscribeRequests/${userUID}`), (snap) => {
+        renderSubscribeGateState(snap.exists() ? snap.val() : null);
+    }, () => {});
+}
+
+function stopSubscribeStatusWatch() {
+    if (subscribeStatusUnsub) {
+        subscribeStatusUnsub();
+        subscribeStatusUnsub = null;
+    }
 }
 
 // ── 자산 랭킹 로드 ──────────────────────────────────────────
@@ -4432,7 +4462,7 @@ window.submitSubscribeRequest = async function() {
         });
         statusEl.style.color = '#22c55e';
         statusEl.textContent = '✅ 신청 완료! 승인 후 자동 활성화됩니다.';
-        setTimeout(() => checkSubscribeStatus(), 1500);
+        setTimeout(() => checkSubscribeStatusOnce(), 1500);
     } catch(e) {
         statusEl.style.color = 'var(--up-color)';
         statusEl.textContent = '신청 실패: ' + e.message;
