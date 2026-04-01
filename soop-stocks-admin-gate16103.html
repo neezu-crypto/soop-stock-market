@@ -94,6 +94,40 @@
             0%, 100% { box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 4px 12px rgba(245,158,11,0.12); }
             50%       { box-shadow: 0 0 0 1px rgba(245,158,11,0.4), 0 4px 16px rgba(245,158,11,0.25); }
         }
+        .request-card.just-arrived {
+            border-color: #38bdf8 !important;
+            animation: new-req-flash 1.2s ease-out 3;
+            position: relative;
+        }
+        @keyframes new-req-flash {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(56,189,248,0.45); }
+            50%      { box-shadow: 0 0 20px 2px rgba(56,189,248,0.35); }
+        }
+        .req-new-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            color: #0f172a;
+            background: linear-gradient(135deg, #38bdf8, #22d3ee);
+            padding: 2px 7px;
+            border-radius: 4px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .realtime-bar {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #22c55e;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: rgba(34,197,94,0.1);
+            border: 1px solid rgba(34,197,94,0.25);
+        }
+        .realtime-bar .live-dot { margin-right: 0; }
 
         /* ── 아코디언 ── */
         .accordion-header {
@@ -861,8 +895,8 @@
         <div class="info-box">
             유저가 신청한 배너 홍보 목록입니다. <b>수락</b> 시 stocksBanner에 자동 등록됩니다.
         </div>
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-            <button class="btn-success" onclick="loadAdRequests()">🔄 신청 목록 불러오기</button>
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div id="ad-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
@@ -880,8 +914,8 @@
         <div class="info-box">
             유저가 신청한 차트 하단 배너 목록입니다. <b>수락</b> 시 chartBanner에 자동 등록됩니다.
         </div>
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-            <button class="btn-success" onclick="loadChartAdRequests()">🔄 신청 목록 불러오기</button>
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div id="chart-ad-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
@@ -1020,8 +1054,8 @@
             유저가 신청한 스트리머 상장 목록입니다. 검토 후 직접 종목을 추가해주세요.<br>
             <span style="color:#38bdf8;">Firebase DB의 <b>listingRequests</b> 경로에서 관리됩니다.</span>
         </div>
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-            <button class="btn-success" onclick="loadListingRequests()">🔄 신청 목록 불러오기</button>
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div id="listing-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
@@ -1097,6 +1131,255 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#x27;');
+    }
+
+    // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
+    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null };
+    let prevListingKeys = null;
+    let prevAdKeys = null;
+    let prevChartKeys = null;
+
+    function playAdminRequestBeep() {
+        try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx();
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'sine';
+            o.frequency.value = 880;
+            g.gain.setValueAtTime(0.055, ctx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+            o.connect(g);
+            g.connect(ctx.destination);
+            o.start();
+            o.stop(ctx.currentTime + 0.1);
+        } catch (_) {}
+    }
+
+    function notifyAdminNewRequest(title, body) {
+        playAdminRequestBeep();
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try {
+                new Notification(title, { body: body || '', silent: true });
+            } catch (_) {}
+        }
+    }
+
+    function maybeRequestNotifPermission() {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+        Notification.requestPermission().catch(() => {});
+    }
+
+    function stopRealtimeRequestListeners() {
+        ['listing', 'ad', 'chart'].forEach((k) => {
+            const u = requestRealtimeUnsubs[k];
+            if (u) {
+                u();
+                requestRealtimeUnsubs[k] = null;
+            }
+        });
+        prevListingKeys = null;
+        prevAdKeys = null;
+        prevChartKeys = null;
+    }
+
+    function renderAdRequestsList(data, highlightIds) {
+        const listEl = document.getElementById('ad-request-list');
+        if (!listEl) return;
+        const entries = Object.entries(data).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+        if (entries.length === 0) {
+            listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = '';
+        entries.forEach(([reqId, req]) => {
+            const date = new Date(req.createdAt).toLocaleString('ko-KR');
+            const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+            const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+            const card = document.createElement('div');
+            const isHi = highlightIds && highlightIds.has(reqId);
+            card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '') + (isHi ? ' just-arrived' : '');
+            const nickJson = JSON.stringify(req.nickname || '');
+            card.innerHTML = `
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                    <img src="${req.imgUrl}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#1e293b;"
+                        onerror="this.style.display='none'">
+                    <div style="flex:1;">
+                        <div style="font-weight:700; color:#f8fafc;">${escapeHtml(req.nickname)}${isHi ? '<span class="req-new-badge">NEW</span>' : ''}</div>
+                        <div style="font-size:12px; color:#64748b;">${escapeHtml(req.soopId)} · ${req.days}일 · 별풍선 ${req.cost}개</div>
+                        <div style="font-size:11px; color:#475569; margin-top:2px;">${date}</div>
+                    </div>
+                    <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end;">
+                    <button onclick="approveAdRequest('${reqId}', ${req.days}, ${nickJson})"
+                        style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px; white-space:nowrap;">수락</button>
+                    <button onclick="rejectAdRequest('${reqId}')"
+                        style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
+                </div>
+            `;
+            listEl.appendChild(card);
+            if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
+        });
+    }
+
+    function renderChartAdRequestsList(data, highlightIds) {
+        const listEl = document.getElementById('chart-ad-request-list');
+        if (!listEl) return;
+        const entries = Object.entries(data).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+        if (entries.length === 0) {
+            listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = '';
+        entries.forEach(([reqId, req]) => {
+            const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+            const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+            const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+            const card = document.createElement('div');
+            const isHi = highlightIds && highlightIds.has(reqId);
+            card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '') + (isHi ? ' just-arrived' : '');
+            card.innerHTML = `
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-weight:700; color:#f8fafc;">${escapeHtml(req.nickname)}${isHi ? '<span class="req-new-badge">NEW</span>' : ''}</span>
+                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                    </div>
+                    <div style="font-size:12px; color:#64748b;">${req.days}일 · 별풍선 ${req.cost}개 · ${date}</div>
+                    <div style="font-size:11px; color:#475569; margin-top:4px; word-break:break-all;">${escapeHtml(req.link)}</div>
+                </div>
+                <div style="background:#0a1628; border-radius:6px; overflow:hidden; border:1px solid #1e293b; margin-bottom:10px; position:relative;">
+                    <img src="${req.imgUrl}" style="width:100%; aspect-ratio:720/150; object-fit:cover; display:block;"
+                        onerror="this.parentElement.innerHTML='<div style=\\'padding:10px; color:#475569; font-size:12px;\\'>이미지 로드 실패</div>'">
+                    <div style="position:absolute;top:4px;right:6px;background:rgba(0,0,0,0.5);color:#94a3b8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">AD</div>
+                </div>
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button onclick="approveChartAdRequest('${reqId}', ${req.days})"
+                        style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>
+                    <button onclick="rejectChartAdRequest('${reqId}')"
+                        style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
+                </div>
+            `;
+            listEl.appendChild(card);
+            if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
+        });
+    }
+
+    function renderListingRequestsList(data, highlightIds) {
+        const listEl = document.getElementById('listing-request-list');
+        if (!listEl) return;
+        const entries = Object.entries(data).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+        if (entries.length === 0) {
+            listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = '';
+        entries.forEach(([reqId, req]) => {
+            const date        = new Date(req.createdAt).toLocaleString('ko-KR');
+            const statusColor = req.status === 'done' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
+            const statusText  = req.status === 'done' ? '✅ 등록완료' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
+            const card = document.createElement('div');
+            const isHi = highlightIds && highlightIds.has(reqId);
+            card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '') + (isHi ? ' just-arrived' : '');
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div>
+                        <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req.name)}</span>${isHi ? '<span class="req-new-badge">NEW</span>' : ''}
+                        <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req.soopId)}</span>
+                    </div>
+                    <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                </div>
+                ${req.reason ? `<div style="font-size:12px; color:#94a3b8; margin-bottom:8px; padding:8px; background:#0f172a; border-radius:6px;">${escapeHtml(req.reason)}</div>` : ''}
+                <div style="font-size:11px; color:#475569; margin-bottom:10px;">${date}</div>
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
+                        style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
+                    ${req.status !== 'done' ? `<button onclick="doneListingRequest('${reqId}')"
+                        style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">등록완료</button>` : ''}
+                    ${req.status !== 'rejected' ? `<button onclick="rejectListingRequest('${reqId}')"
+                        style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
+                    <button onclick="deleteListingRequest('${reqId}')"
+                        style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
+                </div>
+            `;
+            listEl.appendChild(card);
+            if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
+        });
+    }
+
+    function startRealtimeRequestListeners() {
+        stopRealtimeRequestListeners();
+        maybeRequestNotifPermission();
+
+        requestRealtimeUnsubs.ad = onValue(ref(db, 'adRequests/'), (snap) => {
+            try {
+                const data = snap.val() || {};
+                const keys = Object.keys(data);
+                let added = [];
+                if (prevAdKeys !== null) {
+                    added = keys.filter((k) => !prevAdKeys.has(k));
+                }
+                prevAdKeys = new Set(keys);
+                const hi = new Set(added);
+                if (added.length) {
+                    added.forEach((id) => {
+                        const r = data[id];
+                        if (r) notifyAdminNewRequest('새 홍보 신청', `${r.nickname || ''} · ${r.soopId || ''}`);
+                    });
+                }
+                renderAdRequestsList(data, hi);
+            } catch (err) {
+                const el = document.getElementById('ad-request-list');
+                if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+            }
+        });
+
+        requestRealtimeUnsubs.chart = onValue(ref(db, 'chartAdRequests/'), (snap) => {
+            try {
+                const data = snap.val() || {};
+                const keys = Object.keys(data);
+                let added = [];
+                if (prevChartKeys !== null) {
+                    added = keys.filter((k) => !prevChartKeys.has(k));
+                }
+                prevChartKeys = new Set(keys);
+                const hi = new Set(added);
+                if (added.length) {
+                    added.forEach((id) => {
+                        const r = data[id];
+                        if (r) notifyAdminNewRequest('새 차트 배너 신청', `${r.nickname || ''} · ${r.days || ''}일`);
+                    });
+                }
+                renderChartAdRequestsList(data, hi);
+            } catch (err) {
+                const el = document.getElementById('chart-ad-request-list');
+                if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+            }
+        });
+
+        requestRealtimeUnsubs.listing = onValue(ref(db, 'listingRequests/'), (snap) => {
+            try {
+                const data = snap.val() || {};
+                const keys = Object.keys(data);
+                let added = [];
+                if (prevListingKeys !== null) {
+                    added = keys.filter((k) => !prevListingKeys.has(k));
+                }
+                prevListingKeys = new Set(keys);
+                const hi = new Set(added);
+                if (added.length) {
+                    added.forEach((id) => {
+                        const r = data[id];
+                        if (r) notifyAdminNewRequest('새 상장 신청', `${r.name || ''} @${r.soopId || ''}`);
+                    });
+                }
+                renderListingRequestsList(data, hi);
+            } catch (err) {
+                const el = document.getElementById('listing-request-list');
+                if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+            }
+        });
     }
 
     // 사용자 페이지 배너 캐시 무효화 — bannerCacheVersion 증가
@@ -1293,13 +1576,11 @@
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
             await loadMarketHours();
-            // 신청 목록 자동 로드
-            loadAdRequests();
-            loadChartAdRequests();
             loadRelayRequests();
             loadSubscribeRequests();
-            loadListingRequests();
+            startRealtimeRequestListeners();
         } else {
+            stopRealtimeRequestListeners();
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
             document.getElementById('admin-section').style.display = 'none';
@@ -2099,51 +2380,7 @@
             statusEl.innerText   = '❌ 오류: ' + e.message;
         }
     };
-    // ── 홍보 신청 검수 ────────────────────────────────────────
-    window.loadAdRequests = async function() {
-        if (!isAdmin()) return;
-        const listEl = document.getElementById('ad-request-list');
-        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
-        try {
-            const snap = await get(ref(db, 'adRequests/'));
-            if (!snap.exists()) {
-                listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>';
-                return;
-            }
-            const data = snap.val();
-            const items = Object.entries(data).sort((a, b) => b[1].createdAt - a[1].createdAt);
-            listEl.innerHTML = '';
-            items.forEach(([reqId, req]) => {
-                const date = new Date(req.createdAt).toLocaleString('ko-KR');
-                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
-                const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
-                const card = document.createElement('div');
-                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
-                card.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-                        <img src="${req.imgUrl}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; background:#1e293b;"
-                            onerror="this.style.display='none'">
-                        <div style="flex:1;">
-                            <div style="font-weight:700; color:#f8fafc;">${req.nickname}</div>
-                            <div style="font-size:12px; color:#64748b;">${req.soopId} · ${req.days}일 · 별풍선 ${req.cost}개</div>
-                            <div style="font-size:11px; color:#475569; margin-top:2px;">${date}</div>
-                        </div>
-                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end;">
-                        <button onclick="approveAdRequest('${reqId}', ${req.days}, '${req.nickname}')"
-                            style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px; white-space:nowrap;">수락</button>
-                        <button onclick="rejectAdRequest('${reqId}')"
-                            style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
-                    </div>
-                `;
-                listEl.appendChild(card);
-            });
-        } catch(e) {
-            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
-        }
-    };
-
+    // ── 홍보 신청 검수 (목록은 startRealtimeRequestListeners 의 onValue) ──
     window.approveAdRequest = async function(reqId, days, nickname) {
         if (!isAdmin()) return;
         // stocks/ 에서 닉네임으로 종목 ID 자동 검색
@@ -2197,7 +2434,6 @@
 
             invalidateStaticCache(); // 사용자 페이지 캐시 무효화
             alert(`✅ ${req.nickname} 수락 완료!\n종목 ID: ${stockId}\n만료일: ${endDate}`);
-            loadAdRequests();
         } catch(e) {
             alert('수락 실패: ' + e.message);
         }
@@ -2211,57 +2447,12 @@
                 status:     'rejected',
                 rejectedAt: Date.now()
             });
-            loadAdRequests();
         } catch(e) {
             alert('거절 실패: ' + e.message);
         }
     };
 
-    // ── 차트 배너 신청 검수 ───────────────────────────────────
-    window.loadChartAdRequests = async function() {
-        if (!isAdmin()) return;
-        const listEl = document.getElementById('chart-ad-request-list');
-        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
-        try {
-            const snap = await get(ref(db, 'chartAdRequests/'));
-            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
-            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
-            listEl.innerHTML = '';
-            items.forEach(([reqId, req]) => {
-                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
-                const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
-                const statusText  = req.status === 'approved' ? '✅ 수락됨' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
-                const card = document.createElement('div');
-                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
-                card.innerHTML = `
-                    <div style="margin-bottom:10px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <span style="font-weight:700; color:#f8fafc;">${req.nickname}</span>
-                            <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
-                        </div>
-                        <div style="font-size:12px; color:#64748b;">${req.days}일 · 별풍선 ${req.cost}개 · ${date}</div>
-                        <div style="font-size:11px; color:#475569; margin-top:4px; word-break:break-all;">${req.link}</div>
-                    </div>
-                    <!-- 배너 미리보기 -->
-                    <div style="background:#0a1628; border-radius:6px; overflow:hidden; border:1px solid #1e293b; margin-bottom:10px; position:relative;">
-                        <img src="${req.imgUrl}" style="width:100%; aspect-ratio:720/150; object-fit:cover; display:block;"
-                            onerror="this.parentElement.innerHTML='<div style=\'padding:10px; color:#475569; font-size:12px;\'>이미지 로드 실패</div>'">
-                        <div style="position:absolute;top:4px;right:6px;background:rgba(0,0,0,0.5);color:#94a3b8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">AD</div>
-                    </div>
-                    <div style="display:flex; gap:8px; justify-content:flex-end;">
-                        <button onclick="approveChartAdRequest('${reqId}', ${req.days})"
-                            style="background:#22c55e; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>
-                        <button onclick="rejectChartAdRequest('${reqId}')"
-                            style="background:#ef4444; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
-                    </div>
-                `;
-                listEl.appendChild(card);
-            });
-        } catch(e) {
-            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
-        }
-    };
-
+    // ── 차트 배너 신청 검수 (목록 onValue) ─────────────────────
     window.approveChartAdRequest = async function(reqId, days) {
         if (!isAdmin()) return;
         try {
@@ -2283,7 +2474,6 @@
             });
             invalidateStaticCache(); // 사용자 페이지 캐시 무효화
             alert(`✅ ${req.nickname} 차트 배너 수락 완료!\n만료일: ${endDate}`);
-            loadChartAdRequests();
         } catch(e) {
             alert('수락 실패: ' + e.message);
         }
@@ -2294,7 +2484,6 @@
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
             await update(ref(db, `chartAdRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
-            loadChartAdRequests();
         } catch(e) {
             alert('거절 실패: ' + e.message);
         }
@@ -2916,55 +3105,11 @@
         }
     };
 
-    // ── 상장 신청 검수 ───────────────────────────────────────
-    window.loadListingRequests = async function() {
-        if (!isAdmin()) return;
-        const listEl = document.getElementById('listing-request-list');
-        listEl.innerHTML = '<div style="color:#94a3b8; font-size:13px;">불러오는 중...</div>';
-        try {
-            const snap = await get(ref(db, 'listingRequests/'));
-            if (!snap.exists()) { listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>'; return; }
-            const items = Object.entries(snap.val()).sort((a, b) => b[1].createdAt - a[1].createdAt);
-            listEl.innerHTML = '';
-            items.forEach(([reqId, req]) => {
-                const date        = new Date(req.createdAt).toLocaleString('ko-KR');
-                const statusColor = req.status === 'done' ? '#22c55e' : req.status === 'rejected' ? '#ef4444' : '#f59e0b';
-                const statusText  = req.status === 'done' ? '✅ 등록완료' : req.status === 'rejected' ? '❌ 거절됨' : '⏳ 대기중';
-                const card = document.createElement('div');
-                card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '');
-                card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <div>
-                            <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req.name)}</span>
-                            <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req.soopId)}</span>
-                        </div>
-                        <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
-                    </div>
-                    ${req.reason ? `<div style="font-size:12px; color:#94a3b8; margin-bottom:8px; padding:8px; background:#0f172a; border-radius:6px;">${escapeHtml(req.reason)}</div>` : ''}
-                    <div style="font-size:11px; color:#475569; margin-bottom:10px;">${date}</div>
-                    <div style="display:flex; gap:8px; justify-content:flex-end;">
-                        <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
-                            style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
-                        ${req.status !== 'done' ? `<button onclick="doneListingRequest('${reqId}')"
-                            style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">등록완료</button>` : ''}
-                        ${req.status !== 'rejected' ? `<button onclick="rejectListingRequest('${reqId}')"
-                            style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
-                        <button onclick="deleteListingRequest('${reqId}')"
-                            style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
-                    </div>
-                `;
-                listEl.appendChild(card);
-            });
-        } catch(e) {
-            listEl.innerHTML = `<div style="color:#ef4444;">오류: ${escapeHtml(e.message)}</div>`;
-        }
-    };
-
+    // ── 상장 신청 검수 (목록 onValue) ──────────────────────────
     window.doneListingRequest = async function(reqId) {
         if (!isAdmin()) return;
         try {
             await update(ref(db, `listingRequests/${reqId}`), { status: 'done', doneAt: Date.now() });
-            loadListingRequests();
         } catch(e) { alert('처리 실패: ' + e.message); }
     };
 
@@ -2973,7 +3118,6 @@
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
             await update(ref(db, `listingRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
-            loadListingRequests();
         } catch(e) { alert('거절 실패: ' + e.message); }
     };
 
@@ -2982,7 +3126,6 @@
         if (!confirm('이 신청을 삭제하시겠습니까?')) return;
         try {
             await set(ref(db, `listingRequests/${reqId}`), null);
-            loadListingRequests();
         } catch(e) { alert('삭제 실패: ' + e.message); }
     };
 
