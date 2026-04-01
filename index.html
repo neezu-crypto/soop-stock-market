@@ -1001,41 +1001,33 @@
             border-color: var(--primary);
         }
 
-        /* ── 정기점검 오버레이 ── */
+        /* ── 정기점검 · 장마감 오버레이 (slate) ── */
         #maintenance-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-color);
-            display: flex; justify-content: center; align-items: flex-start;
+            background: #0f172a;
+            display: flex; justify-content: center; align-items: center;
             z-index: 9999;
-            overflow-y: auto;
-            padding: 32px 16px;
-            box-sizing: border-box;
         }
         .maintenance-content {
-            text-align: center; max-width: 480px; width: 100%; padding: 40px 36px;
-            background: var(--card-bg); border-radius: 24px;
-            border: 1px solid var(--border);
+            text-align: center; max-width: 420px; padding: 50px 40px;
+            background: #1e293b; border-radius: 24px;
+            border: 1px solid #334155;
             box-shadow: 0 0 40px rgba(0,0,0,0.5);
-            margin: auto 0;
         }
         .maintenance-icon { font-size: 52px; margin-bottom: 20px; }
-        .maintenance-title { font-size: 22px; font-weight: 800; color: var(--text-main); margin-bottom: 10px; }
-        .maintenance-desc  { color: var(--text-sub); font-size: 14px; line-height: 1.8; margin-bottom: 24px; }
+        .maintenance-title { font-size: 22px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
+        .maintenance-desc  { color: #94a3b8; font-size: 14px; line-height: 1.8; margin-bottom: 24px; }
         .maintenance-time-badge {
             display: inline-block;
             background: rgba(56,189,248,0.1);
             border: 1px solid rgba(56,189,248,0.3);
-            color: var(--primary); font-size: 15px; font-weight: 800;
+            color: #38bdf8; font-size: 15px; font-weight: 800;
             padding: 10px 24px; border-radius: 12px; margin-bottom: 20px;
         }
         .maintenance-countdown {
-            font-size: 13px; color: var(--muted); margin-top: 16px;
+            font-size: 13px; color: #64748b; margin-top: 16px;
         }
-        @keyframes event-pulse {
-            0%, 100% { box-shadow: 0 4px 15px rgba(245,158,11,0.3); }
-            50%       { box-shadow: 0 4px 25px rgba(245,158,11,0.6); }
-        }
-        .maintenance-countdown span { color: var(--primary); font-weight: 700; }
+        .maintenance-countdown span { color: #38bdf8; font-weight: 700; }
 
         /* ── 계정 초기화 안내 모달 ── */
         #account-warn-overlay {
@@ -1239,81 +1231,22 @@
     <div class="power-save-desc">터치하거나 움직이면 해제됩니다</div>
 </div>
 
-<!-- ── 정기점검 오버레이 ── -->
-<div id="maintenance-overlay" style="display:flex;" tabindex="0">
-    <div class="maintenance-content" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
-        <div class="maintenance-icon">🎉</div>
-        <div class="maintenance-title">스트리머 주식시장 재오픈 예정</div>
-
-        <div class="maintenance-desc" style="text-align: left; background: rgba(255,255,255,0.03); padding: 16px 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 16px;">
-            안녕하세요, <b>스트리머 주식시장 운영진</b>입니다.<br><br>
-            시스템 안정화 및 보안 강화 작업을 마무리하고<br>
-            <b style="color:var(--primary);">2026년 4월 1일(수)</b> 정식 재오픈 예정입니다.<br>
-            기다려주신 모든 분들께 감사드립니다! 🙏
+<!-- ── 정기점검 · 장마감 오버레이 ── -->
+<div id="maintenance-overlay" style="display:none;" tabindex="0">
+    <div class="maintenance-content">
+        <div class="maintenance-icon">🔔</div>
+        <div class="maintenance-title" id="maintenance-title">주식 시장 오픈 준비 중</div>
+        <div class="maintenance-desc" id="maintenance-desc-main">
+            현재는 원활한 거래를 위한 <b>장 시작 준비 시간</b>입니다.<br>
+            잠시 후 스트리머 주식시장이 개장됩니다.
         </div>
-
-        <!-- 업데이트 소식 -->
-        <div style="text-align:left; background:var(--bg-color); border-radius:14px; padding:16px; margin-bottom:16px; border:1px solid var(--intro-border);">
-            <div style="font-size:12px; font-weight:800; color:#f59e0b; margin-bottom:12px; display:flex; align-items:center; gap:6px;">🆕 이번 업데이트 주요 변경사항</div>
-            <div style="display:flex; flex-direction:column; gap:10px;">
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">📡 중계방 탭</b> — 주식사이트를 중계 중인 스트리머 방송을 바로 시청할 수 있습니다.</div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">👑 구독자 전용 자산 랭킹</b> — 개발자를 구독으로 후원해주시면 상위 100명의 유저 자산 랭킹을 확인 가능합니다.</div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">🎰 정규장 연장 이벤트</b> — 별풍선 33개 후원 시 25% 확률로 정규장 1시간 즉시 연장! 개발자가 라이브 방송 시 후원 가능!</div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">📋 스트리머 상장 신청</b> — 원하는 스트리머가 없다면 검색 후 상장 신청이 가능합니다.</div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">⭐ 즐겨찾기 기능</b> — 관심 스트리머를 즐겨찾기하고 실시간 주가를 바로 확인할 수 있습니다. 상위 100위 전체 표시 대신 실시간 주가 랭킹은 개발자가 직접 라이브 스트리밍할 예정입니다.</div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">📢 배너 광고 신청</b> — 배너 영역 광고 신청을 페이지 내에서 직접 요청 가능하고, 신청하기 버튼으로 즉시 후원창이 열립니다.</div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(56,189,248,0.15); color:var(--primary); border:1px solid rgba(56,189,248,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">개선</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">📈 반등 신호 감지</b> — 하락 후 반등 종목 카드에 노란 pulse 신호가 표시됩니다.</div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">NEW</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">⚡ 서킷브레이커</b> — 10분 내 20% 변동 시 즉시 발동, 3분 거래 동결로 시세 조작을 방지합니다.</div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <span style="font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; background:rgba(56,189,248,0.15); color:var(--primary); border:1px solid rgba(56,189,248,0.3); white-space:nowrap; flex-shrink:0; margin-top:1px;">개선</span>
-                    <div style="font-size:12px; color:var(--text-soft); line-height:1.5;"><b style="color:var(--text-main);">🛡️ 보안 강화</b> — 다층 보안 로직 적용 및 데이터 최적화로 더 안정적인 환경이 됐습니다.</div>
-                </div>
-            </div>
+        <div class="maintenance-time-badge" id="maintenance-time-badge">🕒 시장 운영 시간: 09:00 ~ 익일 04:00</div>
+        <div class="maintenance-desc" id="maintenance-desc-sub" style="margin-bottom:0; font-size: 13px; color: #94a3b8;">
+            준비 시간 동안에는 거래가 제한되며,<br>
+            개장과 동시에 실시간 차트가 활성화됩니다.
         </div>
-
-        <div style="font-size:12px; color:var(--muted); background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px 16px; margin-bottom:16px; text-align:left; line-height:1.7;">
-            ⚠️ <b style="color:var(--text-sub);">안내사항</b><br>
-            재오픈 후 서버 안정화를 위한 테스트가 진행될 수 있습니다.<br>
-            테스트 중 일시적인 오류나 데이터 초기화가 발생할 수 있으니 양해 부탁드립니다.
-        </div>
-
-        <div style="margin-bottom: 20px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-            <a href="https://www.sooplive.com/station/skftodwocks2" target="_blank"
-               style="display:inline-block; background:var(--primary); color:var(--on-primary); padding:12px 24px; border-radius:12px; font-weight:800; text-decoration:none; box-shadow:0 4px 18px rgba(56,189,248,0.35);">
-               📺 개발자 SOOP 방송국
-            </a>
-            <a href="https://www.sooplive.com/station/skftodwocks2/post/190426505" target="_blank"
-               style="display:inline-block; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; padding:12px 24px; border-radius:12px; font-weight:800; text-decoration:none; box-shadow:0 4px 15px rgba(245,158,11,0.3); animation:event-pulse 2s ease-in-out infinite;">
-               🎉 이벤트 진행중
-            </a>
-        </div>
-
         <div class="maintenance-countdown" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            재오픈까지 <span id="maintenance-timer" style="color: var(--up-color); font-weight: 800;">-</span> 남았습니다
+            장 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
         </div>
     </div>
 </div>
@@ -1941,6 +1874,17 @@ function isMaintenanceTime() {
     return false; // 하드코딩 정기점검 비활성화
 }
 
+function attachMaintenanceOverlayHotkey() {
+    const mo = document.getElementById('maintenance-overlay');
+    if (!mo || mo.dataset.hotkeyBound === '1') return;
+    mo.dataset.hotkeyBound = '1';
+    mo.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'Enter') {
+            document.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: true, key: 'Enter', bubbles: true }));
+        }
+    });
+}
+
 // 다음 오픈 시각까지 남은 시간(ms) 반환
 function getTimeUntilOpen() {
     // siteConfig.marketHours 기반으로 오픈까지 남은 시간 계산
@@ -1974,8 +1918,11 @@ if (isMaintenanceTime()) {
         if (timerEl) timerEl.innerText = getTimeUntilOpen();
     }, 1000);
 
+    attachMaintenanceOverlayHotkey();
     return; // ← IIFE 여기서 종료, Firebase 초기화 실행 안 됨
 }
+
+attachMaintenanceOverlayHotkey();
 
 // ── 점검 시간 외 → Firebase 정상 초기화 ─────────────────
 const firebaseConfig = {
@@ -2005,32 +1952,6 @@ get(ref(db, 'siteConfig/')).then(snap => {
     siteConfig = snap.exists() ? snap.val() : {};
     applyMarketState();
 }).catch(() => {});
-
-// ── 점검창 카운트다운 즉시 시작 ──────────────────────────────
-(function startCountdown() {
-    const timerEl    = document.getElementById('maintenance-timer');
-    const targetDate = new Date('2026-04-01T00:00:00+09:00');
-
-    function tick() {
-        const diff = targetDate - new Date();
-        if (!timerEl) return;
-        if (diff <= 0) {
-            timerEl.innerText = '곧 오픈됩니다!';
-            return;
-        }
-        const days  = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const mins  = Math.floor((diff / (1000 * 60)) % 60);
-        const secs  = Math.floor((diff / 1000) % 60);
-        let str = '';
-        if (days > 0)  str += `${days}일 `;
-        if (hours > 0 || days > 0) str += `${hours}시간 `;
-        str += `${mins}분 ${String(secs).padStart(2,'0')}초`;
-        timerEl.innerText = str;
-        setTimeout(tick, 1000);
-    }
-    tick();
-})();
 
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
@@ -2491,6 +2412,13 @@ onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
     updateExtendRequestBar();
 });
 
+// 장 운영 시간 변경 시 UI·구독 모드 갱신
+onValue(ref(db, 'siteConfig/marketHours'), (snap) => {
+    siteConfig.marketHours = snap.exists() ? snap.val() : null;
+    applyMarketState();
+    applyStocksMode();
+});
+
 // 중계방 실시간 구독 (신규 수락/만료 감지)
 onValue(ref(db, 'relayRequests'), (snap) => {
     const data = snap.exists() ? snap.val() : {};
@@ -2595,46 +2523,121 @@ function applyMarketState() {
     const timerEl = document.getElementById('maintenance-timer');
     if (!overlay) return;
 
-    // 관리자 여부 확인
-    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    const isAdminUser     = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    const maintenance = !!siteConfig.maintenance;
+    const mh          = siteConfig.marketHours;
+    const marketOpen  = isMarketOpen();
 
-    // 1. 관리자: 공지 무시하고 정상 접속
-    if (isAdmin) {
+    // ── 1. 관리자: 모든 제한 우회 ────────────────────────────
+    if (isAdminUser) {
         overlay.style.display = 'none';
-        startStocksRealtime(); 
+        startStocksRealtime();
         if (marketCheckTimer) clearTimeout(marketCheckTimer);
         marketCheckTimer = setTimeout(applyMarketState, 60000);
         return;
     }
 
-    // 2. 일반 유저: 4월 1일 재오픈 공지 강제 노출
-    stopAllStocksSubscriptions(); // 데이터 수신 중단 (비용 절감)
-    overlay.style.display = 'flex';
-    setTimeout(() => overlay.focus(), 100);
+    const title    = document.getElementById('maintenance-title');
+    const descMain = document.getElementById('maintenance-desc-main');
+    const descSub  = document.getElementById('maintenance-desc-sub');
+    const badge    = document.getElementById('maintenance-time-badge');
 
-    // D-Day 카운트다운 로직
-    if (timerEl) {
-        const targetDate = new Date('2026-04-01T09:00:00+09:00');
-        const now = new Date();
-        const diff = targetDate - now;
+    // ── 2. 점검 중 또는 시장 마감 ────────────────────────────
+    if (maintenance || (mh && mh.enabled && !marketOpen)) {
+        stopAllStocksSubscriptions();
 
-        if (diff <= 0) {
-            timerEl.innerText = "곧 오픈됩니다!";
+        overlay.style.display = 'flex';
+        setTimeout(() => overlay.focus(), 100);
+
+        if (descSub) descSub.style.display = 'none';
+
+        if (maintenance) {
+            if (timerEl) timerEl.innerText = '관리자 점검 중';
+            if (title) title.innerText = '서버 점검 중';
+            if (descMain) descMain.innerHTML = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
+            if (badge) badge.innerHTML = '🔧 관리자 점검 중';
         } else {
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-            const mins = Math.floor((diff / (1000 * 60)) % 60);
-            
-            let timeString = "";
-            if (days > 0) timeString += `${days}일 `;
-            if (hours > 0 || days > 0) timeString += `${hours}시간 `;
-            timeString += `${mins}분`;
-            
-            timerEl.innerText = timeString;
+            const o = mh.open || '09:00';
+            const c = mh.close || '04:00';
+            const overnightTotal   = o > c;
+            const overnightRegular = mh.regularOpen && mh.regularClose && mh.regularOpen > mh.regularClose;
+            const totalLabel   = overnightTotal ? `${o} ~ 익일 ${c}` : `${o} ~ ${c}`;
+            const regularLabel = (mh.regularOpen && mh.regularClose)
+                ? (overnightRegular ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}` : `${mh.regularOpen} ~ ${mh.regularClose}`)
+                : null;
+
+            if (title) title.innerText = '시장 마감 중';
+            if (descMain) descMain.innerHTML =
+                `현재는 거래 시간이 아닙니다.<br>운영 시간에 다시 방문해 주세요.<br><br>` +
+                `<span style="color:#94a3b8; font-size:13px;">` +
+                `📌 전체 오픈: <b style="color:#f8fafc;">${totalLabel} KST</b><br>` +
+                (regularLabel ? `⚡ 정규장: <b style="color:#38bdf8;">${regularLabel} KST</b>` : '') +
+                `</span>`;
+            if (badge) badge.innerHTML = `🕐 시장 운영 시간: ${totalLabel} KST`;
+
+            if (timerEl) {
+                const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+                const nowMins = now.getHours() * 60 + now.getMinutes();
+                const [oh, om] = o.split(':').map(Number);
+                const openMins = oh * 60 + om;
+                let diff = openMins - nowMins;
+                if (diff <= 0) diff += 1440;
+                const h = Math.floor(diff / 60);
+                const m = diff % 60;
+                timerEl.innerText = `${h > 0 ? h + '시간 ' : ''}${m}분 후 (${o} KST)`;
+            }
+        }
+    } else {
+        // ── 3. 시장 운영 중: 정규장 실시간 ↔ 비정규장 폴링 ───────
+        overlay.style.display = 'none';
+
+        if (isRegularMarket()) {
+            startStocksRealtime();
+        } else {
+            startStocksPolling();
         }
     }
 
-    // 1분마다 갱신
+    // ── 4. 시장 모드 안내 배너 ────────────────────────────────
+    const modeBanner = document.getElementById('market-mode-banner');
+    if (modeBanner) {
+        if (!mh || !mh.enabled || !marketOpen) {
+            modeBanner.style.display = 'none';
+        } else if (isRegularMarket()) {
+            const ro = mh.regularOpen;
+            const rc = mh.regularClose;
+            const overnightR = ro && rc && ro > rc;
+            const rLabel = (ro && rc)
+                ? (overnightR ? `${ro} ~ 익일 ${rc}` : `${ro} ~ ${rc}`)
+                : null;
+
+            modeBanner.style.display = 'block';
+            modeBanner.style.background = 'linear-gradient(135deg, rgba(56,189,248,0.15), rgba(56,189,248,0.05))';
+            modeBanner.style.border = '1px solid rgba(56,189,248,0.4)';
+            modeBanner.style.color = '#f8fafc';
+            modeBanner.innerHTML =
+                `⚡ <b style="color:#38bdf8; font-size:14px;">정규장 진행 중</b> &nbsp;—&nbsp; 주가가 실시간으로 반영됩니다.<br>` +
+                (rLabel ? `<span style="color:#64748b; font-size:12px; font-weight:400;">${rLabel} KST</span>` : '<span style="color:#64748b; font-size:12px; font-weight:400;">실시간 모드</span>');
+        } else {
+            const mo = mh.open || '09:00';
+            const mc = mh.close || '04:00';
+            const overnightT = mo > mc;
+            const overnightR = mh.regularOpen && mh.regularClose && mh.regularOpen > mh.regularClose;
+            const tLabel = overnightT ? `${mo} ~ 익일 ${mc}` : `${mo} ~ ${mc}`;
+            const rLabel = (mh.regularOpen && mh.regularClose)
+                ? (overnightR ? `${mh.regularOpen} ~ 익일 ${mh.regularClose}` : `${mh.regularOpen} ~ ${mh.regularClose}`)
+                : null;
+
+            modeBanner.style.display = 'block';
+            modeBanner.style.background = 'linear-gradient(135deg, rgba(251,191,36,0.12), rgba(251,191,36,0.04))';
+            modeBanner.style.border = '1px solid rgba(251,191,36,0.35)';
+            modeBanner.style.color = '#f8fafc';
+            modeBanner.innerHTML =
+                `🕐 <b style="color:#fbbf24; font-size:14px;">비정규장</b> &nbsp;—&nbsp; 주가가 30초마다 갱신됩니다.<br>` +
+                (rLabel ? `<span style="color:#64748b; font-size:12px; font-weight:400;">⚡ 정규장 실시간 거래: ${rLabel} KST</span>` : '');
+        }
+    }
+
     if (marketCheckTimer) clearTimeout(marketCheckTimer);
     marketCheckTimer = setTimeout(applyMarketState, 60000);
 }
@@ -2715,13 +2718,13 @@ function selectStockForSearch(stockName) {
 let accountWarnShown = false;
 
 // ── 거래화면 진입 시도 ───────────────────────────────────────
-// 점검창이 기본 표시 → 관리자만 진입 가능
 function tryCloseIntro() {
-    const introOverlay = document.getElementById('intro-overlay');
+    const introOverlay  = document.getElementById('intro-overlay');
+    const maintEl       = document.getElementById('maintenance-overlay');
+    const maintBlocking = maintEl && maintEl.style.display === 'flex';
 
-    // 관리자 계정이면 applyMarketState가 점검창 숨기고 거래화면 진입 처리
-    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-    if (isAdmin) {
+    const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    if (isAdminUser) {
         applyMarketState();
         if (introOverlay && !introOverlay.classList.contains('hidden')) {
             setTimeout(() => { introOverlay.classList.add('hidden'); }, 300);
@@ -2729,7 +2732,9 @@ function tryCloseIntro() {
         return;
     }
 
-    // 일반 유저 — 점검창 유지 (진입 불가)
+    if (!maintBlocking && introOverlay && !introOverlay.classList.contains('hidden')) {
+        setTimeout(() => { introOverlay.classList.add('hidden'); }, 300);
+    }
 }
 
 // 잔고·보유 주식 패널 갱신
@@ -2812,6 +2817,7 @@ onAuthStateChanged(auth, async (user) => {
         // 로그인 상태 UI 업데이트
         updateAuthStatusUI(user);
 
+        applyMarketState();
         // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
         tryCloseIntro();
         applyStocksMode();
@@ -4862,28 +4868,61 @@ function processStocksSnap(snap) {
     updateUI(false);
 }
 
-// stocks/ 실시간 구독과 폴링 타이머 모두 해제
+// stocks/ 실시간·폴링·즐겨찾기/보유 개별 구독 모두 해제 (장 마감·점검)
 function stopAllStocksSubscriptions() {
     if (typeof stocksUnsubscribe === 'function') {
-        stocksUnsubscribe(); // Firebase 리스너 해제
+        stocksUnsubscribe();
         stocksUnsubscribe = null;
-        console.log("🛑 실시간 구독 해제됨");
     }
     if (stocksPollTimer) {
         clearInterval(stocksPollTimer);
         stocksPollTimer = null;
-        console.log("🛑 폴링 타이머 중단됨");
     }
+    Object.keys(favoriteUnsubs).forEach(id => {
+        if (favoriteUnsubs[id]) favoriteUnsubs[id]();
+        delete favoriteUnsubs[id];
+    });
+    Object.keys(ownedUnsubs).forEach(id => {
+        if (ownedUnsubs[id]) ownedUnsubs[id]();
+        delete ownedUnsubs[id];
+    });
+    Object.keys(favPollTimers).forEach(id => {
+        clearInterval(favPollTimers[id]);
+        delete favPollTimers[id];
+    });
 }
 
-// stocks/ 전체 실시간 구독 시작 (레거시 — 현재 미사용)
+// 정규장: 즐겨찾기/보유 종목 onValue 실시간
 function startStocksRealtime() {
-    // 즐겨찾기 기반 개별 구독으로 대체 — 전체 구독 불필요
+    onUserActive();
+    const allIds = [...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])];
+    allIds.forEach(id => {
+        if (favPollTimers[id]) { clearInterval(favPollTimers[id]); delete favPollTimers[id]; }
+        if (favorites[id])   subscribeToFavorite(id);
+        if (ownedStocks[id]) subscribeToOwned(id);
+    });
 }
 
-// stocks/ 전체 폴링 시작 (레거시 — 현재 미사용)
+// 비정규장: 30초 폴링
 function startStocksPolling() {
-    // 즐겨찾기 기반 개별 구독으로 대체 — 전체 폴링 불필요
+    onUserActive();
+    const allIds = [...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])];
+    allIds.forEach(id => {
+        if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
+        if (ownedUnsubs[id])    { ownedUnsubs[id](); delete ownedUnsubs[id]; }
+        if (favPollTimers[id]) return;
+        const poll = () => {
+            get(ref(db, `stocks/${id}`)).then(snap => {
+                if (!snap.exists()) return;
+                const data = { ...snap.val(), id };
+                if (favorites[id])   favorites[id]   = data;
+                if (ownedStocks[id]) ownedStocks[id] = data;
+                renderFavoriteList();
+            }).catch(() => {});
+        };
+        poll();
+        favPollTimers[id] = setInterval(poll, 30000);
+    });
 }
 
 // ── 활동 감지 + 정규장/비정규장 구독 모드 ───────────────────
@@ -4943,7 +4982,7 @@ function applyStocksMode() {
 
     // 마감 시간 → 모든 구독 중단 (관리자 제외)
     if (!isAdmin && mh && mh.enabled && !isMarketOpen()) {
-        pauseAllSubscriptions();
+        stopAllStocksSubscriptions();
         return;
     }
 
@@ -5569,9 +5608,7 @@ document.addEventListener('keydown', (e) => {
 
         // 이미 관리자로 로그인된 상태면 바로 마감 안내창 해제
         if (currentUser?.email === 'skftodwocks2@gmail.com') {
-            const maintOverlay = document.getElementById('maintenance-overlay');
-            if (maintOverlay) maintOverlay.style.display = 'none';
-            // stocks 강제 1회 로드 후 구독 시작
+            applyMarketState();
             get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
             applyStocksMode();
             return;
@@ -5582,8 +5619,7 @@ document.addEventListener('keydown', (e) => {
         signInWithPopup(auth, provider)
             .then(result => {
                 if (result.user.email === 'skftodwocks2@gmail.com') {
-                    const maintOverlay = document.getElementById('maintenance-overlay');
-                    if (maintOverlay) maintOverlay.style.display = 'none';
+                    applyMarketState();
                     get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
                     applyStocksMode();
                 } else {
