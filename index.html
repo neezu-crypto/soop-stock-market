@@ -1888,7 +1888,7 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider, signOut } 
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider, signOut, browserPopupRedirectResolver } 
     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 
@@ -2851,8 +2851,9 @@ function updateAuthStatusUI(user) {
 window.loginWithGoogle = async function() {
     const provider = new GoogleAuthProvider();
     try {
-        // 1. 익명 계정에 구글 계정 연결 시도 — UID 유지, 자산 보존
-        await linkWithPopup(auth, provider);
+        // 1. 익명 계정에 구글 계정 연결 시도 (세 번째 인자 추가)
+        await linkWithPopup(auth, provider, browserPopupRedirectResolver); 
+        
         document.getElementById('account-warn-overlay')?.classList.remove('active');
         alert('✅ 구글 계정 연동 완료!\n자산이 그대로 유지되며 다른 기기에서도 동일한 자산으로 접속할 수 있습니다.');
     } catch (err) {
@@ -2861,10 +2862,12 @@ window.loginWithGoogle = async function() {
 
         if (err.code === 'auth/credential-already-in-use' ||
             err.code === 'auth/email-already-in-use') {
+            
             // 이미 다른 기기에서 이 구글 계정으로 연동된 경우
-            // → 해당 구글 UID로 로그인 (기존 자산 사용)
             try {
-                await signInWithPopup(auth, provider);
+                // 2. 해당 구글 UID로 로그인 (세 번째 인자 추가)
+                await signInWithPopup(auth, provider, browserPopupRedirectResolver);
+                
                 document.getElementById('account-warn-overlay')?.classList.remove('active');
                 alert('✅ 기존 구글 계정으로 로그인됐습니다.\n이전에 연동된 자산으로 접속합니다.');
             } catch (err2) {
