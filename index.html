@@ -507,18 +507,6 @@
         .terms-close-btn { width:100%; background:var(--border); color:var(--text-main); border:none; padding:12px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; margin-top:20px; transition:opacity 0.2s; }
         .terms-close-btn:hover { opacity:0.8; }
 
-        /* ── 랭킹 바 ── */
-        .ranking-bar {
-            background: var(--card-bg); width: 100%; padding: 12px 20px; border-radius: 12px;
-            margin-bottom: 20px; display: flex; align-items: center; border: 1px dashed var(--border); overflow: hidden;
-        }
-        .ranking-title { font-weight: 800; color: var(--primary); margin-right: 15px; white-space: nowrap; font-size: 14px; }
-        .ranking-list  { display: flex; gap: 20px; font-size: 13px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-        .rank-item { display: flex; gap: 6px; }
-        .rank-num  { color: var(--primary); font-weight: 800; }
-        .rank-name { color: var(--text-main); }
-        .rank-vol  { color: var(--text-sub); font-size: 11px; }
-
 		/* ── 공지 안내 바 ── */
 .notice-bar {
     background: var(--card-bg);
@@ -1829,18 +1817,6 @@
         </p>
         <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
-    <div class="ranking-bar">
-        <div class="ranking-title">📊 거래량 TOP 5</div>
-        <div id="top-rankers" class="ranking-list">불러오는 중...</div>
-    </div>
-    <div class="ranking-bar">
-        <div class="ranking-title">📈 순매수 TOP 5</div>
-        <div id="net-buy-rankers" class="ranking-list">불러오는 중...</div>
-    </div>
-    <div class="ranking-bar">
-        <div class="ranking-title">📉 순매도 TOP 5</div>
-        <div id="net-sell-rankers" class="ranking-list">불러오는 중...</div>
-    </div>
 
     <!-- 실시간 주가 랭킹 바로가기 -->
     <div style="display:flex; align-items:center; justify-content:space-between; background:var(--card-bg); border-radius:12px; padding:12px 16px; margin-bottom:20px; border:1px dashed var(--border);">
@@ -2056,54 +2032,6 @@ function playHoverSound() {
     hoverPoolIdx++;
     sound.currentTime = 0;
     sound.play().catch(() => {});
-}
-
-/** stocks/ 집계(buyVol·sellVol·volume)로 TOP5 UI 갱신 — rankings/ 쓰기는 관리자 페이지만 */
-function refreshRankingsFromAllStocks() {
-    if (!allStocks.length) {
-        const empty = `<span style="color:var(--text-sub);font-size:12px;">집계 데이터 없음</span>`;
-        document.getElementById('top-rankers') && (document.getElementById('top-rankers').innerHTML = empty);
-        document.getElementById('net-buy-rankers') && (document.getElementById('net-buy-rankers').innerHTML = empty);
-        document.getElementById('net-sell-rankers') && (document.getElementById('net-sell-rankers').innerHTML = empty);
-        return;
-    }
-    const list = allStocks;
-    const volTop = [...list]
-        .sort((a, b) => (b.volume || 0) - (a.volume || 0))
-        .slice(0, 5)
-        .map((s, i) => ({
-            rank: i + 1,
-            id: s.id,
-            name: s.name,
-            price: s.price,
-            totalQty: s.volume || 0
-        }));
-    const netBuy = [...list]
-        .map(s => ({ ...s, netQty: (s.buyVol || 0) - (s.sellVol || 0) }))
-        .filter(s => s.netQty > 0)
-        .sort((a, b) => b.netQty - a.netQty)
-        .slice(0, 5)
-        .map((s, i) => ({
-            rank: i + 1,
-            id: s.id,
-            name: s.name,
-            price: s.price,
-            netQty: s.netQty
-        }));
-    const netSell = [...list]
-        .filter(s => (s.sellVol || 0) > 0)
-        .sort((a, b) => (b.sellVol || 0) - (a.sellVol || 0))
-        .slice(0, 5)
-        .map((s, i) => ({
-            rank: i + 1,
-            id: s.id,
-            name: s.name,
-            price: s.price,
-            netSellQty: s.sellVol || 0
-        }));
-    renderRankingFromCache(volTop);
-    renderNetBuyRanking(netBuy);
-    renderNetSellRanking(netSell);
 }
 
 // ── 중계방 로직 ──────────────────────────────────────────────
@@ -2365,59 +2293,6 @@ window.submitRelayRequest = async function() {
         msgEl.textContent = '신청 실패: ' + e.message;
     }
 };
-
-// rankings/* 표시는 stocks/ 스냅샷 집계(refreshRankingsFromAllStocks) — DB 반영은 관리자 페이지
-
-// 캐시된 랭킹 데이터를 상단 배너에 렌더링
-function renderRankingFromCache(items) {
-    const rankDiv = document.getElementById('top-rankers');
-    if (!rankDiv) return;
-    if (items.length === 0) {
-        rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">보유 데이터 없음</span>`;
-        return;
-    }
-    rankDiv.innerHTML = items.map(s => `
-        <div class="rank-item">
-            <span class="rank-num">${s.rank}위</span>
-            <span class="rank-name">${escapeHtml(s.name)}</span>
-            <span class="rank-qty">총 ${s.totalQty?.toLocaleString() || 0}주</span>
-        </div>
-    `).join('');
-}
-
-// 순매수 랭킹 렌더링
-function renderNetBuyRanking(items) {
-    const rankDiv = document.getElementById('net-buy-rankers');
-    if (!rankDiv) return;
-    if (items.length === 0) {
-        rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">보유 데이터 없음</span>`;
-        return;
-    }
-    rankDiv.innerHTML = items.map(s => `
-        <div class="rank-item">
-            <span class="rank-num">${s.rank}위</span>
-            <span class="rank-name">${escapeHtml(s.name)}</span>
-            <span class="rank-qty up">+${s.netQty?.toLocaleString() || 0}주</span>
-        </div>
-    `).join('');
-}
-
-// 순매도 랭킹 렌더링
-function renderNetSellRanking(items) {
-    const rankDiv = document.getElementById('net-sell-rankers');
-    if (!rankDiv) return;
-    if (items.length === 0) {
-        rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">보유 데이터 없음</span>`;
-        return;
-    }
-    rankDiv.innerHTML = items.map(s => `
-        <div class="rank-item">
-            <span class="rank-num">${s.rank}위</span>
-            <span class="rank-name">${escapeHtml(s.name)}</span>
-            <span class="rank-qty down">-${s.netSellQty?.toLocaleString() || 0}주</span>
-        </div>
-    `).join('');
-}
 
 	// ── 공지 바 ──────────────────────────────────────────────
 get(ref(db, 'siteConfig/notice')).then(snap => {
@@ -5011,7 +4886,6 @@ function processStocksSnap(snap) {
         });
         allStocks = newStocks;
     }
-    refreshRankingsFromAllStocks();
     updateUI(false);
 }
 

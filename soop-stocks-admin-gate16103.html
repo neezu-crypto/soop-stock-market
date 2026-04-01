@@ -20,15 +20,6 @@
         .btn-google { background: white; color: #334155; display: flex; align-items: center; gap: 10px; font-size: 16px; }
         button:hover { opacity: 0.8; transform: translateY(-1px); }
         #admin-info { margin-bottom: 20px; font-size: 14px; color: #94a3b8; }
-        .ranking-preview { margin-top: 15px; border-radius: 10px; overflow: hidden; border: 1px solid #334155; display: none; }
-        .ranking-preview table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .ranking-preview th { background: #0f172a; color: #38bdf8; padding: 10px 14px; text-align: left; font-weight: 700; }
-        .ranking-preview td { padding: 10px 14px; border-top: 1px solid #1e293b; color: #f8fafc; }
-        .ranking-preview tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
-        .rank-badge { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: #38bdf8; color: #0f172a; font-weight: 800; font-size: 12px; text-align: center; line-height: 22px; }
-        .rank-badge.gold   { background: #f59e0b; }
-        .rank-badge.silver { background: #94a3b8; }
-        .rank-badge.bronze { background: #b45309; }
         .status-chip { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
         .status-chip.saved   { background: #166534; color: #86efac; }
         .status-chip.unsaved { background: #7c2d12; color: #fca5a5; }
@@ -181,7 +172,7 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            메인 페이지 순매도 랭킹 아래에 표시되는 공지 내용을 관리합니다.<br>
+            메인 페이지 상단에 표시되는 공지 내용을 관리합니다.<br>
             <span style="color:#38bdf8;">Firebase DB의 <b>siteConfig/notice</b> 값을 변경합니다.</span>
         </div>
 
@@ -560,39 +551,6 @@
 
         <!-- 현재 상태 -->
         <div id="market-hours-status" style="font-size:13px; color:#94a3b8; margin-top:10px;"></div>
-        </div>
-        </div>
-    </div>
-
-    <!-- 🏆 랭킹 TOP5 관리 -->
-    <div class="container" style="display:block; border-color: #a855f7;">
-        <div class="accordion-header">
-            <h1>🏆 랭킹 TOP5 초기화</h1>
-            <span class="accordion-arrow">▼</span>
-        </div>
-        <div class="accordion-body">
-        <div class="accordion-sep">
-        <div class="info-box">
-            사용자 화면의 TOP5는 <b>stocks/</b>의 거래량·buyVol·sellVol로 실시간 표시됩니다.<br>
-            <b>거래 TOP5 DB 반영</b>은 동일 집계를 <b>rankings/</b>에 저장합니다(백업·외부 연동용).<br>
-            장 재오픈 시 <b>랭킹 초기화</b>로 DB의 rankings를 비울 수 있습니다.<br>
-            <span style="color:#ef4444;">초기화 시 거래량 TOP5 · 순매수 TOP5 · 순매도 TOP5 DB 데이터가 모두 삭제됩니다.</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <span style="font-size:13px; color:#94a3b8;">저장된 TOP5 상태:</span>
-            <span id="ranking-status" class="status-chip loading">불러오는 중...</span>
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="btn-success" style="flex:1; min-width:140px;" onclick="previewRankings()">🔍 현재 TOP5 확인</button>
-            <button class="btn-primary" style="flex:1; min-width:140px; margin-top:0;" onclick="publishTradeRankings()">📤 거래 TOP5 DB 반영</button>
-            <button class="btn-primary" style="flex:2; min-width:180px; margin-top:0; background:#ef4444;" onclick="resetRankings()">🗑️ 랭킹 초기화</button>
-        </div>
-        <div class="ranking-preview" id="ranking-preview-table">
-            <table>
-                <thead><tr><th>순위</th><th>스트리머</th><th>총 보유량</th><th>현재가</th></tr></thead>
-                <tbody id="ranking-preview-body"></tbody>
-            </table>
-        </div>
         </div>
         </div>
     </div>
@@ -1040,10 +998,6 @@
             <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
                 <input type="checkbox" id="auto-run-candle" checked style="accent-color:#6366f1;" onchange="persistDailyAutoSettings()">
                 🗑 오래된 캔들 정리
-            </label>
-            <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
-                <input type="checkbox" id="auto-run-reset-ranking" checked style="accent-color:#6366f1;" onchange="persistDailyAutoSettings()">
-                🔄 랭킹 TOP5 초기화
             </label>
         </div>
         <div class="data-status-bar">
@@ -1574,25 +1528,6 @@
     window.reloadStocks = async function() {
         if (!isAdmin()) return; await loadStocksOnce(); };
 
-    async function loadRankingStatus() {
-        const statusEl = document.getElementById('ranking-status');
-        if (!statusEl) return;
-        try {
-            const snap = await get(ref(db, 'rankings/top5'));
-            if (snap.exists()) {
-                const savedAt = snap.val().savedAt ? new Date(snap.val().savedAt).toLocaleString('ko-KR') : '시각 불명';
-                statusEl.className = 'status-chip saved';
-                statusEl.innerText = `✅ 저장됨 (${savedAt})`;
-            } else {
-                statusEl.className = 'status-chip unsaved';
-                statusEl.innerText = '❌ 저장 안 됨';
-            }
-        } catch (e) {
-            statusEl.className = 'status-chip unsaved';
-            statusEl.innerText = '확인 실패';
-        }
-    }
-
     // ── 차트 하단 배너 ───────────────────────────────────────
     async function loadChartBannerStatus() {
         const statusEl  = document.getElementById('chart-banner-status');
@@ -1734,7 +1669,6 @@
             document.getElementById('admin-section').style.display = 'block';
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
             await loadStocksOnce();
-            await loadRankingStatus();
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
             await loadMarketHours();
@@ -1748,102 +1682,6 @@
             document.getElementById('admin-section').style.display = 'none';
         }
     });
-
-    // ── 랭킹 TOP5 ───────────────────────────────────────────
-    async function calcTop5() {
-        const [usersSnap, stocksSnap] = await Promise.all([get(ref(db, 'users/')), get(ref(db, 'stocks/'))]);
-        const usersData  = usersSnap.val()  || {};
-        const stocksData = stocksSnap.val() || {};
-        const ownership  = {};
-        Object.values(usersData).forEach(user => {
-            if (!user.stocks) return;
-            Object.entries(user.stocks).forEach(([stockId, info]) => {
-                const qty = parseInt(info.qty) || 0;
-                if (qty > 0) ownership[stockId] = (ownership[stockId] || 0) + qty;
-            });
-        });
-        return Object.entries(ownership)
-            .map(([id, totalQty]) => { const s = stocksData[id] || {}; return { id, name: s.name || id, price: s.price || 0, totalQty }; })
-            .sort((a, b) => b.totalQty - a.totalQty).slice(0, 5);
-    }
-
-    window.previewRankings = async function() {
-        if (!isAdmin()) return;
-        const statusEl = document.getElementById('ranking-status');
-        statusEl.className = 'status-chip loading'; statusEl.innerText = '집계 중...';
-        try {
-            const top5 = await calcTop5();
-            renderPreviewTable(top5);
-            statusEl.className = 'status-chip unsaved'; statusEl.innerText = `현재 ${top5.length}개 종목`;
-        } catch(e) { alert("집계 중 오류: " + e.message); statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생'; }
-    };
-
-    window.publishTradeRankings = async function() {
-        if (!isAdmin()) return;
-        const statusEl = document.getElementById('ranking-status');
-        if (statusEl) { statusEl.className = 'status-chip loading'; statusEl.innerText = 'DB 반영 중...'; }
-        try {
-            const snap = await get(ref(db, 'stocks/'));
-            const data = snap.val() || {};
-            const list = Object.entries(data).map(([id, s]) => ({ id, ...s }));
-            const t = Date.now();
-            const volTop = [...list].sort((a, b) => (b.volume || 0) - (a.volume || 0)).slice(0, 5).map((s, i) => ({
-                rank: i + 1, id: s.id, name: s.name || s.id, price: s.price || 0, totalQty: s.volume || 0
-            }));
-            const netBuy = [...list].map(s => ({ ...s, netQty: (s.buyVol || 0) - (s.sellVol || 0) }))
-                .filter(s => s.netQty > 0).sort((a, b) => b.netQty - a.netQty).slice(0, 5).map((s, i) => ({
-                    rank: i + 1, id: s.id, name: s.name || s.id, price: s.price || 0, netQty: s.netQty
-                }));
-            const netSell = [...list].filter(s => (s.sellVol || 0) > 0).sort((a, b) => (b.sellVol || 0) - (a.sellVol || 0)).slice(0, 5).map((s, i) => ({
-                rank: i + 1, id: s.id, name: s.name || s.id, price: s.price || 0, netSellQty: s.sellVol || 0
-            }));
-            await Promise.all([
-                set(ref(db, 'rankings/top5'), { savedAt: t, items: volTop }),
-                set(ref(db, 'rankings/netBuyTop5'), { savedAt: t, items: netBuy }),
-                set(ref(db, 'rankings/netSellTop5'), { savedAt: t, items: netSell })
-            ]);
-            if (statusEl) { statusEl.className = 'status-chip'; statusEl.innerText = '✅ DB 반영 완료'; }
-            alert('✅ 거래량·순매수·순매도 TOP5가 rankings/에 저장되었습니다.');
-        } catch (e) {
-            if (statusEl) { statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류'; }
-            alert('저장 실패: ' + e.message);
-        }
-    };
-
-    window.resetRankings = async function(silent = false) {
-        if (!isAdmin()) return;
-        if (!silent && !confirm('⚠️ 랭킹 전체를 초기화하시겠습니까?\n\n• 거래량 TOP5\n• 순매수 TOP5\n• 순매도 TOP5\n\n다음 거래부터 0부터 다시 집계됩니다.')) return;
-        const statusEl = document.getElementById('ranking-status');
-        statusEl.className = 'status-chip loading'; statusEl.innerText = '초기화 중...';
-        try {
-            const empty = { items: [], savedAt: new Date().toISOString() };
-            await Promise.all([
-                set(ref(db, 'rankings/top5'),        empty),
-                set(ref(db, 'rankings/netBuyTop5'),  empty),
-                set(ref(db, 'rankings/netSellTop5'), empty),
-            ]);
-            const tbody = document.getElementById('ranking-preview-body');
-            const wrap  = document.getElementById('ranking-preview-table');
-            if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">초기화 완료 — 다음 거래부터 집계 시작</td></tr>`;
-            if (wrap)  wrap.style.display = 'block';
-            statusEl.className = 'status-chip'; statusEl.innerText = '✅ 초기화 완료';
-            if (!silent) alert('✅ 랭킹 3종 모두 초기화됐습니다.\n다음 거래부터 0부터 다시 집계됩니다.');
-        } catch(e) {
-            alert('초기화 실패: ' + e.message);
-            statusEl.className = 'status-chip unsaved'; statusEl.innerText = '오류 발생';
-        }
-    };
-
-    function renderPreviewTable(top5) {
-        const tbody = document.getElementById('ranking-preview-body');
-        const wrap  = document.getElementById('ranking-preview-table');
-        if (!tbody || !wrap) return;
-        const badgeClass = ['gold', 'silver', 'bronze', '', ''];
-        tbody.innerHTML = top5.length === 0
-            ? `<tr><td colspan="4" style="text-align:center;color:#94a3b8;">보유 데이터 없음</td></tr>`
-            : top5.map((s, i) => `<tr><td><span class="rank-badge ${badgeClass[i]}">${i+1}</span></td><td style="font-weight:700;">${s.name}</td><td style="color:#38bdf8;">${s.totalQty.toLocaleString()}주</td><td style="color:#94a3b8;">${s.price.toLocaleString()}원</td></tr>`).join('');
-        wrap.style.display = 'block';
-    }
 
     // ── 미거래 유저 정리 ─────────────────────────────────────
     async function getInactiveUsers() {
@@ -3115,8 +2953,7 @@
         hour: 0,
         minute: 0,
         runRanking: true,
-        runCandle: true,
-        runResetRanking: true
+        runCandle: true
     };
 
     function clampDailyAutoHourMin(v, lo, hi) {
@@ -3153,7 +2990,6 @@
                 minute: clampDailyAutoHourMin(minEl?.value, 0, 59),
                 runRanking: document.getElementById('auto-run-ranking').checked,
                 runCandle: document.getElementById('auto-run-candle').checked,
-                runResetRanking: document.getElementById('auto-run-reset-ranking').checked,
                 updatedAt: Date.now(),
                 ...extraPatch
             };
@@ -3192,7 +3028,6 @@
             if (minEl) minEl.value = String(clampDailyAutoHourMin(d.minute, 0, 59));
             document.getElementById('auto-run-ranking').checked = d.runRanking !== false;
             document.getElementById('auto-run-candle').checked = d.runCandle !== false;
-            document.getElementById('auto-run-reset-ranking').checked = d.runResetRanking !== false;
             if (d.lastRunAt) {
                 document.getElementById('auto-daily-last').textContent =
                     new Date(d.lastRunAt).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
@@ -3268,11 +3103,9 @@
 
             const runRanking      = document.getElementById('auto-run-ranking').checked;
             const runCandle       = document.getElementById('auto-run-candle').checked;
-            const runResetRanking = document.getElementById('auto-run-reset-ranking').checked;
 
             if (runRanking)      await calcAssetRanking(true);
             if (runCandle)       await pruneAllCandles(true);
-            if (runResetRanking) await resetRankings(true);
 
             const doneMs = Date.now();
             const doneStr = new Date(doneMs).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
