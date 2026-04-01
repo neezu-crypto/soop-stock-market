@@ -1980,6 +1980,12 @@ function getEffectiveFrozenUntil(stockId) {
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
 let userUID          = null;
+/** presence/{uid}/{sessionId} — 세션당 1노드, 하트비트 + onDisconnect.remove로 고스트 최소화 */
+let presenceSessionRef   = null;
+let presenceHeartbeat    = null;
+let presenceCountUnsub   = null;
+let presenceSetupUid     = null;
+
 let allStocks        = [];
 let allBanners       = {}; // stocksBanner/{id} 캐시
 let isTrading        = null; // 거래 중인 종목 ID (null이면 미거래)
@@ -2870,6 +2876,65 @@ setTimeout(() => {
     }
 }, 5000);
 
+// ── 실시간 접속자 집계 (presence/{uid}/{sessionId}/connectedAt) ──
+const PRESENCE_HEARTBEAT_MS = 2 * 60 * 1000; // 주기적 갱신 — onDisconnect 실패 시에도 TTL로 고스트 제거
+const PRESENCE_TTL_MS       = 6 * 60 * 1000; // 마지막 갱신 후 이 시간 초과 시 집계에서 제외 (하트비트의 약 3배)
+
+function countActivePresenceSessions(data) {
+    if (!data || typeof data !== 'object') return 0;
+    const now = Date.now();
+    let count = 0;
+    for (const sessions of Object.values(data)) {
+        if (!sessions || typeof sessions !== 'object') continue;
+        for (const v of Object.values(sessions)) {
+            if (v && typeof v.connectedAt === 'number' && (now - v.connectedAt) <= PRESENCE_TTL_MS) count++;
+        }
+    }
+    return count;
+}
+
+function subscribePresenceCountOnce() {
+    if (presenceCountUnsub) return;
+    presenceCountUnsub = onValue(ref(db, 'presence'), (snap) => {
+        const data = snap.exists() ? snap.val() : {};
+        const count = countActivePresenceSessions(data);
+        const el = document.getElementById('online-count');
+        if (el) el.innerText = count.toLocaleString();
+    });
+}
+
+async function teardownPresenceSession() {
+    if (presenceHeartbeat) {
+        clearInterval(presenceHeartbeat);
+        presenceHeartbeat = null;
+    }
+    if (presenceSessionRef) {
+        try { await remove(presenceSessionRef); } catch (_) {}
+        presenceSessionRef = null;
+    }
+    presenceSetupUid = null;
+}
+
+async function setupPresenceSession(user) {
+    if (!user?.uid) return;
+    if (presenceSetupUid === user.uid && presenceSessionRef) return;
+    await teardownPresenceSession();
+
+    const sessionID = Math.random().toString(36).substring(2, 11);
+    const myPresenceRef = ref(db, `presence/${user.uid}/${sessionID}`);
+    presenceSessionRef = myPresenceRef;
+    presenceSetupUid = user.uid;
+
+    await set(myPresenceRef, { connectedAt: Date.now() });
+    onDisconnect(myPresenceRef).remove();
+
+    presenceHeartbeat = setInterval(() => {
+        set(myPresenceRef, { connectedAt: Date.now() }).catch(() => {});
+    }, PRESENCE_HEARTBEAT_MS);
+
+    subscribePresenceCountOnce();
+}
+
 // ── 인증 & 내 데이터 동기화 ─────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -2888,30 +2953,7 @@ onAuthStateChanged(auth, async (user) => {
         loadStockNameCache();  // 종목 이름 캐시 로드 (검색 준비)
 
         try {
-            // 유저별 전용 노드에 접속 시각(타임스탬프) 저장 → 퇴장 시 자동 삭제
-            const sessionID = Math.random().toString(36).substring(2, 9);
-            const myPresenceRef = ref(db, `presence/${userUID}/${sessionID}`);
-            await set(myPresenceRef, { connectedAt: Date.now() });
-            onDisconnect(myPresenceRef).remove();
-
-            // 접속 시 1회 읽기 — 30분 이내 세션만 유효로 집계
-            // 구조: presence/{uid}/{sessionID}/connectedAt
-            const snap = await get(ref(db, 'presence'));
-            let count = 0;
-            if (snap.exists()) {
-                const now    = Date.now();
-                const cutoff = 30 * 60 * 1000; // 30분
-                Object.values(snap.val()).forEach(sessions => {
-                    // sessions = { sessionID: { connectedAt }, ... }
-                    if (sessions && typeof sessions === 'object') {
-                        Object.values(sessions).forEach(v => {
-                            if (v && v.connectedAt && (now - v.connectedAt) < cutoff) count++;
-                        });
-                    }
-                });
-            }
-            const el = document.getElementById('online-count');
-            if (el) el.innerText = Math.max(1, count).toLocaleString();
+            await setupPresenceSession(user);
         } catch (e) {
             const el = document.getElementById('online-count');
             if (el) el.innerText = '?';
@@ -2934,6 +2976,7 @@ onAuthStateChanged(auth, async (user) => {
             syncOwnedSubscriptions();
         });
     } else {
+        await teardownPresenceSession();
         signInAnonymously(auth);
     }
 });
@@ -2946,10 +2989,13 @@ window.logout = async function() {
         // 1. 모든 데이터 구독 중단 (불필요한 트래픽 방지)
         stopAllStocksSubscriptions();
 
-        // 2. Firebase 로그아웃 실행
+        // 2. presence 노드 즉시 삭제 (onDisconnect만 기대하지 않음 — 고스트 방지)
+        await teardownPresenceSession();
+
+        // 3. Firebase 로그아웃 실행
         await signOut(auth);
 
-        // 3. 로그아웃 후 처리
+        // 4. 로그아웃 후 처리
         // signOut 호출 시 onAuthStateChanged가 자동으로 감지하여 
         // 익명 로그인을 실행하거나 인트로를 띄우게 됩니다.
         alert("성공적으로 로그아웃되었습니다.");
