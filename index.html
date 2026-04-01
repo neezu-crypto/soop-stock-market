@@ -1970,6 +1970,9 @@ let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
 let marketCheckTimer = null;
+/** stocks/ 전체: 정규장 onValue / 비정규장 setInterval get — applyMainStocksDataSync에서 관리 */
+let stocksUnsubscribe  = null;
+let stocksPollTimer    = null;
 let sparklinePriceCache = {}; // { stockId: [price, ...] } — 메모리만, 새로고침 시 초기화
 let sellConfigCache = null;
 let sellConfigFetchCount = 0;
@@ -2335,7 +2338,6 @@ onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
 onValue(ref(db, 'siteConfig/marketHours'), (snap) => {
     siteConfig.marketHours = snap.exists() ? snap.val() : null;
     applyMarketState();
-    applyStocksMode();
 });
 
 // 중계방 실시간 구독 (신규 수락/만료 감지)
@@ -2436,6 +2438,75 @@ function isRegularMarket() {
     return nowMins >= rOpenMins || nowMins < rCloseMins;
 }
 
+/** 전체 주가 동기화 모드 — siteConfig.marketHours(open/close + regularOpen/regularClose) 기준 */
+let mainStocksSyncMode = null; // 'closed' | 'regular' | 'offpeak'
+
+/** siteConfig.marketHours: open/close = 전체 장 운영, regularOpen/regularClose = 정규장(실시간 구간) */
+function getStockSyncMode() {
+    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    if (isAdmin) return 'regular';
+    if (!siteConfigReady) return 'closed';
+    if (siteConfig.maintenance) return 'closed';
+    const mh = siteConfig.marketHours;
+    if (mh && mh.enabled && !isMarketOpen()) return 'closed';
+    if (!isRegularMarket()) return 'offpeak';
+    return 'regular';
+}
+
+/**
+ * stocks/ 전체 목록 동기화: 정규장=onValue, 비정규장(오픈 중)=30초 get, 마감/점검=중단
+ * (즐겨찾기·보유 개별 구독은 applyStocksMode에서 처리)
+ */
+function applyMainStocksDataSync() {
+    const mode = getStockSyncMode();
+    if (mode !== mainStocksSyncMode) {
+        const msg = {
+            closed: '점검·siteConfig 대기·또는 전체 오픈 시간 밖 → stocks/ 리스너·폴링 제거',
+            regular: '정규장(또는 정규 시간 미설정/관리자) → stocks/ onValue 실시간',
+            offpeak: '전체 오픈 시간 내·비정규장 → stocks/ 30초마다 get'
+        };
+        console.log(`[sync-strategy] ${mainStocksSyncMode ?? 'init'} → ${mode}: ${msg[mode]}`);
+        mainStocksSyncMode = mode;
+    }
+
+    if (mode === 'closed') {
+        if (typeof stocksUnsubscribe === 'function') {
+            stocksUnsubscribe();
+            stocksUnsubscribe = null;
+        }
+        if (stocksPollTimer) {
+            clearInterval(stocksPollTimer);
+            stocksPollTimer = null;
+        }
+        return;
+    }
+    if (mode === 'regular') {
+        if (stocksPollTimer) {
+            clearInterval(stocksPollTimer);
+            stocksPollTimer = null;
+        }
+        if (typeof stocksUnsubscribe === 'function') return;
+        stocksUnsubscribe = onValue(ref(db, 'stocks/'), processStocksSnap, (err) => {
+            console.warn('[sync-strategy] stocks/ onValue 오류:', err?.message || err);
+        });
+        return;
+    }
+    if (typeof stocksUnsubscribe === 'function') {
+        stocksUnsubscribe();
+        stocksUnsubscribe = null;
+    }
+    if (stocksPollTimer) return;
+    const poll = () => get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+    poll();
+    stocksPollTimer = setInterval(poll, 30000);
+}
+
+/** 정규장/비정규장/마감 전환 시 1회 호출: 전체 stocks + 즐겨찾기/보유 구독 방식 갱신 */
+function updateSyncStrategy() {
+    applyMainStocksDataSync();
+    applyStocksMode();
+}
+
 function setMarketUiReady(ready) {
     document.body.classList.toggle('market-state-pending', !ready);
     document.body.classList.toggle('market-state-ready', ready);
@@ -2455,7 +2526,11 @@ function setMaintenanceLoading(show) {
 }
 
 // 마감/점검 여부에 따라 오버레이 표시 및 시장 모드 배너 업데이트
+// (finally에서 updateSyncStrategy → 정규장 onValue / 비정규장 30초 폴링 / 마감 중단)
 function applyMarketState() {
+    let mh;
+    let marketOpen;
+    try {
     const overlay = document.getElementById('maintenance-overlay');
     const timerEl = document.getElementById('maintenance-timer');
     if (!overlay) return;
@@ -2467,7 +2542,6 @@ function applyMarketState() {
         setMarketUiReady(true);
         setMaintenanceLoading(false);
         overlay.style.display = 'none';
-        startStocksRealtime();
         if (marketCheckTimer) clearTimeout(marketCheckTimer);
         marketCheckTimer = setTimeout(applyMarketState, 60000);
         return;
@@ -2487,8 +2561,8 @@ function applyMarketState() {
     setMarketUiReady(true);
 
     const maintenance = !!siteConfig.maintenance;
-    const mh          = siteConfig.marketHours;
-    const marketOpen  = isMarketOpen();
+    mh          = siteConfig.marketHours;
+    marketOpen  = isMarketOpen();
 
     const title    = document.getElementById('maintenance-title');
     const descMain = document.getElementById('maintenance-desc-main');
@@ -2541,14 +2615,8 @@ function applyMarketState() {
             }
         }
     } else {
-        // ── 4. 시장 운영 중: 정규장 실시간 ↔ 비정규장 폴링 ───────
+        // ── 4. 시장 운영 중: UI만 처리 — 주가 동기화는 finally의 updateSyncStrategy ──
         overlay.style.display = 'none';
-
-        if (isRegularMarket()) {
-            startStocksRealtime();
-        } else {
-            startStocksPolling();
-        }
     }
 
     // ── 5. 시장 모드 안내 배너 ────────────────────────────────
@@ -2593,6 +2661,9 @@ function applyMarketState() {
 
     if (marketCheckTimer) clearTimeout(marketCheckTimer);
     marketCheckTimer = setTimeout(applyMarketState, 60000);
+    } finally {
+        updateSyncStrategy();
+    }
 }
 
 // ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
@@ -2832,7 +2903,6 @@ onAuthStateChanged(auth, async (user) => {
         applyMarketState();
         // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
         tryCloseIntro();
-        applyStocksMode();
         initFavorites();       // 즐겨찾기 초기 로드
         loadStockNameCache();  // 종목 이름 캐시 로드 (검색 준비)
 
@@ -4843,12 +4913,8 @@ function updateCardContent(card, s, userStock) {
     if (sellBtn) sellBtn.disabled = (isTrading === s.id);
 }
 
-// ── 주식 데이터 리스너 ───────────────────────────────────────
-// 정규장: onValue 실시간 구독
-// 비정규장(전체 오픈 시간 내): 30초 폴링
-// ────────────────────────────────────────────────────────────
-let stocksUnsubscribe  = null; // onValue 해제 함수
-let stocksPollTimer    = null; // 폴링 타이머
+// ── 주식 데이터 리스너 (stocks/ 전체 + 즐겨찾기/보유 개별) ───
+// 마감: 중단 | 비정규장(오픈 중): 30초 폴링 | 정규장: onValue — updateSyncStrategy()
 
 // stocks/ Firebase 스냅샷을 allStocks 캐시에 반영
 function processStocksSnap(snap) {
@@ -4913,39 +4979,6 @@ function stopAllStocksSubscriptions() {
     });
 }
 
-// 정규장: 즐겨찾기/보유 종목 onValue 실시간
-function startStocksRealtime() {
-    onUserActive();
-    const allIds = [...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])];
-    allIds.forEach(id => {
-        if (favPollTimers[id]) { clearInterval(favPollTimers[id]); delete favPollTimers[id]; }
-        if (favorites[id])   subscribeToFavorite(id);
-        if (ownedStocks[id]) subscribeToOwned(id);
-    });
-}
-
-// 비정규장: 30초 폴링
-function startStocksPolling() {
-    onUserActive();
-    const allIds = [...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])];
-    allIds.forEach(id => {
-        if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
-        if (ownedUnsubs[id])    { ownedUnsubs[id](); delete ownedUnsubs[id]; }
-        if (favPollTimers[id]) return;
-        const poll = () => {
-            get(ref(db, `stocks/${id}`)).then(snap => {
-                if (!snap.exists()) return;
-                const data = { ...snap.val(), id };
-                if (favorites[id])   favorites[id]   = data;
-                if (ownedStocks[id]) ownedStocks[id] = data;
-                renderFavoriteList();
-            }).catch(() => {});
-        };
-        poll();
-        favPollTimers[id] = setInterval(poll, 30000);
-    });
-}
-
 // ── 활동 감지 + 정규장/비정규장 구독 모드 ───────────────────
 let isUserActive      = true;
 let activityTimer     = null;
@@ -4957,7 +4990,7 @@ function onUserActive() {
         isUserActive = true;
         // 절전 모드 오버레이 숨김
         document.getElementById('power-save-overlay')?.classList.remove('active');
-        applyStocksMode(); // 활동 재개 → 구독 재시작
+        updateSyncStrategy(); // 활동 재개 → 정규/비정규·stocks/ 동기화 재시작
     }
     clearTimeout(activityTimer);
     activityTimer = setTimeout(() => {
@@ -5043,11 +5076,7 @@ function applyStocksMode() {
     }
 }
 
-// 최초 실행
-applyStocksMode();
-
-// 1분마다 시장 상태 체크 → 자동 전환
-setInterval(applyStocksMode, 60000);
+// 주가 동기화는 applyMarketState()의 finally → updateSyncStrategy()에서 수행 (siteConfig 로드·1분 타이머·인증 시)
 
 // ── 정적 데이터 로컬 캐시 (이름/배너 등 잘 바뀌지 않는 데이터) ──
 const CACHE_KEY     = 'soop_static_cache';
@@ -5631,7 +5660,6 @@ document.addEventListener('keydown', (e) => {
         if (currentUser?.email === 'skftodwocks2@gmail.com') {
             applyMarketState();
             get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
-            applyStocksMode();
             return;
         }
 
@@ -5642,7 +5670,6 @@ document.addEventListener('keydown', (e) => {
                 if (result.user.email === 'skftodwocks2@gmail.com') {
                     applyMarketState();
                     get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
-                    applyStocksMode();
                 } else {
                     alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
                     signInAnonymously(auth);
