@@ -1102,7 +1102,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set, remove, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, initializeAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -2008,11 +2008,39 @@
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("이름을 입력해주세요.");
         const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
-        const stocks = {};
-        uniqueNames.forEach((name, i) => { stocks[`id_${Date.now()}_${i}`] = { name, price: 10000, change: 0, history: [10000, 10000] }; });
+        const batchNow = Date.now();
+        const initialPrice = 10000;
+        const initialVolume = 0;
+        const initialTotalShares = 1000000;
+        const initialStatus = "active";
+        const defaultImpactCoef = 0.0005;
+        const t = serverTimestamp();
+        const stocksToCreate = uniqueNames.map((name, i) => {
+            const newId = `id_${batchNow}_${i}`;
+            return {
+                id: newId,
+                completeObject: {
+                    name,
+                    price: initialPrice,
+                    volume: initialVolume,
+                    totalShares: initialTotalShares,
+                    status: initialStatus,
+                    createdAt: t,
+                    lastUpdate: t,
+                    impactCoef: defaultImpactCoef,
+                    // trade/UI가 history를 '존재'로 기대할 수 있으므로 기본값 제공
+                    history: [initialPrice, initialPrice],
+                    // trade 로직에서 volume/buyVol/sellVol 등을 안전하게 사용 가능하도록 기본값 제공
+                    change: 0,
+                    buyVol: 0,
+                    sellVol: 0,
+                }
+            };
+        });
         if (confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
             try {
-                await update(ref(db, 'stocks/'), stocks);
+                // 각 종목을 "완성된 스키마"로 원자적으로 생성
+                await Promise.all(stocksToCreate.map(s => set(ref(db, 'stocks/' + s.id), s.completeObject)));
                 await set(ref(db, 'siteConfig/stockCacheVersion'), Date.now()); // 캐시 무효화
                 alert("🎉 상장이 완료되었습니다!");
                 document.getElementById('list').value = "";
