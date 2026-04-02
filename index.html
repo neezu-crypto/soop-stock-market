@@ -1700,7 +1700,7 @@
             관리자 검토 후 잔고에 지원금이 지급될 수 있습니다. 중복 신청은 제한됩니다.
         </p>
         <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">Your Nickname <span style="color:#f87171;">*</span></label>
-        <input type="text" id="asset-request-nickname" maxlength="80" placeholder="방송/활동 닉네임"
+        <input type="text" id="asset-request-nickname" maxlength="80" placeholder="Enter your nickname" autocomplete="off"
             oninput="window.syncAssetRequestSubmitState && window.syncAssetRequestSubmitState()"
             style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text-main); font-size:14px; margin-bottom:12px;">
         <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">사유 (선택)</label>
@@ -2100,10 +2100,7 @@ window.openAssetRequestModal = function() {
     const reasonEl = document.getElementById('asset-request-reason');
     if (reasonEl) reasonEl.value = '';
     if (nickEl) {
-        let prefill = '';
-        try { prefill = localStorage.getItem('assetReqNickname') || ''; } catch (_) { /* noop */ }
-        if (!prefill && auth?.currentUser?.displayName) prefill = String(auth.currentUser.displayName);
-        nickEl.value = prefill;
+        nickEl.value = '';
         nickEl.focus();
     }
     syncAssetRequestSubmitState();
@@ -2147,7 +2144,6 @@ window.submitAssetRequest = async function() {
         console.log('[assetRequests][Stage1] submitting', { pushId, path: `assetRequests/${pushId}`, payloadPreview: { ...payload, timestamp: '[serverTimestamp]' } });
         await set(newRef, payload);
         console.log('[assetRequests][Stage1] set() OK — pushId:', pushId, 'fullPath:', `assetRequests/${pushId}`);
-        try { localStorage.setItem('assetReqNickname', nickname); } catch (_) { /* noop */ }
         alert('✅ 신청이 접수되었습니다. 관리자 검토 후 처리됩니다.');
         window.closeAssetRequestModal();
         startAssetRequestStatusWatch(userUID);
