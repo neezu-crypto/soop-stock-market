@@ -1000,6 +1000,29 @@
                 🗑 오래된 캔들 정리
             </label>
         </div>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+            <label style="display:flex; align-items:center; gap:10px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="auto-split-enabled" style="accent-color:#6366f1;" onchange="persistDailyAutoSettings()">
+                ✂️ 주가 자동 액면분할 실행
+            </label>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <span style="font-size:12px; color:#94a3b8; font-weight:700;">주가가</span>
+                <input type="number" id="auto-split-price-threshold" min="0" value="100"
+                    style="width:92px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
+                    onblur="flushDailyAutoPersist()">
+                <span style="color:#64748b;">만원 이상일 때</span>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <span style="font-size:12px; color:#94a3b8; font-weight:700;">분할 비율 (N배)</span>
+                <input type="number" id="auto-split-ratio" min="2" max="100" value="10"
+                    style="width:92px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
+                    onblur="flushDailyAutoPersist()">
+                <span style="color:#64748b;">배</span>
+                <span style="color:#64748b;">액면분할 실행</span>
+            </div>
+            <div id="daily-auto-split-log"
+                style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; max-height:160px; overflow-y:auto; display:none;"></div>
+        </div>
         <div class="data-status-bar">
             <span>마지막 자동 실행: <b id="auto-daily-last" style="color:#f8fafc;">-</b></span>
             <span id="auto-daily-chip" class="status-chip none">대기 중</span>
@@ -2987,13 +3010,30 @@
         hour: 0,
         minute: 0,
         runRanking: true,
-        runCandle: true
+        runCandle: true,
+        autoSplitEnabled: false,
+        // Admin input is "만원" => convert to won in execution.
+        autoSplitThreshold: 100,
+        // N배 => 1:N split (price ÷ N, qty × N)
+        autoSplitRatio: 10
     };
 
     function clampDailyAutoHourMin(v, lo, hi) {
         const n = parseInt(v, 10);
         if (Number.isNaN(n)) return lo;
         return Math.min(hi, Math.max(lo, n));
+    }
+
+    function clampDailyAutoSplitThresholdManwon(v) {
+        const n = parseInt(v, 10);
+        if (Number.isNaN(n)) return DAILY_AUTO_DEFAULTS.autoSplitThreshold;
+        return Math.max(0, n);
+    }
+
+    function clampDailyAutoSplitRatioN(v) {
+        const n = parseInt(v, 10);
+        if (!Number.isInteger(n) || n <= 1) return DAILY_AUTO_DEFAULTS.autoSplitRatio;
+        return Math.min(100, Math.max(2, n));
     }
 
     function flashDailyAutoSaved() {
@@ -3018,17 +3058,29 @@
             const hourEl = document.getElementById('auto-daily-hour');
             const minEl  = document.getElementById('auto-daily-min');
             const extraPatch = isPlainDailyAutoExtra(extra) ? extra : {};
+            const splitEnabledEl   = document.getElementById('auto-split-enabled');
+            const splitThresholdEl = document.getElementById('auto-split-price-threshold');
+            const splitRatioEl     = document.getElementById('auto-split-ratio');
+
+            const autoSplitEnabled   = !!splitEnabledEl?.checked;
+            const autoSplitThreshold = clampDailyAutoSplitThresholdManwon(splitThresholdEl?.value);
+            const autoSplitRatio     = clampDailyAutoSplitRatioN(splitRatioEl?.value);
             const payload = {
                 enabled: document.getElementById('auto-daily-toggle').checked,
                 hour: clampDailyAutoHourMin(hourEl?.value, 0, 23),
                 minute: clampDailyAutoHourMin(minEl?.value, 0, 59),
                 runRanking: document.getElementById('auto-run-ranking').checked,
                 runCandle: document.getElementById('auto-run-candle').checked,
+                autoSplitEnabled,
+                autoSplitThreshold,
+                autoSplitRatio,
                 updatedAt: Date.now(),
                 ...extraPatch
             };
             if (hourEl) hourEl.value = String(payload.hour);
             if (minEl) minEl.value = String(payload.minute);
+            if (splitThresholdEl) splitThresholdEl.value = String(payload.autoSplitThreshold);
+            if (splitRatioEl)     splitRatioEl.value     = String(payload.autoSplitRatio);
             await update(ref(db, 'siteConfig/dailyAuto'), payload);
             flashDailyAutoSaved();
         } catch (e) {
@@ -3062,6 +3114,12 @@
             if (minEl) minEl.value = String(clampDailyAutoHourMin(d.minute, 0, 59));
             document.getElementById('auto-run-ranking').checked = d.runRanking !== false;
             document.getElementById('auto-run-candle').checked = d.runCandle !== false;
+            const splitEnabledEl   = document.getElementById('auto-split-enabled');
+            const splitThresholdEl = document.getElementById('auto-split-price-threshold');
+            const splitRatioEl     = document.getElementById('auto-split-ratio');
+            if (splitEnabledEl) splitEnabledEl.checked = d.autoSplitEnabled === true;
+            if (splitThresholdEl) splitThresholdEl.value = String(clampDailyAutoSplitThresholdManwon(d.autoSplitThreshold));
+            if (splitRatioEl)     splitRatioEl.value     = String(clampDailyAutoSplitRatioN(d.autoSplitRatio));
             if (d.lastRunAt) {
                 document.getElementById('auto-daily-last').textContent =
                     new Date(d.lastRunAt).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'numeric', minute:'numeric' });
@@ -3112,6 +3170,147 @@
         await persistDailyAutoSettings();
     };
 
+    async function autoSplitStocksByThreshold({ thresholdWon, ratioN }) {
+        if (!isAdmin()) return;
+
+        const logEl = document.getElementById('daily-auto-split-log');
+        if (logEl) {
+            logEl.style.display = 'block';
+            logEl.innerHTML = '';
+        }
+
+        const stocksSnap = await get(ref(db, 'stocks/'));
+        const stocksData = stocksSnap.val() || {};
+
+        // 1) 후보: 가격 기준 초과
+        const candidates = Object.entries(stocksData)
+            .filter(([, s]) => (s?.price || 0) >= thresholdWon);
+
+        if (candidates.length === 0) {
+            if (logEl) logEl.innerHTML = `<div style="color:#64748b;">기준가 미만 종목만 존재 — 자동 분할 스킵</div>`;
+            return;
+        }
+
+        // 2) 안전 게이트: 가격이 N으로 나눠떨어져야 (시장가치 보존: price/N * qty*N == price*qty)
+        const ratio = ratioN;
+        const splittable = [];
+        const skipped = [];
+        candidates.forEach(([id, s]) => {
+            const price = s?.price || 0;
+            if (price < ratio) { skipped.push({ id, reason: 'too-small' }); return; }
+            if (price % ratio !== 0) { skipped.push({ id, reason: 'not-divisible' }); return; }
+            splittable.push(id);
+        });
+
+        if (splittable.length === 0) {
+            if (logEl) {
+                logEl.innerHTML = `<div style="color:#f59e0b;">조건 충족 종목이 있으나, 모두 ${ratio}로 나눠떨어지지 않아 자동 분할을 스킵합니다.</div>`;
+            }
+            console.warn('[DailyAutoSplit] skipped all (not divisible).', { thresholdWon, ratioN, candidates: candidates.length });
+            return;
+        }
+
+        const targetSet = new Set(splittable);
+
+        // 점검 모드로 거래 중단(수동 executeSplit와 동일한 안전장치)
+        let maintenanceEnabled = false;
+        const stockUpdates = {};
+        const events = [];
+
+        try {
+            await set(ref(db, 'siteConfig/maintenance'), true);
+            maintenanceEnabled = true;
+            await new Promise(r => setTimeout(r, 2000));
+
+            // 3) 종목 가격/히스토리 업데이트
+            splittable.forEach((id) => {
+                const s = stocksData[id];
+                const oldPrice = s?.price || 0;
+                const newPrice = Math.max(1, Math.floor(oldPrice / ratio));
+
+                const history = (s.history || [s.price]).map(p => Math.max(1, Math.round((p || 0) / ratio)));
+                stockUpdates[`${id}/price`] = newPrice;
+                stockUpdates[`${id}/history`] = history;
+                stockUpdates[`${id}/change`] = s.change || 0;
+
+                events.push({
+                    stockId: id,
+                    stockName: s.name || id,
+                    thresholdWon,
+                    ratioN: ratio,
+                    oldPrice,
+                    newPrice
+                });
+            });
+
+            await update(ref(db, 'stocks/'), stockUpdates);
+
+            // 4) 유저 포트폴리오 qty/avg 조정
+            const usersSnap = await get(ref(db, 'users/'));
+            const usersData = usersSnap.val() || {};
+            const BATCH = 100;
+            const userIds = Object.keys(usersData);
+
+            for (let i = 0; i < userIds.length; i += BATCH) {
+                const batch = userIds.slice(i, i + BATCH);
+                const updates = {};
+                batch.forEach((uid) => {
+                    const user = usersData[uid];
+                    if (!user?.stocks) return;
+                    Object.entries(user.stocks).forEach(([stockId, info]) => {
+                        if (!targetSet.has(stockId)) return;
+                        if (!info || !info.qty) return;
+                        updates[`${uid}/stocks/${stockId}/qty`] = info.qty * ratio;
+                        updates[`${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.round((info.avg || 0) / ratio));
+                    });
+                });
+                if (Object.keys(updates).length > 0) await update(ref(db, 'users/'), updates);
+            }
+
+            // 5) 로그 기록 (UI + RTDB best-effort)
+            if (logEl) {
+                const thresholdStr = thresholdWon.toLocaleString();
+                events.forEach((ev) => {
+                    logEl.innerHTML += `
+                        <div style="color:#94a3b8; margin-bottom:6px;">
+                            종목명: <b style="color:#f8fafc;">${escapeHtml(ev.stockName)}</b>
+                            : ${thresholdStr}원 돌파 -> ${ev.ratioN}배 액면분할 완료
+                            (새 주가: ${ev.newPrice.toLocaleString()}원)
+                        </div>
+                    `;
+                });
+            }
+
+            try {
+                await set(ref(db, `adminActivityLogs/dailyAutoSplit/${Date.now()}`), {
+                    type: 'dailyAutoSplit',
+                    adminEmail: ADMIN_EMAIL,
+                    thresholdWon,
+                    ratioN: ratio,
+                    events,
+                    createdAt: Date.now()
+                });
+            } catch (e) {
+                console.warn('[DailyAutoSplit] failed to write adminActivityLogs:', e?.message || e);
+            }
+        } catch (e) {
+            console.error('[DailyAutoSplit] failed:', e);
+            if (logEl) {
+                logEl.innerHTML += `
+                    <div style="color:#ef4444; margin-top:8px;">
+                        ❌ 자동 액면분할 실패: ${escapeHtml(e?.message || String(e))}
+                    </div>
+                `;
+            }
+        } finally {
+            if (maintenanceEnabled) {
+                try { await set(ref(db, 'siteConfig/maintenance'), false); } catch (_) {}
+            }
+            await loadMaintenanceStatus();
+            await loadStocksOnce();
+        }
+    }
+
     function scheduleDailyAuto() {
         clearTimeout(dailyAutoTimer);
         const hour = clampDailyAutoHourMin(document.getElementById('auto-daily-hour').value, 0, 23);
@@ -3137,6 +3336,25 @@
 
             const runRanking      = document.getElementById('auto-run-ranking').checked;
             const runCandle       = document.getElementById('auto-run-candle').checked;
+
+            const splitEnabledEl   = document.getElementById('auto-split-enabled');
+            const splitThresholdEl = document.getElementById('auto-split-price-threshold');
+            const splitRatioEl     = document.getElementById('auto-split-ratio');
+
+            const autoSplitEnabled = !!splitEnabledEl?.checked;
+            const splitThresholdManwon = clampDailyAutoSplitThresholdManwon(splitThresholdEl?.value);
+            const splitRatioN = clampDailyAutoSplitRatioN(splitRatioEl?.value);
+            const thresholdWon = splitThresholdManwon * 10000;
+
+            if (autoSplitEnabled) {
+                if (!Number.isInteger(splitRatioN) || splitRatioN <= 1) {
+                    console.warn('[DailyAutoSplit] invalid ratio:', splitRatioN);
+                } else if (thresholdWon > 0) {
+                    await autoSplitStocksByThreshold({ thresholdWon, ratioN: splitRatioN });
+                } else {
+                    console.warn('[DailyAutoSplit] invalid thresholdWon:', thresholdWon);
+                }
+            }
 
             if (runRanking)      await calcAssetRanking(true);
             if (runCandle)       await pruneAllCandles(true);
