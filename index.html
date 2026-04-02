@@ -2049,6 +2049,15 @@ let myData           = null;
 let userUID          = null;
 /** users/{uid} onValue 구독 — 계정 전환 시 반드시 해제(미해제 시 ref/_key 관련 오류·고아 리스너) */
 let userDataUnsub    = null;
+/** `reading '_key'` 등 로그인·RTDB 경로 추적 — 원인 파악 후 false 권장 */
+const DEBUG_AUTH_TRAIL = true;
+function logAuthTrail(...args) {
+    if (DEBUG_AUTH_TRAIL) console.log(...args);
+}
+function logAuthTrailError(label, err) {
+    console.error('[Critical Error]', label, err);
+    if (err && typeof err === 'object') console.dir(err);
+}
 /** presence/{uid}/{sessionId} — 세션당 1노드, 하트비트 + onDisconnect.remove로 고스트 최소화 */
 let presenceSessionRef   = null;
 let presenceHeartbeat    = null;
@@ -2603,6 +2612,7 @@ function getStockSyncMode() {
  * 관리자도 여기서 allStocks 캐시만 갱신 — 메인 카드 UI는 refreshMainStockListView(즐겨찾기+보유)로 제한
  */
 function applyMainStocksDataSync() {
+    logAuthTrail('[sync-strategy] applyMainStocksDataSync START', { dbOk: !!db, prevMode: mainStocksSyncMode });
     const mode = getStockSyncMode();
     if (mode !== mainStocksSyncMode) {
         const msg = {
@@ -2614,6 +2624,7 @@ function applyMainStocksDataSync() {
         mainStocksSyncMode = mode;
     }
 
+    try {
     if (mode === 'closed') {
         if (typeof stocksUnsubscribe === 'function') {
             stocksUnsubscribe();
@@ -2623,6 +2634,7 @@ function applyMainStocksDataSync() {
             clearInterval(stocksPollTimer);
             stocksPollTimer = null;
         }
+        logAuthTrail('[sync-strategy] applyMainStocksDataSync END (closed)');
         return;
     }
     if (mode === 'regular') {
@@ -2630,26 +2642,58 @@ function applyMainStocksDataSync() {
             clearInterval(stocksPollTimer);
             stocksPollTimer = null;
         }
-        if (typeof stocksUnsubscribe === 'function') return;
-        stocksUnsubscribe = onValue(ref(db, 'stocks/'), processStocksSnap, (err) => {
-            console.warn('[sync-strategy] stocks/ onValue 오류:', err?.message || err);
-        });
+        if (typeof stocksUnsubscribe === 'function') {
+            logAuthTrail('[sync-strategy] applyMainStocksDataSync END (regular, listener already active)');
+            return;
+        }
+        logAuthTrail('[DB] applyMainStocksDataSync → onValue path: stocks/');
+        try {
+            stocksUnsubscribe = onValue(ref(db, 'stocks/'), processStocksSnap, (err) => {
+                console.warn('[sync-strategy] stocks/ onValue 오류:', err?.message || err);
+            });
+        } catch (err) {
+            logAuthTrailError('Caught in applyMainStocksDataSync (stocks/ onValue)', err);
+            throw err;
+        }
+        logAuthTrail('[sync-strategy] applyMainStocksDataSync END (regular, onValue attached)');
         return;
     }
     if (typeof stocksUnsubscribe === 'function') {
         stocksUnsubscribe();
         stocksUnsubscribe = null;
     }
-    if (stocksPollTimer) return;
-    const poll = () => get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+    if (stocksPollTimer) {
+        logAuthTrail('[sync-strategy] applyMainStocksDataSync END (offpeak, poll timer already running)');
+        return;
+    }
+    logAuthTrail('[DB] applyMainStocksDataSync → get polling path: stocks/ (30s)');
+    const poll = () => {
+        try {
+            get(ref(db, 'stocks/')).then(processStocksSnap).catch((e) => {
+                if (DEBUG_AUTH_TRAIL) console.warn('[sync-strategy] stocks/ get poll error', e);
+            });
+        } catch (err) {
+            logAuthTrailError('Caught in applyMainStocksDataSync (stocks/ get)', err);
+        }
+    };
     poll();
     stocksPollTimer = setInterval(poll, 30000);
+    logAuthTrail('[sync-strategy] applyMainStocksDataSync END (offpeak, poll started)');
+    } catch (err) {
+        logAuthTrailError('applyMainStocksDataSync outer', err);
+    }
 }
 
 /** 정규장/비정규장/마감 전환 시 1회 호출: 전체 stocks + 즐겨찾기/보유 구독 방식 갱신 */
 function updateSyncStrategy() {
-    applyMainStocksDataSync();
-    applyStocksMode();
+    logAuthTrail('[sync-strategy] updateSyncStrategy START');
+    try {
+        applyMainStocksDataSync();
+        applyStocksMode();
+    } catch (err) {
+        logAuthTrailError('Caught in updateSyncStrategy', err);
+    }
+    logAuthTrail('[sync-strategy] updateSyncStrategy END');
 }
 
 function setMarketUiReady(ready) {
@@ -2963,12 +3007,14 @@ function authPopupResolverArgs() {
 }
 
 window.loginWithGoogle = async function() {
+    logAuthTrail('[Auth] loginWithGoogle start, currentUser:', auth.currentUser?.uid ?? '(none)');
     const provider = new GoogleAuthProvider();
     try {
         // 1. 익명 계정에 구글 계정 연결 시도 — UID 유지, 자산 보존
         await linkWithPopup(auth, provider, ...authPopupResolverArgs());
         document.getElementById('account-warn-overlay')?.classList.remove('active');
         alert('✅ 구글 계정 연동 완료!\n자산이 그대로 유지되며 다른 기기에서도 동일한 자산으로 접속할 수 있습니다.');
+        logAuthTrail('[Auth] loginWithGoogle linkWithPopup success');
     } catch (err) {
         if (err.code === 'auth/popup-closed-by-user' ||
             err.code === 'auth/cancelled-popup-request') return;
@@ -2978,16 +3024,20 @@ window.loginWithGoogle = async function() {
             // 이미 다른 기기에서 이 구글 계정으로 연동된 경우
             // → 해당 구글 UID로 로그인 (기존 자산 사용)
             try {
+                logAuthTrail('[Auth] loginWithGoogle → signInWithPopup (credential in use)');
                 await signInWithPopup(auth, provider, ...authPopupResolverArgs());
                 document.getElementById('account-warn-overlay')?.classList.remove('active');
                 alert('✅ 기존 구글 계정으로 로그인됐습니다.\n이전에 연동된 자산으로 접속합니다.');
+                logAuthTrail('[Auth] loginWithGoogle signInWithPopup success');
             } catch (err2) {
                 if (err2.code !== 'auth/popup-closed-by-user') {
+                    logAuthTrailError('loginWithGoogle signInWithPopup', err2);
                     console.error('[Auth] signInWithPopup', err2);
                     alert('로그인 실패: ' + (err2.message || err2.code || '알 수 없는 오류'));
                 }
             }
         } else {
+            logAuthTrailError('loginWithGoogle linkWithPopup', err);
             console.error('[Auth] linkWithPopup', err);
             alert('로그인 실패: ' + (err.message || err.code || '알 수 없는 오류'));
         }
@@ -3023,12 +3073,17 @@ function countActivePresenceSessions(data) {
 
 function subscribePresenceCountOnce() {
     if (presenceCountUnsub) return;
+    logAuthTrail('[DB] subscribePresenceCountOnce onValue path: presence');
+    try {
     presenceCountUnsub = onValue(ref(db, 'presence'), (snap) => {
         const data = snap.exists() ? snap.val() : {};
         const count = countActivePresenceSessions(data);
         const el = document.getElementById('online-count');
         if (el) el.innerText = count.toLocaleString();
     });
+    } catch (err) {
+        logAuthTrailError('subscribePresenceCountOnce', err);
+    }
 }
 
 async function teardownPresenceSession() {
@@ -3044,17 +3099,33 @@ async function teardownPresenceSession() {
 }
 
 async function setupPresenceSession(user) {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+        logAuthTrail('[Auth] setupPresenceSession skipped — no user.uid');
+        return;
+    }
     if (presenceSetupUid === user.uid && presenceSessionRef) return;
     await teardownPresenceSession();
 
     const sessionID = Math.random().toString(36).substring(2, 11);
-    const myPresenceRef = ref(db, `presence/${user.uid}/${sessionID}`);
+    const presencePath = `presence/${user.uid}/${sessionID}`;
+    logAuthTrail('[DB] setupPresenceSession path:', presencePath, 'uid:', user.uid);
+    let myPresenceRef;
+    try {
+        myPresenceRef = ref(db, presencePath);
+    } catch (err) {
+        logAuthTrailError('setupPresenceSession ref()', err);
+        throw err;
+    }
     presenceSessionRef = myPresenceRef;
     presenceSetupUid = user.uid;
 
-    await set(myPresenceRef, { connectedAt: Date.now() });
-    onDisconnect(myPresenceRef).remove();
+    try {
+        await set(myPresenceRef, { connectedAt: Date.now() });
+        onDisconnect(myPresenceRef).remove();
+    } catch (err) {
+        logAuthTrailError('setupPresenceSession set/onDisconnect', err);
+        throw err;
+    }
 
     presenceHeartbeat = setInterval(() => {
         set(myPresenceRef, { connectedAt: Date.now() }).catch(() => {});
@@ -3066,6 +3137,8 @@ async function setupPresenceSession(user) {
 // ── 인증 & 내 데이터 동기화 ─────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
     try {
+        console.log('[Auth] State changed. User:', user?.uid ?? '(null)', 'IsAnonymous:', user?.isAnonymous);
+        logAuthTrail('[Auth] onAuthStateChanged full user:', user);
         console.log('[Init] Auth:', user ? (user.isAnonymous ? 'anonymous' : 'signed-in') : 'signed-out');
         if (user) {
             if (!user.uid || typeof user.uid !== 'string') {
@@ -3077,7 +3150,15 @@ onAuthStateChanged(auth, async (user) => {
                 userDataUnsub = null;
             }
             userUID = user.uid;
-            const userRef = ref(db, `users/${userUID}`);
+            const userPath = `users/${userUID}`;
+            logAuthTrail('[DB] Attempting ref + onValue path:', userPath, 'userUID type:', typeof userUID, 'db:', !!db);
+            let userRef;
+            try {
+                userRef = ref(db, userPath);
+            } catch (err) {
+                logAuthTrailError('Caught in Login Flow (users/ ref)', err);
+                return;
+            }
             if (!myData) myData = { cash: 1000000, stocks: {} };
 
             updateAuthStatusUI(user);
@@ -3085,22 +3166,34 @@ onAuthStateChanged(auth, async (user) => {
             try {
                 applyMarketState();
             } catch (e) {
+                logAuthTrailError('applyMarketState in onAuthStateChanged', e);
                 console.error('[Init] applyMarketState in onAuthStateChanged', e);
                 recoverMarketUiVisible('onAuthStateChanged', e);
             }
             tryCloseIntro();
-            initFavorites();
-            loadStockNameCache();
+            try {
+                initFavorites();
+            } catch (err) {
+                logAuthTrailError('initFavorites in onAuthStateChanged', err);
+            }
+            try {
+                await loadStockNameCache();
+            } catch (err) {
+                logAuthTrailError('loadStockNameCache in onAuthStateChanged', err);
+            }
 
             try {
                 await setupPresenceSession(user);
             } catch (e) {
+                logAuthTrailError('setupPresenceSession in onAuthStateChanged', e);
                 console.warn('[Auth] setupPresenceSession', e);
                 const el = document.getElementById('online-count');
                 if (el) el.innerText = '?';
             }
 
-            userDataUnsub = onValue(userRef, (snapshot) => {
+            try {
+                logAuthTrail('[DB] Registering onValue for path:', userPath);
+                userDataUnsub = onValue(userRef, (snapshot) => {
                 try {
                     if (snapshot.exists()) {
                         const serverData = snapshot.val();
@@ -3119,7 +3212,11 @@ onAuthStateChanged(auth, async (user) => {
                 }
             }, (rtErr) => {
                 console.error('[Auth] users/ onValue error', rtErr);
+                logAuthTrailError('users/ onValue cancel/error callback', rtErr);
             });
+            } catch (err) {
+                logAuthTrailError('Caught in Login Flow (users/ onValue register)', err);
+            }
         } else {
             if (userDataUnsub) {
                 try { userDataUnsub(); } catch (unsubErr) { console.warn('[Auth] userDataUnsub (sign-out)', unsubErr); }
@@ -3137,6 +3234,7 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
     } catch (fatal) {
+        logAuthTrailError('onAuthStateChanged outer', fatal);
         console.error('[Auth] onAuthStateChanged', fatal);
         alert('인증 초기화 중 오류가 발생했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
     }
@@ -5297,22 +5395,30 @@ document.addEventListener('visibilitychange', () => {
 
 // 정규장/비정규장/마감 상태에 따라 구독 방식(실시간/폴링/중단) 결정
 function applyStocksMode() {
+    logAuthTrail('[sync-strategy] applyStocksMode START');
     const mh      = siteConfig.marketHours;
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
 
     // 마감 시간 → 모든 구독 중단 (관리자 제외)
     if (!isAdmin && mh && mh.enabled && !isMarketOpen()) {
         stopAllStocksSubscriptions();
+        logAuthTrail('[sync-strategy] applyStocksMode END (market closed, subs stopped)');
         return;
     }
 
     // 비활동 상태면 재구독 안 함
-    if (!isUserActive) return;
+    if (!isUserActive) {
+        logAuthTrail('[sync-strategy] applyStocksMode END (user inactive, skip)');
+        return;
+    }
 
     // 오픈 시간 → 정규장/비정규장 분기
     const allIds = [
         ...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])
     ];
+    const badIds = allIds.filter((id) => id == null || id === '' || String(id) === 'undefined');
+    if (badIds.length) console.warn('[sync-strategy] applyStocksMode suspicious stock ids:', badIds);
+    logAuthTrail('[sync-strategy] RequiredStockIDs (favorites ∪ owned):', allIds, 'count=', allIds.length, 'isRegularMarket=', isRegularMarket());
 
     if (isRegularMarket()) {
         // 정규장: 실시간 구독 (폴링 중단)
@@ -5328,18 +5434,25 @@ function applyStocksMode() {
             if (ownedUnsubs[id])    { ownedUnsubs[id](); delete ownedUnsubs[id]; }
             if (favPollTimers[id]) return; // 이미 폴링 중
             const poll = () => {
-                get(ref(db, `stocks/${id}`)).then(snap => {
+                const pollPath = `stocks/${id}`;
+                logAuthTrail('[DB] applyStocksMode offpeak get path:', pollPath);
+                try {
+                get(ref(db, pollPath)).then(snap => {
                     if (!snap.exists()) return;
                     const data = { ...snap.val(), id };
                     if (favorites[id])   favorites[id]   = data;
                     if (ownedStocks[id]) ownedStocks[id] = data;
                     renderFavoriteList();
-                }).catch(() => {});
+                }).catch((e) => { if (DEBUG_AUTH_TRAIL) console.warn('[DB] offpeak poll', pollPath, e); });
+                } catch (err) {
+                    logAuthTrailError('applyStocksMode offpeak get ref', err);
+                }
             };
             poll(); // 즉시 1회
             favPollTimers[id] = setInterval(poll, 30000);
         });
     }
+    logAuthTrail('[sync-strategy] applyStocksMode END');
 }
 
 // 주가 동기화는 applyMarketState()의 finally → updateSyncStrategy()에서 수행 (siteConfig 로드·1분 타이머·인증 시)
@@ -5484,8 +5597,14 @@ function loadFavoritesFromLocal() {
 // ── 즐겨찾기 종목 개별 구독 시작 ────────────────────────
 function subscribeToFavorite(stockId) {
     if (favoriteUnsubs[stockId]) return; // 이미 구독 중
-
-    favoriteUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
+    if (stockId == null || stockId === '' || String(stockId) === 'undefined') {
+        console.warn('[DB] subscribeToFavorite skipped invalid stockId:', stockId);
+        return;
+    }
+    const favPath = `stocks/${stockId}`;
+    logAuthTrail('[DB] subscribeToFavorite onValue path:', favPath);
+    try {
+    favoriteUnsubs[stockId] = onValue(ref(db, favPath), (snap) => {
     if (!snap.exists()) return;
     const data = { ...snap.val(), id: stockId };
 
@@ -5513,6 +5632,9 @@ function subscribeToFavorite(stockId) {
     favorites[stockId] = data;
     renderFavoriteList();
 });
+    } catch (err) {
+        logAuthTrailError('subscribeToFavorite onValue', err);
+    }
 }
 
 // 즐겨찾기 종목 구독 해제 및 favorites 캐시에서 제거
@@ -5824,12 +5946,19 @@ function initFavorites() {
 // ── 보유 주식 개별 구독 ──────────────────────────────────
 function subscribeToOwned(stockId) {
     if (ownedUnsubs[stockId]) { console.log('[owned] 이미 구독 중:', stockId); return; }
+    if (stockId == null || stockId === '' || String(stockId) === 'undefined') {
+        console.warn('[DB] subscribeToOwned skipped invalid stockId:', stockId);
+        return;
+    }
 
     console.log('[owned] 구독 시작 시도:', stockId);
 
     const startOwned = () => {
+    const ownPath = `stocks/${stockId}`;
+    logAuthTrail('[DB] subscribeToOwned onValue path:', ownPath);
     console.log('[owned] onValue 등록:', stockId);
-    ownedUnsubs[stockId] = onValue(ref(db, `stocks/${stockId}`), (snap) => {
+    try {
+    ownedUnsubs[stockId] = onValue(ref(db, ownPath), (snap) => {
         console.log('[owned] 데이터 수신:', stockId, snap.exists() ? snap.val()?.price : '없음');
         if (!snap.exists()) return;
         const data = { ...snap.val(), id: stockId };
@@ -5851,6 +5980,9 @@ function subscribeToOwned(stockId) {
         renderFavoriteList();
         renderMyPortfolio();
     });
+    } catch (err) {
+        logAuthTrailError('subscribeToOwned onValue', err);
+    }
 };
 
     startOwned();
