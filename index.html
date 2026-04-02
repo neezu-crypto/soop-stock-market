@@ -3553,15 +3553,15 @@ async function fetchCandles(stockId) {
 }
 
 // ── 차트 렌더링 ──────────────────────────────────────────────
-/** Canvas는 CSS var()를 해석하지 못함 → 실제 색으로 변환. chartjs-chart-financial@0.1.1은 color.up=하락(close<open), color.down=상승(close>open). */
+/** Canvas는 CSS var()를 해석하지 못함 → 실제 색으로 변환. chartjs-chart-financial candlestick: color.up=상승(close>open), color.down=하락(close<open). */
 function resolveCandlestickChartColors() {
     const rs = getComputedStyle(document.documentElement);
     const bullish = rs.getPropertyValue('--up-color').trim() || '#ef4444';
     const bearish = rs.getPropertyValue('--down-color').trim() || '#3b82f6';
     const neutral = rs.getPropertyValue('--text-sub').trim() || '#64748b';
     return {
-        up: bearish,
-        down: bullish,
+        up: bullish,
+        down: bearish,
         unchanged: neutral
     };
 }
@@ -3643,16 +3643,16 @@ function renderCandleChart() {
                         if (!item) return;
                         const t   = new Date(item.x);
                         const fmt = `${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}`;
-                        const isUp = item.c >= item.o;
                         const upCol = getComputedStyle(document.documentElement).getPropertyValue('--up-color').trim() || '#ef4444';
                         const downCol = getComputedStyle(document.documentElement).getPropertyValue('--down-color').trim() || '#3b82f6';
-                        const color = isUp ? upCol : downCol;
+                        const neutralCol = getComputedStyle(document.documentElement).getPropertyValue('--text-sub').trim() || '#64748b';
+                        const dirColor = item.c > item.o ? upCol : item.c < item.o ? downCol : neutralCol;
                         document.getElementById('cm-ohlc-bar').innerHTML = `
                             <span>⏰ <b>${fmt}</b></span>
-                            <span style="margin-left:10px">시 <span style="color:${color}">${item.o.toLocaleString()}</span></span>
-                            <span style="margin-left:10px">고 <span style="color:${upCol}">${item.h.toLocaleString()}</span></span>
-                            <span style="margin-left:10px">저 <span style="color:${downCol}">${item.l.toLocaleString()}</span></span>
-                            <span style="margin-left:10px">종 <span style="color:${color};font-weight:800">${item.c.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">시 <span style="color:${dirColor}">${item.o.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">고 <span style="color:${dirColor}">${item.h.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">저 <span style="color:${dirColor}">${item.l.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">종 <span style="color:${dirColor};font-weight:800">${item.c.toLocaleString()}</span></span>
                         `;
                     }
                 }
