@@ -62,6 +62,29 @@
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
         .stock-card.rebound-signal { border-color: #facc15 !important; box-shadow: 0 0 10px rgba(250,204,21,0.2); }
+        /* 서킷브레이커 동결 — siteConfig/frozenStocks + 로컬 CB */
+        .stock-card.circuit-frozen {
+            opacity: 0.5;
+            filter: grayscale(0.85);
+            pointer-events: none;
+            position: relative;
+        }
+        .stock-card.circuit-frozen:hover { border-color: var(--border); box-shadow: none; background: var(--card-bg); }
+        .circuit-freeze-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(239, 68, 68, 0.94);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 800;
+            z-index: 15;
+            white-space: nowrap;
+            pointer-events: none;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+        }
 
         /* ── 상장 신청 ── */
         .listing-request-box { display:flex; flex-direction:column; align-items:center; gap:12px; padding:30px 20px; text-align:center; }
@@ -1945,13 +1968,67 @@ const auth = getAuth(app);
 
 // ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
-let siteConfigReady = false; // 첫 get(siteConfig) 성공 후 true — 그 전에는 시장 오픈으로 간주하지 않음
+let siteConfigReady = false; // siteConfig onValue 첫 스냅샷 후 true — 그 전에는 시장 오픈으로 간주하지 않음
 /** 클라이언트 전용 서킷 동결(관리자만 siteConfig/frozenStocks에 기록 가능) */
 let localCircuitFreeze = {};
 function getEffectiveFrozenUntil(stockId) {
     const a = siteConfig?.frozenStocks?.[stockId] || 0;
     const b = localCircuitFreeze[stockId] || 0;
     return Math.max(a, b);
+}
+
+/** 종목 카드에 서킷 동결 배지·스타일 반영 (renderFavoriteList / 검색 / processStocksSnap 공통) */
+function refreshCircuitFreezeOnStockCard(card, stockId) {
+    if (!card || !stockId) return;
+    const frozenUntil = getEffectiveFrozenUntil(stockId);
+    const isFrozen    = frozenUntil && frozenUntil > Date.now();
+    if (!isFrozen) {
+        card.classList.remove('circuit-frozen');
+        card.querySelector('.circuit-freeze-overlay')?.remove();
+        return;
+    }
+    const remain = Math.max(0, Math.ceil((frozenUntil - Date.now()) / 1000));
+    card.classList.add('circuit-frozen');
+    let el = card.querySelector('.circuit-freeze-overlay');
+    if (!el) {
+        el = document.createElement('div');
+        el.className = 'circuit-freeze-overlay';
+        el.setAttribute('aria-label', '서킷브레이커 동결');
+        card.appendChild(el);
+    }
+    el.textContent = `🚫 서킷 동결 (${remain}초)`;
+    ensureCircuitFreezeCountdownTimer();
+}
+
+function refreshCircuitFreezeOnAllListCards() {
+    document.querySelectorAll('#stock-list .stock-card[data-id]').forEach((card) => {
+        const id = card.getAttribute('data-id');
+        if (id) refreshCircuitFreezeOnStockCard(card, id);
+    });
+}
+
+let circuitFreezeCountdownTimer = null;
+function ensureCircuitFreezeCountdownTimer() {
+    if (circuitFreezeCountdownTimer) return;
+    circuitFreezeCountdownTimer = setInterval(() => {
+        const list = document.getElementById('stock-list');
+        if (!list) return;
+        let anyActive = false;
+        list.querySelectorAll('.stock-card[data-id]').forEach((card) => {
+            const id = card.getAttribute('data-id');
+            if (!id) return;
+            if (getEffectiveFrozenUntil(id) > Date.now()) {
+                anyActive = true;
+                refreshCircuitFreezeOnStockCard(card, id);
+            } else if (card.classList.contains('circuit-frozen')) {
+                refreshCircuitFreezeOnStockCard(card, id);
+            }
+        });
+        if (!anyActive) {
+            clearInterval(circuitFreezeCountdownTimer);
+            circuitFreezeCountdownTimer = null;
+        }
+    }, 1000);
 }
 
 // ── 상태 ────────────────────────────────────────────────────
@@ -2313,18 +2390,15 @@ setInterval(() => {
     }
 }, 30000);
 
-// ── siteConfig 초기 로드 + maintenance/frozenStocks 실시간 구독 ──
-get(ref(db, 'siteConfig/')).then(snap => {
+// ── siteConfig 실시간 구독 — 첫 스냅샷에서 즉시 장 상태·배너 반영 (get 단발보다 레이스 적음)
+onValue(ref(db, 'siteConfig'), (snap) => {
     siteConfig = snap.exists() ? snap.val() : {};
     siteConfigReady = true;
     applyMarketState();
     tryCloseIntro();
     updateExtendRequestBar();
-}).catch(() => {
-    siteConfigReady = true;
-    applyMarketState();
-    tryCloseIntro();
-    updateExtendRequestBar();
+    if (typeof renderBanners === 'function') renderBanners();
+    queueMicrotask(() => refreshCircuitFreezeOnAllListCards());
 });
 
 // 점검 모드 실시간 구독
@@ -2407,6 +2481,8 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
         }
     });
     updateUI(true);
+    refreshCircuitFreezeOnAllListCards();
+    ensureCircuitFreezeCountdownTimer();
 });
 
 // 현재 시각이 전체 오픈 시간 이내인지 여부 반환
@@ -3009,10 +3085,13 @@ async function checkCircuitBreaker(stockId, candles) {
                 if (ownedStocks[stockId]) subscribeToOwned(stockId);
                 updateUI(true);
                 refreshMainStockListView();
+                refreshCircuitFreezeOnAllListCards();
             }, frozenUntil - Date.now());
 
             updateUI(true);
             refreshMainStockListView();
+            refreshCircuitFreezeOnAllListCards();
+            ensureCircuitFreezeCountdownTimer();
         }, 0);
 
         console.log(`[CB] ${stockId} 서킷브레이커 즉시 발동`);
@@ -4710,6 +4789,14 @@ function renderBanners() {
     });
 }
 
+// 첫 방문 시 모듈·Firebase 지연 후에도 장 상태·배너·동결 UI 한 번 더 동기화
+window.addEventListener('load', () => {
+    if (!siteConfigReady) return;
+    applyMarketState();
+    try { renderBanners(); } catch (_) {}
+    refreshCircuitFreezeOnAllListCards();
+});
+
 // ── XSS 방어: Firebase 데이터를 innerHTML에 삽입하기 전 이스케이프 ──
 function escapeHtml(str) {
     if (str == null) return '';
@@ -4862,6 +4949,7 @@ function updateCardContent(card, s, userStock) {
                 </div>
             </div>
         `;
+        refreshCircuitFreezeOnStockCard(card, s.id);
         return;
     }
 
@@ -4889,6 +4977,8 @@ function updateCardContent(card, s, userStock) {
     const sellBtn = card.querySelector('.btn-trade-sell');
     if (buyBtn)  buyBtn.disabled  = (isTrading === s.id);
     if (sellBtn) sellBtn.disabled = (isTrading === s.id);
+
+    refreshCircuitFreezeOnStockCard(card, s.id);
 }
 
 // ── 주식 데이터 리스너 (stocks/ 전체 + 즐겨찾기/보유 개별) ───
@@ -4912,6 +5002,11 @@ function processStocksSnap(snap) {
         allStocks = newStocks;
         refreshMainStockListView(); // 즐겨찾기+보유(또는 검색)만 — 관리자도 Top100 미표시
         tryCloseIntro(); // stocks 로드 완료 → 오픈 시간이면 인트로 닫기
+        if (typeof renderBanners === 'function') renderBanners();
+        queueMicrotask(() => {
+            applyMarketState();
+            refreshCircuitFreezeOnAllListCards();
+        });
     } else {
         newStocks.forEach(ns => {
             const old = allStocks.find(os => os.id === ns.id);
@@ -5337,6 +5432,8 @@ function renderFavoriteList() {
         }
     });
     listDiv.appendChild(fragment);
+    refreshCircuitFreezeOnAllListCards();
+    ensureCircuitFreezeCountdownTimer();
 }
 
 // ── 즐겨찾기 카드 생성 (일반 카드 + ⭐ 버튼) ──────────
@@ -5514,6 +5611,8 @@ function renderSearchResults() {
         listDiv.appendChild(card);
         stockElements[s.id] = card;
     });
+    refreshCircuitFreezeOnAllListCards();
+    ensureCircuitFreezeCountdownTimer();
 }
 
 // ── 초기 즐겨찾기 로드 (로컬스토리지 → Firebase 구독) ──
