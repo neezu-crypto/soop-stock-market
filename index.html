@@ -1887,7 +1887,7 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, initializeAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider, signOut, browserPopupRedirectResolver,
+import { getAuth, initializeAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, browserPopupRedirectResolver,
     indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } 
     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
@@ -2047,6 +2047,8 @@ function ensureCircuitFreezeCountdownTimer() {
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
 let userUID          = null;
+/** 직전 로그인 UID — 계정 전환 시 구독·캐시 초기화용 */
+let previousAuthUid  = null;
 /** users/{uid} onValue 구독 — 계정 전환 시 반드시 해제(미해제 시 ref/_key 관련 오류·고아 리스너) */
 let userDataUnsub    = null;
 /** `reading '_key'` 등 로그인·RTDB 경로 추적 — 원인 파악 후 false 권장 */
@@ -2983,7 +2985,7 @@ window.closeAccountWarn = function() {
     document.getElementById('account-warn-overlay')?.classList.remove('active');
 };
 
-// 구글 팝업으로 로그인 또는 익명 계정에 연동
+// 구글 팝업 로그인 — 익명(게스트)은 미연동; 로그인 시 Google UID 자산으로 전환 (게스트 임시 데이터는 대체됨)
 // ── 로그인 상태 UI 업데이트 ─────────────────────────────────
 function updateAuthStatusUI(user) {
     const anonEl   = document.getElementById('auth-anon');
@@ -2996,7 +2998,7 @@ function updateAuthStatusUI(user) {
     anonEl.style.display   = isAnonymous ? 'flex' : 'none';
     googleEl.style.display = isAnonymous ? 'none' : 'flex';
     if (!isAnonymous && emailEl) {
-        emailEl.textContent = '구글 연동됨';
+        emailEl.textContent = user.email || '구글 로그인';
     }
 }
 
@@ -3006,41 +3008,29 @@ function authPopupResolverArgs() {
         : [];
 }
 
+function alertGoogleSignInError(err) {
+    if (!err) return;
+    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+    const popupHint = '팝업이 차단되었거나 시크릿 모드에서 제한될 수 있습니다.\n브라우저에서 팝업을 허용하거나, 일반 창에서 다시 시도해 주세요.\n\n(Please allow popups or try a non-incognito window for a stable experience.)';
+    if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
+        alert(popupHint);
+        return;
+    }
+    logAuthTrailError('loginWithGoogle signInWithPopup', err);
+    console.error('[Auth] signInWithPopup', err);
+    alert('로그인 실패: ' + (err.message || err.code || '알 수 없는 오류') + '\n\n' + popupHint);
+}
+
 window.loginWithGoogle = async function() {
     logAuthTrail('[Auth] loginWithGoogle start, currentUser:', auth.currentUser?.uid ?? '(none)');
     const provider = new GoogleAuthProvider();
     try {
-        // 1. 익명 계정에 구글 계정 연결 시도 — UID 유지, 자산 보존
-        await linkWithPopup(auth, provider, ...authPopupResolverArgs());
+        await signInWithPopup(auth, provider, ...authPopupResolverArgs());
         document.getElementById('account-warn-overlay')?.classList.remove('active');
-        alert('✅ 구글 계정 연동 완료!\n자산이 그대로 유지되며 다른 기기에서도 동일한 자산으로 접속할 수 있습니다.');
-        logAuthTrail('[Auth] loginWithGoogle linkWithPopup success');
+        alert('✅ Google 로그인되었습니다.\n동일 계정으로 PC·모바일·태블릿에서 자산이 동기화됩니다.\n(게스트로 보시던 화면은 이 계정 데이터로 바뀝니다.)');
+        logAuthTrail('[Auth] loginWithGoogle signInWithPopup success');
     } catch (err) {
-        if (err.code === 'auth/popup-closed-by-user' ||
-            err.code === 'auth/cancelled-popup-request') return;
-
-        if (err.code === 'auth/credential-already-in-use' ||
-            err.code === 'auth/email-already-in-use') {
-            // 이미 다른 기기에서 이 구글 계정으로 연동된 경우
-            // → 해당 구글 UID로 로그인 (기존 자산 사용)
-            try {
-                logAuthTrail('[Auth] loginWithGoogle → signInWithPopup (credential in use)');
-                await signInWithPopup(auth, provider, ...authPopupResolverArgs());
-                document.getElementById('account-warn-overlay')?.classList.remove('active');
-                alert('✅ 기존 구글 계정으로 로그인됐습니다.\n이전에 연동된 자산으로 접속합니다.');
-                logAuthTrail('[Auth] loginWithGoogle signInWithPopup success');
-            } catch (err2) {
-                if (err2.code !== 'auth/popup-closed-by-user') {
-                    logAuthTrailError('loginWithGoogle signInWithPopup', err2);
-                    console.error('[Auth] signInWithPopup', err2);
-                    alert('로그인 실패: ' + (err2.message || err2.code || '알 수 없는 오류'));
-                }
-            }
-        } else {
-            logAuthTrailError('loginWithGoogle linkWithPopup', err);
-            console.error('[Auth] linkWithPopup', err);
-            alert('로그인 실패: ' + (err.message || err.code || '알 수 없는 오류'));
-        }
+        alertGoogleSignInError(err);
     }
 };
 
@@ -3145,11 +3135,25 @@ onAuthStateChanged(auth, async (user) => {
                 console.error('[Auth] User has no valid uid — skipping DB attach');
                 return;
             }
+            const uidChanged = previousAuthUid !== null && previousAuthUid !== user.uid;
             if (userDataUnsub) {
                 try { userDataUnsub(); } catch (unsubErr) { console.warn('[Auth] userDataUnsub', unsubErr); }
                 userDataUnsub = null;
             }
+            if (uidChanged) {
+                logAuthTrail('[Auth] UID switch — tear down stock subs & UI caches:', previousAuthUid, '→', user.uid);
+                stopAllStocksSubscriptions();
+                mainStocksSyncMode = null;
+                ownedStocks = {};
+                favorites = {};
+                searchResults = {};
+                stockElements = {};
+                myData = { cash: 1000000, stocks: {} };
+                try { updateUI(true); } catch (_) { /* noop */ }
+                try { refreshMainStockListView(); } catch (_) { /* noop */ }
+            }
             userUID = user.uid;
+            previousAuthUid = user.uid;
             const userPath = `users/${userUID}`;
             logAuthTrail('[DB] Attempting ref + onValue path:', userPath, 'userUID type:', typeof userUID, 'db:', !!db);
             let userRef;
@@ -3218,10 +3222,13 @@ onAuthStateChanged(auth, async (user) => {
                 logAuthTrailError('Caught in Login Flow (users/ onValue register)', err);
             }
         } else {
+            previousAuthUid = null;
             if (userDataUnsub) {
                 try { userDataUnsub(); } catch (unsubErr) { console.warn('[Auth] userDataUnsub (sign-out)', unsubErr); }
                 userDataUnsub = null;
             }
+            stopAllStocksSubscriptions();
+            mainStocksSyncMode = null;
             userUID = null;
             myData = null;
             stopSubscribeStatusWatch();
@@ -6079,12 +6086,7 @@ document.addEventListener('keydown', (e) => {
                     signInAnonymously(auth).catch((e) => console.warn('[Auth] signInAnonymously', e));
                 }
             })
-            .catch(err => {
-                if (err.code !== 'auth/popup-closed-by-user') {
-                    console.error('[Auth] Ctrl+Enter signInWithPopup', err);
-                    alert('로그인 실패: ' + (err.message || err.code || '알 수 없는 오류'));
-                }
-            });
+            .catch((err) => alertGoogleSignInError(err));
     }
 });
 
