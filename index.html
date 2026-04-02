@@ -1692,6 +1692,28 @@
 <!-- ══════════════════════════════════════════
      차트 하단 배너 광고 문의 모달
 ══════════════════════════════════════════ -->
+<!-- 자산 지원 신청 -->
+<div id="asset-request-modal" class="promo-modal-overlay" style="z-index:4100;">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>💰 자산 지원 신청</h2></div>
+        <p style="font-size:13px; color:var(--text-sub); margin:0 0 12px 0; line-height:1.5;">
+            관리자 검토 후 잔고에 지원금이 지급될 수 있습니다. 중복 신청은 제한됩니다.
+        </p>
+        <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">Your Nickname <span style="color:#f87171;">*</span></label>
+        <input type="text" id="asset-request-nickname" maxlength="80" placeholder="방송/활동 닉네임"
+            oninput="window.syncAssetRequestSubmitState && window.syncAssetRequestSubmitState()"
+            style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text-main); font-size:14px; margin-bottom:12px;">
+        <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">사유 (선택)</label>
+        <textarea id="asset-request-reason" rows="3" maxlength="500" placeholder="간단히 적어주세요."
+            style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text-main); font-size:13px; resize:vertical; margin-bottom:14px;"></textarea>
+        <div style="display:flex; gap:10px;">
+            <button type="button" onclick="window.closeAssetRequestModal()" style="flex:1; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button type="button" id="asset-request-submit" disabled onclick="window.submitAssetRequest()"
+                style="flex:1; background:var(--primary); color:var(--on-primary); border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px; opacity:0.45;">제출</button>
+        </div>
+    </div>
+</div>
+
 <div id="chart-ad-modal" class="promo-modal-overlay" style="z-index:4000;">
     <div class="promo-modal-content" style="max-width:420px;">
         <div class="promo-modal-header">
@@ -1790,10 +1812,15 @@
 
 <!-- ── 지갑 영역 ── -->
     <div class="wallet-bar">
-        <div style="display:flex; align-items:center; gap:12px;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
             <div style="width:1px; height:16px; background:var(--border);"></div>
             <div class="wallet-info">1회 최대 거래: <span style="color:#f59e0b;">1억원</span></div>
+            <button type="button" id="btn-open-asset-request" onclick="window.openAssetRequestModal()"
+                style="margin-left:4px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap;">
+                💰 자산 지원 신청
+            </button>
+            <span id="asset-request-status" style="display:none; font-size:11px; color:#a5b4fc; font-weight:700;"></span>
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
             <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
@@ -1885,7 +1912,7 @@
 ══════════════════════════════════════════ -->
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
+import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp, push, query, orderByChild, equalTo }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, initializeAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, browserPopupRedirectResolver,
     indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } 
@@ -1978,6 +2005,151 @@ try {
 } catch (e) {
     auth = getAuth(app);
 }
+
+// ── 자산 지원 신청 (assetRequests/) ─────────────────────────
+let assetRequestStatusUnsub = null;
+
+function stopAssetRequestStatusWatch() {
+    if (assetRequestStatusUnsub) {
+        try { assetRequestStatusUnsub(); } catch (_) { /* noop */ }
+        assetRequestStatusUnsub = null;
+    }
+    const el = document.getElementById('asset-request-status');
+    if (el) { el.style.display = 'none'; el.textContent = ''; }
+}
+
+function startAssetRequestStatusWatch(uid) {
+    stopAssetRequestStatusWatch();
+    if (!uid || !db) return;
+    const el = document.getElementById('asset-request-status');
+    if (!el) return;
+    const apply = (snap) => {
+        try {
+            if (!snap.exists()) {
+                el.style.display = 'none';
+                return;
+            }
+            const raw = snap.val() || {};
+            const entries = Object.entries(raw).filter(([, v]) => v && v.uid === uid);
+            const pending = entries
+                .filter(([, v]) => v.status === 'pending')
+                .sort((a, b) => (b[1].createdAtMs || 0) - (a[1].createdAtMs || 0))[0];
+            if (pending) {
+                el.style.display = 'inline';
+                el.textContent = '⏳ 자산 지원 신청: 검토 중';
+                return;
+            }
+            const done = entries
+                .filter(([, v]) => v.status === 'completed')
+                .sort((a, b) => (b[1].completedAt || 0) - (a[1].completedAt || 0) || (b[1].createdAtMs || 0) - (a[1].createdAtMs || 0))[0];
+            if (done) {
+                el.style.display = 'inline';
+                el.textContent = '✅ 자산 지원이 처리되었습니다.';
+                return;
+            }
+            el.style.display = 'none';
+            el.textContent = '';
+        } catch (_) {
+            el.style.display = 'none';
+        }
+    };
+    try {
+        assetRequestStatusUnsub = onValue(ref(db, 'assetRequests'), apply);
+    } catch (_) {
+        el.style.display = 'none';
+    }
+}
+
+async function userHasPendingAssetRequest(uid) {
+    if (!uid || !db) return false;
+    try {
+        const q = query(ref(db, 'assetRequests'), orderByChild('uid'), equalTo(uid));
+        const snap = await get(q);
+        if (!snap.exists()) return false;
+        return Object.values(snap.val()).some(v => v && v.status === 'pending');
+    } catch (_) {
+        try {
+            const snap = await get(ref(db, 'assetRequests'));
+            if (!snap.exists()) return false;
+            return Object.values(snap.val()).some(v => v && v.uid === uid && v.status === 'pending');
+        } catch (e2) {
+            console.warn('[assetRequests] pending check failed:', e2?.message || e2);
+            return false;
+        }
+    }
+}
+
+function syncAssetRequestSubmitState() {
+    const nick = document.getElementById('asset-request-nickname')?.value?.trim() || '';
+    const btn  = document.getElementById('asset-request-submit');
+    if (!btn) return;
+    const ok = nick.length > 0;
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? '1' : '0.45';
+    btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+window.syncAssetRequestSubmitState = syncAssetRequestSubmitState;
+
+window.openAssetRequestModal = function() {
+    document.getElementById('asset-request-modal')?.classList.add('active');
+    const nickEl = document.getElementById('asset-request-nickname');
+    const reasonEl = document.getElementById('asset-request-reason');
+    if (reasonEl) reasonEl.value = '';
+    if (nickEl) {
+        let prefill = '';
+        try { prefill = localStorage.getItem('assetReqNickname') || ''; } catch (_) { /* noop */ }
+        if (!prefill && auth?.currentUser?.displayName) prefill = String(auth.currentUser.displayName);
+        nickEl.value = prefill;
+        nickEl.focus();
+    }
+    syncAssetRequestSubmitState();
+};
+
+window.closeAssetRequestModal = function() {
+    document.getElementById('asset-request-modal')?.classList.remove('active');
+};
+
+window.submitAssetRequest = async function() {
+    if (!userUID || !myData) {
+        alert('데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+        return;
+    }
+    const nickname = document.getElementById('asset-request-nickname')?.value?.trim() || '';
+    if (!nickname) {
+        alert('닉네임을 입력해주세요.');
+        return;
+    }
+    const requestReason = (document.getElementById('asset-request-reason')?.value || '').trim();
+    if (await userHasPendingAssetRequest(userUID)) {
+        alert('이미 검토 중인 자산 지원 신청이 있습니다. 처리 완료 후 다시 신청해주세요.');
+        return;
+    }
+    const btn = document.getElementById('asset-request-submit');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    try {
+        const newRef = push(ref(db, 'assetRequests'));
+        const currentBalance = Math.floor(Number(myData.cash) || 0);
+        await set(newRef, {
+            uid: userUID,
+            nickname,
+            currentBalance,
+            requestReason: requestReason || '',
+            requestAmount: 0,
+            status: 'pending',
+            timestamp: serverTimestamp(),
+            createdAtMs: Date.now()
+        });
+        try { localStorage.setItem('assetReqNickname', nickname); } catch (_) { /* noop */ }
+        alert('✅ 신청이 접수되었습니다. 관리자 검토 후 처리됩니다.');
+        window.closeAssetRequestModal();
+        startAssetRequestStatusWatch(userUID);
+    } catch (e) {
+        console.warn('[assetRequests] submit failed:', e?.message || e);
+        alert('신청 실패: ' + (e?.message || '알 수 없는 오류'));
+    } finally {
+        syncAssetRequestSubmitState();
+    }
+};
 
 // ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
@@ -3212,6 +3384,7 @@ onAuthStateChanged(auth, async (user) => {
             }
             userUID = user.uid;
             previousAuthUid = user.uid;
+            try { startAssetRequestStatusWatch(user.uid); } catch (_) { /* noop */ }
             try { hydrateLastTradeTimeFromOffPeakStorage(); } catch (_) { /* noop */ }
             const userPath = `users/${userUID}`;
             logAuthTrail('[DB] Attempting ref + onValue path:', userPath, 'userUID type:', typeof userUID, 'db:', !!db);
@@ -3281,6 +3454,7 @@ onAuthStateChanged(auth, async (user) => {
                 logAuthTrailError('Caught in Login Flow (users/ onValue register)', err);
             }
         } else {
+            try { stopAssetRequestStatusWatch(); } catch (_) { /* noop */ }
             previousAuthUid = null;
             if (userDataUnsub) {
                 try { userDataUnsub(); } catch (unsubErr) { console.warn('[Auth] userDataUnsub (sign-out)', unsubErr); }
@@ -6364,6 +6538,7 @@ document.addEventListener('keydown', (e) => {
             return false;
         };
         if (closeIfActive('chart-modal-overlay', closeChartModal)) return;
+        if (closeIfActive('asset-request-modal', () => window.closeAssetRequestModal())) return;
         if (closeIfActive('promo-modal', () => window.closePromoModal())) return;
         if (closeIfActive('chart-ad-modal', () => window.closeChartAdModal())) return;
         if (closeIfActive('extend-modal', () => window.closeExtendModal())) return;

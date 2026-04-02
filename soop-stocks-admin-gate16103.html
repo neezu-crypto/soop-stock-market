@@ -1066,6 +1066,44 @@
         </div>
     </div>
 
+    <!-- 💰 자산 지원 신청 검수 -->
+    <div class="container" style="display:block; border-color: #8b5cf6;">
+        <div class="accordion-header">
+            <h1>💰 자산 지원 신청</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            유저가 신청한 자산 지원입니다. <b>Grant</b> 시 해당 유저 <b>users/{uid}/cash</b>에 합산됩니다.<br>
+            <span style="color:#38bdf8;">Firebase: <b>assetRequests/</b> · 감사 로그: <b>adminLogs/grants/</b></span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
+        </div>
+        <div style="overflow-x:auto; border:1px solid #334155; border-radius:10px;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                <thead>
+                    <tr style="background:#0f172a; color:#38bdf8; text-align:left;">
+                        <th style="padding:8px;">요청 ID</th>
+                        <th style="padding:8px;">UID</th>
+                        <th style="padding:8px;">Nickname</th>
+                        <th style="padding:8px;">신청 시 잔고</th>
+                        <th style="padding:8px;">실시간 잔고</th>
+                        <th style="padding:8px;">사유</th>
+                        <th style="padding:8px;">지급액</th>
+                        <th style="padding:8px; text-align:right;">처리</th>
+                    </tr>
+                </thead>
+                <tbody id="asset-requests-tbody">
+                    <tr><td colspan="8" style="padding:12px;color:#64748b;text-align:center;">불러오는 중...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 👑 구독자 신청 검수 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
         <div class="accordion-header">
@@ -1102,7 +1140,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set, remove, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set, remove, onValue, serverTimestamp, runTransaction, push } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, initializeAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -1146,13 +1184,118 @@
             .replace(/'/g, '&#x27;');
     }
 
+    function showAdminToast(message) {
+        const el = document.createElement('div');
+        el.textContent = message;
+        el.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:99999;background:#14532d;color:#86efac;border:1px solid #22c55e;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:800;box-shadow:0 8px 24px rgba(0,0,0,0.35);max-width:90vw;text-align:center;';
+        document.body.appendChild(el);
+        setTimeout(() => {
+            el.style.opacity = '0';
+            el.style.transition = 'opacity 0.35s ease';
+            setTimeout(() => el.remove(), 400);
+        }, 2400);
+    }
+
+    async function renderAssetRequestsTable(data, highlightIds) {
+        const tbody = document.getElementById('asset-requests-tbody');
+        if (!tbody) return;
+        const pending = Object.entries(data || {}).filter(([, v]) => v && v.status === 'pending')
+            .sort((a, b) => (a[1].createdAtMs || 0) - (b[1].createdAtMs || 0));
+        if (pending.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="padding:12px;color:#64748b;text-align:center;">대기 중인 신청이 없습니다.</td></tr>';
+            return;
+        }
+        const rows = await Promise.all(pending.map(async ([reqId, req]) => {
+            let liveCash = '—';
+            try {
+                const us = await get(ref(db, `users/${req.uid}`));
+                if (us.exists()) {
+                    const c = Number(us.val().cash);
+                    liveCash = Number.isFinite(c) ? Math.floor(c).toLocaleString() : '—';
+                }
+            } catch (_) { /* noop */ }
+            const reqBal = (req.currentBalance != null) ? Math.floor(Number(req.currentBalance) || 0).toLocaleString() : '—';
+            const reason = (req.requestReason || '').trim();
+            const reasonShort = reason.length > 80 ? `${escapeHtml(reason.slice(0, 80))}…` : escapeHtml(reason);
+            const hi = highlightIds && highlightIds.has(reqId);
+            return `
+                <tr style="border-top:1px solid #334155;${hi ? 'background:rgba(56,189,248,0.08);' : ''}">
+                    <td style="padding:8px; color:#94a3b8; font-size:11px; word-break:break-all;">${escapeHtml(reqId)}</td>
+                    <td style="padding:8px; color:#f8fafc; font-size:11px; word-break:break-all;">${escapeHtml(req.uid)}</td>
+                    <td style="padding:8px; color:#f8fafc; font-weight:700;">${escapeHtml(req.nickname || '')}</td>
+                    <td style="padding:8px; color:#cbd5e1;">${reqBal}</td>
+                    <td style="padding:8px; color:#38bdf8; font-weight:700;">${liveCash}</td>
+                    <td style="padding:8px; color:#94a3b8; max-width:140px;" title="${escapeHtml(reason)}">${reasonShort || '—'}</td>
+                    <td style="padding:8px;">
+                        <input type="number" id="grant-amt-${reqId}" min="1" step="1" placeholder="금액"
+                            style="width:100%; max-width:120px; padding:6px 8px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#f8fafc; font-size:12px;">
+                    </td>
+                    <td style="padding:8px; text-align:right;">
+                        <button type="button" class="btn-grant-asset"
+                            data-req-id="${escapeHtml(reqId)}"
+                            data-target-uid="${escapeHtml(req.uid)}"
+                            style="background:#22c55e; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:800; font-size:12px; white-space:nowrap;">Grant</button>
+                    </td>
+                </tr>`;
+        }));
+        tbody.innerHTML = rows.join('');
+        tbody.querySelectorAll('.btn-grant-asset').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const rid = btn.getAttribute('data-req-id');
+                const uid = btn.getAttribute('data-target-uid');
+                window.grantAssetRequest(rid, uid);
+            });
+        });
+    }
+
+    window.grantAssetRequest = async function(reqId, targetUid) {
+        if (!isAdmin()) return;
+        const input = document.getElementById(`grant-amt-${reqId}`);
+        const amt = Math.floor(Number(input?.value));
+        if (!Number.isFinite(amt) || amt <= 0) {
+            alert('지급 금액을 1원 이상의 정수로 입력해주세요.');
+            return;
+        }
+        if (!confirm(`다음 유저에게 ${amt.toLocaleString()}원을 지급할까요?\n\nUID: ${targetUid}`)) return;
+        try {
+            const reqSnap = await get(ref(db, `assetRequests/${reqId}`));
+            if (!reqSnap.exists() || reqSnap.val().status !== 'pending') {
+                alert('이미 처리되었거나 없는 요청입니다.');
+                return;
+            }
+            await runTransaction(ref(db, `users/${targetUid}`), (cur) => {
+                const c = cur || { cash: 1000000, stocks: {} };
+                const cash = Math.floor(Number(c.cash) || 1000000);
+                return { ...c, cash: cash + amt };
+            });
+            const logRef = push(ref(db, 'adminLogs/grants'));
+            await update(ref(db), {
+                [`assetRequests/${reqId}/status`]: 'completed',
+                [`assetRequests/${reqId}/completedAt`]: Date.now(),
+                [`assetRequests/${reqId}/grantedAmount`]: amt,
+                [`adminLogs/grants/${logRef.key}`]: {
+                    adminEmail: auth.currentUser?.email || '',
+                    targetUid,
+                    amount: amt,
+                    requestId: reqId,
+                    timestamp: serverTimestamp()
+                }
+            });
+            showAdminToast(`✅ ${amt.toLocaleString()}원 지급 완료`);
+        } catch (e) {
+            console.warn('[grantAssetRequest]', e);
+            alert('지급 실패: ' + (e?.message || e));
+        }
+    };
+
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
-    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, subscribe: null };
+    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, subscribe: null, asset: null };
     let prevListingKeys = null;
     let prevAdKeys = null;
     let prevChartKeys = null;
     let prevRelayKeys = null;
     let prevSubscribeKeys = null;
+    let prevAssetKeys = null;
 
     function playAdminRequestBeep() {
         try {
@@ -1187,7 +1330,7 @@
     }
 
     function stopRealtimeRequestListeners() {
-        ['listing', 'ad', 'chart', 'relay', 'subscribe'].forEach((k) => {
+        ['listing', 'ad', 'chart', 'relay', 'subscribe', 'asset'].forEach((k) => {
             const u = requestRealtimeUnsubs[k];
             if (u) {
                 u();
@@ -1199,6 +1342,7 @@
         prevChartKeys = null;
         prevRelayKeys = null;
         prevSubscribeKeys = null;
+        prevAssetKeys = null;
     }
 
     function renderAdRequestsList(data, highlightIds) {
@@ -1541,6 +1685,29 @@
             } catch (err) {
                 const el = document.getElementById('subscribe-request-list');
                 if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+            }
+        });
+
+        requestRealtimeUnsubs.asset = onValue(ref(db, 'assetRequests'), (snap) => {
+            try {
+                const data = snap.val() || {};
+                const keys = Object.keys(data);
+                let added = [];
+                if (prevAssetKeys !== null) {
+                    added = keys.filter((k) => !prevAssetKeys.has(k));
+                }
+                prevAssetKeys = new Set(keys);
+                const hi = new Set(added);
+                if (added.length) {
+                    added.forEach((id) => {
+                        const r = data[id];
+                        if (r && r.status === 'pending') notifyAdminNewRequest('새 자산 지원 신청', `${r.nickname || ''} · ${r.uid || ''}`);
+                    });
+                }
+                renderAssetRequestsTable(data, hi);
+            } catch (err) {
+                const el = document.getElementById('asset-requests-tbody');
+                if (el) el.innerHTML = `<tr><td colspan="8" style="padding:12px;color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</td></tr>`;
             }
         });
     }
