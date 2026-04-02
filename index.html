@@ -3572,6 +3572,9 @@ function renderCandleChart() {
     if (!canvas) return;
 
     const candleColors = resolveCandlestickChartColors();
+    const chartStyleRs = getComputedStyle(document.documentElement);
+    const chartTickColor = chartStyleRs.getPropertyValue('--text-sub').trim() || '#94a3b8';
+    const chartGridColor = 'rgba(148, 163, 184, 0.22)';
 
     // 기간 + 분봉 필터링
     const filtered    = filterByTimeframe(candleDataCache, chartTimeframeMin);
@@ -3611,6 +3614,31 @@ function renderCandleChart() {
         candleChartInstance.data.datasets[0].data = chartData;
         candleChartInstance.data.datasets[0].color = { ...candleColors };
         candleChartInstance.data.datasets[0].borderColor = { ...candleColors };
+        if (candleChartInstance.options.scales?.x?.ticks) {
+            candleChartInstance.options.scales.x.ticks.color = chartTickColor;
+        }
+        if (candleChartInstance.options.scales?.x?.grid) {
+            candleChartInstance.options.scales.x.grid.color = chartGridColor;
+        }
+        if (candleChartInstance.options.scales?.y?.ticks) {
+            candleChartInstance.options.scales.y.ticks.color = chartTickColor;
+        }
+        if (candleChartInstance.options.scales?.y?.grid) {
+            candleChartInstance.options.scales.y.grid.color = chartGridColor;
+        }
+        if (candleChartInstance.options.scales?.x?.border) {
+            candleChartInstance.options.scales.x.border.color = chartGridColor;
+        }
+        if (candleChartInstance.options.scales?.y?.border) {
+            candleChartInstance.options.scales.y.border.color = chartGridColor;
+        }
+        if (candleChartInstance.options.plugins?.tooltip) {
+            candleChartInstance.options.plugins.tooltip.titleColor = chartTickColor;
+            candleChartInstance.options.plugins.tooltip.bodyColor = chartTickColor;
+        }
+        if (candleChartInstance.options.plugins?.legend?.labels) {
+            candleChartInstance.options.plugins.legend.labels.color = chartTickColor;
+        }
         candleChartInstance.update('none');
         return;
     }
@@ -3635,9 +3663,17 @@ function renderCandleChart() {
                 intersect: false,
             },
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: false,
+                    labels: { color: chartTickColor, font: { size: 11 } }
+                },
                 tooltip: {
                     enabled: false,
+                    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+                    titleColor: chartTickColor,
+                    bodyColor: chartTickColor,
+                    borderColor: 'rgba(51, 65, 85, 0.75)',
+                    borderWidth: 1,
                     external: (ctx) => {
                         const item = ctx.tooltip?.dataPoints?.[0]?.raw;
                         if (!item) return;
@@ -3664,14 +3700,16 @@ function renderCandleChart() {
                         unit: chartIntervalMin >= 30 ? 'hour' : 'minute',
                         displayFormats: { minute: 'HH:mm', hour: 'HH:mm' }
                     },
-                    grid:  { color: 'rgba(51,65,85,0.3)', drawTicks: false },
-                    ticks: { color: 'var(--text-sub)', maxTicksLimit: 8, font: { size: 11 } }
+                    border: { color: chartGridColor, display: true },
+                    grid:  { color: chartGridColor, drawTicks: false },
+                    ticks: { color: chartTickColor, maxTicksLimit: 8, font: { size: 11 } }
                 },
                 y: {
                     position: 'right',
-                    grid:  { color: 'rgba(51,65,85,0.3)', drawTicks: false },
+                    border: { color: chartGridColor, display: true },
+                    grid:  { color: chartGridColor, drawTicks: false },
                     ticks: {
-                        color: 'var(--text-sub)',
+                        color: chartTickColor,
                         font:  { size: 11 },
                         callback: (v) => v.toLocaleString() + '원'
                     }
