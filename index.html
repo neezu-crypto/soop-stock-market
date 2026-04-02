@@ -4286,6 +4286,21 @@ const effectiveImpactCoef = impactCoef * dampingFactor;
 
 const impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
 
+// Temporary: Admin-only debug to verify impact damping is applied.
+try {
+    const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    if (isAdminUser) {
+        console.log(
+            "[Trade Debug] Base Impact:",
+            impactCoef,
+            "Damping:",
+            dampingFactor,
+            "Final Impact:",
+            impact
+        );
+    }
+} catch (_) { /* noop */ }
+
     let finalTradePrice = 0;
 
     try {
