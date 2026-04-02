@@ -2390,16 +2390,68 @@ setInterval(() => {
     }
 }, 30000);
 
-// ── siteConfig 실시간 구독 — 첫 스냅샷에서 즉시 장 상태·배너 반영 (get 단발보다 레이스 적음)
-onValue(ref(db, 'siteConfig'), (snap) => {
-    siteConfig = snap.exists() ? snap.val() : {};
+// ── siteConfig: get 부트스트랩 + onValue (권한/오프라인 시 onValue만으로는 영원 대기할 수 있음)
+function recoverMarketUiVisible(reason, err) {
+    console.warn('[Init] recoverMarketUiVisible:', reason, err?.message || err || '');
+    try {
+        siteConfigReady = true;
+        setMarketUiReady(true);
+        setMaintenanceLoading(false);
+        const ov = document.getElementById('maintenance-overlay');
+        if (ov) ov.style.display = 'none';
+    } catch (_) { /* noop */ }
+}
+
+function applySiteConfigHydration(snap, source) {
+    console.log('[Init] Config:', source, snap && typeof snap.exists === 'function' ? snap.exists() : 'no-snap');
+    try {
+        if (snap && typeof snap.exists === 'function' && snap.exists()) {
+            const v = snap.val();
+            siteConfig = v && typeof v === 'object' ? v : {};
+        } else {
+            siteConfig = {};
+        }
+    } catch (parseErr) {
+        console.warn('[Init] siteConfig val parse', parseErr);
+        siteConfig = {};
+    }
     siteConfigReady = true;
-    applyMarketState();
-    tryCloseIntro();
-    updateExtendRequestBar();
-    if (typeof renderBanners === 'function') renderBanners();
-    queueMicrotask(() => refreshCircuitFreezeOnAllListCards());
+
+    try {
+        applyMarketState();
+    } catch (mErr) {
+        console.error('[Init] applyMarketState error after', source, mErr);
+        recoverMarketUiVisible('applyMarketState:' + source, mErr);
+    }
+
+    try { tryCloseIntro(); } catch (e) { console.warn('[Init] tryCloseIntro', e); }
+    try { updateExtendRequestBar(); } catch (e) { console.warn('[Init] updateExtendRequestBar', e); }
+    try {
+        if (typeof renderBanners === 'function') renderBanners();
+    } catch (e) { console.warn('[Init] renderBanners', e); }
+    queueMicrotask(() => {
+        try { refreshCircuitFreezeOnAllListCards(); } catch (_) { /* noop */ }
+    });
+    console.log('[Init] Config done:', source);
+}
+
+get(ref(db, 'siteConfig')).then((snap) => {
+    applySiteConfigHydration(snap, 'get(ok)');
+}).catch((err) => {
+    console.warn('[Init] get(siteConfig) failed — fallback empty', err?.message || err);
+    applySiteConfigHydration(null, 'get(catch)');
 });
+
+onValue(ref(db, 'siteConfig'), (snap) => {
+    applySiteConfigHydration(snap, 'onValue');
+});
+
+setTimeout(() => {
+    if (!siteConfigReady) {
+        console.warn('[Init] siteConfig still not ready after 6s — forcing hydration');
+        applySiteConfigHydration(null, 'timeout-fallback');
+    }
+}, 6000);
 
 // 점검 모드 실시간 구독
 onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
@@ -2739,7 +2791,11 @@ function applyMarketState() {
     if (marketCheckTimer) clearTimeout(marketCheckTimer);
     marketCheckTimer = setTimeout(applyMarketState, 60000);
     } finally {
-        updateSyncStrategy();
+        try {
+            updateSyncStrategy();
+        } catch (syncErr) {
+            console.error('[Init] updateSyncStrategy (applyMarketState finally)', syncErr);
+        }
     }
 }
 
@@ -2969,6 +3025,7 @@ async function setupPresenceSession(user) {
 
 // ── 인증 & 내 데이터 동기화 ─────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
+    console.log('[Init] Auth:', user ? (user.isAnonymous ? 'anonymous' : 'signed-in') : 'signed-out');
     if (user) {
         userUID = user.uid;
         const userRef  = ref(db, `users/${userUID}`);
@@ -2977,7 +3034,12 @@ onAuthStateChanged(auth, async (user) => {
         // 로그인 상태 UI 업데이트
         updateAuthStatusUI(user);
 
-        applyMarketState();
+        try {
+            applyMarketState();
+        } catch (e) {
+            console.error('[Init] applyMarketState in onAuthStateChanged', e);
+            recoverMarketUiVisible('onAuthStateChanged', e);
+        }
         // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
         tryCloseIntro();
         initFavorites();       // 즐겨찾기 초기 로드
@@ -4791,10 +4853,19 @@ function renderBanners() {
 
 // 첫 방문 시 모듈·Firebase 지연 후에도 장 상태·배너·동결 UI 한 번 더 동기화
 window.addEventListener('load', () => {
-    if (!siteConfigReady) return;
-    applyMarketState();
-    try { renderBanners(); } catch (_) {}
-    refreshCircuitFreezeOnAllListCards();
+    console.log('[Init] window load, siteConfigReady=', siteConfigReady);
+    if (!siteConfigReady) {
+        console.warn('[Init] load event: config not ready yet (onValue/get will still run)');
+        return;
+    }
+    try {
+        applyMarketState();
+    } catch (e) {
+        console.error('[Init] applyMarketState on load', e);
+        recoverMarketUiVisible('window-load', e);
+    }
+    try { renderBanners(); } catch (e) { console.warn('[Init] renderBanners on load', e); }
+    try { refreshCircuitFreezeOnAllListCards(); } catch (_) { /* noop */ }
 });
 
 // ── XSS 방어: Firebase 데이터를 innerHTML에 삽입하기 전 이스케이프 ──
@@ -4999,14 +5070,17 @@ function processStocksSnap(snap) {
     });
 
     if (allStocks.length === 0) {
+        console.log('[Init] Stocks: first snapshot, count=', newStocks.length);
         allStocks = newStocks;
         refreshMainStockListView(); // 즐겨찾기+보유(또는 검색)만 — 관리자도 Top100 미표시
         tryCloseIntro(); // stocks 로드 완료 → 오픈 시간이면 인트로 닫기
-        if (typeof renderBanners === 'function') renderBanners();
+        if (typeof renderBanners === 'function') {
+            try { renderBanners(); } catch (e) { console.warn('[Init] renderBanners in processStocksSnap', e); }
+        }
         queueMicrotask(() => {
-            applyMarketState();
-            refreshCircuitFreezeOnAllListCards();
+            try { refreshCircuitFreezeOnAllListCards(); } catch (_) { /* noop */ }
         });
+        console.log('[Init] Render: first list pass done');
     } else {
         newStocks.forEach(ns => {
             const old = allStocks.find(os => os.id === ns.id);
