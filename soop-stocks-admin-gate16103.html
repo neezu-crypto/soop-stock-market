@@ -1196,15 +1196,27 @@
         }, 2400);
     }
 
+    function isPendingStatus(v) {
+        return v && String(v.status || '').trim().toLowerCase() === 'pending';
+    }
+
     async function renderAssetRequestsTable(data, highlightIds) {
         const tbody = document.getElementById('asset-requests-tbody');
-        if (!tbody) return;
-        const pending = Object.entries(data || {}).filter(([, v]) => v && v.status === 'pending')
+        if (!tbody) {
+            console.warn('[assetRequests][Stage4] render skipped — #asset-requests-tbody not in DOM');
+            return;
+        }
+        const raw = data || {};
+        const allKeys = Object.keys(raw);
+        console.log('[assetRequests][Stage4] renderAssetRequestsTable — total keys:', allKeys.length, 'sample:', allKeys.slice(0, 5));
+        const pending = Object.entries(raw).filter(([, v]) => isPendingStatus(v))
             .sort((a, b) => (a[1].createdAtMs || 0) - (b[1].createdAtMs || 0));
+        console.log('[assetRequests][Stage4] pending rows:', pending.length);
         if (pending.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" style="padding:12px;color:#64748b;text-align:center;">대기 중인 신청이 없습니다.</td></tr>';
             return;
         }
+        try {
         const rows = await Promise.all(pending.map(async ([reqId, req]) => {
             let liveCash = '—';
             try {
@@ -1246,6 +1258,11 @@
                 window.grantAssetRequest(rid, uid);
             });
         });
+        console.log('[assetRequests][Stage4] table HTML updated, row count:', pending.length);
+        } catch (err) {
+            console.error('[assetRequests][Stage4] render failed:', err?.message || err);
+            tbody.innerHTML = `<tr><td colspan="8" style="padding:12px;color:#ef4444;">렌더 오류: ${escapeHtml(err?.message || String(err))}</td></tr>`;
+        }
     }
 
     window.grantAssetRequest = async function(reqId, targetUid) {
@@ -1688,27 +1705,46 @@
             }
         });
 
-        requestRealtimeUnsubs.asset = onValue(ref(db, 'assetRequests'), (snap) => {
-            try {
-                const data = snap.val() || {};
-                const keys = Object.keys(data);
-                let added = [];
-                if (prevAssetKeys !== null) {
-                    added = keys.filter((k) => !prevAssetKeys.has(k));
+        requestRealtimeUnsubs.asset = onValue(
+            ref(db, 'assetRequests'),
+            (snap) => {
+                try {
+                    const data = snap.val() || {};
+                    const keys = Object.keys(data);
+                    console.log('[assetRequests][Stage3-admin] onValue snapshot exists=', snap.exists(), 'childCount=', keys.length, '(listener: full path assetRequests/, not orderByChild)');
+                    let added = [];
+                    if (prevAssetKeys !== null) {
+                        added = keys.filter((k) => !prevAssetKeys.has(k));
+                    }
+                    prevAssetKeys = new Set(keys);
+                    const hi = new Set(added);
+                    if (added.length) {
+                        added.forEach((id) => {
+                            const r = data[id];
+                            if (r && isPendingStatus(r)) notifyAdminNewRequest('새 자산 지원 신청', `${r.nickname || ''} · ${r.uid || ''}`);
+                        });
+                    }
+                    renderAssetRequestsTable(data, hi);
+                } catch (err) {
+                    console.error('[assetRequests][Stage3-admin] callback error:', err);
+                    const el = document.getElementById('asset-requests-tbody');
+                    if (el) el.innerHTML = `<tr><td colspan="8" style="padding:12px;color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</td></tr>`;
                 }
-                prevAssetKeys = new Set(keys);
-                const hi = new Set(added);
-                if (added.length) {
-                    added.forEach((id) => {
-                        const r = data[id];
-                        if (r && r.status === 'pending') notifyAdminNewRequest('새 자산 지원 신청', `${r.nickname || ''} · ${r.uid || ''}`);
-                    });
-                }
-                renderAssetRequestsTable(data, hi);
-            } catch (err) {
+            },
+            (err) => {
+                console.error('[assetRequests][Stage3-admin] onValue PERMISSION_DENIED or cancelled:', err?.code || '', err?.message || err);
                 const el = document.getElementById('asset-requests-tbody');
-                if (el) el.innerHTML = `<tr><td colspan="8" style="padding:12px;color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</td></tr>`;
+                if (el) {
+                    el.innerHTML = `<tr><td colspan="8" style="padding:12px;color:#ef4444;">assetRequests 읽기 실패: ${escapeHtml(err?.message || 'permission')}. Rules·로그인·배포 여부를 확인하세요.</td></tr>`;
+                }
             }
+        );
+
+        get(ref(db, 'assetRequests')).then((snap) => {
+            console.log('[assetRequests][Stage3-admin] one-shot get() exists=', snap.exists(), 'keys=', snap.exists() ? Object.keys(snap.val() || {}).length : 0);
+            renderAssetRequestsTable(snap.val() || {}, new Set());
+        }).catch((e) => {
+            console.error('[assetRequests][Stage3-admin] one-shot get failed:', e?.code || '', e?.message || e);
         });
     }
 

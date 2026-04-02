@@ -2054,7 +2054,16 @@ function startAssetRequestStatusWatch(uid) {
         }
     };
     try {
-        assetRequestStatusUnsub = onValue(ref(db, 'assetRequests'), apply);
+        assetRequestStatusUnsub = onValue(
+            ref(db, 'assetRequests'),
+            (snap) => {
+                console.log('[assetRequests][Stage3-user-watch] snapshot exists=', snap.exists(), 'keys=', snap.exists() ? Object.keys(snap.val() || {}).length : 0);
+                apply(snap);
+            },
+            (err) => {
+                console.error('[assetRequests][Stage3-user-watch] onValue permission/error:', err?.code || '', err?.message || err);
+            }
+        );
     } catch (_) {
         el.style.display = 'none';
     }
@@ -2128,8 +2137,9 @@ window.submitAssetRequest = async function() {
     if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
     try {
         const newRef = push(ref(db, 'assetRequests'));
+        const pushId = newRef.key;
         const currentBalance = Math.floor(Number(myData.cash) || 0);
-        await set(newRef, {
+        const payload = {
             uid: userUID,
             nickname,
             currentBalance,
@@ -2138,13 +2148,16 @@ window.submitAssetRequest = async function() {
             status: 'pending',
             timestamp: serverTimestamp(),
             createdAtMs: Date.now()
-        });
+        };
+        console.log('[assetRequests][Stage1] submitting', { pushId, path: `assetRequests/${pushId}`, payloadPreview: { ...payload, timestamp: '[serverTimestamp]' } });
+        await set(newRef, payload);
+        console.log('[assetRequests][Stage1] set() OK — pushId:', pushId, 'fullPath:', `assetRequests/${pushId}`);
         try { localStorage.setItem('assetReqNickname', nickname); } catch (_) { /* noop */ }
         alert('✅ 신청이 접수되었습니다. 관리자 검토 후 처리됩니다.');
         window.closeAssetRequestModal();
         startAssetRequestStatusWatch(userUID);
     } catch (e) {
-        console.warn('[assetRequests] submit failed:', e?.message || e);
+        console.warn('[assetRequests][Stage1] submit failed (rules/write?):', e?.code || '', e?.message || e);
         alert('신청 실패: ' + (e?.message || '알 수 없는 오류'));
     } finally {
         syncAssetRequestSubmitState();
