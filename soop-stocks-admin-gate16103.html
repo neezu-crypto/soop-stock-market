@@ -286,6 +286,21 @@
                         <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.003</div>
                     </div>
                 </div>
+                <div style="margin-top:12px; background:#1e293b; border-radius:8px; padding:10px 12px; border:1px solid #334155;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
+                        <div>
+                            <div style="font-size:11px; color:#94a3b8; font-weight:800; margin-bottom:4px;">임팩트 감쇄 기준 주가 (만원)</div>
+                            <div style="font-size:10px; color:#64748b;">현재가가 기준가보다 높을수록 impact이 감소합니다.</div>
+                        </div>
+                        <span style="font-size:11px; color:#94a3b8; font-weight:700; white-space:nowrap;">기본 10 (100,000원)</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="number" id="auto-impact-reference-price" value="10" min="1" step="1"
+                            style="flex:1; background:#0f172a; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none;">
+                        <span style="color:#94a3b8; font-size:13px; white-space:nowrap;">만원</span>
+                    </div>
+                <button class="btn-primary" style="margin-top:10px; width:100%; background:#7c3aed; color:white;" onclick="saveMarketParams()">💾 임팩트 감쇄 저장</button>
+                </div>
             </div>
 
             <!-- 시뮬레이터 -->
@@ -2607,6 +2622,40 @@
         }
     }
 
+    async function loadMarketParams() {
+        try {
+            const snap = await get(ref(db, 'siteConfig/marketParams'));
+            const d = snap.exists() ? snap.val() : {};
+            const impactRefPrice = d?.impactRefPrice ?? 100000;
+            const impactRefPriceManwon = Math.max(1, Math.round(Number(impactRefPrice) / 10000));
+            const inputEl = document.getElementById('auto-impact-reference-price');
+            if (inputEl) inputEl.value = String(impactRefPriceManwon);
+        } catch (e) {
+            const inputEl = document.getElementById('auto-impact-reference-price');
+            if (inputEl) inputEl.value = '10'; // default: 100,000 won
+        }
+    }
+
+    window.saveMarketParams = async function() {
+        if (!isAdmin()) return;
+        const inputEl = document.getElementById('auto-impact-reference-price');
+        if (!inputEl) return;
+
+        const refManwon = Number(inputEl.value);
+        const refPriceWon = Number.isFinite(refManwon) ? Math.round(refManwon * 10000) : 100000;
+        const safeRefPriceWon = Math.max(1, refPriceWon);
+
+        try {
+            // `update` creates the key even if marketParams was previously missing/empty.
+            await update(ref(db, 'siteConfig/marketParams'), {
+                impactRefPrice: safeRefPriceWon,
+                updatedAt: Date.now()
+            });
+        } catch (e) {
+            alert('임팩트 감쇄 기준 저장 실패: ' + e.message);
+        }
+    };
+
     window.saveSellConfig = async function() {
         if (!isAdmin()) return;
         const basePrice  = Number(document.getElementById('sell-base-price').value);
@@ -2630,6 +2679,9 @@
             document.getElementById('sell-config-chip').textContent = '커스텀 적용 중';
             document.getElementById('sell-config-status').textContent = `base: ${basePrice.toLocaleString()}원 / scale: ${scalePrice.toLocaleString()}원`;
             alert('✅ 하락 가중치 설정이 저장되었습니다.');
+
+            // Persist new marketParams alongside sellConfig changes.
+            try { await window.saveMarketParams(); } catch (_) { /* noop */ }
         } catch(e) {
             alert('저장 실패: ' + e.message);
         }
@@ -2641,12 +2693,18 @@
         const basePrice  = Number(document.getElementById('sell-base-price').value)  || 10000;
         const scalePrice = Number(document.getElementById('sell-scale-price').value) || 90000;
         const impact     = Number(document.getElementById('sell-impact').value)      || 0.0005;
+        const refManwon  = Number(document.getElementById('auto-impact-reference-price')?.value) || 10;
+        const refPriceWon = refManwon * 10000;
         const resultEl   = document.getElementById('sim-result');
 
         if (!price || !qty) { resultEl.textContent = '주가와 수량을 입력하세요.'; resultEl.style.color = '#64748b'; return; }
 
         const sellPressure = 1 + (Math.max(0, price - basePrice) / scalePrice);
-        const impactVal    = impact * Math.log2(1 + qty) * sellPressure;
+        // Price-Inverse Impact Scaling:
+        // Effective Impact = Base Impact * min(1, refPrice/currentPrice)
+        const damping      = Math.min(1, refPriceWon / Math.max(1, price));
+        const effImpact    = impact * damping;
+        const impactVal    = effImpact * Math.log2(1 + qty) * sellPressure;
         const dropAmt      = Math.round(price * impactVal);
 
         resultEl.style.color = '#f8fafc';
@@ -2654,6 +2712,7 @@
             <div style="display:grid; grid-template-columns:auto 1fr; gap:4px 12px; line-height:1.8;">
                 <span style="color:#94a3b8;">sellPressure</span><span style="color:#ef4444; font-weight:700;">${sellPressure.toFixed(4)}배</span>
                 <span style="color:#94a3b8;">impact 수치</span><span style="color:#fca5a5;">${(impactVal * 100).toFixed(4)}%</span>
+                <span style="color:#94a3b8;">감쇄 계수</span><span style="color:#f59e0b; font-weight:700;">${damping.toFixed(4)}배</span>
                 <span style="color:#94a3b8;">예상 하락폭</span><span style="color:#ef4444; font-weight:700;">▼ ${dropAmt.toLocaleString()}원</span>
                 <span style="color:#94a3b8;">매도 후 예상가</span><span style="color:#f8fafc; font-weight:700;">${Math.max(0, price - dropAmt).toLocaleString()}원</span>
             </div>
@@ -2788,6 +2847,7 @@
     }
 
     loadSellConfig();
+    loadMarketParams();
 
     // ── 공지 관리 ─────────────────────────────────────────────
     async function loadNotice() {

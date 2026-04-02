@@ -2081,6 +2081,8 @@ let stocksPollTimer    = null;
 let sparklinePriceCache = {}; // { stockId: [price, ...] } — 메모리만, 새로고침 시 초기화
 let sellConfigCache = null;
 let sellConfigFetchCount = 0;
+let marketParamsCache = null;
+let marketParamsFetchCount = 0;
 
 // ── 즐겨찾기 상태 ────────────────────────────────────────────
 let favorites        = {};    // { stockId: { id, name, price, ... } }
@@ -4252,6 +4254,12 @@ if (!sellConfigCache || sellConfigFetchCount % 20 === 0) {
 }
 sellConfigFetchCount++;
 
+if (!marketParamsCache || marketParamsFetchCount % 20 === 0) {
+    const mpSnap = await get(ref(db, 'siteConfig/marketParams'));
+    marketParamsCache = mpSnap.exists() ? mpSnap.val() : {};
+}
+marketParamsFetchCount++;
+
 const userPreSnap = await get(userRef);
 const preUser     = userPreSnap.exists() ? userPreSnap.val() : { cash: 1000000, stocks: {} };
 const preCash     = preUser.cash ?? 1000000;
@@ -4269,7 +4277,14 @@ if (type === 'sell') {
 }
 
 // 최종 영향력 계산 — 매수/매도 기본 변동폭은 동일, 매도만 sellPressure 적용
-const impact = impactCoef * Math.log2(1 + qty) * sellPressure;
+const impactRefPriceWon = marketParamsCache?.impactRefPrice ?? 100000;
+// Price-Inverse Impact Scaling:
+// Effective Impact = Base Impact * min(1, ReferencePrice / CurrentPrice)
+// => high-priced stocks become "heavier" (smaller price moves per trade).
+const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
+const effectiveImpactCoef = impactCoef * dampingFactor;
+
+const impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
 
     let finalTradePrice = 0;
 
