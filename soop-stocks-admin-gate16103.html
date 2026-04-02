@@ -1065,7 +1065,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
     import { getDatabase, ref, get, update, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+    import { getAuth, initializeAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
@@ -1076,7 +1076,16 @@
     };
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
-    const auth = getAuth(app);
+    let auth;
+    try {
+        // Keep Admin session sticky like the user-facing page.
+        const authOpts = {
+            persistence: [indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence],
+        };
+        auth = initializeAuth(app, authOpts);
+    } catch (e) {
+        auth = getAuth(app);
+    }
     const provider = new GoogleAuthProvider();
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
@@ -1663,7 +1672,20 @@
         }
     };
 
+    let pendingLogoutUiTimeout = null;
+    const LOGOUT_UI_DEBOUNCE_MS = 900;
+
     onAuthStateChanged(auth, async (user) => {
+        console.log("[Admin Auth] State Changed - User:", user ? user.email : "Logged Out");
+        if (pendingLogoutUiTimeout) {
+            clearTimeout(pendingLogoutUiTimeout);
+            pendingLogoutUiTimeout = null;
+        }
+
+        // Some environments may briefly report `undefined` during reconnect;
+        // in that case we should not immediately flip the UI back to login.
+        if (typeof user === 'undefined') return;
+
         if (user && user.email === ADMIN_EMAIL) {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-section').style.display = 'block';
@@ -1675,11 +1697,23 @@
             startRealtimeRequestListeners();
             startDailyAutoSettingsListener();
         } else {
-            stopDailyAutoSettingsListener();
-            stopRealtimeRequestListeners();
-            if (user) alert("관리자 권한이 없습니다.");
-            document.getElementById('login-section').style.display = 'flex';
-            document.getElementById('admin-section').style.display = 'none';
+            if (user) {
+                // Auth user exists but isn't admin.
+                console.warn("[Admin Auth] Access Denied: Email mismatch", user.email);
+                stopDailyAutoSettingsListener();
+                stopRealtimeRequestListeners();
+                alert("관리자 권한이 없습니다.");
+                document.getElementById('login-section').style.display = 'flex';
+                document.getElementById('admin-section').style.display = 'none';
+            } else {
+                // Debounce null -> avoid UI flicker during transient refresh reconnect.
+                pendingLogoutUiTimeout = setTimeout(() => {
+                    stopDailyAutoSettingsListener();
+                    stopRealtimeRequestListeners();
+                    document.getElementById('login-section').style.display = 'flex';
+                    document.getElementById('admin-section').style.display = 'none';
+                }, LOGOUT_UI_DEBOUNCE_MS);
+            }
         }
     });
 
