@@ -1887,7 +1887,8 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider, signOut, browserPopupRedirectResolver } 
+import { getAuth, initializeAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, linkWithPopup, GoogleAuthProvider, signOut, browserPopupRedirectResolver,
+    indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } 
     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
 (function () {
@@ -1964,7 +1965,19 @@ const firebaseConfig = {
 };
 const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
-const auth = getAuth(app);
+/** Incognito 등에서 IndexedDB/localStorage 실패 시 inMemory로 폴백 + 팝업 리졸버 명시(내부 ref/_key 오류 방지) */
+let auth;
+try {
+    const authOpts = {
+        persistence: [indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence],
+    };
+    if (typeof browserPopupRedirectResolver !== 'undefined' && browserPopupRedirectResolver) {
+        authOpts.popupRedirectResolver = browserPopupRedirectResolver;
+    }
+    auth = initializeAuth(app, authOpts);
+} catch (e) {
+    auth = getAuth(app);
+}
 
 // ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
@@ -2034,6 +2047,8 @@ function ensureCircuitFreezeCountdownTimer() {
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
 let userUID          = null;
+/** users/{uid} onValue 구독 — 계정 전환 시 반드시 해제(미해제 시 ref/_key 관련 오류·고아 리스너) */
+let userDataUnsub    = null;
 /** presence/{uid}/{sessionId} — 세션당 1노드, 하트비트 + onDisconnect.remove로 고스트 최소화 */
 let presenceSessionRef   = null;
 let presenceHeartbeat    = null;
@@ -2931,6 +2946,7 @@ function updateAuthStatusUI(user) {
     const googleEl = document.getElementById('auth-google');
     const emailEl  = document.getElementById('auth-google-email');
     if (!anonEl || !googleEl) return;
+    if (!user) return;
 
     const isAnonymous = user.isAnonymous;
     anonEl.style.display   = isAnonymous ? 'flex' : 'none';
@@ -2940,11 +2956,17 @@ function updateAuthStatusUI(user) {
     }
 }
 
+function authPopupResolverArgs() {
+    return (typeof browserPopupRedirectResolver !== 'undefined' && browserPopupRedirectResolver)
+        ? [browserPopupRedirectResolver]
+        : [];
+}
+
 window.loginWithGoogle = async function() {
     const provider = new GoogleAuthProvider();
     try {
         // 1. 익명 계정에 구글 계정 연결 시도 — UID 유지, 자산 보존
-        await linkWithPopup(auth, provider, browserPopupRedirectResolver);
+        await linkWithPopup(auth, provider, ...authPopupResolverArgs());
         document.getElementById('account-warn-overlay')?.classList.remove('active');
         alert('✅ 구글 계정 연동 완료!\n자산이 그대로 유지되며 다른 기기에서도 동일한 자산으로 접속할 수 있습니다.');
     } catch (err) {
@@ -2956,16 +2978,18 @@ window.loginWithGoogle = async function() {
             // 이미 다른 기기에서 이 구글 계정으로 연동된 경우
             // → 해당 구글 UID로 로그인 (기존 자산 사용)
             try {
-                await signInWithPopup(auth, provider, browserPopupRedirectResolver);
+                await signInWithPopup(auth, provider, ...authPopupResolverArgs());
                 document.getElementById('account-warn-overlay')?.classList.remove('active');
                 alert('✅ 기존 구글 계정으로 로그인됐습니다.\n이전에 연동된 자산으로 접속합니다.');
             } catch (err2) {
                 if (err2.code !== 'auth/popup-closed-by-user') {
-                    alert('로그인 실패: ' + err2.message);
+                    console.error('[Auth] signInWithPopup', err2);
+                    alert('로그인 실패: ' + (err2.message || err2.code || '알 수 없는 오류'));
                 }
             }
         } else {
-            alert('로그인 실패: ' + err.message);
+            console.error('[Auth] linkWithPopup', err);
+            alert('로그인 실패: ' + (err.message || err.code || '알 수 없는 오류'));
         }
     }
 };
@@ -3041,52 +3065,80 @@ async function setupPresenceSession(user) {
 
 // ── 인증 & 내 데이터 동기화 ─────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
-    console.log('[Init] Auth:', user ? (user.isAnonymous ? 'anonymous' : 'signed-in') : 'signed-out');
-    if (user) {
-        userUID = user.uid;
-        const userRef  = ref(db, `users/${userUID}`);
-        if (!myData) myData = { cash: 1000000, stocks: {} };
-
-        // 로그인 상태 UI 업데이트
-        updateAuthStatusUI(user);
-
-        try {
-            applyMarketState();
-        } catch (e) {
-            console.error('[Init] applyMarketState in onAuthStateChanged', e);
-            recoverMarketUiVisible('onAuthStateChanged', e);
-        }
-        // 로그인 완료 → 관리자 여부 확정 후 인트로/구독 상태 재판단
-        tryCloseIntro();
-        initFavorites();       // 즐겨찾기 초기 로드
-        loadStockNameCache();  // 종목 이름 캐시 로드 (검색 준비)
-
-        try {
-            await setupPresenceSession(user);
-        } catch (e) {
-            const el = document.getElementById('online-count');
-            if (el) el.innerText = '?';
-        }
-
-        onValue(userRef, (snapshot) => {
-            if (snapshot.exists()) {
-                const serverData = snapshot.val();
-                myData = {
-                    ...serverData,
-                    cash:   serverData.cash   ?? 1000000,
-                    stocks: serverData.stocks || {}
-                };
-            } else {
-                if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
+    try {
+        console.log('[Init] Auth:', user ? (user.isAnonymous ? 'anonymous' : 'signed-in') : 'signed-out');
+        if (user) {
+            if (!user.uid || typeof user.uid !== 'string') {
+                console.error('[Auth] User has no valid uid — skipping DB attach');
+                return;
             }
-            updateUI(true);
+            if (userDataUnsub) {
+                try { userDataUnsub(); } catch (unsubErr) { console.warn('[Auth] userDataUnsub', unsubErr); }
+                userDataUnsub = null;
+            }
+            userUID = user.uid;
+            const userRef = ref(db, `users/${userUID}`);
+            if (!myData) myData = { cash: 1000000, stocks: {} };
 
-            // 보유 주식 구독 재계산 (보유량 변동 시마다)
-            syncOwnedSubscriptions();
-        });
-    } else {
-        await teardownPresenceSession();
-        signInAnonymously(auth);
+            updateAuthStatusUI(user);
+
+            try {
+                applyMarketState();
+            } catch (e) {
+                console.error('[Init] applyMarketState in onAuthStateChanged', e);
+                recoverMarketUiVisible('onAuthStateChanged', e);
+            }
+            tryCloseIntro();
+            initFavorites();
+            loadStockNameCache();
+
+            try {
+                await setupPresenceSession(user);
+            } catch (e) {
+                console.warn('[Auth] setupPresenceSession', e);
+                const el = document.getElementById('online-count');
+                if (el) el.innerText = '?';
+            }
+
+            userDataUnsub = onValue(userRef, (snapshot) => {
+                try {
+                    if (snapshot.exists()) {
+                        const serverData = snapshot.val();
+                        myData = {
+                            ...serverData,
+                            cash:   serverData.cash   ?? 1000000,
+                            stocks: serverData.stocks || {}
+                        };
+                    } else {
+                        if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
+                    }
+                    updateUI(true);
+                    syncOwnedSubscriptions();
+                } catch (cbErr) {
+                    console.error('[Auth] users/ snapshot handler', cbErr);
+                }
+            }, (rtErr) => {
+                console.error('[Auth] users/ onValue error', rtErr);
+            });
+        } else {
+            if (userDataUnsub) {
+                try { userDataUnsub(); } catch (unsubErr) { console.warn('[Auth] userDataUnsub (sign-out)', unsubErr); }
+                userDataUnsub = null;
+            }
+            userUID = null;
+            myData = null;
+            stopSubscribeStatusWatch();
+            await teardownPresenceSession();
+            try {
+                await signInAnonymously(auth);
+            } catch (anonErr) {
+                console.error('[Auth] signInAnonymously failed (incognito/storage 등)', anonErr);
+                alert('연결에 실패했습니다. 시크릿 창에서는 쿠키·저장소 제한으로 로그인이 어려울 수 있습니다. 일반 창에서 다시 시도해 주세요.');
+            }
+        }
+    } catch (fatal) {
+        console.error('[Auth] onAuthStateChanged', fatal);
+        alert('인증 초기화 중 오류가 발생했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
     }
 });
 
@@ -5847,19 +5899,20 @@ document.addEventListener('keydown', (e) => {
 
         // 미로그인 또는 일반 유저 → 구글 로그인 팝업
         const provider = new GoogleAuthProvider();
-        signInWithPopup(auth, provider)
+        signInWithPopup(auth, provider, ...authPopupResolverArgs())
             .then(result => {
                 if (result.user.email === 'skftodwocks2@gmail.com') {
                     applyMarketState();
                     get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
                 } else {
                     alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
-                    signInAnonymously(auth);
+                    signInAnonymously(auth).catch((e) => console.warn('[Auth] signInAnonymously', e));
                 }
             })
             .catch(err => {
                 if (err.code !== 'auth/popup-closed-by-user') {
-                    alert('로그인 실패: ' + err.message);
+                    console.error('[Auth] Ctrl+Enter signInWithPopup', err);
+                    alert('로그인 실패: ' + (err.message || err.code || '알 수 없는 오류'));
                 }
             });
     }
