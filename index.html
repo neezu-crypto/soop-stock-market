@@ -3501,10 +3501,25 @@ async function fetchCandles(stockId) {
 }
 
 // ── 차트 렌더링 ──────────────────────────────────────────────
+/** Canvas는 CSS var()를 해석하지 못함 → 실제 색으로 변환. chartjs-chart-financial@0.1.1은 color.up=하락(close<open), color.down=상승(close>open). */
+function resolveCandlestickChartColors() {
+    const rs = getComputedStyle(document.documentElement);
+    const bullish = rs.getPropertyValue('--up-color').trim() || '#ef4444';
+    const bearish = rs.getPropertyValue('--down-color').trim() || '#3b82f6';
+    const neutral = rs.getPropertyValue('--text-sub').trim() || '#64748b';
+    return {
+        up: bearish,
+        down: bullish,
+        unchanged: neutral
+    };
+}
+
 function renderCandleChart() {
     const canvas   = document.getElementById('candleChart');
     const emptyMsg = document.getElementById('chart-empty-msg');
     if (!canvas) return;
+
+    const candleColors = resolveCandlestickChartColors();
 
     // 기간 + 분봉 필터링
     const filtered    = filterByTimeframe(candleDataCache, chartTimeframeMin);
@@ -3541,8 +3556,9 @@ function renderCandleChart() {
     }));
 
     if (candleChartInstance) {
-        // 데이터만 교체 (부드럽게)
         candleChartInstance.data.datasets[0].data = chartData;
+        candleChartInstance.data.datasets[0].color = { ...candleColors };
+        candleChartInstance.data.datasets[0].borderColor = { ...candleColors };
         candleChartInstance.update('none');
         return;
     }
@@ -3554,16 +3570,8 @@ function renderCandleChart() {
             datasets: [{
                 label: '',
                 data: chartData,
-                color: {
-                    up:   'var(--up-color)',
-                    down: 'var(--down-color)',
-                    unchanged: 'var(--text-sub)',
-                },
-                borderColor: {
-                    up:   'var(--up-color)',
-                    down: 'var(--down-color)',
-                    unchanged: 'var(--text-sub)',
-                }
+                color: { ...candleColors },
+                borderColor: { ...candleColors }
             }]
         },
         options: {
@@ -3584,12 +3592,14 @@ function renderCandleChart() {
                         const t   = new Date(item.x);
                         const fmt = `${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}`;
                         const isUp = item.c >= item.o;
-                        const color = isUp ? 'var(--up-color)' : 'var(--down-color)';
+                        const upCol = getComputedStyle(document.documentElement).getPropertyValue('--up-color').trim() || '#ef4444';
+                        const downCol = getComputedStyle(document.documentElement).getPropertyValue('--down-color').trim() || '#3b82f6';
+                        const color = isUp ? upCol : downCol;
                         document.getElementById('cm-ohlc-bar').innerHTML = `
                             <span>⏰ <b>${fmt}</b></span>
                             <span style="margin-left:10px">시 <span style="color:${color}">${item.o.toLocaleString()}</span></span>
-                            <span style="margin-left:10px">고 <span style="color:var(--up-color)">${item.h.toLocaleString()}</span></span>
-                            <span style="margin-left:10px">저 <span style="color:var(--down-color)">${item.l.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">고 <span style="color:${upCol}">${item.h.toLocaleString()}</span></span>
+                            <span style="margin-left:10px">저 <span style="color:${downCol}">${item.l.toLocaleString()}</span></span>
                             <span style="margin-left:10px">종 <span style="color:${color};font-weight:800">${item.c.toLocaleString()}</span></span>
                         `;
                     }
