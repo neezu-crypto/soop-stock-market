@@ -2054,10 +2054,11 @@ function startAssetRequestStatusWatch(uid) {
         }
     };
     try {
+        const q = query(ref(db, 'assetRequests'), orderByChild('uid'), equalTo(uid));
         assetRequestStatusUnsub = onValue(
-            ref(db, 'assetRequests'),
+            q,
             (snap) => {
-                console.log('[assetRequests][Stage3-user-watch] snapshot exists=', snap.exists(), 'keys=', snap.exists() ? Object.keys(snap.val() || {}).length : 0);
+                console.log('[assetRequests][Stage3-user-watch] query(uid) snapshot exists=', snap.exists(), 'keys=', snap.exists() ? Object.keys(snap.val() || {}).length : 0);
                 apply(snap);
             },
             (err) => {
@@ -2076,15 +2077,9 @@ async function userHasPendingAssetRequest(uid) {
         const snap = await get(q);
         if (!snap.exists()) return false;
         return Object.values(snap.val()).some(v => v && v.status === 'pending');
-    } catch (_) {
-        try {
-            const snap = await get(ref(db, 'assetRequests'));
-            if (!snap.exists()) return false;
-            return Object.values(snap.val()).some(v => v && v.uid === uid && v.status === 'pending');
-        } catch (e2) {
-            console.warn('[assetRequests] pending check failed:', e2?.message || e2);
-            return false;
-        }
+    } catch (e1) {
+        console.warn('[assetRequests] pending check (query) failed:', e1?.code || '', e1?.message || e1);
+        return false;
     }
 }
 
