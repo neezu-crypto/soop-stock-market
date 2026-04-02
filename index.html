@@ -2822,6 +2822,10 @@ function applyMarketState() {
         // ── 4. 시장 운영 중: 오버레이 제거 후에만 거래 UI 표시 — 동기화는 finally의 updateSyncStrategy ──
         overlay.style.display = 'none';
         setMarketUiReady(true);
+        try {
+            // 카드 생성 시점에 lastTradeTime이 이미 오프피크 쿨다운으로 반영되어야 버튼이 즉시 disable됨
+            hydrateLastTradeTimeFromOffPeakStorage();
+        } catch (_) { /* noop */ }
         try { refreshMainStockListView(); } catch (re) {
             console.warn('[Init] refreshMainStockListView after market open', re);
         }
@@ -3206,6 +3210,7 @@ onAuthStateChanged(auth, async (user) => {
             }
             userUID = user.uid;
             previousAuthUid = user.uid;
+            try { hydrateLastTradeTimeFromOffPeakStorage(); } catch (_) { /* noop */ }
             const userPath = `users/${userUID}`;
             logAuthTrail('[DB] Attempting ref + onValue path:', userPath, 'userUID type:', typeof userUID, 'db:', !!db);
             let userRef;
@@ -3990,6 +3995,7 @@ function persistOffPeakTradeTime(ts) {
     if (!uid) return;
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) return;
+    if (!siteConfigReady) return;
     if (!isMarketOpen() || isRegularMarket()) return;
     const key = offPeakTradeStorageKeyForUid(uid);
     if (!key) return;
@@ -4006,8 +4012,8 @@ function hydrateLastTradeTimeFromOffPeakStorage() {
     if (isAdmin) return;
     const key = offPeakTradeStorageKeyForUid(uid);
     if (!key) return;
-
-    if (!isMarketOpen() || isRegularMarket()) {
+    const validateMode = siteConfigReady;
+    if (validateMode && (!isMarketOpen() || isRegularMarket())) {
         try { localStorage.removeItem(key); } catch (_) { /* noop */ }
         return;
     }
@@ -4033,6 +4039,21 @@ function getTradeCooldownMs() {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) return 0;
     if (!isMarketOpen()) return 0;
+    // siteConfig 미수신(초기 로딩) 동안에는 off-peak 여부를 확정할 수 없으므로,
+    // 로컬에 비정규장 거래 시각이 최근(30초 이내)으로 남아있으면 30초 쿨다운을 강제
+    if (!siteConfigReady) {
+        const uid = auth.currentUser?.uid || userUID;
+        if (uid) {
+            const k = offPeakTradeStorageKeyForUid(uid);
+            if (k) {
+                let raw;
+                try { raw = localStorage.getItem(k); } catch (_) { raw = null; }
+                const ts = raw ? parseInt(raw, 10) : NaN;
+                if (Number.isFinite(ts) && ts > 0 && (Date.now() - ts) < 30000) return 30000;
+            }
+        }
+        return 1000; // 안전한 기본값
+    }
     return isRegularMarket() ? 1000 : 30000;
 }
 
@@ -4121,15 +4142,34 @@ window.trade = async function (id, type, qty = 1) {
     // 0. 관리자 여부 확인 (Firebase Auth 기준)
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
 
+    const now = Date.now();
+
+    // Hard-Stop: 새로고침/클릭 타이밍이 UI보다 빠르더라도, 로컬 저장된 쿨다운으로 즉시 차단
+    if (!isAdmin) {
+        if (!userUID && auth.currentUser?.uid) userUID = auth.currentUser.uid; // hydrate용
+        try { hydrateLastTradeTimeFromOffPeakStorage(); } catch (_) { /* noop */ }
+    }
+
+    const cooldownMs = getTradeCooldownMs();
+    if (!isAdmin && cooldownMs > 0 && (now - lastTradeTime < cooldownMs)) {
+        const remaining = Math.ceil((cooldownMs - (now - lastTradeTime)) / 1000);
+        const isOffPeakNow = !isRegularMarket() && isMarketOpen();
+        if (isOffPeakNow) {
+            alert(`비정규장 매매 제한: ${remaining}초 후 가능합니다.`);
+        } else {
+            alert(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
+        }
+        return;
+    }
+
+    const currentTime = now;
+
     // 공지 종목 거래 차단
     const stockInfo = allStocks.find(s => s.id === id);
     if (stockInfo?.name?.includes('[공지]')) {
         alert('📢 공지 종목은 거래할 수 없습니다.');
         return;
     }
-
-    const currentTime = Date.now();
-    const cooldownMs = getTradeCooldownMs();
 
     // 서킷브레이커 — 관리자 동결(siteConfig) + 클라이언트 서킷(localCircuitFreeze)
     const frozenUntil = getEffectiveFrozenUntil(id);
@@ -4139,16 +4179,6 @@ window.trade = async function (id, type, qty = 1) {
         return;
     }
 
-    // 매매 쿨타임 — 정규장 1초 / 비정규장 30초 (관리자 무시)
-    if (!isAdmin && cooldownMs > 0 && currentTime - lastTradeTime < cooldownMs) {
-        const remaining = Math.ceil((cooldownMs - (currentTime - lastTradeTime)) / 1000);
-        if (!isRegularMarket() && isMarketOpen()) {
-            alert(`비정규장 거래 재사용 대기시간: ${remaining}초\n잠시 후 다시 시도해주세요.`);
-        } else {
-            alert(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
-        }
-        return;
-    }
     if (isTrading === id) return; // 같은 종목 중복 거래 방지
     if (isTrading) {} // 다른 종목은 허용
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
