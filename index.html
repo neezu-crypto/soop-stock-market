@@ -2395,11 +2395,11 @@ function recoverMarketUiVisible(reason, err) {
     console.warn('[Init] recoverMarketUiVisible:', reason, err?.message || err || '');
     try {
         siteConfigReady = true;
-        setMarketUiReady(true);
-        setMaintenanceLoading(false);
-        const ov = document.getElementById('maintenance-overlay');
-        if (ov) ov.style.display = 'none';
-    } catch (_) { /* noop */ }
+        if (!siteConfig || typeof siteConfig !== 'object') siteConfig = {};
+        applyMarketState();
+    } catch (e) {
+        console.error('[Init] recoverMarketUiVisible applyMarketState failed', e);
+    }
 }
 
 function applySiteConfigHydration(snap, source) {
@@ -2430,6 +2430,7 @@ function applySiteConfigHydration(snap, source) {
         if (typeof renderBanners === 'function') renderBanners();
     } catch (e) { console.warn('[Init] renderBanners', e); }
     queueMicrotask(() => {
+        if (!isTradingUiUnlocked()) return;
         try { refreshCircuitFreezeOnAllListCards(); } catch (_) { /* noop */ }
     });
     console.log('[Init] Config done:', source);
@@ -2641,6 +2642,17 @@ function setMarketUiReady(ready) {
     document.body.classList.toggle('market-state-ready', ready);
 }
 
+/** 거래 UI(메인 리스트) 표시 가능 — siteConfig 반영 후 오픈(또는 시간 제한 없음)일 때만 true */
+function isTradingUiUnlocked() {
+    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    if (isAdmin) return true;
+    if (!siteConfigReady) return false;
+    if (siteConfig?.maintenance) return false;
+    const mh = siteConfig?.marketHours;
+    if (mh && mh.enabled && !isMarketOpen()) return false;
+    return true;
+}
+
 function setMaintenanceLoading(show) {
     const load = document.getElementById('maintenance-loading');
     const body = document.getElementById('maintenance-body');
@@ -2687,7 +2699,6 @@ function applyMarketState() {
     }
 
     setMaintenanceLoading(false);
-    setMarketUiReady(true);
 
     const maintenance = !!siteConfig.maintenance;
     mh          = siteConfig.marketHours;
@@ -2700,6 +2711,7 @@ function applyMarketState() {
 
     // ── 3. 점검 중 또는 시장 마감 ────────────────────────────
     if (maintenance || (mh && mh.enabled && !marketOpen)) {
+        setMarketUiReady(false);
         stopAllStocksSubscriptions();
 
         overlay.style.display = 'flex';
@@ -2744,8 +2756,12 @@ function applyMarketState() {
             }
         }
     } else {
-        // ── 4. 시장 운영 중: UI만 처리 — 주가 동기화는 finally의 updateSyncStrategy ──
+        // ── 4. 시장 운영 중: 오버레이 제거 후에만 거래 UI 표시 — 동기화는 finally의 updateSyncStrategy ──
         overlay.style.display = 'none';
+        setMarketUiReady(true);
+        try { refreshMainStockListView(); } catch (re) {
+            console.warn('[Init] refreshMainStockListView after market open', re);
+        }
     }
 
     // ── 5. 시장 모드 안내 배너 ────────────────────────────────
@@ -4865,7 +4881,9 @@ window.addEventListener('load', () => {
         recoverMarketUiVisible('window-load', e);
     }
     try { renderBanners(); } catch (e) { console.warn('[Init] renderBanners on load', e); }
-    try { refreshCircuitFreezeOnAllListCards(); } catch (_) { /* noop */ }
+    try {
+        if (isTradingUiUnlocked()) refreshCircuitFreezeOnAllListCards();
+    } catch (_) { /* noop */ }
 });
 
 // ── XSS 방어: Firebase 데이터를 innerHTML에 삽입하기 전 이스케이프 ──
@@ -4935,6 +4953,7 @@ function createSparkline(stockId, fallbackPrice, isUp) {
 // 메인 리스트는 계정 유형과 무관하게 즐겨찾기+보유(또는 검색 결과)만 표시 — Top 100 전체 시세 뷰 없음.
 
 function refreshMainStockListView() {
+    if (!isTradingUiUnlocked()) return;
     const q = document.getElementById('search-input')?.value?.trim() || '';
     if (!q) renderFavoriteList();
     else renderSearchResults();
@@ -5434,6 +5453,7 @@ function renderFavoriteList() {
     const listDiv  = document.getElementById('stock-list');
     const emptyDiv = document.getElementById('stock-empty');
     if (!listDiv) return;
+    if (!isTradingUiUnlocked()) return;
 
     // 즐겨찾기 + 보유 주식 합산 (중복 제거)
     const merged = {};
@@ -5653,6 +5673,7 @@ function renderSearchResults() {
     const emptyDiv = document.getElementById('stock-empty');
     const q        = document.getElementById('search-input')?.value?.trim() || '';
     if (!q || !listDiv) return;
+    if (!isTradingUiUnlocked()) return;
 
     const items = Object.values(searchResults)
         .sort((a, b) => (b.price || 0) - (a.price || 0));
