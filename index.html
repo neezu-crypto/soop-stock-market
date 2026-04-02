@@ -2879,7 +2879,9 @@ function applyMarketState() {
 // ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
 document.getElementById('my-stocks-list').addEventListener('click', (e) => {
     const item = e.target.closest('.my-stock-item');
-    if (item) selectStockForSearch(item.getAttribute('data-name'));
+    if (item) {
+        selectStockForSearch(item.getAttribute('data-name'), item.getAttribute('data-id'));
+    }
 });
 
 // ── 내 보유 주식 패널 ────────────────────────────────────────
@@ -2919,6 +2921,7 @@ function renderMyPortfolio() {
 
         const item = document.createElement('div');
         item.className = 'my-stock-item';
+        item.setAttribute('data-id', id);
         item.setAttribute('data-name', name);
         item.innerHTML = `
             <div class="my-stock-info">
@@ -2937,15 +2940,49 @@ function renderMyPortfolio() {
     saveAssetHistoryToday(totalWithCash);
 }
 
-// 종목명으로 검색창 자동 입력 후 포커스
-function selectStockForSearch(stockName) {
+/** 검색 비동기 렌더 후 해당 종목 카드로 스크롤 (검색창으로 스크롤하지 않음) */
+function scrollStockCardIntoViewDeferred(stockId) {
+    if (!stockId) return;
+    const findCard = () => {
+        try {
+            return document.querySelector(`#stock-list .stock-card[data-id="${CSS.escape(String(stockId))}"]`);
+        } catch (_) {
+            return document.querySelector(`#stock-list .stock-card[data-id="${stockId}"]`);
+        }
+    };
+    const go = () => {
+        const card = findCard();
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return true;
+        }
+        return false;
+    };
+    if (go()) return;
+    requestAnimationFrame(() => {
+        if (go()) return;
+        requestAnimationFrame(() => {
+            if (go()) return;
+            let n = 0;
+            const t = setInterval(() => {
+                if (go() || ++n >= 24) clearInterval(t);
+            }, 50);
+        });
+    });
+}
+
+// 종목명으로 검색 실행 후 메인 리스트의 해당 카드로 스크롤
+function selectStockForSearch(stockName, stockId) {
     const searchInput = document.getElementById('search-input');
-    if (searchInput) {
-        searchInput.value = stockName;
+    if (!searchInput) return;
+    searchInput.value = stockName || '';
+    try {
+        searchInput.focus({ preventScroll: true });
+    } catch (_) {
         searchInput.focus();
-        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    scrollStockCardIntoViewDeferred(stockId || '');
 }
 
 // ── UI 갱신 ──────────────────────────────────────────────────
