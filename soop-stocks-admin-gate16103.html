@@ -2276,8 +2276,10 @@
         const listDiv   = document.getElementById('admin-stock-list');
         if (!listDiv) return;
         listDiv.innerHTML = "";
-        Object.entries(allStocksData).forEach(([id, s]) => {
-            if (s.name.toLowerCase().includes(searchVal)) {
+        Object.entries(allStocksData)
+            .filter(([id, s]) => s.name.toLowerCase().includes(searchVal))
+            .sort((a, b) => (Number(b[1].price) || 0) - (Number(a[1].price) || 0))
+            .forEach(([id, s]) => {
                 const macroRunning = !!activeMacros[id];
                 const targetSaved = macroTargetByStock[id] != null ? String(macroTargetByStock[id]) : '';
                 const item = document.createElement('div');
@@ -2311,7 +2313,6 @@
                     </div>
                 `;
                 listDiv.appendChild(item);
-            }
         });
     }
 
