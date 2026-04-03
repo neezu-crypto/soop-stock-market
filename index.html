@@ -4240,7 +4240,9 @@ function getTradeCooldownMs() {
 function isGlobalTradeCooldownActive() {
     const ms = getTradeCooldownMs();
     if (ms <= 0) return false;
-    return Date.now() - lastTradeTime < ms;
+    const ts = Number(lastTradeTime);
+    if (!Number.isFinite(ts) || ts <= 0) return false;
+    return Date.now() - ts < ms;
 }
 
 function isTradeButtonDisabled(stockId) {
@@ -4259,15 +4261,21 @@ function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId) {
         return;
     }
     const dis = isTradeButtonDisabled(stockId);
+    const ltForRem = Number(lastTradeTime);
     const rem = isGlobalTradeCooldownActive()
-        ? Math.max(1, Math.ceil((getTradeCooldownMs() - (Date.now() - lastTradeTime)) / 1000))
+        ? Math.max(1, Math.ceil((getTradeCooldownMs() - (Date.now() - (Number.isFinite(ltForRem) && ltForRem > 0 ? ltForRem : 0))) / 1000))
         : 0;
     const offPeakOpen = !isRegularMarket() && isMarketOpen();
     [buyBtn, sellBtn].forEach((btn, i) => {
         if (!btn) return;
         const isBuy = i === 0;
         const label = isBuy ? '매수' : '매도';
-        btn.disabled = dis;
+        if (dis) {
+            btn.disabled = true;
+        } else {
+            btn.disabled = false;
+            try { btn.removeAttribute('disabled'); } catch (_) { /* noop */ }
+        }
         btn.style.opacity = dis ? '0.55' : '';
         if (dis && isGlobalTradeCooldownActive() && offPeakOpen) {
             btn.textContent = `${rem}초 후 가능`;
@@ -4312,7 +4320,7 @@ function refreshTradeCooldownButtons() {
 
 setInterval(() => {
     try {
-        if (isGlobalTradeCooldownActive()) refreshTradeCooldownButtons();
+        if (userUID && isTradingUiUnlocked()) refreshTradeCooldownButtons();
     } catch (_) { /* noop */ }
 }, 1000);
 
@@ -4331,8 +4339,10 @@ window.trade = async function (id, type, qty = 1) {
     }
 
     const cooldownMs = getTradeCooldownMs();
-    if (!isAdmin && cooldownMs > 0 && (now - lastTradeTime < cooldownMs)) {
-        const remaining = Math.ceil((cooldownMs - (now - lastTradeTime)) / 1000);
+    const lt = Number(lastTradeTime);
+    const lastTs = Number.isFinite(lt) && lt > 0 ? lt : 0;
+    if (!isAdmin && cooldownMs > 0 && lastTs > 0 && (now - lastTs < cooldownMs)) {
+        const remaining = Math.ceil((cooldownMs - (now - lastTs)) / 1000);
         const isOffPeakNow = !isRegularMarket() && isMarketOpen();
         if (isOffPeakNow) {
             alert(`비정규장 매매 제한: ${remaining}초 후 가능합니다.`);
@@ -4415,6 +4425,8 @@ window.trade = async function (id, type, qty = 1) {
 
     isTrading = id; // 해당 종목만 버튼 비활성화
     updateUI(false);
+
+    try {
 
     if (!myData.stocks) myData.stocks = {};
 
@@ -4695,11 +4707,15 @@ try {
         else if (error.message === "트랜잭션중단") { /* 정상 중단 — 알림 없음 */ }
         else if (error.message === "유저동기화실패") alert("잔고 동기화에 실패했습니다. 새로고침 후 다시 시도해주세요.");
         else alert("거래 중 오류가 발생했습니다.");
+    }
+    } catch (outerErr) {
+        console.warn('[Trade] unexpected', outerErr?.message || outerErr);
+        alert("거래 중 오류가 발생했습니다.");
     } finally {
+        isTrading = null;
+        try { updateUI(true); } catch (_) { /* noop */ }
+        try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
         setTimeout(() => {
-            isTrading = null;
-            updateUI(true);
-            try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
             // 거래한 종목 카드 즉시 업데이트 (보유수, 버튼 활성화)
             const card = stockElements[id];
             const stockData = favorites[id] || ownedStocks[id] || searchResults[id];
@@ -4748,7 +4764,7 @@ try {
                 }
             }
             renderMyPortfolio();
-        }, 1000);
+        }, 0);
     }
 };
 
