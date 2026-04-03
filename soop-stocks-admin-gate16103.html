@@ -336,9 +336,33 @@
                 gap: 14px !important;
             }
             /* 종목 관리 리스트 — 행마다 세로 정렬·넓은 터치 영역 */
+            #admin-stock-list.admin-stock-scroll-host {
+                gap: 0 !important;
+                display: block !important;
+                contain: layout style;
+            }
             #admin-stock-list {
                 max-height: min(55vh, 480px) !important;
                 gap: 14px !important;
+            }
+            .admin-stock-vscroll-track {
+                position: relative;
+                width: 100%;
+                pointer-events: auto;
+            }
+            .admin-stock-vscroll-window {
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0;
+                will-change: transform;
+            }
+            .admin-stock-row {
+                flex-shrink: 0;
+                box-sizing: border-box;
             }
             #admin-stock-list .batch-control {
                 flex-direction: column;
@@ -819,7 +843,7 @@
         <div class="info-box">종목 이름을 검색하여 가격을 직접 수정할 수 있습니다.</div>
         <input type="text" id="admin-search" placeholder="스트리머 검색..."
             style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box; margin-bottom:15px;">
-        <div id="admin-stock-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;"></div>
+        <div id="admin-stock-list" class="admin-stock-scroll-host" style="max-height: 300px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
         </div>
         </div>
     </div>
@@ -2029,7 +2053,9 @@
             allStocksData = snap.val() || {};
             const count = Object.keys(allStocksData).length;
             if (statusEl) statusEl.innerText = `${count}개 종목 로드됨`;
-            renderAdminStockList();
+            clearTimeout(adminSearchDebounceTimer);
+            adminSearchDebounceTimer = null;
+            renderAdminStockList({ resetScroll: true });
         } catch (e) {
             if (statusEl) statusEl.innerText = '로드 실패';
         }
@@ -2271,21 +2297,32 @@
     const macroTargetByStock = {};
     window.macroTargetByStock = macroTargetByStock;
 
-    function renderAdminStockList() {
+    /** @type {Array<[string, object]>} 필터·정렬된 종목 (가상 스크롤 캐시) */
+    let adminStockListFilteredEntries = [];
+    let adminSearchDebounceTimer = null;
+    let adminStockScrollRaf = 0;
+    let adminStockListScrollBound = false;
+    let adminStockResizeTimer = null;
+
+    function getAdminStockRowStride() {
+        return window.matchMedia('(max-width: 768px)').matches ? 232 : 198;
+    }
+
+    function getAdminStockFilteredSorted() {
         const searchVal = (document.getElementById('admin-search')?.value || '').toLowerCase();
-        const listDiv   = document.getElementById('admin-stock-list');
-        if (!listDiv) return;
-        listDiv.innerHTML = "";
-        Object.entries(allStocksData)
-            .filter(([id, s]) => s.name.toLowerCase().includes(searchVal))
-            .sort((a, b) => (Number(b[1].price) || 0) - (Number(a[1].price) || 0))
-            .forEach(([id, s]) => {
-                const macroRunning = !!activeMacros[id];
-                const targetSaved = macroTargetByStock[id] != null ? String(macroTargetByStock[id]) : '';
-                const item = document.createElement('div');
-                item.className = 'batch-control';
-                item.style.cssText = 'padding:10px; background:#0f172a; border-radius:8px; display:flex; flex-direction:column; gap:8px;';
-                item.innerHTML = `
+        return Object.entries(allStocksData)
+            .filter(([id, s]) => (s.name || '').toLowerCase().includes(searchVal))
+            .sort((a, b) => (Number(b[1].price) || 0) - (Number(a[1].price) || 0));
+    }
+
+    function buildAdminStockRowEl(id, s) {
+        const macroRunning = !!activeMacros[id];
+        const targetSaved = macroTargetByStock[id] != null ? String(macroTargetByStock[id]) : '';
+        const item = document.createElement('div');
+        item.className = 'batch-control admin-stock-row';
+        item.dataset.stockId = id;
+        item.style.cssText = 'padding:10px; background:#0f172a; border-radius:8px; display:flex; flex-direction:column; gap:8px;';
+        item.innerHTML = `
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                         <div style="flex:1; font-size:14px;">${escapeHtml(s.name)}</div>
                         <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
@@ -2312,8 +2349,124 @@
                         </button>
                     </div>
                 `;
-                listDiv.appendChild(item);
-        });
+        return item;
+    }
+
+    const ADMIN_STOCK_OVERSCAN = 5;
+
+    function renderAdminStockListViewport() {
+        const listDiv = document.getElementById('admin-stock-list');
+        if (!listDiv) return;
+        const entries = adminStockListFilteredEntries;
+        const n = entries.length;
+        const stride = getAdminStockRowStride();
+        if (n === 0) return;
+
+        let track = listDiv.querySelector('.admin-stock-vscroll-track');
+        let win = listDiv.querySelector('.admin-stock-vscroll-window');
+        if (!track || !win) return;
+
+        const totalH = n * stride;
+        track.style.height = totalH + 'px';
+
+        const clientH = listDiv.clientHeight || 300;
+        const st = listDiv.scrollTop;
+        let start = Math.floor(st / stride) - ADMIN_STOCK_OVERSCAN;
+        if (start < 0) start = 0;
+        let end = Math.ceil((st + clientH) / stride) + ADMIN_STOCK_OVERSCAN;
+        if (end > n) end = n;
+
+        win.style.top = (start * stride) + 'px';
+        win.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        for (let i = start; i < end; i++) {
+            const [id, s] = entries[i];
+            const wrap = document.createElement('div');
+            wrap.style.height = stride + 'px';
+            wrap.style.flexShrink = '0';
+            wrap.style.boxSizing = 'border-box';
+            wrap.style.overflow = 'hidden';
+            wrap.appendChild(buildAdminStockRowEl(id, s));
+            frag.appendChild(wrap);
+        }
+        win.appendChild(frag);
+    }
+
+    function ensureAdminStockListScrollListener() {
+        const listDiv = document.getElementById('admin-stock-list');
+        if (!listDiv || adminStockListScrollBound) return;
+        adminStockListScrollBound = true;
+        listDiv.addEventListener('scroll', () => {
+            if (adminStockScrollRaf) cancelAnimationFrame(adminStockScrollRaf);
+            adminStockScrollRaf = requestAnimationFrame(() => {
+                adminStockScrollRaf = 0;
+                renderAdminStockListViewport();
+            });
+        }, { passive: true });
+        window.addEventListener('resize', () => {
+            clearTimeout(adminStockResizeTimer);
+            adminStockResizeTimer = setTimeout(() => {
+                const ld = document.getElementById('admin-stock-list');
+                const tr = ld?.querySelector('.admin-stock-vscroll-track');
+                const n = adminStockListFilteredEntries.length;
+                if (tr && n) tr.style.height = (n * getAdminStockRowStride()) + 'px';
+                if (n) renderAdminStockListViewport();
+            }, 120);
+        }, { passive: true });
+    }
+
+    /**
+     * @param {{ resetScroll?: boolean }} [opts] — resetScroll: true면 스크롤 맨 위(검색·최초 로드). false면 위치 유지(거래·매크로).
+     */
+    function renderAdminStockList(opts) {
+        opts = opts || {};
+        const resetScroll = opts.resetScroll === true;
+        const listDiv = document.getElementById('admin-stock-list');
+        if (!listDiv) return;
+
+        adminStockListFilteredEntries = getAdminStockFilteredSorted();
+        const n = adminStockListFilteredEntries.length;
+        const stride = getAdminStockRowStride();
+        const hadAnyStocks = Object.keys(allStocksData).length > 0;
+
+        listDiv.classList.add('admin-stock-scroll-host');
+
+        if (n === 0) {
+            listDiv.innerHTML = hadAnyStocks
+                ? '<div style="color:#64748b;font-size:13px;padding:16px;text-align:center;">검색 결과가 없습니다.</div>'
+                : '<div style="color:#64748b;font-size:13px;padding:16px;text-align:center;">표시할 종목이 없습니다.</div>';
+            return;
+        }
+
+        const prevScrollTop = resetScroll ? 0 : listDiv.scrollTop;
+
+        listDiv.innerHTML = '';
+        const track = document.createElement('div');
+        track.className = 'admin-stock-vscroll-track';
+        const win = document.createElement('div');
+        win.className = 'admin-stock-vscroll-window';
+        track.appendChild(win);
+        listDiv.appendChild(track);
+
+        track.style.height = (n * stride) + 'px';
+
+        if (resetScroll) {
+            listDiv.scrollTop = 0;
+        } else {
+            const maxS = Math.max(0, listDiv.scrollHeight - listDiv.clientHeight);
+            listDiv.scrollTop = Math.min(prevScrollTop, maxS);
+        }
+
+        ensureAdminStockListScrollListener();
+        renderAdminStockListViewport();
+    }
+
+    function debouncedRenderAdminStockListFromSearch() {
+        clearTimeout(adminSearchDebounceTimer);
+        adminSearchDebounceTimer = setTimeout(() => {
+            adminSearchDebounceTimer = null;
+            renderAdminStockList({ resetScroll: true });
+        }, 280);
     }
 
     /**
@@ -2437,7 +2590,7 @@
                 const inp = document.getElementById(`input-${stockId}`);
                 if (inp && nv && nv.price != null) inp.value = nv.price;
             } else {
-                renderAdminStockList();
+                renderAdminStockList({ resetScroll: false });
             }
             if (!silent) {
                 const stockName = nv?.name || allStocksData[stockId]?.name || stockId;
@@ -2464,7 +2617,7 @@
             delete activeMacros[stockId];
         }
         delete macroTickBusy[stockId];
-        renderAdminStockList();
+        renderAdminStockList({ resetScroll: false });
         const name = allStocksData[stockId]?.name || stockId;
         if (reason === 'manual') {
             showAdminToast('매크로가 중지되었습니다.');
@@ -2552,7 +2705,7 @@
                     return;
                 }
 
-                renderAdminStockList();
+                renderAdminStockList({ resetScroll: false });
 
                 if (!activeMacros[stockId]) return;
                 scheduleNextMacroTick();
@@ -2562,7 +2715,7 @@
         };
 
         activeMacros[stockId] = true;
-        renderAdminStockList();
+        renderAdminStockList({ resetScroll: false });
         tick().catch((e) => {
             console.error('[adminRunMacro]', e);
             stopAdminMacro(stockId, e?.message || String(e));
@@ -2705,7 +2858,7 @@
         }
     };
 
-    document.getElementById('admin-search')?.addEventListener('input', renderAdminStockList);
+    document.getElementById('admin-search')?.addEventListener('input', debouncedRenderAdminStockListFromSearch);
 
     window.cleanupDuplicateStocks = async function() {
         if (!isAdmin()) return;
