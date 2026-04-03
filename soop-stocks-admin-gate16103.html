@@ -3478,8 +3478,29 @@
         await persistDailyAutoSettings();
     };
 
+    function chunkArray(arr, size) {
+        const out = [];
+        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+        return out;
+    }
+
+    async function logDailyAutoSplitFailure(err, { thresholdWon, ratioN, splittableIds }) {
+        try {
+            await set(ref(db, `adminActivityLogs/errors/${Date.now()}`), {
+                type: 'dailyAutoSplitFailure',
+                message: err?.message != null ? String(err.message) : String(err),
+                thresholdWon,
+                ratioN,
+                splittableIds: Array.isArray(splittableIds) ? splittableIds : [],
+                createdAt: Date.now()
+            });
+        } catch (_) { /* noop */ }
+    }
+
     async function autoSplitStocksByThreshold({ thresholdWon, ratioN }) {
         const logEl = document.getElementById('daily-auto-split-log');
+        const USER_BATCH_SIZE = 500;
+        const ratio = ratioN;
         const emailNorm = (auth.currentUser?.email || '').toLowerCase();
         if (emailNorm !== ADMIN_EMAIL.toLowerCase()) {
             console.error('[DailyAutoSplit] aborted: expected admin email skftodwocks2@gmail.com, got:', auth.currentUser?.email);
@@ -3499,7 +3520,7 @@
             console.error('[DailyAutoSplit] token refresh failed:', e?.message || e);
             if (logEl) {
                 logEl.style.display = 'block';
-                logEl.innerHTML = `<div style="color:#ef4444;">인증 토큰 갱신 실패. 다시 로그인 후 시도하세요.</div>`;
+                logEl.innerHTML = `<div style="color:#ef4444;">인증 토큰 갱신 실패. 다시 로그인 후 다시 시도하세요.</div>`;
             }
             return;
         }
@@ -3509,62 +3530,59 @@
             logEl.innerHTML = '';
         }
 
-        const stocksSnap = await get(ref(db, 'stocks/'));
-        const stocksData = stocksSnap.val() || {};
-
-        // 1) 후보: 가격 기준 초과
-        const candidates = Object.entries(stocksData)
-            .filter(([, s]) => (s?.price || 0) >= thresholdWon);
-
-        if (candidates.length === 0) {
-            if (logEl) logEl.innerHTML = `<div style="color:#64748b;">기준가 미만 종목만 존재 — 자동 분할 스킵</div>`;
-            return;
-        }
-
-        // 2) 분할 대상: 기준가 이상이면 진행(가격은 Math.floor로 처리 — 나눗셈 떨어짐 불필요)
-        const ratio = ratioN;
-        const splittable = [];
-        const skipped = [];
-        candidates.forEach(([id, s]) => {
-            const price = s?.price || 0;
-            if (price < ratio) { skipped.push({ id, reason: 'too-small' }); return; }
-            splittable.push(id);
-        });
-
-        if (splittable.length === 0) {
-            if (logEl) {
-                logEl.innerHTML = `<div style="color:#f59e0b;">기준가 이상이지만 주가가 분할 배수(${ratio})보다 작아 분할할 수 없는 종목뿐입니다.</div>`;
-            }
-            console.warn('[DailyAutoSplit] skipped all (too-small vs ratio).', { thresholdWon, ratioN, candidates: candidates.length });
-            return;
-        }
-
-        const targetSet = new Set(splittable);
-
-        // 점검 모드로 거래 중단(수동 executeSplit와 동일한 안전장치)
         let maintenanceEnabled = false;
-        const events = [];
+        let splittableIds = [];
 
         try {
             await set(ref(db, 'siteConfig/maintenance'), true);
             maintenanceEnabled = true;
             await new Promise((r) => setTimeout(r, 1000));
 
-            const splitTs = Date.now();
-            const rootUpdates = {};
+            const stocksSnap = await get(ref(db, 'stocks/'));
+            const stocksData = stocksSnap.val() || {};
 
-            // 3) 종목: 가격·히스토리·분할 시각(거래 규칙 완화용) — users와 같은 원자 update에 포함
+            const candidates = Object.entries(stocksData)
+                .filter(([, s]) => (s?.price || 0) >= thresholdWon);
+
+            if (candidates.length === 0) {
+                if (logEl) logEl.innerHTML = `<div style="color:#64748b;">기준가 미만 종목만 존재 — 자동 분할 스킵</div>`;
+                await set(ref(db, 'siteConfig/maintenance'), false);
+                maintenanceEnabled = false;
+                return;
+            }
+
+            const splittable = [];
+            candidates.forEach(([id, s]) => {
+                const price = s?.price || 0;
+                if (price < ratio) return;
+                splittable.push(id);
+            });
+
+            if (splittable.length === 0) {
+                if (logEl) {
+                    logEl.innerHTML = `<div style="color:#f59e0b;">기준가 이상이지만 주가가 분할 배수(${ratio})보다 작아 분할할 수 없는 종목뿐입니다.</div>`;
+                }
+                console.warn('[DailyAutoSplit] skipped all (too-small vs ratio).', { thresholdWon, ratioN, candidates: candidates.length });
+                await set(ref(db, 'siteConfig/maintenance'), false);
+                maintenanceEnabled = false;
+                return;
+            }
+
+            splittableIds = [...splittable];
+            const targetSet = new Set(splittable);
+            const splitTs = Date.now();
+            const events = [];
+
+            const stockUpdates = {};
             splittable.forEach((id) => {
                 const s = stocksData[id];
                 const oldPrice = s?.price || 0;
                 const newPrice = Math.max(1, Math.floor(oldPrice / ratio));
-
                 const history = (s.history || [s.price]).map(p => Math.max(1, Math.floor((Number(p) || 0) / ratio)));
-                rootUpdates[`stocks/${id}/price`] = newPrice;
-                rootUpdates[`stocks/${id}/history`] = history;
-                rootUpdates[`stocks/${id}/change`] = s.change || 0;
-                rootUpdates[`stocks/${id}/lastSplitTimestamp`] = splitTs;
-
+                stockUpdates[`stocks/${id}/price`] = newPrice;
+                stockUpdates[`stocks/${id}/history`] = history;
+                stockUpdates[`stocks/${id}/change`] = s.change || 0;
+                stockUpdates[`stocks/${id}/lastSplitTimestamp`] = splitTs;
                 events.push({
                     stockId: id,
                     stockName: s.name || id,
@@ -3575,47 +3593,38 @@
                 });
             });
 
-            // 4) 유저 포트폴리오 qty/avg (정수 수량 — 동일 update로 종목과 동시 반영)
+            await update(ref(db), stockUpdates);
+
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
             const userIds = Object.keys(usersData);
 
+            const uidToPaths = new Map();
             userIds.forEach((uid) => {
                 const user = usersData[uid];
                 if (!user?.stocks) return;
+                const paths = {};
                 Object.entries(user.stocks).forEach(([stockId, info]) => {
                     if (!targetSet.has(stockId)) return;
                     if (!info) return;
                     const q = Math.floor(Number(info.qty) || 0);
                     if (q <= 0) return;
                     const newQty = Math.floor(q * ratio);
-                    rootUpdates[`users/${uid}/stocks/${stockId}/qty`] = newQty;
-                    rootUpdates[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
+                    paths[`users/${uid}/stocks/${stockId}/qty`] = newQty;
+                    paths[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
                 });
+                if (Object.keys(paths).length > 0) uidToPaths.set(uid, paths);
             });
 
-            const keyCount = Object.keys(rootUpdates).length;
-            console.log('[DailyAutoSplit] single root update keys:', keyCount);
-            try {
-                await update(ref(db), rootUpdates);
-            } catch (e1) {
-                console.warn('[DailyAutoSplit] atomic root update failed; applying stocks then users:', e1?.message || e1);
-                const stockRel = {};
-                splittable.forEach((id) => {
-                    ['price', 'history', 'change', 'lastSplitTimestamp'].forEach((field) => {
-                        const full = `stocks/${id}/${field}`;
-                        if (rootUpdates[full] !== undefined) stockRel[`${id}/${field}`] = rootUpdates[full];
-                    });
-                });
-                await update(ref(db, 'stocks/'), stockRel);
-                const userOnly = {};
-                Object.keys(rootUpdates).forEach((k) => {
-                    if (k.startsWith('users/')) userOnly[k.replace(/^users\//, '')] = rootUpdates[k];
-                });
-                if (Object.keys(userOnly).length > 0) await update(ref(db, 'users/'), userOnly);
+            const uidsWithUpdates = [...uidToPaths.keys()];
+            const uidChunks = chunkArray(uidsWithUpdates, USER_BATCH_SIZE);
+            for (let i = 0; i < uidChunks.length; i++) {
+                const chunk = uidChunks[i];
+                const batch = {};
+                chunk.forEach((uid) => Object.assign(batch, uidToPaths.get(uid)));
+                await update(ref(db), batch);
             }
 
-            // 5) 로그 기록 (UI + RTDB best-effort)
             if (logEl) {
                 const thresholdStr = thresholdWon.toLocaleString();
                 events.forEach((ev) => {
@@ -3641,19 +3650,21 @@
             } catch (e) {
                 console.warn('[DailyAutoSplit] failed to write adminActivityLogs:', e?.message || e);
             }
+
+            await set(ref(db, 'siteConfig/maintenance'), false);
+            maintenanceEnabled = false;
         } catch (e) {
             console.error('[DailyAutoSplit] failed:', e);
+            await logDailyAutoSplitFailure(e, { thresholdWon, ratioN, splittableIds });
             if (logEl) {
                 logEl.innerHTML += `
                     <div style="color:#ef4444; margin-top:8px;">
                         ❌ 자동 액면분할 실패: ${escapeHtml(e?.message || String(e))}
+                        ${maintenanceEnabled ? '<div style="margin-top:6px;">점검 모드가 유지됩니다. 데이터 확인 후 수동으로 해제하세요.</div>' : ''}
                     </div>
                 `;
             }
         } finally {
-            if (maintenanceEnabled) {
-                try { await set(ref(db, 'siteConfig/maintenance'), false); } catch (_) {}
-            }
             await loadMaintenanceStatus();
             await loadStocksOnce();
         }
