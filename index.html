@@ -4513,17 +4513,17 @@ try {
         const stockTxAbort = { reason: null };
 
         const stockTxResult = await runTransaction(stockRef, (currentStock) => {
-            if (!currentStock) {
+            if (currentStock == null) {
                 stockTxAbort.reason = 'Stock ID not found in DB';
                 return currentStock;
             }
 
+            const row = typeof currentStock === 'object' ? currentStock : {};
             stockTxAbort.reason = null;
             let newPrice;
-            let prevPrice = Number(currentStock.price);
+            let prevPrice = Number(row?.price);
             if (!Number.isFinite(prevPrice) || prevPrice <= 0) {
-                prevPrice = currentPrice; // 클릭 시점에 보정한 price (또는 기본값)
-                if (!stockTxAbort.reason) stockTxAbort.reason = 'Price data missing (prevPrice invalid)';
+                prevPrice = Math.max(1, Number(currentPrice) || 10000);
             }
 
             if (type === 'buy') {
@@ -4559,12 +4559,15 @@ try {
             const addBuy  = type === 'buy' ? qty : 0;
             const addSell = type === 'sell' ? qty : 0;
             const changeVal = prevPrice > 0 ? (((newPrice - prevPrice) / prevPrice) * 100) : 0;
+            const baseVol = Number(row.volume);
+            const baseBuy = Number(row.buyVol);
+            const baseSell = Number(row.sellVol);
             return {
-                ...currentStock,
+                ...row,
                 price:   newPrice,
-                volume:  (Number(currentStock.volume) || 0) + qty,
-                buyVol:  (Number(currentStock.buyVol) || 0) + addBuy,
-                sellVol: (Number(currentStock.sellVol) || 0) + addSell,
+                volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
+                buyVol:  (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
+                sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
                 change:  changeVal.toFixed(2)
             };
         });
