@@ -9,3 +9,6 @@ functions/node_modules/
 npm-debug.log*
 firebase-debug.log*
 .firebase/
+
+# 파이어베이스 보안 규칙 파일 무시 (보안 권장)
+database.rules.json

@@ -2251,8 +2251,9 @@ let lastTradeTime    = 0; // 비정규장: localStorage `lastOffPeakTradeTime_${
 /** 직전 applyMarketState에서의 정규장 여부 — 비정규장→정규장 전환 시 비정규 쿨다운 해제 */
 let lastApplyRegular = null;
 let marketCheckTimer = null;
-/** stocks/ 전체: 정규장 onValue / 비정규장 setInterval get — applyMainStocksDataSync에서 관리 */
+/** stocks/ 전체: 장 운영 중(정규·비정규) 모두 onValue — applyMainStocksDataSync에서 관리 */
 let stocksUnsubscribe  = null;
+/** 레거시: 예전 비정규장 30초 폴링 타이머 — stopAllStocksSubscriptions 등에서 정리만 유지 */
 let stocksPollTimer    = null;
 let sparklinePriceCache = {}; // { stockId: [price, ...] } — 메모리만, 새로고침 시 초기화
 let sellConfigCache = null;
@@ -2789,7 +2790,8 @@ function getStockSyncMode() {
 }
 
 /**
- * stocks/ 전체 목록 동기화: 정규장=onValue, 비정규장(오픈 중)=30초 get, 마감/점검=중단
+ * stocks/ 전체 목록 동기화: 장 운영 중(정규·비정규) 모두 onValue — 변경 시에만 전송되어 폴링보다 대역폭 절약
+ * 마감/점검=중단
  * (즐겨찾기·보유 개별 구독은 applyStocksMode에서 처리)
  * 관리자도 여기서 allStocks 캐시만 갱신 — 메인 카드 UI는 refreshMainStockListView(즐겨찾기+보유)로 제한
  */
@@ -2798,9 +2800,9 @@ function applyMainStocksDataSync() {
     const mode = getStockSyncMode();
     if (mode !== mainStocksSyncMode) {
         const msg = {
-            closed: '점검·siteConfig 대기·또는 전체 오픈 시간 밖 → stocks/ 리스너·폴링 제거',
-            regular: '정규장(또는 정규 시간 미설정/관리자) → stocks/ onValue 실시간',
-            offpeak: '전체 오픈 시간 내·비정규장 → stocks/ 30초마다 get'
+            closed: '점검·siteConfig 대기·또는 전체 오픈 시간 밖 → stocks/ 리스너 제거',
+            regular: '정규장(또는 정규 시간 미설정/관리자) → stocks/ onValue',
+            offpeak: '전체 오픈 시간 내·비정규장 → stocks/ onValue (비정규도 실시간·폴링 없음)'
         };
         console.log(`[sync-strategy] ${mainStocksSyncMode ?? 'init'} → ${mode}: ${msg[mode]}`);
         mainStocksSyncMode = mode;
@@ -2819,48 +2821,25 @@ function applyMainStocksDataSync() {
         logAuthTrail('[sync-strategy] applyMainStocksDataSync END (closed)');
         return;
     }
-    if (mode === 'regular') {
-        if (stocksPollTimer) {
-            clearInterval(stocksPollTimer);
-            stocksPollTimer = null;
-        }
-        if (typeof stocksUnsubscribe === 'function') {
-            logAuthTrail('[sync-strategy] applyMainStocksDataSync END (regular, listener already active)');
-            return;
-        }
-        logAuthTrail('[DB] applyMainStocksDataSync → onValue path: stocks/');
-        try {
-            stocksUnsubscribe = onValue(ref(db, 'stocks/'), processStocksSnap, (err) => {
-                console.warn('[sync-strategy] stocks/ onValue 오류:', err?.message || err);
-            });
-        } catch (err) {
-            logAuthTrailError('Caught in applyMainStocksDataSync (stocks/ onValue)', err);
-            throw err;
-        }
-        logAuthTrail('[sync-strategy] applyMainStocksDataSync END (regular, onValue attached)');
-        return;
+    // regular | offpeak — 동일: stocks/ 전체 onValue (30초 폴링 제거)
+    if (stocksPollTimer) {
+        clearInterval(stocksPollTimer);
+        stocksPollTimer = null;
     }
     if (typeof stocksUnsubscribe === 'function') {
-        stocksUnsubscribe();
-        stocksUnsubscribe = null;
-    }
-    if (stocksPollTimer) {
-        logAuthTrail('[sync-strategy] applyMainStocksDataSync END (offpeak, poll timer already running)');
+        logAuthTrail('[sync-strategy] applyMainStocksDataSync END (open, onValue already active)', { mode });
         return;
     }
-    logAuthTrail('[DB] applyMainStocksDataSync → get polling path: stocks/ (30s)');
-    const poll = () => {
-        try {
-            get(ref(db, 'stocks/')).then(processStocksSnap).catch((e) => {
-                if (DEBUG_AUTH_TRAIL) console.warn('[sync-strategy] stocks/ get poll error', e);
-            });
-        } catch (err) {
-            logAuthTrailError('Caught in applyMainStocksDataSync (stocks/ get)', err);
-        }
-    };
-    poll();
-    stocksPollTimer = setInterval(poll, 30000);
-    logAuthTrail('[sync-strategy] applyMainStocksDataSync END (offpeak, poll started)');
+    logAuthTrail('[DB] applyMainStocksDataSync → onValue path: stocks/ (regular|offpeak)');
+    try {
+        stocksUnsubscribe = onValue(ref(db, 'stocks/'), processStocksSnap, (err) => {
+            console.warn('[sync-strategy] stocks/ onValue 오류:', err?.message || err);
+        });
+    } catch (err) {
+        logAuthTrailError('Caught in applyMainStocksDataSync (stocks/ onValue)', err);
+        throw err;
+    }
+    logAuthTrail('[sync-strategy] applyMainStocksDataSync END (open, onValue attached)', { mode });
     } catch (err) {
         logAuthTrailError('applyMainStocksDataSync outer', err);
     }
@@ -2908,7 +2887,7 @@ function setMaintenanceLoading(show) {
 }
 
 // 마감/점검 여부에 따라 오버레이 표시 및 시장 모드 배너 업데이트
-// (finally에서 updateSyncStrategy → 정규장 onValue / 비정규장 30초 폴링 / 마감 중단)
+// (finally에서 updateSyncStrategy → 정규·비정규 모두 stocks/ onValue / 마감 중단)
 function applyMarketState() {
     let mh;
     let marketOpen;
@@ -3044,7 +3023,7 @@ function applyMarketState() {
             modeBanner.style.border = '1px solid rgba(251,191,36,0.35)';
             modeBanner.style.color = '#f8fafc';
             modeBanner.innerHTML =
-                `🕐 <b style="color:#fbbf24; font-size:14px;">비정규장</b> &nbsp;—&nbsp; 30초마다 매매 가능합니다.<br>` +
+                `🕐 <b style="color:#fbbf24; font-size:14px;">비정규장</b> &nbsp;—&nbsp; 주가는 실시간으로 반영됩니다. 매매는 30초 간격으로 가능합니다.<br>` +
                 (rLabel ? `<span style="color:#64748b; font-size:12px; font-weight:400;">⚡ 정규장 실시간 거래: ${rLabel} KST</span>` : '');
         }
     }
@@ -5872,7 +5851,7 @@ function updateCardContent(card, s, userStock) {
 }
 
 // ── 주식 데이터 리스너 (stocks/ 전체 + 즐겨찾기/보유 개별) ───
-// 마감: 중단 | 비정규장(오픈 중): 30초 폴링 | 정규장: onValue — updateSyncStrategy()
+// 마감: 중단 | 장 운영 중: stocks/ 전체 onValue + 즐겨찾기/보유 per-stock onValue — updateSyncStrategy()
 
 // stocks/ Firebase 스냅샷을 allStocks 캐시에 반영
 function processStocksSnap(snap) {
@@ -5921,7 +5900,7 @@ function processStocksSnap(snap) {
     updateUI(false);
 }
 
-// stocks/ 실시간·폴링·즐겨찾기/보유 개별 구독 모두 해제 (장 마감·점검)
+// stocks/ 실시간·즐겨찾기/보유 개별 구독 모두 해제 (장 마감·점검)
 function stopAllStocksSubscriptions() {
     if (typeof stocksUnsubscribe === 'function') {
         stocksUnsubscribe();
@@ -5948,7 +5927,7 @@ function stopAllStocksSubscriptions() {
 // ── 활동 감지 + 정규장/비정규장 구독 모드 ───────────────────
 let isUserActive      = true;
 let activityTimer     = null;
-let favPollTimers     = {}; // 비정규장 폴링 타이머 { stockId: intervalId }
+let favPollTimers     = {}; // 레거시 비정규장 종목별 폴링 타이머 — 정리용으로만 유지
 
 // 마우스·터치·키 입력 감지 시 호출 — 비활동 타이머 리셋 및 구독 재개
 function onUserActive() {
@@ -5976,7 +5955,7 @@ function pauseAllSubscriptions() {
         if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         if (ownedUnsubs[id]) { ownedUnsubs[id](); delete ownedUnsubs[id]; }
     });
-    // 폴링 타이머 해제 (알림 설정 종목 예외)
+    // 레거시 비정규장 폴링 타이머 해제 (알림 설정 종목 예외)
     Object.keys(favPollTimers).forEach(id => {
         if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         clearInterval(favPollTimers[id]); delete favPollTimers[id];
@@ -5995,7 +5974,7 @@ document.addEventListener('visibilitychange', () => {
     if (!document.hidden) onUserActive();
 });
 
-// 정규장/비정규장/마감 상태에 따라 구독 방식(실시간/폴링/중단) 결정
+// 정규장/비정규장/마감 상태에 따라 구독 방식(실시간/중단) 결정 — 비정규장도 정규와 동일 per-stock onValue
 function applyStocksMode() {
     logAuthTrail('[sync-strategy] applyStocksMode START');
     const mh      = siteConfig.marketHours;
@@ -6014,7 +5993,7 @@ function applyStocksMode() {
         return;
     }
 
-    // 오픈 시간 → 정규장/비정규장 분기
+    // 오픈 시간 → 즐겨찾기/보유 종목은 정규·비정규 모두 onValue (stocks/{id})
     const allIds = [
         ...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])
     ];
@@ -6022,38 +6001,11 @@ function applyStocksMode() {
     if (badIds.length) console.warn('[sync-strategy] applyStocksMode suspicious stock ids:', badIds);
     logAuthTrail('[sync-strategy] RequiredStockIDs (favorites ∪ owned):', allIds, 'count=', allIds.length, 'isRegularMarket=', isRegularMarket());
 
-    if (isRegularMarket()) {
-        // 정규장: 실시간 구독 (폴링 중단)
-        allIds.forEach(id => {
-            if (favPollTimers[id]) { clearInterval(favPollTimers[id]); delete favPollTimers[id]; }
-            if (favorites[id])   subscribeToFavorite(id);
-            if (ownedStocks[id]) subscribeToOwned(id);
-        });
-    } else {
-        // 비정규장: 폴링 30초 (실시간 구독 해제)
-        allIds.forEach(id => {
-            if (favoriteUnsubs[id]) { favoriteUnsubs[id](); delete favoriteUnsubs[id]; }
-            if (ownedUnsubs[id])    { ownedUnsubs[id](); delete ownedUnsubs[id]; }
-            if (favPollTimers[id]) return; // 이미 폴링 중
-            const poll = () => {
-                const pollPath = `stocks/${id}`;
-                logAuthTrail('[DB] applyStocksMode offpeak get path:', pollPath);
-                try {
-                get(ref(db, pollPath)).then(snap => {
-                    if (!snap.exists()) return;
-                    const data = { ...snap.val(), id };
-                    if (favorites[id])   favorites[id]   = data;
-                    if (ownedStocks[id]) ownedStocks[id] = data;
-                    renderFavoriteList();
-                }).catch((e) => { if (DEBUG_AUTH_TRAIL) console.warn('[DB] offpeak poll', pollPath, e); });
-                } catch (err) {
-                    logAuthTrailError('applyStocksMode offpeak get ref', err);
-                }
-            };
-            poll(); // 즉시 1회
-            favPollTimers[id] = setInterval(poll, 30000);
-        });
-    }
+    allIds.forEach(id => {
+        if (favPollTimers[id]) { clearInterval(favPollTimers[id]); delete favPollTimers[id]; }
+        if (favorites[id])   subscribeToFavorite(id);
+        if (ownedStocks[id]) subscribeToOwned(id);
+    });
     logAuthTrail('[sync-strategy] applyStocksMode END');
 }
 
