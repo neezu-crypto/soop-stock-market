@@ -2296,6 +2296,17 @@
     /** 목표가 입력값 유지 (리렌더 후에도) */
     const macroTargetByStock = {};
     window.macroTargetByStock = macroTargetByStock;
+    /** 강제매매·매크로 수량 입력값 유지 (리렌더·가상 스크롤 후에도) */
+    const adminForceQtyByStock = {};
+    window.adminForceQtyByStock = adminForceQtyByStock;
+
+    function getAdminForceQtySaved(stockId) {
+        const raw = adminForceQtyByStock[stockId];
+        if (raw == null || raw === '') return '1';
+        const n = Math.floor(Number(raw));
+        if (!Number.isInteger(n) || n < 1 || n > 100) return '1';
+        return String(n);
+    }
 
     /** @type {Array<[string, object]>} 필터·정렬된 종목 (가상 스크롤 캐시) */
     let adminStockListFilteredEntries = [];
@@ -2318,6 +2329,7 @@
     function buildAdminStockRowEl(id, s) {
         const macroRunning = !!activeMacros[id];
         const targetSaved = macroTargetByStock[id] != null ? String(macroTargetByStock[id]) : '';
+        const qtySaved = escapeHtml(getAdminForceQtySaved(id));
         const item = document.createElement('div');
         item.className = 'batch-control admin-stock-row';
         item.dataset.stockId = id;
@@ -2330,7 +2342,8 @@
                     </div>
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid #1e293b; padding-top:8px;">
                         <span style="font-size:11px; color:#94a3b8;">수량(1~100)</span>
-                        <input type="number" min="1" max="100" value="1" id="admin-force-qty-${id}" inputmode="numeric"
+                        <input type="number" min="1" max="100" value="${qtySaved}" id="admin-force-qty-${id}" inputmode="numeric"
+                            oninput="window.adminForceQtyByStock['${id}']=this.value"
                             style="width:64px; padding:6px; background:#1e293b; border:1px solid #475569; color:#f8fafc; border-radius:6px; font-size:13px;">
                         <button type="button" class="btn-success" data-admin-force-stock="${id}" onclick="adminExecuteTrade('${id}','buy')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Buy</button>
                         <button type="button" class="btn-danger" data-admin-force-stock="${id}" onclick="adminExecuteTrade('${id}','sell')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Sell</button>
@@ -2586,6 +2599,7 @@
                 Object.assign(allStocksData[stockId], nv);
             }
             try { await invalidateStaticCache(); } catch (_) { /* noop */ }
+            adminForceQtyByStock[stockId] = String(qty);
             if (skipRender) {
                 const inp = document.getElementById(`input-${stockId}`);
                 if (inp && nv && nv.price != null) inp.value = nv.price;
