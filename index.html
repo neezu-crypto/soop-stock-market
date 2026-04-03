@@ -4326,6 +4326,30 @@ setInterval(() => {
     } catch (_) { /* noop */ }
 }, 1000);
 
+/** database.rules.json users/$uid/stocks/$stockId · cash 범위와 맞춤 (최대 자산 500억) */
+const USER_CASH_MAX = 50000000000;
+const USER_STOCK_QTY_MAX = 100000000;
+const USER_STOCK_AVG_MAX = 50000000000;
+
+/** users/.../stocks/$stockId 규칙 통과용 — qty·avg만 숫자로 정리(레거시 문자열·배열 stocks 등 제거) */
+function normalizeUserStocksForRules(raw) {
+    const o = {};
+    if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return o;
+    Object.entries(raw).forEach(([sid, p]) => {
+        if (p == null || typeof p !== 'object' || Array.isArray(p)) return;
+        const q = Math.floor(Math.max(0, Math.min(USER_STOCK_QTY_MAX, Number(p.qty))));
+        const a = Math.round(Math.max(0, Math.min(USER_STOCK_AVG_MAX, Number(p.avg))));
+        if (q > 0 && Number.isFinite(a)) o[sid] = { qty: q, avg: a };
+    });
+    return o;
+}
+
+function clampUserCash(n) {
+    const x = Math.round(Number(n));
+    if (!Number.isFinite(x)) return 0;
+    return Math.max(0, Math.min(USER_CASH_MAX, x));
+}
+
 // ── 거래 함수 ────────────────────────────────────────────────
 window.trade = async function (id, type, qty = 1) {
 
@@ -4374,6 +4398,8 @@ window.trade = async function (id, type, qty = 1) {
     if (isTrading === id) return; // 같은 종목 중복 거래 방지
     if (isTrading) {} // 다른 종목은 허용
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
+    if (!auth.currentUser?.uid) return alert("로그인이 필요합니다.");
+    if (userUID !== auth.currentUser.uid) userUID = auth.currentUser.uid;
 
     // 4. 점검 모드 + 시장 마감 체크 (관리자는 무시)
     if (siteConfig.maintenance === true && !isAdmin) {
@@ -4432,8 +4458,13 @@ window.trade = async function (id, type, qty = 1) {
 
     if (!myData.stocks) myData.stocks = {};
 
+const tradeUid = auth.currentUser?.uid;
+if (!tradeUid) {
+    alert('로그인 정보가 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+    return;
+}
 const stockRef = ref(db, `stocks/${id}`);
-const userRef  = ref(db, `users/${userUID}`);
+const userRef  = ref(db, `users/${tradeUid}`);
 
 // 현재 주가 정보 가져오기
 // 새로 상장된 종목은 UI/캐시에 아직 price가 없을 수 있으므로, 클릭 시점에 DB로 보정한다.
@@ -4616,38 +4647,44 @@ try {
 
         const userTxResult = await runTransaction(userRef, (current) => {
             const c = current || { cash: 1000000, stocks: {} };
-            const cash = c.cash ?? 1000000;
-            const rawPos = c.stocks?.[id];
+            const cash = clampUserCash(c.cash ?? 1000000);
+            const baseStocks = normalizeUserStocksForRules(c.stocks);
+            const rawPos = baseStocks[id];
             const usQty = Math.floor(Math.max(0, Number(rawPos?.qty) || 0));
-            const usAvg = Math.round(Math.max(0, Number(rawPos?.avg) || 0));
+            const usAvg = Math.round(Math.max(0, Math.min(USER_STOCK_AVG_MAX, Number(rawPos?.avg) || 0)));
             const us = { qty: usQty, avg: usAvg };
+            const tradeTs = Date.now();
             let nextUser;
             if (type === 'buy') {
                 const totalBuyPrice = finalTradePrice * qty;
                 if (cash < totalBuyPrice) return;
                 const totalCost = (us.qty * us.avg) + totalBuyPrice;
                 const newQty = us.qty + qty;
+                if (newQty > USER_STOCK_QTY_MAX) return;
+                const nextAvg = Math.round(totalCost / newQty);
+                if (!Number.isFinite(nextAvg)) return;
+                const avgClamped = Math.max(0, Math.min(USER_STOCK_AVG_MAX, nextAvg));
                 nextUser = {
                     ...c,
-                    cash: cash - totalBuyPrice,
-                    stocks: { ...(c.stocks || {}), [id]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
-                    lastTradeTime: serverTimestamp()
+                    cash: clampUserCash(cash - totalBuyPrice),
+                    stocks: { ...baseStocks, [id]: { qty: newQty, avg: avgClamped } },
+                    lastTradeTime: tradeTs
                 };
             } else {
                 if (us.qty < qty) return;
                 const totalSellAmount = Math.round(finalTradePrice * qty * (1 - fee));
                 const newQty = Math.max(0, Math.floor(us.qty - qty));
-                const nextStocks = { ...(c.stocks || {}) };
+                const nextStocks = { ...baseStocks };
                 if (newQty === 0) {
-                    nextStocks[id] = null;
+                    delete nextStocks[id];
                 } else {
                     nextStocks[id] = { qty: newQty, avg: us.avg };
                 }
                 nextUser = {
                     ...c,
-                    cash: cash + totalSellAmount,
+                    cash: clampUserCash(cash + totalSellAmount),
                     stocks: nextStocks,
-                    lastTradeTime: serverTimestamp()
+                    lastTradeTime: tradeTs
                 };
             }
             const userSanitized = {};
