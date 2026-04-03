@@ -1168,7 +1168,8 @@
     // 인증 가드 헬퍼 — 모든 admin 함수 진입부에서 호출
     function isAdmin() {
         const user = auth.currentUser;
-        if (user && user.email === ADMIN_EMAIL) return true;
+        const em = (user?.email || '').toLowerCase();
+        if (user && em === ADMIN_EMAIL.toLowerCase()) return true;
         alert('⛔ 관리자 권한이 없습니다.');
         return false;
     }
@@ -3463,6 +3464,10 @@
 
     async function autoSplitStocksByThreshold({ thresholdWon, ratioN }) {
         if (!isAdmin()) return;
+        if (!auth.currentUser?.uid) {
+            console.error('[DailyAutoSplit] aborted: no authenticated user');
+            return;
+        }
 
         const logEl = document.getElementById('daily-auto-split-log');
         if (logEl) {
