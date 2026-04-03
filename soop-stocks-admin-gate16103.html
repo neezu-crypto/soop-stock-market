@@ -3476,36 +3476,58 @@
         }
     };
 
-    window.runSimulator = function() {
-        const price      = Number(document.getElementById('sim-price').value);
-        const qty        = Number(document.getElementById('sim-qty').value);
-        const basePrice  = Number(document.getElementById('sell-base-price').value)  || 10000;
-        const scalePrice = Number(document.getElementById('sell-scale-price').value) || 90000;
-        const impact     = Number(document.getElementById('sell-impact').value)      || 0.0005;
-        const refManwon  = Number(document.getElementById('auto-impact-reference-price')?.value) || 10;
-        const refPriceWon = refManwon * 10000;
-        const resultEl   = document.getElementById('sim-result');
+    /** index.html `trade` / `adminExecuteTrade` 와 동일 수식 — 설정은 RTDB 실시간 값 사용 */
+    window.runSimulator = async function() {
+        const price    = Number(document.getElementById('sim-price').value);
+        const qty      = Number(document.getElementById('sim-qty').value);
+        const resultEl = document.getElementById('sim-result');
 
         if (!price || !qty) { resultEl.textContent = '주가와 수량을 입력하세요.'; resultEl.style.color = '#64748b'; return; }
 
-        const sellPressure = 1 + (Math.max(0, price - basePrice) / scalePrice);
-        // Price-Inverse Impact Scaling:
-        // Effective Impact = Base Impact * min(1, refPrice/currentPrice)
-        const damping      = Math.min(1, refPriceWon / Math.max(1, price));
-        const effImpact    = impact * damping;
-        const impactVal    = effImpact * Math.log2(1 + qty) * sellPressure;
-        const dropAmt      = Math.round(price * impactVal);
+        resultEl.textContent = '불러오는 중…';
+        resultEl.style.color = '#94a3b8';
+        try {
+            const [cfgSnap, mpSnap] = await Promise.all([
+                get(ref(db, 'siteConfig/sellConfig')),
+                get(ref(db, 'siteConfig/marketParams'))
+            ]);
+            const sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
+            const marketParamsCache = mpSnap.exists() ? mpSnap.val() : {};
+            const safeNum = (v, def) => {
+                const n = Number(v);
+                return Number.isFinite(n) ? n : def;
+            };
+            const basePrice  = Math.max(1, safeNum(sellConfigCache.basePrice  ?? 10000, 10000));
+            const scalePrice = Math.max(1, safeNum(sellConfigCache.scalePrice ?? 90000, 90000));
+            const impactCoef = safeNum(sellConfigCache.impact     ?? 0.0005, 0.0005);
+            const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice ?? 100000, 100000));
 
-        resultEl.style.color = '#f8fafc';
-        resultEl.innerHTML = `
-            <div style="display:grid; grid-template-columns:auto 1fr; gap:4px 12px; line-height:1.8;">
+            const currentPrice = price;
+            const sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
+            const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
+            const effectiveImpactCoef = impactCoef * dampingFactor;
+            const impactVal = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
+
+            const newPriceAfterSell = Math.round(currentPrice * (1 - impactVal));
+            const dropAmt = currentPrice - newPriceAfterSell;
+
+            resultEl.style.color = '#f8fafc';
+            resultEl.innerHTML = `
+            <div style="display:grid; grid-template-columns:auto 1fr; gap:4px 12px; line-height:1.8; font-size:13px;">
+                <span style="color:#64748b; font-size:11px; grid-column:1/-1;">※ siteConfig/sellConfig · marketParams 저장값 기준 (메인 앱 거래와 동일)</span>
                 <span style="color:#94a3b8;">sellPressure</span><span style="color:#ef4444; font-weight:700;">${sellPressure.toFixed(4)}배</span>
-                <span style="color:#94a3b8;">impact 수치</span><span style="color:#fca5a5;">${(impactVal * 100).toFixed(4)}%</span>
-                <span style="color:#94a3b8;">감쇄 계수</span><span style="color:#f59e0b; font-weight:700;">${damping.toFixed(4)}배</span>
-                <span style="color:#94a3b8;">예상 하락폭</span><span style="color:#ef4444; font-weight:700;">▼ ${dropAmt.toLocaleString()}원</span>
-                <span style="color:#94a3b8;">매도 후 예상가</span><span style="color:#f8fafc; font-weight:700;">${Math.max(0, price - dropAmt).toLocaleString()}원</span>
+                <span style="color:#94a3b8;">effectiveImpactCoef</span><span style="color:#a78bfa; font-weight:700;">${effectiveImpactCoef.toFixed(8)}</span>
+                <span style="color:#94a3b8;">impact (비율)</span><span style="color:#fca5a5;">${(impactVal * 100).toFixed(4)}%</span>
+                <span style="color:#94a3b8;">감쇄(damping)</span><span style="color:#f59e0b; font-weight:700;">${dampingFactor.toFixed(4)}</span>
+                <span style="color:#94a3b8;">예상 하락액</span><span style="color:#ef4444; font-weight:700;">▼ ${dropAmt.toLocaleString()}원</span>
+                <span style="color:#94a3b8;">매도 후 예상가</span><span style="color:#f8fafc; font-weight:700;">${newPriceAfterSell.toLocaleString()}원</span>
+                <span style="color:#94a3b8;">(검증)</span><span style="color:#64748b;">round(가격×(1−impact))와 동일</span>
             </div>
         `;
+        } catch (e) {
+            resultEl.textContent = '오류: ' + (e?.message || e);
+            resultEl.style.color = '#fca5a5';
+        }
     };
 
     window.toggleAutoMode = async function(enabled) {
