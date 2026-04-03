@@ -3487,22 +3487,21 @@
             return;
         }
 
-        // 2) 안전 게이트: 가격이 N으로 나눠떨어져야 (시장가치 보존: price/N * qty*N == price*qty)
+        // 2) 분할 대상: 기준가 이상이면 진행(가격은 Math.floor로 처리 — 나눗셈 떨어짐 불필요)
         const ratio = ratioN;
         const splittable = [];
         const skipped = [];
         candidates.forEach(([id, s]) => {
             const price = s?.price || 0;
             if (price < ratio) { skipped.push({ id, reason: 'too-small' }); return; }
-            if (price % ratio !== 0) { skipped.push({ id, reason: 'not-divisible' }); return; }
             splittable.push(id);
         });
 
         if (splittable.length === 0) {
             if (logEl) {
-                logEl.innerHTML = `<div style="color:#f59e0b;">조건 충족 종목이 있으나, 모두 ${ratio}로 나눠떨어지지 않아 자동 분할을 스킵합니다.</div>`;
+                logEl.innerHTML = `<div style="color:#f59e0b;">기준가 이상이지만 주가가 분할 배수(${ratio})보다 작아 분할할 수 없는 종목뿐입니다.</div>`;
             }
-            console.warn('[DailyAutoSplit] skipped all (not divisible).', { thresholdWon, ratioN, candidates: candidates.length });
+            console.warn('[DailyAutoSplit] skipped all (too-small vs ratio).', { thresholdWon, ratioN, candidates: candidates.length });
             return;
         }
 
@@ -3518,13 +3517,13 @@
             maintenanceEnabled = true;
             await new Promise(r => setTimeout(r, 2000));
 
-            // 3) 종목 가격/히스토리 업데이트
+            // 3) 종목 가격/히스토리 업데이트 (가격·히스토리는 Math.floor, 나누어떨어지지 않아도 적용)
             splittable.forEach((id) => {
                 const s = stocksData[id];
                 const oldPrice = s?.price || 0;
                 const newPrice = Math.max(1, Math.floor(oldPrice / ratio));
 
-                const history = (s.history || [s.price]).map(p => Math.max(1, Math.round((p || 0) / ratio)));
+                const history = (s.history || [s.price]).map(p => Math.max(1, Math.floor((Number(p) || 0) / ratio)));
                 stockUpdates[`${id}/price`] = newPrice;
                 stockUpdates[`${id}/history`] = history;
                 stockUpdates[`${id}/change`] = s.change || 0;
@@ -3555,9 +3554,11 @@
                     if (!user?.stocks) return;
                     Object.entries(user.stocks).forEach(([stockId, info]) => {
                         if (!targetSet.has(stockId)) return;
-                        if (!info || !info.qty) return;
-                        updates[`${uid}/stocks/${stockId}/qty`] = info.qty * ratio;
-                        updates[`${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.round((info.avg || 0) / ratio));
+                        if (!info) return;
+                        const q = Math.floor(Number(info.qty) || 0);
+                        if (q <= 0) return;
+                        updates[`${uid}/stocks/${stockId}/qty`] = q * ratio;
+                        updates[`${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
                     });
                 });
                 if (Object.keys(updates).length > 0) await update(ref(db, 'users/'), updates);
