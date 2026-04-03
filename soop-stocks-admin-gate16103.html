@@ -1205,16 +1205,20 @@
             .replace(/'/g, '&#x27;');
     }
 
-    function showAdminToast(message) {
+    function showAdminToast(message, type) {
+        const isError = type === 'error';
+        const bg = isError ? '#7f1d1d' : '#14532d';
+        const fg = isError ? '#fecaca' : '#86efac';
+        const bd = isError ? '#ef4444' : '#22c55e';
         const el = document.createElement('div');
         el.textContent = message;
-        el.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:99999;background:#14532d;color:#86efac;border:1px solid #22c55e;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:800;box-shadow:0 8px 24px rgba(0,0,0,0.35);max-width:90vw;text-align:center;';
+        el.style.cssText = `position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:99999;background:${bg};color:${fg};border:1px solid ${bd};padding:12px 20px;border-radius:12px;font-size:14px;font-weight:800;box-shadow:0 8px 24px rgba(0,0,0,0.35);max-width:90vw;text-align:center;`;
         document.body.appendChild(el);
         setTimeout(() => {
             el.style.opacity = '0';
             el.style.transition = 'opacity 0.35s ease';
             setTimeout(() => el.remove(), 400);
-        }, 2400);
+        }, isError ? 4200 : 2400);
     }
 
     function isPendingStatus(v) {
@@ -2047,8 +2051,8 @@
                         <span style="font-size:11px; color:#94a3b8;">수량(1~100)</span>
                         <input type="number" min="1" max="100" value="1" id="admin-force-qty-${id}" inputmode="numeric"
                             style="width:64px; padding:6px; background:#1e293b; border:1px solid #475569; color:#f8fafc; border-radius:6px; font-size:13px;">
-                        <button type="button" class="btn-success" onclick="adminExecuteTrade('${id}','buy')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Buy</button>
-                        <button type="button" class="btn-danger" onclick="adminExecuteTrade('${id}','sell')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Sell</button>
+                        <button type="button" class="btn-success" data-admin-force-stock="${id}" onclick="adminExecuteTrade('${id}','buy')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Buy</button>
+                        <button type="button" class="btn-danger" data-admin-force-stock="${id}" onclick="adminExecuteTrade('${id}','sell')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Sell</button>
                     </div>
                 `;
                 listDiv.appendChild(item);
@@ -2065,11 +2069,27 @@
         let qty = Math.floor(Number(qtyEl?.value));
         if (!Number.isFinite(qty)) qty = NaN;
         if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
-            alert('수량은 1~100 사이의 정수여야 합니다.');
+            showAdminToast('수량은 1~100 사이의 정수여야 합니다.', 'error');
             return;
         }
         const t = type === 'sell' ? 'sell' : 'buy';
-        if (!confirm(`관리자 강제 ${t === 'buy' ? '매수' : '매도'} ${qty}주를 실행할까요?\n유저 지갑·보유는 변경되지 않으며 종목 주가·거래량만 반영됩니다.`)) return;
+        const rowBtns = Array.from(document.querySelectorAll('button[data-admin-force-stock]')).filter(
+            (b) => b.getAttribute('data-admin-force-stock') === stockId
+        );
+        const t0 = Date.now();
+        const setRowBusy = (busy) => {
+            rowBtns.forEach((b) => {
+                b.disabled = busy;
+                b.style.opacity = busy ? '0.65' : '';
+                b.style.cursor = busy ? 'not-allowed' : '';
+            });
+        };
+        const releaseRow = () => {
+            const elapsed = Date.now() - t0;
+            const wait = Math.max(0, 300 - elapsed);
+            setTimeout(() => setRowBusy(false), wait);
+        };
+        setRowBusy(true);
 
         const stockRef = ref(db, `stocks/${stockId}`);
         try {
@@ -2136,7 +2156,7 @@
             });
 
             if (!txResult.committed) {
-                alert('거래가 반영되지 않았습니다. (트랜잭션 미커밋)');
+                showAdminToast('거래가 반영되지 않았습니다. (트랜잭션 미커밋)', 'error');
                 return;
             }
             const nv = txResult.snapshot.val();
@@ -2145,10 +2165,15 @@
             }
             try { await invalidateStaticCache(); } catch (_) { /* noop */ }
             renderAdminStockList();
-            showAdminToast(`강제 ${t === 'buy' ? '매수' : '매도'} ${qty}주 · 새 주가 ${(nv?.price ?? 0).toLocaleString()}원`);
+            const stockName = nv?.name || allStocksData[stockId]?.name || stockId;
+            const side = t === 'buy' ? '매수' : '매도';
+            const priceStr = (nv?.price ?? 0).toLocaleString();
+            showAdminToast(`[${stockName}] ${side} ${qty}주 완료 (현재가: ${priceStr}원)`);
         } catch (e) {
             console.error('[adminExecuteTrade]', e);
-            alert('실패: ' + (e?.message || e));
+            showAdminToast('실패: ' + (e?.message || String(e)), 'error');
+        } finally {
+            releaseRow();
         }
     };
 
