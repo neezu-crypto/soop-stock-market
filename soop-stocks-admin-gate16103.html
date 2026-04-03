@@ -65,6 +65,17 @@
         .toggle-switch-sm input:checked + .toggle-slider { background: #22c55e; }
         .toggle-switch-sm input:checked + .toggle-slider:before { transform: translateX(16px); }
 
+        .admin-macro-running {
+            background: #f59e0b !important;
+            color: #0f172a !important;
+            border: 1px solid #fbbf24 !important;
+            animation: admin-macro-pulse 0.85s ease-in-out infinite;
+        }
+        @keyframes admin-macro-pulse {
+            0%, 100% { filter: brightness(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
+            50% { filter: brightness(1.1); box-shadow: 0 0 14px 3px rgba(245, 158, 11, 0.4); }
+        }
+
         
         .live-ranking-wrap { max-width: 600px; width: 100%; }
         .live-ranking-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -2031,6 +2042,12 @@
     };
 
     // ── 종목 관리 ────────────────────────────────────────────
+    /** @type {Record<string, ReturnType<typeof setInterval>>} */
+    const activeMacros = {};
+    /** 목표가 입력값 유지 (리렌더 후에도) */
+    const macroTargetByStock = {};
+    window.macroTargetByStock = macroTargetByStock;
+
     function renderAdminStockList() {
         const searchVal = (document.getElementById('admin-search')?.value || '').toLowerCase();
         const listDiv   = document.getElementById('admin-stock-list');
@@ -2038,6 +2055,8 @@
         listDiv.innerHTML = "";
         Object.entries(allStocksData).forEach(([id, s]) => {
             if (s.name.toLowerCase().includes(searchVal)) {
+                const macroRunning = !!activeMacros[id];
+                const targetSaved = macroTargetByStock[id] != null ? String(macroTargetByStock[id]) : '';
                 const item = document.createElement('div');
                 item.className = 'batch-control';
                 item.style.cssText = 'padding:10px; background:#0f172a; border-radius:8px; display:flex; flex-direction:column; gap:8px;';
@@ -2054,6 +2073,19 @@
                         <button type="button" class="btn-success" data-admin-force-stock="${id}" onclick="adminExecuteTrade('${id}','buy')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Buy</button>
                         <button type="button" class="btn-danger" data-admin-force-stock="${id}" onclick="adminExecuteTrade('${id}','sell')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Sell</button>
                     </div>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid #334155; padding-top:8px;">
+                        <span style="font-size:12px; color:#fbbf24; font-weight:800;">매크로 설정</span>
+                        <label style="font-size:11px; color:#94a3b8;">목표 가격</label>
+                        <input type="number" min="1" step="1" id="admin-macro-target-${id}" value="${escapeHtml(targetSaved)}"
+                            oninput="window.macroTargetByStock['${id}']=this.value"
+                            style="width:96px; padding:6px; background:#1e293b; border:1px solid #475569; color:#f8fafc; border-radius:6px; font-size:13px;"
+                            ${macroRunning ? 'disabled' : ''}>
+                        <button type="button" id="admin-macro-btn-${id}" onclick="adminRunMacro('${id}')"
+                            class="${macroRunning ? 'admin-macro-running' : ''}"
+                            style="padding:6px 12px; font-size:11px; font-weight:800; border-radius:8px; cursor:pointer; ${macroRunning ? '' : 'border:1px solid #475569; background:#334155; color:#f8fafc;'}">
+                            ${macroRunning ? '매크로 중지' : '매크로 시작'}
+                        </button>
+                    </div>
                 `;
                 listDiv.appendChild(item);
             }
@@ -2062,15 +2094,28 @@
 
     /**
      * 유저 잔고/보유 없이 주가만 index.html trade 와 동일한 임팩트 공식으로 변동 (stocks 노드만 갱신).
+     * @param {string} stockId
+     * @param {'buy'|'sell'} type
+     * @param {{ qty?: number, silent?: boolean, skipRender?: boolean }} [opts]
+     * @returns {Promise<{ ok: boolean, price?: number, error?: string }>}
      */
-    window.adminExecuteTrade = async function(stockId, type) {
-        if (!isAdmin()) return;
-        const qtyEl = document.getElementById(`admin-force-qty-${stockId}`);
-        let qty = Math.floor(Number(qtyEl?.value));
+    window.adminExecuteTrade = async function(stockId, type, opts) {
+        opts = opts || {};
+        const silent = !!opts.silent;
+        const skipRender = !!opts.skipRender;
+        if (!isAdmin()) return { ok: false, error: 'not_admin' };
+
+        let qty;
+        if (opts.qty != null && opts.qty !== '') {
+            qty = Math.floor(Number(opts.qty));
+        } else {
+            const qtyEl = document.getElementById(`admin-force-qty-${stockId}`);
+            qty = Math.floor(Number(qtyEl?.value));
+        }
         if (!Number.isFinite(qty)) qty = NaN;
         if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
-            showAdminToast('수량은 1~100 사이의 정수여야 합니다.', 'error');
-            return;
+            if (!silent) showAdminToast('수량은 1~100 사이의 정수여야 합니다.', 'error');
+            return { ok: false, error: 'invalid_qty' };
         }
         const t = type === 'sell' ? 'sell' : 'buy';
         const rowBtns = Array.from(document.querySelectorAll('button[data-admin-force-stock]')).filter(
@@ -2089,7 +2134,7 @@
             const wait = Math.max(0, 300 - elapsed);
             setTimeout(() => setRowBusy(false), wait);
         };
-        setRowBusy(true);
+        if (!silent) setRowBusy(true);
 
         const stockRef = ref(db, `stocks/${stockId}`);
         try {
@@ -2156,25 +2201,138 @@
             });
 
             if (!txResult.committed) {
-                showAdminToast('거래가 반영되지 않았습니다. (트랜잭션 미커밋)', 'error');
-                return;
+                if (!silent) showAdminToast('거래가 반영되지 않았습니다. (트랜잭션 미커밋)', 'error');
+                return { ok: false, error: 'not_committed' };
             }
             const nv = txResult.snapshot.val();
             if (nv && allStocksData[stockId]) {
                 Object.assign(allStocksData[stockId], nv);
             }
             try { await invalidateStaticCache(); } catch (_) { /* noop */ }
-            renderAdminStockList();
-            const stockName = nv?.name || allStocksData[stockId]?.name || stockId;
-            const side = t === 'buy' ? '매수' : '매도';
-            const priceStr = (nv?.price ?? 0).toLocaleString();
-            showAdminToast(`[${stockName}] ${side} ${qty}주 완료 (현재가: ${priceStr}원)`);
+            if (skipRender) {
+                const inp = document.getElementById(`input-${stockId}`);
+                if (inp && nv && nv.price != null) inp.value = nv.price;
+            } else {
+                renderAdminStockList();
+            }
+            if (!silent) {
+                const stockName = nv?.name || allStocksData[stockId]?.name || stockId;
+                const side = t === 'buy' ? '매수' : '매도';
+                const priceStr = (nv?.price ?? 0).toLocaleString();
+                showAdminToast(`[${stockName}] ${side} ${qty}주 완료 (현재가: ${priceStr}원)`);
+            }
+            return { ok: true, price: nv?.price };
         } catch (e) {
             console.error('[adminExecuteTrade]', e);
-            showAdminToast('실패: ' + (e?.message || String(e)), 'error');
+            if (!silent) showAdminToast('실패: ' + (e?.message || String(e)), 'error');
+            return { ok: false, error: e?.message || String(e) };
         } finally {
-            releaseRow();
+            if (!silent) releaseRow();
         }
+    };
+
+    const macroTickBusy = {};
+
+    function stopAdminMacro(stockId, reason) {
+        if (activeMacros[stockId]) {
+            clearInterval(activeMacros[stockId]);
+            delete activeMacros[stockId];
+        }
+        delete macroTickBusy[stockId];
+        renderAdminStockList();
+        const name = allStocksData[stockId]?.name || stockId;
+        if (reason === 'manual') {
+            showAdminToast('매크로가 중지되었습니다.');
+        } else if (reason === 'target') {
+            showAdminToast(`[${name}] 목표가 도달 — 매크로 종료`);
+        } else if (reason && typeof reason === 'string') {
+            showAdminToast('매크로 중단: ' + reason, 'error');
+        }
+    }
+
+    /**
+     * 목표가까지 1초마다 강제 매매 (현재가 < 목표 → 매수, 현재가 > 목표 → 매도).
+     */
+    window.adminRunMacro = async function(stockId) {
+        if (!isAdmin()) return;
+        if (activeMacros[stockId]) {
+            stopAdminMacro(stockId, 'manual');
+            return;
+        }
+        const targetEl = document.getElementById(`admin-macro-target-${stockId}`);
+        const targetRaw = Number(targetEl?.value);
+        if (!Number.isFinite(targetRaw) || targetRaw < 1) {
+            showAdminToast('목표 가격(1 이상)을 입력하세요.', 'error');
+            return;
+        }
+        macroTargetByStock[stockId] = String(Math.floor(targetRaw));
+
+        const tick = async () => {
+            if (!activeMacros[stockId]) return;
+            if (macroTickBusy[stockId]) return;
+            macroTickBusy[stockId] = true;
+            try {
+                const tgt = Math.round(targetRaw);
+                const cur = Number(allStocksData[stockId]?.price);
+                if (!Number.isFinite(cur) || cur <= 0) {
+                    stopAdminMacro(stockId, '현재가를 읽을 수 없습니다.');
+                    return;
+                }
+
+                if (cur === tgt) {
+                    stopAdminMacro(stockId, 'target');
+                    return;
+                }
+
+                const qtyEl = document.getElementById(`admin-force-qty-${stockId}`);
+                const q = Math.floor(Number(qtyEl?.value));
+                if (!Number.isInteger(q) || q < 1 || q > 100) {
+                    stopAdminMacro(stockId, '수량은 1~100 정수여야 합니다.');
+                    return;
+                }
+
+                let side;
+                if (cur < tgt) side = 'buy';
+                else if (cur > tgt) side = 'sell';
+                else {
+                    stopAdminMacro(stockId, 'target');
+                    return;
+                }
+
+                const res = await adminExecuteTrade(stockId, side, { silent: true, skipRender: true, qty: q });
+                if (!res || !res.ok) {
+                    stopAdminMacro(stockId, res?.error || '강제 거래 실패');
+                    return;
+                }
+
+                const newP = Number(res.price);
+                if (side === 'buy' && Number.isFinite(newP) && newP >= tgt) {
+                    stopAdminMacro(stockId, 'target');
+                    return;
+                }
+                if (side === 'sell' && Number.isFinite(newP) && newP <= tgt) {
+                    stopAdminMacro(stockId, 'target');
+                    return;
+                }
+
+                renderAdminStockList();
+            } finally {
+                macroTickBusy[stockId] = false;
+            }
+        };
+
+        const intervalId = setInterval(() => {
+            tick().catch((e) => {
+                console.error('[adminRunMacro]', e);
+                stopAdminMacro(stockId, e?.message || String(e));
+            });
+        }, 1000);
+        activeMacros[stockId] = intervalId;
+        renderAdminStockList();
+        tick().catch((e) => {
+            console.error('[adminRunMacro]', e);
+            stopAdminMacro(stockId, e?.message || String(e));
+        });
     };
 
     window.updateSinglePrice = async function(id) {
