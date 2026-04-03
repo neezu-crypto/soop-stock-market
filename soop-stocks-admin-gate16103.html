@@ -2036,16 +2036,121 @@
             if (s.name.toLowerCase().includes(searchVal)) {
                 const item = document.createElement('div');
                 item.className = 'batch-control';
-                item.style.cssText = "padding:10px; background:#0f172a; border-radius:8px;";
+                item.style.cssText = 'padding:10px; background:#0f172a; border-radius:8px; display:flex; flex-direction:column; gap:8px;';
                 item.innerHTML = `
-                    <div style="flex:1; font-size:14px;">${s.name}</div>
-                    <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
-                    <button class="btn-success" onclick="updateSinglePrice('${id}')" style="padding:8px 12px; font-size:12px;">수정</button>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <div style="flex:1; font-size:14px;">${escapeHtml(s.name)}</div>
+                        <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
+                        <button type="button" class="btn-success" onclick="updateSinglePrice('${id}')" style="padding:8px 12px; font-size:12px;">수정</button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid #1e293b; padding-top:8px;">
+                        <span style="font-size:11px; color:#94a3b8;">수량(1~100)</span>
+                        <input type="number" min="1" max="100" value="1" id="admin-force-qty-${id}" inputmode="numeric"
+                            style="width:64px; padding:6px; background:#1e293b; border:1px solid #475569; color:#f8fafc; border-radius:6px; font-size:13px;">
+                        <button type="button" class="btn-success" onclick="adminExecuteTrade('${id}','buy')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Buy</button>
+                        <button type="button" class="btn-danger" onclick="adminExecuteTrade('${id}','sell')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Sell</button>
+                    </div>
                 `;
                 listDiv.appendChild(item);
             }
         });
     }
+
+    /**
+     * 유저 잔고/보유 없이 주가만 index.html trade 와 동일한 임팩트 공식으로 변동 (stocks 노드만 갱신).
+     */
+    window.adminExecuteTrade = async function(stockId, type) {
+        if (!isAdmin()) return;
+        const qtyEl = document.getElementById(`admin-force-qty-${stockId}`);
+        let qty = Math.floor(Number(qtyEl?.value));
+        if (!Number.isFinite(qty)) qty = NaN;
+        if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+            alert('수량은 1~100 사이의 정수여야 합니다.');
+            return;
+        }
+        const t = type === 'sell' ? 'sell' : 'buy';
+        if (!confirm(`관리자 강제 ${t === 'buy' ? '매수' : '매도'} ${qty}주를 실행할까요?\n유저 지갑·보유는 변경되지 않으며 종목 주가·거래량만 반영됩니다.`)) return;
+
+        const stockRef = ref(db, `stocks/${stockId}`);
+        try {
+            const [cfgSnap, mpSnap, preSnap] = await Promise.all([
+                get(ref(db, 'siteConfig/sellConfig')),
+                get(ref(db, 'siteConfig/marketParams')),
+                get(stockRef)
+            ]);
+            const sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
+            const marketParamsCache = mpSnap.exists() ? mpSnap.val() : {};
+            const safeNum = (v, def) => {
+                const n = Number(v);
+                return Number.isFinite(n) ? n : def;
+            };
+            const basePrice  = Math.max(1, safeNum(sellConfigCache.basePrice  ?? 10000, 10000));
+            const scalePrice = Math.max(1, safeNum(sellConfigCache.scalePrice ?? 90000, 90000));
+            const impactCoef = safeNum(sellConfigCache.impact     ?? 0.0005, 0.0005);
+            const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice ?? 100000, 100000));
+
+            let currentPrice = Number(preSnap.exists() ? preSnap.val()?.price : NaN);
+            if (!Number.isFinite(currentPrice) || currentPrice <= 0) currentPrice = 10000;
+
+            let sellPressure = 1;
+            if (t === 'sell') {
+                sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
+            }
+            const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
+            const effectiveImpactCoef = impactCoef * dampingFactor;
+            const impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
+
+            const txResult = await runTransaction(stockRef, (currentStock) => {
+                if (currentStock == null) return currentStock;
+                const row = typeof currentStock === 'object' ? currentStock : {};
+                let prevPrice = Number(row?.price);
+                if (!Number.isFinite(prevPrice) || prevPrice <= 0) {
+                    prevPrice = Math.max(1, Number(currentPrice) || 10000);
+                }
+                let newPrice;
+                if (t === 'buy') {
+                    newPrice = Math.round(prevPrice * (1 + impact));
+                } else {
+                    newPrice = Math.round(prevPrice * (1 - impact));
+                }
+                const addBuy  = t === 'buy' ? qty : 0;
+                const addSell = t === 'sell' ? qty : 0;
+                const changeVal = prevPrice > 0 ? (((newPrice - prevPrice) / prevPrice) * 100) : 0;
+                const baseVol = Number(row.volume);
+                const baseBuy = Number(row.buyVol);
+                const baseSell = Number(row.sellVol);
+                const nextStock = {
+                    ...row,
+                    price:   newPrice,
+                    volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
+                    buyVol:  (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
+                    sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
+                    change:  changeVal.toFixed(2)
+                };
+                const sanitized = {};
+                Object.keys(nextStock).forEach((k) => {
+                    const v = nextStock[k];
+                    if (v !== undefined) sanitized[k] = v;
+                });
+                return sanitized;
+            });
+
+            if (!txResult.committed) {
+                alert('거래가 반영되지 않았습니다. (트랜잭션 미커밋)');
+                return;
+            }
+            const nv = txResult.snapshot.val();
+            if (nv && allStocksData[stockId]) {
+                Object.assign(allStocksData[stockId], nv);
+            }
+            try { await invalidateStaticCache(); } catch (_) { /* noop */ }
+            renderAdminStockList();
+            showAdminToast(`강제 ${t === 'buy' ? '매수' : '매도'} ${qty}주 · 새 주가 ${(nv?.price ?? 0).toLocaleString()}원`);
+        } catch (e) {
+            console.error('[adminExecuteTrade]', e);
+            alert('실패: ' + (e?.message || e));
+        }
+    };
 
     window.updateSinglePrice = async function(id) {
         if (!isAdmin()) return;
