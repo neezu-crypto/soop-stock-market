@@ -2348,7 +2348,7 @@
             await set(ref(db, 'siteConfig/maintenance'), true);
             await new Promise(r => setTimeout(r, 2000));
 
-            statusEl.innerText = '종목 주가 조정 중...';
+            statusEl.innerText = '종목·유저 데이터 일괄 반영 준비 중...';
             const stocksSnap = await get(ref(db, 'stocks/'));
             const stocksData = stocksSnap.val() || {};
             const top100Ids = new Set(
@@ -2356,39 +2356,54 @@
                     .sort(([, a], [, b]) => (b.price || 0) - (a.price || 0))
                     .slice(0, 100).map(([id]) => id)
             );
-            const stockUpdates = {};
+            const splitTs = Date.now();
+            const rootUpdates = {};
             Object.entries(stocksData).forEach(([id, s]) => {
                 if (!top100Ids.has(id)) return;
-                const newPrice = Math.max(1, Math.round((s.price || 0) / ratio));
-                const history  = (s.history || [s.price]).map(p => Math.max(1, Math.round(p / ratio)));
-                stockUpdates[`${id}/price`]   = newPrice;
-                stockUpdates[`${id}/history`] = history;
-                stockUpdates[`${id}/change`]  = s.change || 0;
+                const newPrice = Math.max(1, Math.floor((s.price || 0) / ratio));
+                const history  = (s.history || [s.price]).map(p => Math.max(1, Math.floor((Number(p) || 0) / ratio)));
+                rootUpdates[`stocks/${id}/price`] = newPrice;
+                rootUpdates[`stocks/${id}/history`] = history;
+                rootUpdates[`stocks/${id}/change`] = s.change || 0;
+                rootUpdates[`stocks/${id}/lastSplitTimestamp`] = splitTs;
             });
-            await update(ref(db, 'stocks/'), stockUpdates);
-            statusEl.innerText = `종목 주가 조정 완료 (${top100Ids.size}개) → 유저 데이터 조정 중...`;
 
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
-            const BATCH     = 100;
             const userIds   = Object.keys(usersData);
-            let processed   = 0;
-            for (let i = 0; i < userIds.length; i += BATCH) {
-                const batch   = userIds.slice(i, i + BATCH);
-                const updates = {};
-                batch.forEach(uid => {
-                    const user = usersData[uid];
-                    if (!user?.stocks) return;
-                    Object.entries(user.stocks).forEach(([stockId, info]) => {
-                        if (!info || !info.qty || !top100Ids.has(stockId)) return;
-                        updates[`${uid}/stocks/${stockId}/qty`] = info.qty * ratio;
-                        updates[`${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.round((info.avg || 0) / ratio));
+            userIds.forEach((uid) => {
+                const user = usersData[uid];
+                if (!user?.stocks) return;
+                Object.entries(user.stocks).forEach(([stockId, info]) => {
+                    if (!info || !info.qty || !top100Ids.has(stockId)) return;
+                    const q = Math.floor(Number(info.qty) || 0);
+                    if (q <= 0) return;
+                    const newQty = Math.floor(q * ratio);
+                    rootUpdates[`users/${uid}/stocks/${stockId}/qty`] = newQty;
+                    rootUpdates[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
+                });
+            });
+
+            statusEl.innerText = `원자 반영 중 (종목 ${top100Ids.size}개 + 유저 보유분)...`;
+            try {
+                await update(ref(db), rootUpdates);
+            } catch (e1) {
+                console.warn('[executeSplit] root update failed; stocks then users:', e1?.message || e1);
+                const stockRel = {};
+                top100Ids.forEach((id) => {
+                    ['price', 'history', 'change', 'lastSplitTimestamp'].forEach((field) => {
+                        const full = `stocks/${id}/${field}`;
+                        if (rootUpdates[full] !== undefined) stockRel[`${id}/${field}`] = rootUpdates[full];
                     });
                 });
-                if (Object.keys(updates).length > 0) await update(ref(db, 'users/'), updates);
-                processed += batch.length;
-                statusEl.innerText = `유저 데이터 조정 중... (${processed}/${userIds.length}명)`;
+                await update(ref(db, 'stocks/'), stockRel);
+                const userOnly = {};
+                Object.keys(rootUpdates).forEach((k) => {
+                    if (k.startsWith('users/')) userOnly[k.replace(/^users\//, '')] = rootUpdates[k];
+                });
+                if (Object.keys(userOnly).length > 0) await update(ref(db, 'users/'), userOnly);
             }
+            statusEl.innerText = `종목·유저 반영 완료 (${userIds.length}명 스캔)`;
 
             statusEl.innerText = '🟢 점검 모드 해제 중...';
             await set(ref(db, 'siteConfig/maintenance'), false);
@@ -3528,7 +3543,6 @@
 
         // 점검 모드로 거래 중단(수동 executeSplit와 동일한 안전장치)
         let maintenanceEnabled = false;
-        const stockUpdates = {};
         const events = [];
 
         try {
@@ -3536,16 +3550,20 @@
             maintenanceEnabled = true;
             await new Promise((r) => setTimeout(r, 1000));
 
-            // 3) 종목 가격/히스토리 업데이트 (가격·히스토리는 Math.floor, 나누어떨어지지 않아도 적용)
+            const splitTs = Date.now();
+            const rootUpdates = {};
+
+            // 3) 종목: 가격·히스토리·분할 시각(거래 규칙 완화용) — users와 같은 원자 update에 포함
             splittable.forEach((id) => {
                 const s = stocksData[id];
                 const oldPrice = s?.price || 0;
                 const newPrice = Math.max(1, Math.floor(oldPrice / ratio));
 
                 const history = (s.history || [s.price]).map(p => Math.max(1, Math.floor((Number(p) || 0) / ratio)));
-                stockUpdates[`${id}/price`] = newPrice;
-                stockUpdates[`${id}/history`] = history;
-                stockUpdates[`${id}/change`] = s.change || 0;
+                rootUpdates[`stocks/${id}/price`] = newPrice;
+                rootUpdates[`stocks/${id}/history`] = history;
+                rootUpdates[`stocks/${id}/change`] = s.change || 0;
+                rootUpdates[`stocks/${id}/lastSplitTimestamp`] = splitTs;
 
                 events.push({
                     stockId: id,
@@ -3557,30 +3575,44 @@
                 });
             });
 
-            await update(ref(db, 'stocks/'), stockUpdates);
-
-            // 4) 유저 포트폴리오 qty/avg 조정
+            // 4) 유저 포트폴리오 qty/avg (정수 수량 — 동일 update로 종목과 동시 반영)
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
-            const BATCH = 100;
             const userIds = Object.keys(usersData);
 
-            for (let i = 0; i < userIds.length; i += BATCH) {
-                const batch = userIds.slice(i, i + BATCH);
-                const updates = {};
-                batch.forEach((uid) => {
-                    const user = usersData[uid];
-                    if (!user?.stocks) return;
-                    Object.entries(user.stocks).forEach(([stockId, info]) => {
-                        if (!targetSet.has(stockId)) return;
-                        if (!info) return;
-                        const q = Math.floor(Number(info.qty) || 0);
-                        if (q <= 0) return;
-                        updates[`${uid}/stocks/${stockId}/qty`] = q * ratio;
-                        updates[`${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
+            userIds.forEach((uid) => {
+                const user = usersData[uid];
+                if (!user?.stocks) return;
+                Object.entries(user.stocks).forEach(([stockId, info]) => {
+                    if (!targetSet.has(stockId)) return;
+                    if (!info) return;
+                    const q = Math.floor(Number(info.qty) || 0);
+                    if (q <= 0) return;
+                    const newQty = Math.floor(q * ratio);
+                    rootUpdates[`users/${uid}/stocks/${stockId}/qty`] = newQty;
+                    rootUpdates[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
+                });
+            });
+
+            const keyCount = Object.keys(rootUpdates).length;
+            console.log('[DailyAutoSplit] single root update keys:', keyCount);
+            try {
+                await update(ref(db), rootUpdates);
+            } catch (e1) {
+                console.warn('[DailyAutoSplit] atomic root update failed; applying stocks then users:', e1?.message || e1);
+                const stockRel = {};
+                splittable.forEach((id) => {
+                    ['price', 'history', 'change', 'lastSplitTimestamp'].forEach((field) => {
+                        const full = `stocks/${id}/${field}`;
+                        if (rootUpdates[full] !== undefined) stockRel[`${id}/${field}`] = rootUpdates[full];
                     });
                 });
-                if (Object.keys(updates).length > 0) await update(ref(db, 'users/'), updates);
+                await update(ref(db, 'stocks/'), stockRel);
+                const userOnly = {};
+                Object.keys(rootUpdates).forEach((k) => {
+                    if (k.startsWith('users/')) userOnly[k.replace(/^users\//, '')] = rootUpdates[k];
+                });
+                if (Object.keys(userOnly).length > 0) await update(ref(db, 'users/'), userOnly);
             }
 
             // 5) 로그 기록 (UI + RTDB best-effort)
