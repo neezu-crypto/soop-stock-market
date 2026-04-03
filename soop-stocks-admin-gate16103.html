@@ -1928,7 +1928,8 @@
         // in that case we should not immediately flip the UI back to login.
         if (typeof user === 'undefined') return;
 
-        if (user && user.email === ADMIN_EMAIL) {
+        if (user && (user.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+            await new Promise((r) => setTimeout(r, 1000));
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-section').style.display = 'block';
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
@@ -3344,7 +3345,7 @@
     }
 
     window.persistDailyAutoSettings = async function(extra) {
-        if (!auth.currentUser || auth.currentUser.email !== ADMIN_EMAIL) return;
+        if (!auth.currentUser || (auth.currentUser.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return;
         if (dailyAutoApplyingFromServer) return;
         try {
             const hourEl = document.getElementById('auto-daily-hour');
@@ -3463,13 +3464,31 @@
     };
 
     async function autoSplitStocksByThreshold({ thresholdWon, ratioN }) {
-        if (!isAdmin()) return;
+        const logEl = document.getElementById('daily-auto-split-log');
+        const emailNorm = (auth.currentUser?.email || '').toLowerCase();
+        if (emailNorm !== ADMIN_EMAIL.toLowerCase()) {
+            console.error('[DailyAutoSplit] aborted: expected admin email skftodwocks2@gmail.com, got:', auth.currentUser?.email);
+            if (logEl) {
+                logEl.style.display = 'block';
+                logEl.innerHTML = `<div style="color:#ef4444;">권한 오류: 관리자 계정으로만 자동 분할을 실행할 수 있습니다.</div>`;
+            }
+            return;
+        }
         if (!auth.currentUser?.uid) {
             console.error('[DailyAutoSplit] aborted: no authenticated user');
             return;
         }
+        try {
+            await auth.currentUser.getIdToken(true);
+        } catch (e) {
+            console.error('[DailyAutoSplit] token refresh failed:', e?.message || e);
+            if (logEl) {
+                logEl.style.display = 'block';
+                logEl.innerHTML = `<div style="color:#ef4444;">인증 토큰 갱신 실패. 다시 로그인 후 시도하세요.</div>`;
+            }
+            return;
+        }
 
-        const logEl = document.getElementById('daily-auto-split-log');
         if (logEl) {
             logEl.style.display = 'block';
             logEl.innerHTML = '';
@@ -3515,7 +3534,7 @@
         try {
             await set(ref(db, 'siteConfig/maintenance'), true);
             maintenanceEnabled = true;
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise((r) => setTimeout(r, 1000));
 
             // 3) 종목 가격/히스토리 업데이트 (가격·히스토리는 Math.floor, 나누어떨어지지 않아도 적용)
             splittable.forEach((id) => {
