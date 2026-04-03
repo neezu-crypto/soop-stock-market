@@ -1046,6 +1046,26 @@
         </div>
     </div>
 
+    <!-- 🧹 유저 보유 데이터 정리 -->
+    <div class="container" style="display:block; border-color: #22c55e;">
+        <div class="accordion-header">
+            <h1>🧹 유저 보유 데이터 정리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            모든 유저의 <b>users/…/stocks/…</b> 노드를 정리합니다.<br>
+            qty·avg를 정수로 보정하고, NaN·손상 항목은 제거합니다. 전량 매도 후 0주는 노드 삭제(null)로 맞춥니다.
+        </div>
+        <div class="data-status-bar">
+            <span id="sanitize-user-status" style="color:#94a3b8;">대기 중</span>
+            <button class="btn-success" type="button" onclick="sanitizeAllUserStocksData()" style="padding:6px 14px; font-size:12px;">🧹 Sanitize User Data 실행</button>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 📋 상장 신청 검수 -->
     <div class="container" style="display:block; border-color: #6366f1;">
         <div class="accordion-header">
@@ -3483,6 +3503,61 @@
         for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
         return out;
     }
+
+    window.sanitizeAllUserStocksData = async function() {
+        if (!isAdmin()) return;
+        const statusEl = document.getElementById('sanitize-user-status');
+        if (statusEl) statusEl.textContent = '조회 중...';
+        const BATCH_KEYS = 400;
+        try {
+            const snap = await get(ref(db, 'users/'));
+            if (!snap.exists()) {
+                if (statusEl) statusEl.textContent = '유저 데이터 없음';
+                return;
+            }
+            const all = snap.val() || {};
+            const rootUpdates = {};
+            Object.entries(all).forEach(([uid, user]) => {
+                if (!user || typeof user !== 'object' || !user.stocks) return;
+                Object.entries(user.stocks).forEach(([stockId, info]) => {
+                    const path = `users/${uid}/stocks/${stockId}`;
+                    if (info == null || typeof info !== 'object') {
+                        rootUpdates[path] = null;
+                        return;
+                    }
+                    const qn = Number(info.qty);
+                    const an = Number(info.avg);
+                    const qty = Number.isFinite(qn) ? Math.floor(Math.max(0, qn)) : 0;
+                    const avg = Number.isFinite(an) ? Math.round(Math.max(0, an)) : 0;
+                    if (qty <= 0) {
+                        rootUpdates[path] = null;
+                        return;
+                    }
+                    const clean = { qty, avg };
+                    const onlyCore = Object.keys(info).every((k) => k === 'qty' || k === 'avg');
+                    if (onlyCore && Number(info.qty) === clean.qty && Number(info.avg) === clean.avg) return;
+                    rootUpdates[path] = clean;
+                });
+            });
+            const keys = Object.keys(rootUpdates);
+            if (keys.length === 0) {
+                if (statusEl) statusEl.textContent = '수정할 항목 없음';
+                return;
+            }
+            const chunks = chunkArray(keys, BATCH_KEYS);
+            for (let i = 0; i < chunks.length; i++) {
+                const batch = {};
+                chunks[i].forEach((k) => { batch[k] = rootUpdates[k]; });
+                await update(ref(db), batch);
+                if (statusEl) statusEl.textContent = `반영 중… ${i + 1}/${chunks.length}`;
+            }
+            if (statusEl) statusEl.textContent = `완료: ${keys.length}개 경로 갱신`;
+        } catch (e) {
+            console.error('[sanitizeAllUserStocksData]', e);
+            if (statusEl) statusEl.textContent = '실패: ' + (e?.message || e);
+            alert('Sanitize 실패: ' + (e?.message || e));
+        }
+    };
 
     async function logDailyAutoSplitFailure(err, { thresholdWon, ratioN, splittableIds }) {
         try {

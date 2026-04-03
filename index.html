@@ -4116,7 +4116,8 @@ function calcMaxQty(stockId, type, inputQty) {
         const maxAfford = Math.floor((myData.cash || 0) / estPrice);
         return Math.min(v, maxAfford, 100);
     } else if (type === 'sell') {
-        return Math.min(v, userStock.qty, 100);
+        const uq = Math.floor(Math.max(0, Number(userStock.qty) || 0));
+        return Math.min(v, uq, 100);
     }
     return v;
 }
@@ -4151,7 +4152,8 @@ window.smartClampQty = function(el, stockId, type) {
         const maxBuy    = Math.min(v, maxAfford, 100);
         el.value = Math.max(1, maxBuy);
     } else if (type === 'sell') {
-        const maxSell = Math.min(v, userStock.qty, 100);
+        const uq = Math.floor(Math.max(0, Number(userStock.qty) || 0));
+        const maxSell = Math.min(v, uq, 100);
         el.value = Math.max(1, maxSell);
     } else {
         el.value = v;
@@ -4555,8 +4557,9 @@ try {
                 }
 
                 const userStock  = preUser.stocks?.[id] || { qty: 0, avg: 0 };
-                if (userStock.qty === 0) {
-                    const ownedCount = Object.values(preUser.stocks || {}).filter(s => (s?.qty || 0) > 0).length;
+                const uqPre = Math.floor(Math.max(0, Number(userStock.qty) || 0));
+                if (uqPre === 0) {
+                    const ownedCount = Object.values(preUser.stocks || {}).filter(s => Math.floor(Math.max(0, Number(s?.qty) || 0)) > 0).length;
                     if (ownedCount >= 10) {
                         stockTxAbort.reason = "종목한도";
                         return;
@@ -4564,8 +4567,9 @@ try {
                 }
             } else {
                 const userStock = preUser.stocks?.[id] || { qty: 0, avg: 0 };
+                const uqSell = Math.floor(Math.max(0, Number(userStock.qty) || 0));
 
-                if (userStock.qty < qty) {
+                if (uqSell < qty) {
                     stockTxAbort.reason = "보유부족";
                     return;
                 }
@@ -4613,7 +4617,10 @@ try {
         const userTxResult = await runTransaction(userRef, (current) => {
             const c = current || { cash: 1000000, stocks: {} };
             const cash = c.cash ?? 1000000;
-            const us = c.stocks?.[id] || { qty: 0, avg: 0 };
+            const rawPos = c.stocks?.[id];
+            const usQty = Math.floor(Math.max(0, Number(rawPos?.qty) || 0));
+            const usAvg = Math.round(Math.max(0, Number(rawPos?.avg) || 0));
+            const us = { qty: usQty, avg: usAvg };
             let nextUser;
             if (type === 'buy') {
                 const totalBuyPrice = finalTradePrice * qty;
@@ -4629,7 +4636,7 @@ try {
             } else {
                 if (us.qty < qty) return;
                 const totalSellAmount = Math.round(finalTradePrice * qty * (1 - fee));
-                const newQty = us.qty - qty;
+                const newQty = Math.max(0, Math.floor(us.qty - qty));
                 const nextStocks = { ...(c.stocks || {}) };
                 if (newQty === 0) {
                     nextStocks[id] = null;
