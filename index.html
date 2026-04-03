@@ -4562,7 +4562,7 @@ try {
             const baseVol = Number(row.volume);
             const baseBuy = Number(row.buyVol);
             const baseSell = Number(row.sellVol);
-            return {
+            const nextStock = {
                 ...row,
                 price:   newPrice,
                 volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
@@ -4570,9 +4570,20 @@ try {
                 sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
                 change:  changeVal.toFixed(2)
             };
+            const sanitized = {};
+            Object.keys(nextStock).forEach((k) => {
+                const v = nextStock[k];
+                if (v !== undefined) sanitized[k] = v;
+            });
+            return sanitized;
         });
 
+        console.log('[Trade] stockTx result', id, {
+            committed: stockTxResult.committed,
+            snapshotExists: stockTxResult.snapshot?.exists?.() === true
+        });
         if (!stockTxResult.committed) {
+            console.warn('[Trade] stockTx not committed (server rejected or aborted)', id, stockTxResult);
             const reason = stockTxAbort.reason || 'Unknown stockTx failure';
             console.warn(`Trade failed for ${id}: Reason - ${reason}`);
             if (stockTxAbort.reason === "잔액부족") throw new Error("잔액부족");
@@ -4613,6 +4624,14 @@ try {
                 lastTradeTime: serverTimestamp()
             };
         });
+
+        console.log('[Trade] userTx result', id, {
+            committed: userTxResult.committed,
+            snapshotExists: userTxResult.snapshot?.exists?.() === true
+        });
+        if (!userTxResult.committed) {
+            console.warn('[Trade] userTx not committed', id, userTxResult);
+        }
 
         if (!userTxResult.committed) {
             console.warn(`Trade failed for ${id}: Reason - userTx not committed`);
