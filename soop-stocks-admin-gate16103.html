@@ -69,11 +69,12 @@
             background: #f59e0b !important;
             color: #0f172a !important;
             border: 1px solid #fbbf24 !important;
-            animation: admin-macro-pulse 0.85s ease-in-out infinite;
+            animation: admin-macro-pulse 2.8s ease-in-out infinite;
         }
         @keyframes admin-macro-pulse {
-            0%, 100% { filter: brightness(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
-            50% { filter: brightness(1.1); box-shadow: 0 0 14px 3px rgba(245, 158, 11, 0.4); }
+            0%, 100% { filter: brightness(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); }
+            40% { filter: brightness(1.06); box-shadow: 0 0 10px 2px rgba(245, 158, 11, 0.32); }
+            65% { filter: brightness(1.12); box-shadow: 0 0 16px 4px rgba(245, 158, 11, 0.42); }
         }
 
         
@@ -2234,8 +2235,9 @@
     const macroTickBusy = {};
 
     function stopAdminMacro(stockId, reason) {
-        if (activeMacros[stockId]) {
-            clearInterval(activeMacros[stockId]);
+        const h = activeMacros[stockId];
+        if (h != null) {
+            if (typeof h === 'number') clearTimeout(h);
             delete activeMacros[stockId];
         }
         delete macroTickBusy[stockId];
@@ -2251,7 +2253,8 @@
     }
 
     /**
-     * 목표가까지 1초마다 강제 매매 (현재가 < 목표 → 매수, 현재가 > 목표 → 매도).
+     * 목표가까지 강제 매매 (현재가 < 목표 → 매수, 현재가 > 목표 → 매도).
+     * 다음 틱은 매 거래 성공 후 2~4초 랜덤 지연(recursive setTimeout). activeMacros[stockId] = 대기 중인 timeout id.
      */
     window.adminRunMacro = async function(stockId) {
         if (!isAdmin()) return;
@@ -2266,6 +2269,17 @@
             return;
         }
         macroTargetByStock[stockId] = String(Math.floor(targetRaw));
+
+        const scheduleNextMacroTick = () => {
+            if (!activeMacros[stockId]) return;
+            const delay = Math.floor(Math.random() * 2001) + 2000;
+            activeMacros[stockId] = setTimeout(() => {
+                tick().catch((e) => {
+                    console.error('[adminRunMacro]', e);
+                    stopAdminMacro(stockId, e?.message || String(e));
+                });
+            }, delay);
+        };
 
         const tick = async () => {
             if (!activeMacros[stockId]) return;
@@ -2316,18 +2330,15 @@
                 }
 
                 renderAdminStockList();
+
+                if (!activeMacros[stockId]) return;
+                scheduleNextMacroTick();
             } finally {
                 macroTickBusy[stockId] = false;
             }
         };
 
-        const intervalId = setInterval(() => {
-            tick().catch((e) => {
-                console.error('[adminRunMacro]', e);
-                stopAdminMacro(stockId, e?.message || String(e));
-            });
-        }, 1000);
-        activeMacros[stockId] = intervalId;
+        activeMacros[stockId] = true;
         renderAdminStockList();
         tick().catch((e) => {
             console.error('[adminRunMacro]', e);
