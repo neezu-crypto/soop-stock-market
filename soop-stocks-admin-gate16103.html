@@ -2,6 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
     <title>SOOP STOCK - 관리자 센터</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <style>
@@ -152,6 +154,226 @@
         .accordion-body { overflow: hidden; max-height: 0; transition: max-height 0.35s ease; }
         .accordion-body.open { max-height: 4000px; }
         .accordion-sep { border-top: 1px solid #334155; margin-top: 14px; padding-top: 14px; }
+
+        /* ── 모바일: 관리자 앱 느낌 · 터치 최적화 (768px 이하, PC는 위 규칙 유지) ── */
+        @media (max-width: 768px) {
+            html { -webkit-text-size-adjust: 100%; }
+            body {
+                padding: calc(12px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-right, 0px))
+                    calc(24px + env(safe-area-inset-bottom, 0px)) calc(14px + env(safe-area-inset-left, 0px));
+                align-items: stretch;
+                min-height: 100dvh;
+                background: linear-gradient(180deg, #020617 0%, #0f172a 32%, #0f172a 100%);
+                color: #f1f5f9;
+            }
+            #admin-section {
+                max-width: 100% !important;
+                width: 100%;
+            }
+            #login-section.login-box {
+                width: 100%;
+                max-width: 100%;
+                padding: 28px 20px;
+                box-sizing: border-box;
+            }
+            .container {
+                max-width: 100%;
+                padding: 20px 16px;
+                border-radius: 18px;
+                margin-bottom: 16px;
+                border-width: 1px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+            }
+            h1 {
+                font-size: 1.125rem;
+                letter-spacing: -0.02em;
+                color: #7dd3fc;
+                padding-bottom: 12px;
+                margin-bottom: 12px;
+            }
+            .accordion-header {
+                min-height: 48px;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .accordion-header h1 {
+                font-size: 1.05rem;
+                line-height: 1.35;
+            }
+            .accordion-arrow {
+                font-size: 16px;
+                padding: 8px;
+                margin-top: -4px;
+            }
+            .accordion-sep {
+                margin-top: 16px;
+                padding-top: 16px;
+            }
+            .info-box {
+                font-size: 0.9375rem;
+                line-height: 1.6;
+                padding: 14px 14px;
+                color: #e2e8f0;
+                background: #1e293b;
+                border: 1px solid #475569;
+            }
+            .data-status-bar {
+                flex-wrap: wrap;
+                gap: 10px;
+                padding: 14px 14px;
+                font-size: 0.875rem;
+                line-height: 1.45;
+            }
+            .data-status-bar b,
+            .data-status-bar span {
+                word-break: keep-all;
+            }
+            input[type="text"],
+            input[type="number"],
+            input[type="email"],
+            input[type="search"],
+            select,
+            textarea {
+                font-size: 16px !important;
+                min-height: 48px;
+                padding: 12px 14px !important;
+                border-radius: 12px !important;
+                box-sizing: border-box;
+                border-color: #64748b !important;
+                color: #f8fafc !important;
+            }
+            textarea {
+                min-height: 120px;
+                line-height: 1.5;
+            }
+            button,
+            .btn-primary,
+            .btn-success,
+            .btn-danger,
+            .btn-google {
+                min-height: 48px;
+                min-width: 48px;
+                padding: 14px 18px !important;
+                font-size: 16px !important;
+                border-radius: 12px !important;
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: rgba(56, 189, 248, 0.15);
+            }
+            button:active {
+                transform: scale(0.98);
+                opacity: 0.95;
+            }
+            .btn-primary {
+                margin-top: 12px;
+            }
+            .toggle-wrap {
+                padding: 16px 14px;
+                gap: 12px;
+                flex-wrap: wrap;
+            }
+            .toggle-label {
+                font-size: 0.9375rem;
+            }
+            .toggle-sub {
+                font-size: 0.8125rem;
+                color: #94a3b8;
+            }
+            .toggle-switch {
+                width: 56px;
+                height: 30px;
+            }
+            .toggle-switch .toggle-slider:before {
+                width: 22px;
+                height: 22px;
+                top: 4px;
+                left: 4px;
+            }
+            .toggle-switch input:checked + .toggle-slider:before {
+                transform: translateX(26px);
+            }
+            .toggle-switch-sm {
+                width: 44px;
+                height: 26px;
+            }
+            .toggle-switch-sm .toggle-slider:before {
+                width: 18px;
+                height: 18px;
+            }
+            .toggle-switch-sm input:checked + .toggle-slider:before {
+                transform: translateX(18px);
+            }
+            .status-chip {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+            .live-ranking-table {
+                font-size: 0.875rem;
+            }
+            .live-ranking-table th,
+            .live-ranking-table td {
+                padding: 12px 10px;
+            }
+            .live-ranking-container {
+                max-height: 70vh;
+            }
+            .chart-banner-info-row {
+                flex-wrap: wrap;
+                padding: 12px 14px;
+                font-size: 0.875rem;
+            }
+            .request-card {
+                padding: 16px;
+            }
+            .realtime-bar {
+                font-size: 0.8125rem;
+                padding: 8px 14px;
+            }
+            /* 인라인 그리드(매도설정·자동모드 등) — 모바일에서 세로 스택 */
+            [style*="grid-template-columns:1fr 1fr 1fr"],
+            [style*="grid-template-columns:1fr 1fr"] {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 14px !important;
+            }
+            /* 종목 관리 리스트 — 행마다 세로 정렬·넓은 터치 영역 */
+            #admin-stock-list {
+                max-height: min(55vh, 480px) !important;
+                gap: 14px !important;
+            }
+            #admin-stock-list .batch-control {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 12px;
+                padding: 14px !important;
+            }
+            #admin-stock-list .batch-control > div {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 10px !important;
+            }
+            #admin-stock-list input[type="number"] {
+                width: 100% !important;
+                max-width: none !important;
+                flex: none !important;
+            }
+            #admin-stock-list button {
+                width: 100%;
+                justify-content: center;
+            }
+            .admin-macro-running {
+                width: 100%;
+            }
+            #admin-info {
+                font-size: 0.875rem;
+                padding: 12px 14px;
+                background: #1e293b;
+                border-radius: 12px;
+                border: 1px solid #334155;
+                margin-bottom: 16px;
+                color: #cbd5e1;
+            }
+        }
     </style>
 </head>
 <body>
