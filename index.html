@@ -4509,6 +4509,12 @@ try {
 
     let finalTradePrice = 0;
 
+    let stockRollbackVal = null;
+    try {
+        const rbSnap = await get(stockRef);
+        if (rbSnap.exists()) stockRollbackVal = JSON.parse(JSON.stringify(rbSnap.val()));
+    } catch (_) { /* noop */ }
+
     try {
         const stockTxAbort = { reason: null };
 
@@ -4596,33 +4602,41 @@ try {
             const c = current || { cash: 1000000, stocks: {} };
             const cash = c.cash ?? 1000000;
             const us = c.stocks?.[id] || { qty: 0, avg: 0 };
+            let nextUser;
             if (type === 'buy') {
                 const totalBuyPrice = finalTradePrice * qty;
                 if (cash < totalBuyPrice) return;
                 const totalCost = (us.qty * us.avg) + totalBuyPrice;
                 const newQty = us.qty + qty;
-                return {
+                nextUser = {
                     ...c,
                     cash: cash - totalBuyPrice,
                     stocks: { ...(c.stocks || {}), [id]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
                     lastTradeTime: serverTimestamp()
                 };
-            }
-            if (us.qty < qty) return;
-            const totalSellAmount = Math.round(finalTradePrice * qty * (1 - fee));
-            const newQty = us.qty - qty;
-            const nextStocks = { ...(c.stocks || {}) };
-            if (newQty === 0) {
-                nextStocks[id] = null;
             } else {
-                nextStocks[id] = { qty: newQty, avg: us.avg };
+                if (us.qty < qty) return;
+                const totalSellAmount = Math.round(finalTradePrice * qty * (1 - fee));
+                const newQty = us.qty - qty;
+                const nextStocks = { ...(c.stocks || {}) };
+                if (newQty === 0) {
+                    nextStocks[id] = null;
+                } else {
+                    nextStocks[id] = { qty: newQty, avg: us.avg };
+                }
+                nextUser = {
+                    ...c,
+                    cash: cash + totalSellAmount,
+                    stocks: nextStocks,
+                    lastTradeTime: serverTimestamp()
+                };
             }
-            return {
-                ...c,
-                cash: cash + totalSellAmount,
-                stocks: nextStocks,
-                lastTradeTime: serverTimestamp()
-            };
+            const userSanitized = {};
+            Object.keys(nextUser).forEach((k) => {
+                const v = nextUser[k];
+                if (v !== undefined) userSanitized[k] = v;
+            });
+            return userSanitized;
         });
 
         console.log('[Trade] userTx result', id, {
@@ -4631,9 +4645,17 @@ try {
         });
         if (!userTxResult.committed) {
             console.warn('[Trade] userTx not committed', id, userTxResult);
-        }
-
-        if (!userTxResult.committed) {
+            if (stockRollbackVal != null) {
+                try {
+                    await runTransaction(stockRef, () => {
+                        const back = JSON.parse(JSON.stringify(stockRollbackVal));
+                        return back;
+                    });
+                    console.warn('[Trade] best-effort stock rollback applied after userTx failure');
+                } catch (rbErr) {
+                    console.error('[Trade] stock rollback failed (data may be inconsistent):', rbErr?.message || rbErr);
+                }
+            }
             console.warn(`Trade failed for ${id}: Reason - userTx not committed`);
             throw new Error("유저동기화실패");
         }
