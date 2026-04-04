@@ -41,6 +41,13 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 20px; border: 1px solid var(--primary);
         }
         .wallet-info span { color: var(--primary); font-weight: 800; }
+        .market-mode-btn {
+            background: var(--card-bg); color: var(--muted); border: 1px solid var(--border);
+            padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .market-mode-btn:hover { color: var(--text-main); border-color: var(--primary); }
+        .market-mode-btn.active { color: #f59e0b; border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.08); }
         header { padding: 10px 0; border-bottom: 1px solid var(--card-bg); margin-bottom: 10px; }
         #search-input {
             width: 100%; padding: 14px; border-radius: 12px; background: var(--card-bg);
@@ -1315,7 +1322,7 @@
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
-                    <div class="intro-update-text"><b>👑 자산 랭킹 열람</b> — 전체 유저 자산 순위(TOP 등)를 확인하는 기능입니다. 별풍선 50개 약정·검수 승인 후 12시간 동안 열람됩니다.</div>
+                    <div class="intro-update-text"><b>👑 자산 랭킹 열람</b> — 전체 유저 자산 순위(TOP 등)를 확인하는 기능입니다. 별풍선 30개 약정·검수 승인 후 12시간 동안 열람됩니다.</div>
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
@@ -1378,6 +1385,7 @@
     <!-- 탭 버튼 -->
     <div class="portfolio-tabs">
         <button class="portfolio-tab-btn active" id="tab-btn-stocks" onclick="switchPortfolioTab('stocks')">📈 내 주식</button>
+        <button type="button" class="portfolio-tab-btn" id="tab-btn-coins" style="display:none;" onclick="switchPortfolioTab('coins')">🪙 내 코인</button>
         <button type="button" class="portfolio-tab-btn rank-tab" id="tab-btn-ranking" disabled
             style="opacity:0.45; cursor:not-allowed; position:relative;"
             onclick="switchPortfolioTab('ranking')">
@@ -1391,6 +1399,12 @@
         </div>
         <div class="my-stocks-guide">💡 클릭 시 즉시 검색됩니다</div>
     </div>
+    <div id="portfolio-panel-coins" style="display:none;">
+        <div id="my-coins-list" class="my-stocks-list">
+            <div class="no-stock-msg">보유 중인 코인이 없습니다.</div>
+        </div>
+        <div class="my-stocks-guide">💡 코인시장에서 거래 · 종목명은 주식과 동일 · 시세는 별도</div>
+    </div>
     <!-- 자산 랭킹 탭 -->
     <div id="portfolio-panel-ranking" style="display:none;">
         <!-- 구독 미인증 상태 -->
@@ -1398,7 +1412,7 @@
             <div class="subscribe-gate-icon">👑</div>
             <div id="ranking-gate-copy-default">
                 <div class="subscribe-gate-title">자산 랭킹 열람 신청</div>
-                <div class="subscribe-gate-desc">이 기능으로 <b>전체 참여 유저 기준 자산 순위</b>(운영진이 집계한 TOP 100 등)를 이 탭에서 볼 수 있습니다. 검수 승인 후 <b>12시간</b> 동안 열람할 수 있어요.<br><br>닉네임·SOOP 아이디를 입력한 뒤 <b>검수 신청하기</b>를 누르면 별풍선 후원 페이지가 열립니다. 단가는 <b style="color:#f59e0b;">별풍선 50개</b> 약정이며, 다른 유료 신청과 같이 후원 확인 후 검수가 진행됩니다.</div>
+                <div class="subscribe-gate-desc">이 기능으로 <b>전체 참여 유저 기준 자산 순위</b>(운영진이 집계한 TOP 100 등)를 이 탭에서 볼 수 있습니다. 검수 승인 후 <b>12시간</b> 동안 열람할 수 있어요.<br><br>닉네임·SOOP 아이디를 입력한 뒤 <b>검수 신청하기</b>를 누르면 별풍선 후원 페이지가 열립니다. 단가는 <b style="color:#f59e0b;">별풍선 30개</b> 약정이며, 다른 유료 신청과 같이 후원 확인 후 검수가 진행됩니다.</div>
             </div>
             <div id="ranking-gate-copy-expired" style="display:none;">
                 <div class="subscribe-gate-title">열람 기간이 만료되었습니다</div>
@@ -1819,7 +1833,14 @@
         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
             <div style="width:1px; height:16px; background:var(--border);"></div>
-            <div class="wallet-info">1회 최대 거래: <span style="color:#f59e0b;">1억원</span></div>
+            <div class="wallet-info">1회 최대 거래: <span id="wallet-max-trade" style="color:#f59e0b;">1억원</span></div>
+            <div id="coin-market-wallet-ui" style="display:none; align-items:center; flex-wrap:wrap; gap:6px;">
+                <div style="width:1px; height:16px; background:var(--border);"></div>
+                <div class="wallet-market-toggle" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <button type="button" id="btn-market-stock" class="market-mode-btn active" onclick="setActiveMarket('stock')" title="주식 시장">📈 주식</button>
+                    <button type="button" id="btn-market-coin" class="market-mode-btn" onclick="setActiveMarket('coin')" title="고액 회원 전용 · 현금 공유">🪙 코인</button>
+                </div>
+            </div>
             <button type="button" id="btn-open-asset-request" onclick="window.openAssetRequestModal()"
                 style="margin-left:4px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap;">
                 💰 자산 지원 신청
@@ -2247,7 +2268,19 @@ let presenceCountUnsub   = null;
 let presenceSetupUid     = null;
 
 let allStocks        = [];
+/** 코인 시장 전체 시세 캐시 (stocks/ 와 동일 id·이름 공유, 가격·거래는 독립) */
+let allCoins         = [];
 let allBanners       = {}; // stocksBanner/{id} 캐시
+/** 'stock' | 'coin' — 메인 리스트·매매 기준 시장 (코인은 관리자 계정에서만 노출·활성) */
+let activeMarket     = 'stock';
+let coinsUnsubscribe = null;
+let mainCoinsSyncMode = null;
+let favoriteCoins    = {};
+let favoriteCoinUnsubs = {};
+let ownedCoins       = {};
+let ownedCoinUnsubs  = {};
+let favCoinPollTimers = {};
+let sparklineCoinPriceCache = {};
 let isTrading        = null; // 거래 중인 종목 ID (null이면 미거래)
 let isBannerRendered = false;
 let stockElements    = {};
@@ -2277,7 +2310,7 @@ let rankingAccessLegacyCache = null;
 let rankingAccessExpiryTimer = null;
 let rankingAccessRemainingInterval = null;
 const RANKING_ACCESS_DURATION_MS = 12 * 60 * 60 * 1000;
-const ASSET_RANKING_ACCESS_BALLOON_COST = 50;
+const ASSET_RANKING_ACCESS_BALLOON_COST = 30;
 
 // ── 보유 주식 구독 상태 ──────────────────────────────────────
 let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
@@ -2294,6 +2327,8 @@ const stockTradeTracker = {};
 // 차트 모달 상태
 // ══════════════════════════════════════════════════════════
 let chartModalStockId    = null;   // 현재 열린 종목 ID
+/** 차트 열 때점 시장 — 모달 매매·캔들 경로에 사용 */
+let chartModalMarket     = 'stock';
 let chartTimeframeMin    = 10;     // 보여줄 기간 (분)
 let chartIntervalMin     = 1;      // 분봉 단위 (분)
 let candleChartInstance  = null;   // Chart.js 인스턴스
@@ -2800,6 +2835,138 @@ function getStockSyncMode() {
     return 'regular';
 }
 
+const STOCK_MAX_TRADE_PER_ORDER_WON = 100000000;
+const COIN_MAX_TRADE_PER_ORDER_WON  = 10000000000;
+/** 코인 체결 시 impact 배수 — 주식보다 변동성 크게 */
+const COIN_MARKET_IMPACT_MULTIPLIER = 1.85;
+
+/** 코인 시장 UI·구독·거래 — 테스트 기간에는 관리자(이 이메일)만 허용 */
+const COIN_MARKET_ADMIN_EMAIL = 'skftodwocks2@gmail.com';
+
+function isCoinMarketAdmin() {
+    try {
+        return auth?.currentUser?.email === COIN_MARKET_ADMIN_EMAIL;
+    } catch (_) {
+        return false;
+    }
+}
+
+function teardownCoinMarketClientSubscriptions() {
+    Object.keys(favoriteCoinUnsubs).forEach((id) => {
+        if (favoriteCoinUnsubs[id]) {
+            favoriteCoinUnsubs[id]();
+            delete favoriteCoinUnsubs[id];
+        }
+    });
+    Object.keys(ownedCoinUnsubs).forEach((id) => {
+        if (ownedCoinUnsubs[id]) {
+            ownedCoinUnsubs[id]();
+            delete ownedCoinUnsubs[id];
+        }
+    });
+    Object.keys(favCoinPollTimers).forEach((id) => {
+        clearInterval(favCoinPollTimers[id]);
+        delete favCoinPollTimers[id];
+    });
+    favoriteCoins = {};
+    ownedCoins = {};
+}
+
+/**
+ * 비관리자: 코인 시장 UI 숨김·항상 주식 모드·코인 RTDB 구독 해제.
+ * 관리자: 지갑/탭 표시, sessionStorage 로 코인 모드 복원.
+ */
+function applyCoinMarketFeatureVisibility() {
+    const show = isCoinMarketAdmin();
+    const wrap = document.getElementById('coin-market-wallet-ui');
+    const tabBtn = document.getElementById('tab-btn-coins');
+    if (wrap) {
+        wrap.style.display = show ? 'flex' : 'none';
+        wrap.style.alignItems = 'center';
+    }
+    if (tabBtn) tabBtn.style.display = show ? '' : 'none';
+
+    if (!show) {
+        activeMarket = 'stock';
+        try { sessionStorage.setItem('soop_active_market', 'stock'); } catch (_) { /* noop */ }
+        teardownCoinMarketClientSubscriptions();
+        const cp = document.getElementById('portfolio-panel-coins');
+        if (cp && window.getComputedStyle(cp).display !== 'none') {
+            switchPortfolioTab('stocks');
+        }
+    } else {
+        try {
+            const _m = sessionStorage.getItem('soop_active_market');
+            if (_m === 'stock' || _m === 'coin') activeMarket = _m;
+        } catch (_) { /* noop */ }
+    }
+
+    updateWalletTradeCapLabel();
+    document.getElementById('btn-market-stock')?.classList.toggle('active', activeMarket === 'stock');
+    document.getElementById('btn-market-coin')?.classList.toggle('active', activeMarket === 'coin');
+    try { updateSyncStrategy(); } catch (_) { /* noop */ }
+    try { refreshMainStockListView(); } catch (_) { /* noop */ }
+}
+
+function isCoinMarket() {
+    return isCoinMarketAdmin() && activeMarket === 'coin';
+}
+
+function getCoinMarketMinWealthWon() {
+    const v = siteConfig?.coinMarketMinTotalWon;
+    if (typeof v === 'number' && v > 0 && Number.isFinite(v)) return v;
+    return 1000000000;
+}
+
+function computeTotalWealthWon() {
+    let w = Math.floor(Math.max(0, Number(myData?.cash) || 0));
+    const addStockVal = (id, qty) => {
+        if (!qty || qty <= 0) return;
+        const row = favorites[id] || ownedStocks[id] || allStocks.find(s => s.id === id);
+        const p = Number(row?.price);
+        if (Number.isFinite(p) && p > 0) w += Math.floor(p * qty);
+    };
+    const addCoinVal = (id, qty) => {
+        if (!qty || qty <= 0) return;
+        const row = favoriteCoins[id] || ownedCoins[id] || allCoins.find(s => s.id === id);
+        const p = Number(row?.price);
+        if (Number.isFinite(p) && p > 0) w += Math.floor(p * qty);
+    };
+    Object.entries(myData?.stocks || {}).forEach(([id, p]) => addStockVal(id, Math.floor(Number(p?.qty) || 0)));
+    if (isCoinMarketAdmin()) {
+        Object.entries(myData?.coins || {}).forEach(([id, p]) => addCoinVal(id, Math.floor(Number(p?.qty) || 0)));
+    }
+    return w;
+}
+
+function canAccessCoinMarket() {
+    return isCoinMarketAdmin();
+}
+
+function updateWalletTradeCapLabel() {
+    const el = document.getElementById('wallet-max-trade');
+    if (!el) return;
+    el.textContent = isCoinMarket() ? '100억원' : '1억원';
+}
+
+window.setActiveMarket = function (mode) {
+    const m = mode === 'coin' ? 'coin' : 'stock';
+    if (m === 'coin' && !isCoinMarketAdmin()) return;
+    if (m === activeMarket) return;
+    activeMarket = m;
+    try { sessionStorage.setItem('soop_active_market', activeMarket); } catch (_) { /* noop */ }
+    try { closeChartModal(); } catch (_) { /* noop */ }
+    document.getElementById('btn-market-stock')?.classList.toggle('active', m === 'stock');
+    document.getElementById('btn-market-coin')?.classList.toggle('active', m === 'coin');
+    updateWalletTradeCapLabel();
+    try { updateSyncStrategy(); } catch (_) { /* noop */ }
+    try { refreshMainStockListView(); } catch (_) { /* noop */ }
+};
+
+function candleBufferKey(stockId, market) {
+    return (market === 'coin' ? 'c:' : 's:') + stockId;
+}
+
 /**
  * stocks/ 전체 목록 동기화: 장 운영 중(정규·비정규) 모두 onValue — 변경 시에만 전송되어 폴링보다 대역폭 절약
  * 마감/점검=중단
@@ -2808,6 +2975,19 @@ function getStockSyncMode() {
  */
 function applyMainStocksDataSync() {
     logAuthTrail('[sync-strategy] applyMainStocksDataSync START', { dbOk: !!db, prevMode: mainStocksSyncMode });
+    if (activeMarket === 'coin') {
+        if (typeof stocksUnsubscribe === 'function') {
+            stocksUnsubscribe();
+            stocksUnsubscribe = null;
+        }
+        if (stocksPollTimer) {
+            clearInterval(stocksPollTimer);
+            stocksPollTimer = null;
+        }
+        mainStocksSyncMode = null;
+        logAuthTrail('[sync-strategy] applyMainStocksDataSync skip (coin market active)');
+        return;
+    }
     const mode = getStockSyncMode();
     if (mode !== mainStocksSyncMode) {
         const msg = {
@@ -2856,11 +3036,91 @@ function applyMainStocksDataSync() {
     }
 }
 
+function applyMainCoinsDataSync() {
+    if (activeMarket !== 'coin') {
+        if (typeof coinsUnsubscribe === 'function') {
+            coinsUnsubscribe();
+            coinsUnsubscribe = null;
+        }
+        mainCoinsSyncMode = null;
+        logAuthTrail('[sync-strategy] applyMainCoinsDataSync skip (stock market active)');
+        return;
+    }
+    const mode = getStockSyncMode();
+    if (mode !== mainCoinsSyncMode) {
+        const msg = {
+            closed: '마감·점검 → coins/ 리스너 제거',
+            regular: '정규장 → coins/ onValue',
+            offpeak: '비정규장 → coins/ onValue'
+        };
+        console.log(`[sync-strategy] coins ${mainCoinsSyncMode ?? 'init'} → ${mode}: ${msg[mode]}`);
+        mainCoinsSyncMode = mode;
+    }
+    try {
+        if (mode === 'closed') {
+            if (typeof coinsUnsubscribe === 'function') {
+                coinsUnsubscribe();
+                coinsUnsubscribe = null;
+            }
+            return;
+        }
+        if (typeof coinsUnsubscribe === 'function') return;
+        logAuthTrail('[DB] applyMainCoinsDataSync → onValue path: coins/');
+        coinsUnsubscribe = onValue(ref(db, 'coins/'), processCoinsSnap, (err) => {
+            console.warn('[sync-strategy] coins/ onValue 오류:', err?.message || err);
+        });
+    } catch (err) {
+        logAuthTrailError('applyMainCoinsDataSync', err);
+    }
+}
+
+function processCoinsSnap(snap) {
+    const data     = snap.val() || {};
+    const newCoins = Object.keys(data).map((key) => {
+        const s = { ...data[key], id: key };
+        const nameFromStock = stockNameCache[key] || allStocks.find((os) => os.id === key)?.name;
+        if (nameFromStock) s.name = s.name || nameFromStock;
+        if (allBanners[key]) {
+            s.bannerImg     = allBanners[key].bannerImg;
+            s.bannerEndDate = allBanners[key].bannerEndDate;
+            s.bannerIsPaid  = allBanners[key].bannerIsPaid;
+            s.link          = allBanners[key].link;
+        }
+        return s;
+    });
+
+    if (allCoins.length === 0) {
+        allCoins = newCoins;
+        refreshMainStockListView();
+        tryCloseIntro();
+        queueMicrotask(() => {
+            try { refreshCircuitFreezeOnAllListCards(); } catch (_) { /* noop */ }
+        });
+    } else {
+        newCoins.forEach((ns) => {
+            const old = allCoins.find((os) => os.id === ns.id);
+            if (old && (old.price !== ns.price || old.change !== ns.change)) {
+                if (!sparklineCoinPriceCache[ns.id]) sparklineCoinPriceCache[ns.id] = [old.price];
+                sparklineCoinPriceCache[ns.id].push(ns.price);
+                if (sparklineCoinPriceCache[ns.id].length > 20) sparklineCoinPriceCache[ns.id].shift();
+                const card = stockElements[ns.id];
+                if (!card) return;
+                const qtyInput = document.getElementById(`qty-${ns.id}`);
+                if (qtyInput && document.activeElement === qtyInput) return;
+                updateCardContent(card, ns, (myData?.coins || {})[ns.id] || { qty: 0, avg: 0 });
+            }
+        });
+        allCoins = newCoins;
+    }
+    updateUI(false);
+}
+
 /** 정규장/비정규장/마감 전환 시 1회 호출: 전체 stocks + 즐겨찾기/보유 구독 방식 갱신 */
 function updateSyncStrategy() {
     logAuthTrail('[sync-strategy] updateSyncStrategy START');
     try {
         applyMainStocksDataSync();
+        applyMainCoinsDataSync();
         applyStocksMode();
     } catch (err) {
         logAuthTrailError('Caught in updateSyncStrategy', err);
@@ -3069,6 +3329,21 @@ document.getElementById('my-stocks-list').addEventListener('click', (e) => {
     }
 });
 
+document.getElementById('my-coins-list')?.addEventListener('click', (e) => {
+    if (!isCoinMarketAdmin()) return;
+    const item = e.target.closest('.my-stock-item');
+    if (!item) return;
+    if (!isCoinMarket()) setActiveMarket('coin');
+    if (!isCoinMarket()) return;
+    selectStockForSearch(item.getAttribute('data-name'), item.getAttribute('data-id'));
+});
+
+function portfolioSubPaneVisible(elId) {
+    const el = document.getElementById(elId);
+    if (!el) return false;
+    return window.getComputedStyle(el).display !== 'none';
+}
+
 // ── 내 보유 주식 패널 ────────────────────────────────────────
 function renderMyPortfolio() {
     const portfolioDiv       = document.getElementById('my-stocks-list');
@@ -3081,7 +3356,7 @@ function renderMyPortfolio() {
 
     if (stockIds.length === 0) {
         portfolioDiv.innerHTML = '<div class="no-stock-msg">보유 중인 주식이 없습니다.</div>';
-        if (totalAssetsDisplay) totalAssetsDisplay.innerText = "0원";
+        if (totalAssetsDisplay && portfolioSubPaneVisible('portfolio-panel-stocks')) totalAssetsDisplay.innerText = '0원';
         return;
     }
 
@@ -3119,10 +3394,63 @@ function renderMyPortfolio() {
             </div>`;
         portfolioDiv.appendChild(item);
     });
-    if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
-    // 오늘 자산 스냅샷 저장
-    const totalWithCash = totalStockValue + (myData?.cash || 0);
-    saveAssetHistoryToday(totalWithCash);
+    if (totalAssetsDisplay && portfolioSubPaneVisible('portfolio-panel-stocks')) {
+        totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
+    }
+}
+
+function renderMyCoinPortfolio() {
+    if (!isCoinMarketAdmin()) return;
+    const portfolioDiv       = document.getElementById('my-coins-list');
+    const totalAssetsDisplay = document.getElementById('total-assets');
+    if (!portfolioDiv) return;
+
+    const userCoins = myData?.coins || {};
+    const coinIds   = Object.keys(userCoins).filter((id) => userCoins[id] && userCoins[id].qty > 0);
+    let totalCoinValue = 0;
+
+    if (coinIds.length === 0) {
+        portfolioDiv.innerHTML = '<div class="no-stock-msg">보유 중인 코인이 없습니다.</div>';
+        if (totalAssetsDisplay && portfolioSubPaneVisible('portfolio-panel-coins')) totalAssetsDisplay.innerText = '0원';
+        return;
+    }
+
+    portfolioDiv.innerHTML = '';
+    coinIds.forEach((id) => {
+        const coinData = ownedCoins[id] || favoriteCoins[id] || searchResults[id];
+        const name = coinData?.name || stockNameCache[id];
+        if (!name) return;
+        const info = userCoins[id];
+        const currentPrice = coinData?.price || 0;
+        totalCoinValue += currentPrice * info.qty;
+
+        const priceLoaded = currentPrice > 0;
+        const profit = !priceLoaded ? null
+            : info.avg > 0 ? (((currentPrice - info.avg) / info.avg) * 100).toFixed(1)
+            : '0.0';
+        const profitClass = profit === null ? 'steady'
+            : profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
+        const profitText = profit === null ? '로딩 중...'
+            : `${profit > 0 ? '+' : ''}${profit}%`;
+
+        const item = document.createElement('div');
+        item.className = 'my-stock-item';
+        item.setAttribute('data-id', id);
+        item.setAttribute('data-name', name);
+        item.innerHTML = `
+            <div class="my-stock-info">
+                <span class="my-stock-name">${escapeHtml(name)}</span>
+                <span class="my-stock-profit ${profitClass}">${profitText}</span>
+            </div>
+            <div class="my-stock-details">
+                <span>${info.qty}코인 보유</span>
+                <span>평균 ${info.avg.toLocaleString()}원</span>
+            </div>`;
+        portfolioDiv.appendChild(item);
+    });
+    if (totalAssetsDisplay && portfolioSubPaneVisible('portfolio-panel-coins')) {
+        totalAssetsDisplay.innerText = `코인 평가 ${totalCoinValue.toLocaleString()}원`;
+    }
 }
 
 /** 검색 비동기 렌더 후 해당 종목 카드로 스크롤 (검색창으로 스크롤하지 않음) */
@@ -3199,6 +3527,8 @@ function updateUI(isFullRender = true) {
     if (myData) {
         if (cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
         renderMyPortfolio();
+        renderMyCoinPortfolio();
+        try { saveAssetHistoryToday(computeTotalWealthWon()); } catch (_) { /* noop */ }
     }
 }
 
@@ -3367,11 +3697,14 @@ onAuthStateChanged(auth, async (user) => {
                 logAuthTrail('[Auth] UID switch — tear down stock subs & UI caches:', previousAuthUid, '→', user.uid);
                 stopAllStocksSubscriptions();
                 mainStocksSyncMode = null;
+                mainCoinsSyncMode = null;
                 ownedStocks = {};
+                ownedCoins = {};
                 favorites = {};
+                favoriteCoins = {};
                 searchResults = {};
                 stockElements = {};
-                myData = { cash: 1000000, stocks: {} };
+                myData = { cash: 1000000, stocks: {}, coins: {} };
                 lastTradeTime = 0;
                 try { updateUI(true); } catch (_) { /* noop */ }
                 try { refreshMainStockListView(); } catch (_) { /* noop */ }
@@ -3397,7 +3730,7 @@ onAuthStateChanged(auth, async (user) => {
                 logAuthTrailError('Caught in Login Flow (users/ ref)', err);
                 return;
             }
-            if (!myData) myData = { cash: 1000000, stocks: {} };
+            if (!myData) myData = { cash: 1000000, stocks: {}, coins: {} };
 
             updateAuthStatusUI(user);
 
@@ -3409,6 +3742,11 @@ onAuthStateChanged(auth, async (user) => {
                 recoverMarketUiVisible('onAuthStateChanged', e);
             }
             tryCloseIntro();
+            try {
+                applyCoinMarketFeatureVisibility();
+            } catch (err) {
+                logAuthTrailError('applyCoinMarketFeatureVisibility in onAuthStateChanged', err);
+            }
             try {
                 initFavorites();
             } catch (err) {
@@ -3438,13 +3776,15 @@ onAuthStateChanged(auth, async (user) => {
                         myData = {
                             ...serverData,
                             cash:   serverData.cash   ?? 1000000,
-                            stocks: serverData.stocks || {}
+                            stocks: serverData.stocks || {},
+                            coins:  serverData.coins  || {}
                         };
                     } else {
-                        if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
+                        if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {}, coins: {} };
                     }
                     updateUI(true);
                     syncOwnedSubscriptions();
+                    syncOwnedCoinSubscriptions();
                 } catch (cbErr) {
                     console.error('[Auth] users/ snapshot handler', cbErr);
                 }
@@ -3477,6 +3817,9 @@ onAuthStateChanged(auth, async (user) => {
             stopRankingAccessWatch();
             lastTradeTime = 0;
             await teardownPresenceSession();
+            try {
+                applyCoinMarketFeatureVisibility();
+            } catch (_) { /* noop */ }
             try {
                 await signInAnonymously(auth);
             } catch (anonErr) {
@@ -3596,26 +3939,26 @@ const candleBuffer = {};
 /**
  * 거래 발생 시 분봉 버퍼에 누적 → 1초 디바운스 후 Firebase write
  * 같은 분 내 10번 거래해도 Firebase write는 1회
+ * @param {{ market?: 'stock'|'coin' }} [opts]
  */
-async function updateCandlestick(stockId, tradePrice, qty) {
+async function updateCandlestick(stockId, tradePrice, qty, opts = {}) {
+    const market = opts.market === 'coin' ? 'coin' : 'stock';
+    const bkey = candleBufferKey(stockId, market);
     const ts  = currentMinuteTs();
-    const buf = candleBuffer[stockId];
+    const buf = candleBuffer[bkey];
 
     if (buf && buf.ts === ts) {
-        // 같은 분 — 로컬 버퍼에만 합산
         buf.h  = Math.max(buf.h, tradePrice);
         buf.l  = Math.min(buf.l, tradePrice);
         buf.c  = tradePrice;
         buf.v += qty;
     } else {
-        // 새 분봉 시작 — 버퍼 초기화
         if (buf?.timer) clearTimeout(buf.timer);
-        candleBuffer[stockId] = { ts, o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty };
+        candleBuffer[bkey] = { ts, o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, market };
     }
 
-    // 기존 타이머 취소 후 1초 뒤 write 예약 (디바운스)
-    if (candleBuffer[stockId].timer) clearTimeout(candleBuffer[stockId].timer);
-    candleBuffer[stockId].timer = setTimeout(() => flushCandlestick(stockId), 1000);
+    if (candleBuffer[bkey].timer) clearTimeout(candleBuffer[bkey].timer);
+    candleBuffer[bkey].timer = setTimeout(() => flushCandlestick(stockId, { market }), 1000);
 }
 
 /**
@@ -3625,13 +3968,18 @@ async function updateCandlestick(stockId, tradePrice, qty) {
 // localStorage 캔들 캐시 (6시간 TTL)
 // ══════════════════════════════════════════════════════════════
 const CANDLE_CACHE_PREFIX = 'soop_candles_';
+const CANDLE_COIN_CACHE_PREFIX = 'soop_coin_candles_';
 const CANDLE_CACHE_TTL    = 6 * 60 * 60 * 1000; // 6시간 (데이터 보관)
 const CANDLE_STALE_MS     = 5 * 60 * 1000;       // 5분 (재접속 후 갱신 기준)
 
-function saveCandleToLocal(stockId, candle) {
+function candleLocalPrefix(market) {
+    return market === 'coin' ? CANDLE_COIN_CACHE_PREFIX : CANDLE_CACHE_PREFIX;
+}
+
+function saveCandleToLocal(stockId, candle, market = 'stock') {
     try {
-        const key      = CANDLE_CACHE_PREFIX + stockId;
-        const { data: existing } = loadCandlesFromLocal(stockId);
+        const key      = candleLocalPrefix(market) + stockId;
+        const { data: existing } = loadCandlesFromLocal(stockId, market);
         const idx      = existing.findIndex(c => c.t === candle.t);
         if (idx >= 0) {
             existing[idx] = {
@@ -3650,28 +3998,29 @@ function saveCandleToLocal(stockId, candle) {
     } catch(e) {}
 }
 
-function loadCandlesFromLocal(stockId) {
+function loadCandlesFromLocal(stockId, market = 'stock') {
     try {
-        const raw = localStorage.getItem(CANDLE_CACHE_PREFIX + stockId);
+        const raw = localStorage.getItem(candleLocalPrefix(market) + stockId);
         if (!raw) return { data: [], savedAt: 0 };
         const { ts, data } = JSON.parse(raw);
         if (Date.now() - ts > CANDLE_CACHE_TTL) {
-            localStorage.removeItem(CANDLE_CACHE_PREFIX + stockId);
+            localStorage.removeItem(candleLocalPrefix(market) + stockId);
             return { data: [], savedAt: 0 };
         }
         return { data: Array.isArray(data) ? data : [], savedAt: ts };
     } catch(e) { return { data: [], savedAt: 0 }; }
 }
 
-async function flushCandlestick(stockId) {
-    const buf = candleBuffer[stockId];
+async function flushCandlestick(stockId, opts = {}) {
+    const market = opts.market === 'coin' ? 'coin' : 'stock';
+    const bkey = candleBufferKey(stockId, market);
+    const buf = candleBuffer[bkey];
     if (!buf) return;
 
-    // localStorage 캔들 캐시 저장 (6시간 TTL)
-    saveCandleToLocal(stockId, { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts });
+    saveCandleToLocal(stockId, { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts }, market);
 
-    // Firebase write (기존 유지)
-    const candleRef = ref(db, `candlesticks/${stockId}/${buf.ts}`);
+    const basePath = market === 'coin' ? 'coinCandles' : 'candlesticks';
+    const candleRef = ref(db, `${basePath}/${stockId}/${buf.ts}`);
     try {
         await runTransaction(candleRef, (current) => {
             if (!current) {
@@ -3691,8 +4040,7 @@ async function flushCandlestick(stockId) {
         console.warn('[candle] flush 실패 (무시):', e.message);
     }
 
-    // 거래 발생 시마다 서킷브레이커 감지 (차트 모달 없이도 실시간 체크)
-    checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId).data);
+    checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId, market).data);
 }
 
 // pruneOldCandles — 관리자 페이지에서만 실행 (클라이언트 제거)
@@ -3729,8 +4077,10 @@ function filterByTimeframe(candles, timeframeMin) {
 
 // ── 차트 모달 열기 ───────────────────────────────────────────
 window.openChartModal = function(stockId) {
-    const s = favorites[stockId] || ownedStocks[stockId] || searchResults[stockId]
-           || allStocks.find(x => x.id === stockId);
+    chartModalMarket = isCoinMarket() ? 'coin' : 'stock';
+    const s = chartModalMarket === 'coin'
+        ? (favoriteCoins[stockId] || ownedCoins[stockId] || searchResults[stockId] || allCoins.find((x) => x.id === stockId))
+        : (favorites[stockId] || ownedStocks[stockId] || searchResults[stockId] || allStocks.find((x) => x.id === stockId));
     if (!s) return;
 
     chartModalStockId = stockId;
@@ -3821,6 +4171,7 @@ function closeChartModal() {
     document.body.style.overflow = '';
     if (candleChartInstance) { candleChartInstance.destroy(); candleChartInstance = null; }
     chartModalStockId = null;
+    chartModalMarket  = 'stock';
     candleDataCache   = [];
     chartIsLoading    = false;
 }
@@ -3864,26 +4215,25 @@ async function fetchCandles(stockId) {
 
     try {
         // 1. localStorage 캐시 확인
-        const { data: local, savedAt } = loadCandlesFromLocal(stockId);
+        const cm = chartModalMarket === 'coin' ? 'coin' : 'stock';
+        const { data: local, savedAt } = loadCandlesFromLocal(stockId, cm);
         const isStale = (Date.now() - savedAt) > CANDLE_STALE_MS; // 5분 경과 여부
 
         if (local.length > 0 && !isStale) {
-            // 캐시 신선 → 바로 사용
             candleDataCache = local.sort((a, b) => a.t - b.t);
             checkCircuitBreaker(stockId, candleDataCache);
         } else {
-            // 캐시 없거나 5분 경과 → Firebase 재조회
-            const snap = await get(ref(db, `candlesticks/${stockId}`));
+            const path = cm === 'coin' ? `coinCandles/${stockId}` : `candlesticks/${stockId}`;
+            const snap = await get(ref(db, path));
             if (snap.exists()) {
                 const raw = snap.val();
                 candleDataCache = Object.values(raw)
                     .map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c, v: c.v || 0, t: c.t }))
                     .sort((a, b) => a.t - b.t);
                 checkCircuitBreaker(stockId, candleDataCache);
-                // Firebase 데이터를 localStorage에 저장
-                candleDataCache.forEach(c => saveCandleToLocal(stockId, c));
+                candleDataCache.forEach((c) => saveCandleToLocal(stockId, c, cm));
             } else {
-                candleDataCache = local.length > 0 ? local : []; // Firebase도 없으면 기존 캐시라도 사용
+                candleDataCache = local.length > 0 ? local : [];
             }
         }
     } catch (e) {
@@ -3934,7 +4284,8 @@ function renderCandleChart() {
 
     // 거래량 합계
     const totalVol = aggregated.reduce((sum, c) => sum + (c.v || 0), 0);
-    document.getElementById('cm-volume').textContent = `거래량: ${totalVol.toLocaleString()}주`;
+    const volUnit = chartModalMarket === 'coin' ? '코인' : '주';
+    document.getElementById('cm-volume').textContent = `거래량: ${totalVol.toLocaleString()}${volUnit}`;
 
     // 데이터 범위 표시
     if (aggregated.length >= 2) {
@@ -4096,7 +4447,7 @@ window.tradeFromModal = function(type) {
     if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
     const qty = calcMaxQty(chartModalStockId, type, parseInt(input.value) || 1);
     if (qty !== parseInt(input.value)) input.value = qty; // 자동 보정 시 입력값 갱신
-    window.trade(chartModalStockId, type, qty);
+    window.trade(chartModalStockId, type, qty, { market: chartModalMarket });
 };
 
 // ── 카드 수량 입력 거래 ──────────────────────────────────────
@@ -4114,13 +4465,21 @@ function calcMaxQty(stockId, type, inputQty) {
     let v = Math.min(Math.max(1, inputQty), 100);
     if (!myData) return v;
 
-    const stock     = favorites[stockId] || ownedStocks[stockId] || searchResults[stockId];
-    const userStock = myData.stocks?.[stockId] || { qty: 0 };
+    const fromModal = chartModalStockId === stockId;
+    const coinQ = fromModal ? (chartModalMarket === 'coin') : isCoinMarket();
+    const stock = coinQ
+        ? (favoriteCoins[stockId] || ownedCoins[stockId] || searchResults[stockId])
+        : (favorites[stockId] || ownedStocks[stockId] || searchResults[stockId]);
+    const userStock = coinQ
+        ? (myData.coins?.[stockId] || { qty: 0 })
+        : (myData.stocks?.[stockId] || { qty: 0 });
+    const maxWon = coinQ ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
 
     if (type === 'buy' && stock) {
         const estPrice  = Math.round(stock.price * (1 + 0.0005));
         const maxAfford = Math.floor((myData.cash || 0) / estPrice);
-        return Math.min(v, maxAfford, 100);
+        const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
+        return Math.min(v, maxAfford, maxByCap, 100);
     } else if (type === 'sell') {
         const uq = Math.floor(Math.max(0, Number(userStock.qty) || 0));
         return Math.min(v, uq, 100);
@@ -4149,13 +4508,21 @@ window.smartClampQty = function(el, stockId, type) {
 
     if (!myData) { el.value = v; return; }
 
-    const stock     = favorites[stockId] || ownedStocks[stockId] || searchResults[stockId];
-    const userStock = myData.stocks?.[stockId] || { qty: 0 };
+    const fromModal = chartModalStockId === stockId;
+    const coinQ = fromModal ? (chartModalMarket === 'coin') : isCoinMarket();
+    const stock = coinQ
+        ? (favoriteCoins[stockId] || ownedCoins[stockId] || searchResults[stockId])
+        : (favorites[stockId] || ownedStocks[stockId] || searchResults[stockId]);
+    const userStock = coinQ
+        ? (myData.coins?.[stockId] || { qty: 0 })
+        : (myData.stocks?.[stockId] || { qty: 0 });
+    const maxWon = coinQ ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
 
     if (type === 'buy' && stock) {
         const estPrice  = Math.round(stock.price * (1 + 0.0005));
         const maxAfford = Math.floor((myData.cash || 0) / estPrice);
-        const maxBuy    = Math.min(v, maxAfford, 100);
+        const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
+        const maxBuy    = Math.min(v, maxAfford, maxByCap, 100);
         el.value = Math.max(1, maxBuy);
     } else if (type === 'sell') {
         const uq = Math.floor(Math.max(0, Number(userStock.qty) || 0));
@@ -4353,6 +4720,8 @@ function normalizeUserStocksForRules(raw) {
     return o;
 }
 
+const normalizeUserCoinsForRules = normalizeUserStocksForRules;
+
 function clampUserCash(n) {
     const x = Math.round(Number(n));
     if (!Number.isFinite(x)) return 0;
@@ -4360,10 +4729,13 @@ function clampUserCash(n) {
 }
 
 // ── 거래 함수 ────────────────────────────────────────────────
-window.trade = async function (id, type, qty = 1) {
+window.trade = async function (id, type, qty = 1, opts = {}) {
 
     // 0. 관리자 여부 확인 (Firebase Auth 기준)
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    const tradeMarket = (opts && opts.market) || activeMarket;
+    const isCoin = tradeMarket === 'coin';
+    if (isCoin && !isCoinMarketAdmin()) return;
 
     const now = Date.now();
 
@@ -4424,37 +4796,39 @@ window.trade = async function (id, type, qty = 1) {
 
     // 서버 사이드 이중 검증 — 클라이언트 우회 방지
     if (qty < 1 || qty > 100 || !Number.isInteger(qty)) {
-        alert('거래 수량은 1~100주 사이여야 합니다.');
+        alert(isCoin ? '거래 수량은 1~100코인 사이여야 합니다.' : '거래 수량은 1~100주 사이여야 합니다.');
         return;
     }
 
-    // 보유 종목 수 제한 — 매수 시 신규 종목 체크
+    // 보유 종목 수 제한 — 매수 시 신규 종목 체크 (주식/코인 포트폴리오 각각)
     if (type === 'buy') {
-        const currentQtyOfStock = myData?.stocks?.[id]?.qty || 0;
-        if (currentQtyOfStock === 0) {
-            const ownedStockCount = Object.values(myData?.stocks || {}).filter(s => s.qty > 0).length;
-            if (ownedStockCount >= MAX_OWNED_STOCK_SYMBOLS) {
+        const book = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
+        const currentQtyOf = book[id]?.qty || 0;
+        if (currentQtyOf === 0) {
+            const ownedCount = Object.values(book).filter((s) => s.qty > 0).length;
+            if (ownedCount >= MAX_OWNED_STOCK_SYMBOLS) {
                 alert(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
                 return;
             }
         }
     }
 
-    // ── 1억원 한도 사전 체크 ─────────────────────────────────
-    const stockForCheck = allStocks.find(s => s.id === id);
+    const maxOrderWon = isCoin ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
+    const maxLabel    = isCoin ? '100억원' : '1억원';
+    const stockForCheck = (isCoin ? allCoins : allStocks).find((s) => s.id === id);
     if (stockForCheck) {
         if (type === 'sell') {
             const estSellPrice = Math.round(stockForCheck.price * (1 - 0.0005));
             const estReceive   = Math.round(estSellPrice * qty * (1 - 0.003));
-            if (estReceive > 100000000) {
-                alert(`1회 최대 거래 금액(1억원)을 초과합니다.\n\n예상 수령액: ${estReceive.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
+            if (estReceive > maxOrderWon) {
+                alert(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 수령액: ${estReceive.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
                 return;
             }
         } else {
             const estBuyPrice  = Math.round(stockForCheck.price * (1 + 0.0005));
             const estTotal     = estBuyPrice * qty;
-            if (estTotal > 100000000) {
-                alert(`1회 최대 거래 금액(1억원)을 초과합니다.\n\n예상 구매액: ${estTotal.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
+            if (estTotal > maxOrderWon) {
+                alert(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 구매액: ${estTotal.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
                 return;
             }
         }
@@ -4466,20 +4840,23 @@ window.trade = async function (id, type, qty = 1) {
     try {
 
     if (!myData.stocks) myData.stocks = {};
+    if (!myData.coins) myData.coins = {};
 
 const tradeUid = auth.currentUser?.uid;
 if (!tradeUid) {
     alert('로그인 정보가 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
     return;
 }
-const stockRef = ref(db, `stocks/${id}`);
+const stockRef = ref(db, isCoin ? `coins/${id}` : `stocks/${id}`);
 const userRef  = ref(db, `users/${tradeUid}`);
 
 // 현재 주가 정보 가져오기
 // 새로 상장된 종목은 UI/캐시에 아직 price가 없을 수 있으므로, 클릭 시점에 DB로 보정한다.
-let currentStockData = favorites[id] || ownedStocks[id] || searchResults[id];
+let currentStockData = isCoin
+    ? (favoriteCoins[id] || ownedCoins[id] || searchResults[id])
+    : (favorites[id] || ownedStocks[id] || searchResults[id]);
 let currentPrice = Number(currentStockData?.price);
-if (!Number.isFinite(currentPrice) || currentPrice <= 0) currentPrice = 10000;
+if (!Number.isFinite(currentPrice) || currentPrice <= 0) currentPrice = isCoin ? 100000000 : 10000;
 
 try {
     const snap = await get(stockRef);
@@ -4489,17 +4866,23 @@ try {
         const p = Number(data?.price);
         if (Number.isFinite(p) && p > 0) currentPrice = p;
 
-        // 트레이드/검증이 참조하는 전역 캐시(allStocks)를 즉시 보정
-        const idx = allStocks.findIndex(s => s?.id === id);
-        if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...currentStockData };
-        else allStocks.push(currentStockData);
-
-        if (favorites[id]) favorites[id] = currentStockData;
-        if (ownedStocks[id]) ownedStocks[id] = currentStockData;
+        if (isCoin) {
+            const idx = allCoins.findIndex((s) => s?.id === id);
+            if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...currentStockData };
+            else allCoins.push(currentStockData);
+            if (favoriteCoins[id]) favoriteCoins[id] = currentStockData;
+            if (ownedCoins[id]) ownedCoins[id] = currentStockData;
+        } else {
+            const idx = allStocks.findIndex((s) => s?.id === id);
+            if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...currentStockData };
+            else allStocks.push(currentStockData);
+            if (favorites[id]) favorites[id] = currentStockData;
+            if (ownedStocks[id]) ownedStocks[id] = currentStockData;
+        }
         if (searchResults[id]) searchResults[id] = currentStockData;
     }
 } catch (e) {
-    console.warn(`[Trade] stock hydrate failed for ${id}:`, e?.message || e);
+    console.warn(`[Trade] hydrate failed for ${id}:`, e?.message || e);
 }
 
 // 20번마다 한 번씩 서버에서 설정값 로드
@@ -4516,7 +4899,7 @@ if (!marketParamsCache || marketParamsFetchCount % 20 === 0) {
 marketParamsFetchCount++;
 
 const userPreSnap = await get(userRef);
-const preUser     = userPreSnap.exists() ? userPreSnap.val() : { cash: 1000000, stocks: {} };
+const preUser     = userPreSnap.exists() ? userPreSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
 const preCash     = preUser.cash ?? 1000000;
 
 const safeNum = (v, def) => {
@@ -4544,7 +4927,8 @@ const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice 
 const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
 const effectiveImpactCoef = impactCoef * dampingFactor;
 
-const impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
+let impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
+if (isCoin) impact *= COIN_MARKET_IMPACT_MULTIPLIER;
 
 // Temporary: Admin-only debug to verify impact damping is applied.
 try {
@@ -4583,8 +4967,10 @@ try {
             let newPrice;
             let prevPrice = Number(row?.price);
             if (!Number.isFinite(prevPrice) || prevPrice <= 0) {
-                prevPrice = Math.max(1, Number(currentPrice) || 10000);
+                prevPrice = Math.max(1, Number(currentPrice) || (isCoin ? 100000000 : 10000));
             }
+
+            const preBook = isCoin ? (preUser.coins || {}) : (preUser.stocks || {});
 
             if (type === 'buy') {
                 newPrice        = Math.round(prevPrice * (1 + impact));
@@ -4596,17 +4982,17 @@ try {
                     return;
                 }
 
-                const userStock  = preUser.stocks?.[id] || { qty: 0, avg: 0 };
+                const userStock  = preBook[id] || { qty: 0, avg: 0 };
                 const uqPre = Math.floor(Math.max(0, Number(userStock.qty) || 0));
                 if (uqPre === 0) {
-                    const ownedCount = Object.values(preUser.stocks || {}).filter(s => Math.floor(Math.max(0, Number(s?.qty) || 0)) > 0).length;
+                    const ownedCount = Object.values(preBook).filter((s) => Math.floor(Math.max(0, Number(s?.qty) || 0)) > 0).length;
                     if (ownedCount >= MAX_OWNED_STOCK_SYMBOLS) {
                         stockTxAbort.reason = "종목한도";
                         return;
                     }
                 }
             } else {
-                const userStock = preUser.stocks?.[id] || { qty: 0, avg: 0 };
+                const userStock = preBook[id] || { qty: 0, avg: 0 };
                 const uqSell = Math.floor(Math.max(0, Number(userStock.qty) || 0));
 
                 if (uqSell < qty) {
@@ -4655,10 +5041,12 @@ try {
         }
 
         const userTxResult = await runTransaction(userRef, (current) => {
-            const c = current || { cash: 1000000, stocks: {} };
+            const c = current || { cash: 1000000, stocks: {}, coins: {} };
             const cash = clampUserCash(c.cash ?? 1000000);
             const baseStocks = normalizeUserStocksForRules(c.stocks);
-            const rawPos = baseStocks[id];
+            const baseCoins = normalizeUserCoinsForRules(c.coins);
+            const baseBook = isCoin ? baseCoins : baseStocks;
+            const rawPos = baseBook[id];
             const usQty = Math.floor(Math.max(0, Number(rawPos?.qty) || 0));
             const usAvg = Math.round(Math.max(0, Math.min(USER_STOCK_AVG_MAX, Number(rawPos?.avg) || 0)));
             const us = { qty: usQty, avg: usAvg };
@@ -4673,28 +5061,50 @@ try {
                 const nextAvg = Math.round(totalCost / newQty);
                 if (!Number.isFinite(nextAvg)) return;
                 const avgClamped = Math.max(0, Math.min(USER_STOCK_AVG_MAX, nextAvg));
-                nextUser = {
-                    ...c,
-                    cash: clampUserCash(cash - totalBuyPrice),
-                    stocks: { ...baseStocks, [id]: { qty: newQty, avg: avgClamped } },
-                    lastTradeTime: tradeTs
-                };
+                if (isCoin) {
+                    nextUser = {
+                        ...c,
+                        cash: clampUserCash(cash - totalBuyPrice),
+                        stocks: baseStocks,
+                        coins: { ...baseCoins, [id]: { qty: newQty, avg: avgClamped } },
+                        lastTradeTime: tradeTs
+                    };
+                } else {
+                    nextUser = {
+                        ...c,
+                        cash: clampUserCash(cash - totalBuyPrice),
+                        stocks: { ...baseStocks, [id]: { qty: newQty, avg: avgClamped } },
+                        coins: baseCoins,
+                        lastTradeTime: tradeTs
+                    };
+                }
             } else {
                 if (us.qty < qty) return;
                 const totalSellAmount = Math.round(finalTradePrice * qty * (1 - fee));
                 const newQty = Math.max(0, Math.floor(us.qty - qty));
-                const nextStocks = { ...baseStocks };
+                const nextBook = { ...baseBook };
                 if (newQty === 0) {
-                    delete nextStocks[id];
+                    delete nextBook[id];
                 } else {
-                    nextStocks[id] = { qty: newQty, avg: us.avg };
+                    nextBook[id] = { qty: newQty, avg: us.avg };
                 }
-                nextUser = {
-                    ...c,
-                    cash: clampUserCash(cash + totalSellAmount),
-                    stocks: nextStocks,
-                    lastTradeTime: tradeTs
-                };
+                if (isCoin) {
+                    nextUser = {
+                        ...c,
+                        cash: clampUserCash(cash + totalSellAmount),
+                        stocks: baseStocks,
+                        coins: nextBook,
+                        lastTradeTime: tradeTs
+                    };
+                } else {
+                    nextUser = {
+                        ...c,
+                        cash: clampUserCash(cash + totalSellAmount),
+                        stocks: nextBook,
+                        coins: baseCoins,
+                        lastTradeTime: tradeTs
+                    };
+                }
             }
             const userSanitized = {};
             Object.keys(nextUser).forEach((k) => {
@@ -4728,9 +5138,10 @@ try {
         const nv = userTxResult.snapshot.val();
         myData.cash = nv.cash ?? 1000000;
         myData.stocks = nv.stocks || {};
+        myData.coins = nv.coins || {};
 
         if (finalTradePrice > 0) {
-            updateCandlestick(id, finalTradePrice, qty).catch(e => {
+            updateCandlestick(id, finalTradePrice, qty, { market: isCoin ? 'coin' : 'stock' }).catch((e) => {
                 console.warn('[candle] 분봉 업데이트 실패 (무시):', e.message);
             });
         }
@@ -4769,27 +5180,65 @@ try {
         try { updateUI(true); } catch (_) { /* noop */ }
         try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
         setTimeout(() => {
-            // 거래한 종목 카드 즉시 업데이트 (보유수, 버튼 활성화)
             const card = stockElements[id];
-            const stockData = favorites[id] || ownedStocks[id] || searchResults[id];
+            const stockData = isCoin
+                ? (favoriteCoins[id] || ownedCoins[id] || searchResults[id])
+                : (favorites[id] || ownedStocks[id] || searchResults[id]);
+            const currentQty = isCoin ? (myData?.coins?.[id]?.qty || 0) : (myData?.stocks?.[id]?.qty || 0);
 
-            // 보유량 기준으로 ownedStocks 갱신
-            const currentQty = myData?.stocks?.[id]?.qty || 0;
+            if (isCoin) {
+                if (currentQty > 0 && stockData) {
+                    ownedCoins[id] = { ...stockData, id };
+                } else if (currentQty === 0) {
+                    delete ownedCoins[id];
+                    if (ownedCoinUnsubs[id]) { ownedCoinUnsubs[id](); delete ownedCoinUnsubs[id]; }
+                    if (favCoinPollTimers[id] && !favoriteCoins[id]) {
+                        clearInterval(favCoinPollTimers[id]); delete favCoinPollTimers[id];
+                    }
+                }
+                if (currentQty === 0 && !favoriteCoins[id]) {
+                    const searchVal = document.getElementById('search-input')?.value?.trim() || '';
+                    if (searchVal) {
+                        if (card && stockData) {
+                            updateCardContent(card, stockData, { qty: 0, avg: 0 });
+                            const favBtn = card.querySelector('.btn-favorite');
+                            if (favBtn) { favBtn.textContent = '☆'; favBtn.title = '즐겨찾기 추가'; }
+                        }
+                    } else {
+                        renderFavoriteCoinList();
+                    }
+                    renderMyCoinPortfolio();
+                    return;
+                }
+                if (card && stockData) {
+                    updateCardContent(card, stockData, myData?.coins?.[id] || { qty: 0, avg: 0 });
+                    if (!card.querySelector('.btn-favorite')) {
+                        const favBtn = document.createElement('button');
+                        const isFav = !!favoriteCoins[id];
+                        favBtn.className   = 'btn-favorite';
+                        favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+                        favBtn.textContent = isFav ? '⭐' : '☆';
+                        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
+                        card.querySelector('.price-group')?.appendChild(favBtn);
+                    }
+                }
+                renderMyCoinPortfolio();
+                return;
+            }
+
             if (currentQty > 0 && stockData) {
-                ownedStocks[id] = { ...stockData, id }; // 신규/유지 보유
+                ownedStocks[id] = { ...stockData, id };
             } else if (currentQty === 0) {
-                delete ownedStocks[id]; // 전량 매도 → 제거
+                delete ownedStocks[id];
                 if (ownedUnsubs[id]) { ownedUnsubs[id](); delete ownedUnsubs[id]; }
                 if (favPollTimers[id] && !favorites[id]) {
                     clearInterval(favPollTimers[id]); delete favPollTimers[id];
                 }
             }
 
-            // 즐겨찾기/보유 모두 없으면 카드 리스트에서 즉시 제거
             if (currentQty === 0 && !favorites[id]) {
                 const searchVal = document.getElementById('search-input')?.value?.trim() || '';
                 if (searchVal) {
-                    // 검색 중이면 카드 유지 + 버튼/보유수만 갱신
                     if (card && stockData) {
                         updateCardContent(card, stockData, { qty: 0, avg: 0 });
                         const favBtn = card.querySelector('.btn-favorite');
@@ -4803,16 +5252,14 @@ try {
             }
 
             if (card && stockData) {
-                updateCardContent(card, stockData,
-                    myData?.stocks?.[id] || { qty: 0, avg: 0 });
-                // 즐겨찾기 버튼 복원
+                updateCardContent(card, stockData, myData?.stocks?.[id] || { qty: 0, avg: 0 });
                 if (!card.querySelector('.btn-favorite')) {
                     const favBtn = document.createElement('button');
                     const isFav  = !!favorites[id];
                     favBtn.className   = 'btn-favorite';
                     favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
                     favBtn.textContent = isFav ? '⭐' : '☆';
-                    favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(id); };
+                    favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
                     card.querySelector('.price-group')?.appendChild(favBtn);
                 }
             }
@@ -4824,16 +5271,23 @@ try {
 // ── 모바일 보유 주식 패널 슬라이드 ──────────────────────────
 // ── 포트폴리오 탭 전환 ──────────────────────────────────────
 window.switchPortfolioTab = function(tab) {
-    document.getElementById('portfolio-panel-stocks').style.display  = tab === 'stocks'  ? 'flex' : 'none';
-    document.getElementById('portfolio-panel-ranking').style.display = tab === 'ranking' ? 'block' : 'none';
+    if (tab === 'coins' && !isCoinMarketAdmin()) return;
+    document.getElementById('portfolio-panel-stocks').style.display   = tab === 'stocks'  ? 'flex' : 'none';
+    document.getElementById('portfolio-panel-coins').style.display    = tab === 'coins'  ? 'flex' : 'none';
+    document.getElementById('portfolio-panel-ranking').style.display  = tab === 'ranking' ? 'block' : 'none';
     document.getElementById('portfolio-panel-stocks').style.flexDirection = 'column';
+    document.getElementById('portfolio-panel-coins').style.flexDirection = 'column';
     document.getElementById('tab-btn-stocks').classList.toggle('active', tab === 'stocks');
+    document.getElementById('tab-btn-coins')?.classList.toggle('active', tab === 'coins');
     document.getElementById('tab-btn-ranking').classList.toggle('active', tab === 'ranking');
 
     if (tab === 'ranking') {
         startRankingAccessWatch();
     } else {
         stopRankingAccessWatch();
+    }
+    if (tab === 'stocks' || tab === 'coins') {
+        try { updateUI(false); } catch (_) { /* noop */ }
     }
 };
 
@@ -5061,11 +5515,20 @@ async function loadAssetRanking() {
 
         // 내 자산 계산
         let myAsset = myData?.cash || 0;
-        if (myData?.stocks && allStocks.length > 0) {
+        if (myData?.stocks) {
             Object.entries(myData.stocks).forEach(([id, s]) => {
                 if (!s.qty || s.qty <= 0) return;
-                const stock = allStocks.find(st => st.id === id);
-                if (stock) myAsset += stock.price * s.qty;
+                const row = favorites[id] || ownedStocks[id] || allStocks.find((st) => st.id === id);
+                const p = Number(row?.price);
+                if (Number.isFinite(p) && p > 0) myAsset += p * s.qty;
+            });
+        }
+        if (isCoinMarketAdmin() && myData?.coins) {
+            Object.entries(myData.coins).forEach(([id, s]) => {
+                if (!s.qty || s.qty <= 0) return;
+                const row = favoriteCoins[id] || ownedCoins[id] || allCoins.find((st) => st.id === id);
+                const p = Number(row?.price);
+                if (Number.isFinite(p) && p > 0) myAsset += p * s.qty;
             });
         }
         myAsset = Math.floor(myAsset);
@@ -5897,8 +6360,9 @@ function detectRebound(history) {
 
 // sparklinePriceCache 우선 — 없으면 현재가 flat line
 function createSparkline(stockId, fallbackPrice, isUp) {
-    const history = (sparklinePriceCache[stockId]?.length >= 2)
-        ? sparklinePriceCache[stockId]
+    const lineCache = isCoinMarket() ? sparklineCoinPriceCache : sparklinePriceCache;
+    const history = (lineCache[stockId]?.length >= 2)
+        ? lineCache[stockId]
         : (fallbackPrice ? [fallbackPrice, fallbackPrice] : null);
     if (!history || history.length < 2) return '';
     const min   = Math.min(...history);
@@ -5966,13 +6430,17 @@ function createStockCard(s) {
     // 호버 사운드
     card.addEventListener('mouseenter', () => playHoverSound());
 
-    updateCardContent(card, s, (myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
+    const pos = isCoinMarket()
+        ? ((myData?.coins || {})[s.id] || { qty: 0, avg: 0 })
+        : ((myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
+    updateCardContent(card, s, pos);
     return card;
 }
 
 // 기존 카드의 주가·변동률·보유량 등 내용만 업데이트
 function updateCardContent(card, s, userStock) {
     const isUp = (s.change || 0) >= 0;
+    const posUnit = isCoinMarket() ? '코인' : '주';
     let myProfit = 0, profitClass = 'steady';
     if (userStock.qty > 0 && userStock.avg > 0) {
         myProfit    = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
@@ -5983,10 +6451,11 @@ function updateCardContent(card, s, userStock) {
     if (!card.querySelector('.info-group')) {
         const name = s.name || stockNameCache[s.id] || s.id;
         const prevQty = document.getElementById(`qty-${s.id}`)?.value || '1';
+        const maxHint = isCoinMarket() ? '최대 100코인' : '최대 100주';
         card.innerHTML = `
             <div class="info-group">
                 <div class="stock-name">${escapeHtml(name)}</div>
-                <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
+                <div class="my-qty">보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
             </div>
             <div class="price-group">
                 <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
@@ -6000,7 +6469,7 @@ function updateCardContent(card, s, userStock) {
                         onclick="event.stopPropagation()"
                         oninput="clampQty(this)"
                         onblur="smartClampQty(this,'${s.id}',event.relatedTarget?.dataset?.tradeType||'buy')">
-                    <span class="trade-qty-hint">최대 100주</span>
+                    <span class="trade-qty-hint">${maxHint}</span>
                 </div>
                 <div class="trade-btn-row">
                     <button class="btn-trade-buy"  data-trade-type="buy"
@@ -6025,7 +6494,10 @@ function updateCardContent(card, s, userStock) {
     }
 
     const myQtyEl = card.querySelector('.my-qty');
-    if (myQtyEl) myQtyEl.innerHTML = `보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>`;
+    if (myQtyEl) myQtyEl.innerHTML = `보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>`;
+
+    const hintEl = card.querySelector('.trade-qty-hint');
+    if (hintEl) hintEl.textContent = isCoinMarket() ? '최대 100코인' : '최대 100주';
 
     const priceEl = card.querySelector('.current-price');
     if (priceEl) { priceEl.textContent = `${(s.price || 0).toLocaleString()}원`; priceEl.className = `current-price ${isUp ? 'up' : 'down'}`; }
@@ -6035,7 +6507,7 @@ function updateCardContent(card, s, userStock) {
 
     const chartWrap = card.querySelector('.chart-wrap');
     if (chartWrap) chartWrap.innerHTML = createSparkline(s.id, s.price, isUp);
-    card.classList.toggle('rebound-signal', detectRebound(sparklinePriceCache[s.id] || []));
+    card.classList.toggle('rebound-signal', detectRebound((isCoinMarket() ? sparklineCoinPriceCache : sparklinePriceCache)[s.id] || []));
 
     applyTradeCooldownStateToCard(card, s.id);
 
@@ -6114,6 +6586,23 @@ function stopAllStocksSubscriptions() {
         clearInterval(favPollTimers[id]);
         delete favPollTimers[id];
     });
+    if (typeof coinsUnsubscribe === 'function') {
+        coinsUnsubscribe();
+        coinsUnsubscribe = null;
+    }
+    mainCoinsSyncMode = null;
+    Object.keys(favoriteCoinUnsubs).forEach((id) => {
+        if (favoriteCoinUnsubs[id]) favoriteCoinUnsubs[id]();
+        delete favoriteCoinUnsubs[id];
+    });
+    Object.keys(ownedCoinUnsubs).forEach((id) => {
+        if (ownedCoinUnsubs[id]) ownedCoinUnsubs[id]();
+        delete ownedCoinUnsubs[id];
+    });
+    Object.keys(favCoinPollTimers).forEach((id) => {
+        clearInterval(favCoinPollTimers[id]);
+        delete favCoinPollTimers[id];
+    });
 }
 
 // ── 활동 감지 + 정규장/비정규장 구독 모드 ───────────────────
@@ -6151,6 +6640,18 @@ function pauseAllSubscriptions() {
     Object.keys(favPollTimers).forEach(id => {
         if (alertSettings[id]?.enabled) return; // 알림 설정 종목은 유지
         clearInterval(favPollTimers[id]); delete favPollTimers[id];
+    });
+    Object.keys(favoriteCoinUnsubs).forEach((id) => {
+        if (alertSettings[id]?.enabled) return;
+        if (favoriteCoinUnsubs[id]) { favoriteCoinUnsubs[id](); delete favoriteCoinUnsubs[id]; }
+    });
+    Object.keys(ownedCoinUnsubs).forEach((id) => {
+        if (alertSettings[id]?.enabled) return;
+        if (ownedCoinUnsubs[id]) { ownedCoinUnsubs[id](); delete ownedCoinUnsubs[id]; }
+    });
+    Object.keys(favCoinPollTimers).forEach((id) => {
+        if (alertSettings[id]?.enabled) return;
+        clearInterval(favCoinPollTimers[id]); delete favCoinPollTimers[id];
     });
     // 절전 모드 오버레이 표시
     document.getElementById('power-save-overlay')?.classList.add('active');
@@ -6198,6 +6699,17 @@ function applyStocksMode() {
         if (favorites[id])   subscribeToFavorite(id);
         if (ownedStocks[id]) subscribeToOwned(id);
     });
+
+    if (isCoinMarketAdmin()) {
+        const coinIds = [...new Set([...Object.keys(favoriteCoins), ...Object.keys(ownedCoins)])];
+        const badCoin = coinIds.filter((id) => id == null || id === '' || String(id) === 'undefined');
+        if (badCoin.length) console.warn('[sync-strategy] applyStocksMode suspicious coin ids:', badCoin);
+        coinIds.forEach((id) => {
+            if (favCoinPollTimers[id]) { clearInterval(favCoinPollTimers[id]); delete favCoinPollTimers[id]; }
+            if (favoriteCoins[id]) subscribeToFavoriteCoin(id);
+            if (ownedCoins[id]) subscribeToOwnedCoin(id);
+        });
+    }
     logAuthTrail('[sync-strategy] applyStocksMode END');
 }
 
@@ -6416,8 +6928,112 @@ window.toggleFavorite = function(stockId) {
     }
 };
 
+window.toggleFavoriteForActiveMarket = function (stockId) {
+    if (isCoinMarket()) window.toggleFavoriteCoin(stockId);
+    else window.toggleFavorite(stockId);
+};
+
+window.toggleFavoriteCoin = function (stockId) {
+    if (!isCoinMarketAdmin()) return;
+    if (favoriteCoins[stockId]) {
+        unsubscribeFromFavoriteCoin(stockId);
+        saveFavoriteCoinsToLocal();
+        renderFavoriteCoinList();
+        renderSearchResults();
+    } else {
+        const isOwned = (myData?.coins?.[stockId]?.qty || 0) > 0;
+        const nonOwnedCount = Object.keys(favoriteCoins).filter((id) => !(myData?.coins?.[id]?.qty > 0)).length;
+        if (!isOwned && nonOwnedCount >= 5) {
+            alert('보유하지 않은 종목의 즐겨찾기는 최대 5개까지 가능합니다.');
+            return;
+        }
+        const stockData = searchResults[stockId];
+        if (stockData) favoriteCoins[stockId] = stockData;
+        subscribeToFavoriteCoin(stockId);
+        saveFavoriteCoinsToLocal();
+        renderSearchResults();
+    }
+};
+
 // ── 즐겨찾기 목록 렌더링 ────────────────────────────────
+function renderFavoriteCoinList() {
+    const listDiv  = document.getElementById('stock-list');
+    const emptyDiv = document.getElementById('stock-empty');
+    if (!listDiv) return;
+    if (!isTradingUiUnlocked()) return;
+
+    const merged = {};
+    Object.entries(favoriteCoins).forEach(([id, s]) => { merged[id] = { ...s, isFavorite: true }; });
+    Object.entries(ownedCoins).forEach(([id, s]) => {
+        if (merged[id]) merged[id] = { ...merged[id], ...s, isFavorite: true };
+        else merged[id] = { ...s, isFavorite: false };
+    });
+    const items = Object.values(merged);
+
+    if (items.length === 0) {
+        listDiv.innerHTML  = '';
+        stockElements      = {};
+        if (emptyDiv) emptyDiv.style.display = 'flex';
+        return;
+    }
+    if (emptyDiv) emptyDiv.style.display = 'none';
+
+    const searchVal = document.getElementById('search-input')?.value || '';
+    if (searchVal.trim()) return;
+
+    const fragment = document.createDocumentFragment();
+    items.sort((a, b) => (b.price || 0) - (a.price || 0)).forEach((s) => {
+        let card = stockElements[s.id];
+        if (!card) {
+            card = createStockCard(s);
+            stockElements[s.id] = card;
+        } else {
+            updateCardContent(card, s, (myData?.coins || {})[s.id] || { qty: 0, avg: 0 });
+        }
+        let favBtn = card.querySelector('.btn-favorite');
+        if (!favBtn) {
+            favBtn = document.createElement('button');
+            favBtn.className = 'btn-favorite';
+            favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(s.id); };
+            card.querySelector('.price-group')?.appendChild(favBtn);
+        }
+        favBtn.title       = s.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가';
+        favBtn.textContent = s.isFavorite ? '⭐' : '☆';
+
+        let btnGroup = card.querySelector('.price-btn-group');
+        if (!btnGroup) {
+            btnGroup = document.createElement('div');
+            btnGroup.className = 'price-btn-group';
+            if (favBtn.parentNode) favBtn.parentNode.removeChild(favBtn);
+            btnGroup.appendChild(favBtn);
+            const alertBtn = document.createElement('button');
+            alertBtn.className = 'btn-alert';
+            alertBtn.dataset.id = s.id;
+            alertBtn.onclick = (e) => { e.stopPropagation(); openAlertModal(s.id, s.name || s.id); };
+            btnGroup.appendChild(alertBtn);
+            card.querySelector('.price-group')?.appendChild(btnGroup);
+        }
+        const alertBtnEl = btnGroup.querySelector('.btn-alert');
+        if (alertBtnEl) { alertBtnEl.textContent = getAlertIcon(s.id); alertBtnEl.title = '알림 설정'; }
+
+        fragment.appendChild(card);
+    });
+    Object.keys(stockElements).forEach((id) => {
+        if (!items.find((s) => s.id === id)) {
+            stockElements[id]?.remove();
+            delete stockElements[id];
+        }
+    });
+    listDiv.appendChild(fragment);
+    refreshCircuitFreezeOnAllListCards();
+    ensureCircuitFreezeCountdownTimer();
+}
+
 function renderFavoriteList() {
+    if (isCoinMarket()) {
+        renderFavoriteCoinList();
+        return;
+    }
     const listDiv  = document.getElementById('stock-list');
     const emptyDiv = document.getElementById('stock-empty');
     if (!listDiv) return;
@@ -6458,7 +7074,7 @@ function renderFavoriteList() {
         if (!favBtn) {
             favBtn = document.createElement('button');
             favBtn.className = 'btn-favorite';
-            favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(s.id); };
+            favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(s.id); };
             card.querySelector('.price-group')?.appendChild(favBtn);
         }
         favBtn.title       = s.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가';
@@ -6580,16 +7196,17 @@ async function handleSearch(query) {
     if (emptyDiv) emptyDiv.style.display = 'none';
 
     try {
-        // 이름 캐시 없으면 먼저 로드
         if (Object.keys(stockNameCache).length === 0) {
             await loadStockNameCache();
         }
 
         searchResults = {};
+        const coinMode = isCoinMarket();
         Object.entries(stockNameCache).forEach(([id, name]) => {
             if (name.includes(q)) {
-                // 즐겨찾기/보유 캐시에 실시간 데이터가 있으면 병합
-                const cached = favorites[id] || ownedStocks[id];
+                const cached = coinMode
+                    ? (favoriteCoins[id] || ownedCoins[id])
+                    : (favorites[id] || ownedStocks[id]);
                 searchResults[id] = cached
                     ? { ...cached, id }
                     : { id, name, price: 0, change: 0, volume: 0 };
@@ -6598,41 +7215,48 @@ async function handleSearch(query) {
 
         renderSearchResults();
 
-        // 캐시 없는 종목 → 실시간 가격 즉시 조회 후 카드 업데이트
-        const needsPrice = Object.keys(searchResults).filter(id =>
-            !favorites[id] && !ownedStocks[id]
+        const needsPrice = Object.keys(searchResults).filter((id) =>
+            coinMode
+                ? (!favoriteCoins[id] && !ownedCoins[id])
+                : (!favorites[id] && !ownedStocks[id])
         );
         if (needsPrice.length > 0) {
-            needsPrice.forEach(async id => {
+            needsPrice.forEach(async (id) => {
                 try {
-                    const snap = await get(ref(db, `stocks/${id}`));
+                    const path = coinMode ? `coins/${id}` : `stocks/${id}`;
+                    const snap = await get(ref(db, path));
                     if (!snap.exists()) return;
                     const data = snap.val();
-                    // 검색창이 아직 같은 검색어면 결과 업데이트
                     if (document.getElementById('search-input')?.value?.trim() === q) {
                         const resolved = { ...data, id };
                         searchResults[id] = resolved;
-                        // 검색으로만 먼저 보이는 신규 종목은 trade 시점에 stale 참조를 피하기 위해 allStocks도 즉시 보정
-                        const idx = allStocks.findIndex(s => s?.id === id);
-                        if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...resolved };
-                        else allStocks.push(resolved);
+                        if (coinMode) {
+                            const idx = allCoins.findIndex((s) => s?.id === id);
+                            if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...resolved };
+                            else allCoins.push(resolved);
+                        } else {
+                            const idx = allStocks.findIndex((s) => s?.id === id);
+                            if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...resolved };
+                            else allStocks.push(resolved);
+                        }
                         const card = stockElements[id];
                         if (card && myData) {
-                            updateCardContent(card, searchResults[id],
-                                (myData?.stocks || {})[id] || { qty: 0, avg: 0 });
-                            // updateCardContent 후 즐겨찾기 버튼 복원
+                            const pos = coinMode
+                                ? ((myData?.coins || {})[id] || { qty: 0, avg: 0 })
+                                : ((myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+                            updateCardContent(card, searchResults[id], pos);
                             if (!card.querySelector('.btn-favorite')) {
                                 const favBtn = document.createElement('button');
-                                const isFav  = !!favorites[id];
+                                const isFav = coinMode ? !!favoriteCoins[id] : !!favorites[id];
                                 favBtn.className   = 'btn-favorite';
                                 favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
                                 favBtn.textContent = isFav ? '⭐' : '☆';
-                                favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(id); };
+                                favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
                                 card.querySelector('.price-group')?.appendChild(favBtn);
                             }
                         }
                     }
-                } catch(e) {}
+                } catch (e) { /* noop */ }
             });
         }
     } catch(e) {
@@ -6670,11 +7294,11 @@ function renderSearchResults() {
     items.forEach(s => {
         const card   = createStockCard(s);
         const favBtn = document.createElement('button');
-        const isFav  = !!favorites[s.id];
+        const isFav  = isCoinMarket() ? !!favoriteCoins[s.id] : !!favorites[s.id];
         favBtn.className   = 'btn-favorite';
         favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
         favBtn.textContent = isFav ? '⭐' : '☆';
-        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavorite(s.id); };
+        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(s.id); };
         card.querySelector('.price-group')?.appendChild(favBtn);
         listDiv.appendChild(card);
         stockElements[s.id] = card;
@@ -6684,14 +7308,20 @@ function renderSearchResults() {
 }
 
 // ── 초기 즐겨찾기 로드 (로컬스토리지 → Firebase 구독) ──
+function initFavoriteCoins() {
+    if (!isCoinMarketAdmin()) return;
+    loadFavoriteCoinsFromLocal().forEach((id) => subscribeToFavoriteCoin(id));
+}
+
 function initFavorites() {
     const savedIds = loadFavoritesFromLocal();
     if (savedIds.length === 0) {
         const emptyDiv = document.getElementById('stock-empty');
-        if (emptyDiv) emptyDiv.style.display = 'flex';
-        return;
+        if (emptyDiv && loadFavoriteCoinsFromLocal().length === 0) emptyDiv.style.display = 'flex';
+    } else {
+        savedIds.forEach((id) => subscribeToFavorite(id));
     }
-    savedIds.forEach(id => subscribeToFavorite(id));
+    initFavoriteCoins();
 }
 
 // ── 보유 주식 개별 구독 ──────────────────────────────────
@@ -6768,6 +7398,113 @@ function syncOwnedSubscriptions() {
                 clearInterval(favPollTimers[id]); delete favPollTimers[id];
             }
             delete ownedStocks[id];
+        }
+    });
+}
+
+function saveFavoriteCoinsToLocal() {
+    try {
+        localStorage.setItem('soop_favorite_coins', JSON.stringify(Object.keys(favoriteCoins)));
+    } catch (e) { /* noop */ }
+}
+
+function loadFavoriteCoinsFromLocal() {
+    try {
+        const raw = localStorage.getItem('soop_favorite_coins');
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+}
+
+function subscribeToFavoriteCoin(stockId) {
+    if (!isCoinMarketAdmin()) return;
+    if (favoriteCoinUnsubs[stockId]) return;
+    if (stockId == null || stockId === '' || String(stockId) === 'undefined') return;
+    try {
+        favoriteCoinUnsubs[stockId] = onValue(ref(db, `coins/${stockId}`), (snap) => {
+            if (!snap.exists()) return;
+            const data = { ...snap.val(), id: stockId };
+            const prevPrice = favoriteCoins[stockId]?.price;
+            if (prevPrice !== undefined) {
+                if (!sparklineCoinPriceCache[stockId]) sparklineCoinPriceCache[stockId] = [prevPrice];
+                if (prevPrice !== data.price) {
+                    sparklineCoinPriceCache[stockId].push(data.price);
+                    if (sparklineCoinPriceCache[stockId].length > 20) sparklineCoinPriceCache[stockId].shift();
+                    checkPriceAlert(stockId, data.name || stockId, prevPrice, data.price);
+                }
+            } else if (!sparklineCoinPriceCache[stockId]) {
+                sparklineCoinPriceCache[stockId] = [data.price];
+            }
+            if (allBanners[stockId]) {
+                data.bannerImg     = allBanners[stockId].bannerImg;
+                data.bannerEndDate = allBanners[stockId].bannerEndDate;
+                data.bannerIsPaid  = allBanners[stockId].bannerIsPaid;
+                data.link          = allBanners[stockId].link;
+            }
+            favoriteCoins[stockId] = data;
+            if (isCoinMarket()) renderFavoriteCoinList();
+        }, (err) => console.warn('[coin fav] onValue', err?.message || err));
+    } catch (err) {
+        logAuthTrailError('subscribeToFavoriteCoin', err);
+    }
+}
+
+function unsubscribeFromFavoriteCoin(stockId) {
+    if (favoriteCoinUnsubs[stockId]) {
+        favoriteCoinUnsubs[stockId]();
+        delete favoriteCoinUnsubs[stockId];
+    }
+    delete favoriteCoins[stockId];
+}
+
+function subscribeToOwnedCoin(stockId) {
+    if (!isCoinMarketAdmin()) return;
+    if (ownedCoinUnsubs[stockId]) return;
+    if (stockId == null || stockId === '' || String(stockId) === 'undefined') return;
+    try {
+        ownedCoinUnsubs[stockId] = onValue(ref(db, `coins/${stockId}`), (snap) => {
+            if (!snap.exists()) return;
+            const data = { ...snap.val(), id: stockId };
+            const prevPrice = ownedCoins[stockId]?.price;
+            if (prevPrice !== undefined) {
+                if (!sparklineCoinPriceCache[stockId]) sparklineCoinPriceCache[stockId] = [prevPrice];
+                if (prevPrice !== data.price) {
+                    sparklineCoinPriceCache[stockId].push(data.price);
+                    if (sparklineCoinPriceCache[stockId].length > 20) sparklineCoinPriceCache[stockId].shift();
+                }
+            } else if (!sparklineCoinPriceCache[stockId]) {
+                sparklineCoinPriceCache[stockId] = [data.price];
+            }
+            ownedCoins[stockId] = data;
+            if (favoriteCoins[stockId]) favoriteCoins[stockId] = data;
+            if (isCoinMarket()) renderFavoriteCoinList();
+            renderMyCoinPortfolio();
+        }, (err) => console.warn('[owned coin]', err?.message || err));
+    } catch (err) {
+        logAuthTrailError('subscribeToOwnedCoin', err);
+    }
+}
+
+function syncOwnedCoinSubscriptions() {
+    if (!isCoinMarketAdmin()) return;
+    if (!myData?.coins) return;
+    const currentOwned = new Set(
+        Object.keys(myData.coins).filter((id) => (myData.coins[id]?.qty || 0) > 0)
+    );
+    currentOwned.forEach((id) => {
+        if (!ownedCoins[id]) ownedCoins[id] = { id };
+        subscribeToOwnedCoin(id);
+    });
+    Object.keys(ownedCoins).forEach((id) => {
+        if (!currentOwned.has(id) && !favoriteCoins[id]) {
+            if (ownedCoinUnsubs[id]) {
+                ownedCoinUnsubs[id]();
+                delete ownedCoinUnsubs[id];
+            }
+            if (favCoinPollTimers[id] && !favoriteCoins[id]) {
+                clearInterval(favCoinPollTimers[id]);
+                delete favCoinPollTimers[id];
+            }
+            delete ownedCoins[id];
         }
     });
 }
@@ -6899,7 +7636,7 @@ document.addEventListener('keydown', (e) => {
         <p>초기 지급되는 가상 자산 100만원은 게임 내에서만 유효합니다. 게임 자산은 현금으로 환전되거나 양도될 수 없습니다. 서비스 점검, 오류, 운영 정책 변경으로 인해 자산이 변동될 수 있습니다.</p>
 
         <h3>제4조 후원 및 유료 서비스</h3>
-        <p>배너 광고, 중계방 등록, 차트 배너, <b style="color:var(--text-main);">자산 랭킹 열람</b> 등 유료·유료성 신청 서비스는 SOOP 별풍선 후원을 전제로 운영됩니다. 자산 랭킹 열람은 신청 시 안내된 별풍선 개수(현재 <b style="color:var(--text-main);">50개</b>)에 대한 약정 후 운영진 검수를 거쳐 승인되며, 승인 시점부터 정해진 기간(현재 <b style="color:var(--text-main);">12시간</b>) 동안 랭킹 화면을 이용할 수 있습니다. 기간 만료 후에는 동일 절차로 재신청할 수 있습니다. 별풍선 후원 자체는 SOOP 플랫폼 정책에 따르며 환불은 SOOP 환불 정책을 따릅니다. 배너·중계 등 기간형 서비스의 노출 기간은 운영진 승인 및 약정 내용에 따라 산정되며, 서비스 점검으로 인한 노출 손실은 운영진 판단에 따라 보전될 수 있습니다.</p>
+        <p>배너 광고, 중계방 등록, 차트 배너, <b style="color:var(--text-main);">자산 랭킹 열람</b> 등 유료·유료성 신청 서비스는 SOOP 별풍선 후원을 전제로 운영됩니다. 자산 랭킹 열람은 신청 시 안내된 별풍선 개수(현재 <b style="color:var(--text-main);">30개</b>)에 대한 약정 후 운영진 검수를 거쳐 승인되며, 승인 시점부터 정해진 기간(현재 <b style="color:var(--text-main);">12시간</b>) 동안 랭킹 화면을 이용할 수 있습니다. 기간 만료 후에는 동일 절차로 재신청할 수 있습니다. 별풍선 후원 자체는 SOOP 플랫폼 정책에 따르며 환불은 SOOP 환불 정책을 따릅니다. 배너·중계 등 기간형 서비스의 노출 기간은 운영진 승인 및 약정 내용에 따라 산정되며, 서비스 점검으로 인한 노출 손실은 운영진 판단에 따라 보전될 수 있습니다.</p>
 
         <h3>제5조 운영 정책</h3>
         <p>운영진은 서비스 안정성을 위해 사전 고지 없이 점검, 종목 조정, 주가 수정을 진행할 수 있습니다. 어뷰징, 비정상적 거래, 운영 방해 행위가 확인될 경우 제재 없이 계정이 초기화될 수 있습니다. 운영진의 모든 결정은 최종적이며 별도 이의 제기 절차가 없습니다.</p>

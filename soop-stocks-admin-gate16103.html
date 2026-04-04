@@ -1159,6 +1159,14 @@
             <button class="btn-primary" onclick="uploadStocks()">일괄 상장 실행</button>
             <button class="btn-primary" style="background: #64748b;" onclick="deleteStocks()">일괄 삭제 실행</button>
         </div>
+        <div class="info-box" style="margin-top:16px; border-color:#f59e0b; color:#fcd34d;">
+            <b>🪙 코인 시장 동기화</b> — <code>stocks/</code>에 있는 종목 ID마다 <code>coins/</code>에 행이 없으면 생성합니다.<br>
+            시가는 <b>1억원</b>으로 두고, 거래량·보유는 0부터 시작합니다. (주식 시세와 완전히 별도 노드)
+        </div>
+        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+            <button type="button" class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="syncCoinsFromStocks()">코인 시장 종목 생성 (미존재만)</button>
+        </div>
+        <div id="sync-coins-status" style="font-size:13px; color:#94a3b8; margin-top:8px;"></div>
         </div>
         </div>
     </div>
@@ -1492,7 +1500,7 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            별풍선 <b>50개</b> 약정 후 신청된 건입니다. 후원 확인 후 <b>수락</b>하면 해당 유저에게 자산 랭킹이 <b>12시간</b> 열람됩니다.<br>
+            별풍선 <b>30개</b> 약정 후 신청된 건입니다. 후원 확인 후 <b>수락</b>하면 해당 유저에게 자산 랭킹이 <b>12시간</b> 열람됩니다.<br>
             <span style="color:#38bdf8;">Firebase: <b>assetRankingRequests/{uid}</b> · 승인 시 <b>accessExpiresAt</b> 저장. 예전 <b>subscribeRequests</b>만 승인된 유저는 메인 앱에서 레거시로 랭킹이 열릴 수 있습니다.</span>
         </div>
 
@@ -2044,7 +2052,7 @@
             const st          = String(req.status || '').toLowerCase();
             const statusColor = st === 'approved' ? '#22c55e' : st === 'expired' ? '#64748b' : st === 'rejected' ? '#ef4444' : '#f59e0b';
             const statusText  = st === 'approved' ? '✅ 승인됨' : st === 'expired' ? '⬛ 만료됨' : st === 'rejected' ? '❌ 거절' : '⏳ 대기중';
-            const costNum     = typeof req.cost === 'number' ? req.cost : 50;
+            const costNum     = typeof req.cost === 'number' ? req.cost : 30;
             const expMs       = getAssetRankingAccessExpiresAtMs(req);
             const expLine     = st === 'approved' && expMs
                 ? `<div style="font-size:11px; color:${Date.now() >= expMs ? '#f59e0b' : '#94a3b8'}; margin-bottom:8px;">열람 만료 시각(12h): ${new Date(expMs).toLocaleString('ko-KR')}${Date.now() >= expMs ? ' · <b>시간 경과</b> (앱에서 랭킹 차단)' : ''}</div>`
@@ -2302,6 +2310,44 @@
     }
     window.reloadStocks = async function() {
         if (!isAdmin()) return; await loadStocksOnce(); };
+
+    window.syncCoinsFromStocks = async function() {
+        if (!isAdmin()) return;
+        const statusEl = document.getElementById('sync-coins-status');
+        if (statusEl) statusEl.textContent = '진행 중...';
+        try {
+            const [sSnap, cSnap] = await Promise.all([
+                get(ref(db, 'stocks/')),
+                get(ref(db, 'coins/'))
+            ]);
+            const stocks = sSnap.exists() ? sSnap.val() : {};
+            const coins = cSnap.exists() ? cSnap.val() : {};
+            let created = 0;
+            const updates = {};
+            const INITIAL = 100000000;
+            for (const [id, row] of Object.entries(stocks)) {
+                if (coins[id]) continue;
+                const name = row?.name || '';
+                updates[`coins/${id}`] = {
+                    name,
+                    price: INITIAL,
+                    volume: 0,
+                    buyVol: 0,
+                    sellVol: 0,
+                    change: '0.00'
+                };
+                created++;
+            }
+            if (created === 0) {
+                if (statusEl) statusEl.textContent = '새로 만들 코인 종목이 없습니다. (이미 coins/에 모두 있음)';
+                return;
+            }
+            await update(ref(db), updates);
+            if (statusEl) statusEl.textContent = `완료: ${created}개 코인 종목 생성 (시가 1억원)`;
+        } catch (e) {
+            if (statusEl) statusEl.textContent = '실패: ' + (e.message || e);
+        }
+    };
 
     // ── 차트 하단 배너 ───────────────────────────────────────
     async function loadChartBannerStatus() {
