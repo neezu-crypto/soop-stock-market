@@ -3066,20 +3066,29 @@
                     .slice(0, 100).map(([id]) => id)
             );
             const splitTs = Date.now();
-            const rootUpdates = {};
-            Object.entries(stocksData).forEach(([id, s]) => {
-                if (!top100Ids.has(id)) return;
-                const newPrice = Math.max(1, Math.floor((s.price || 0) / ratio));
-                const history  = (s.history || [s.price]).map(p => Math.max(1, Math.floor((Number(p) || 0) / ratio)));
-                rootUpdates[`stocks/${id}/price`] = newPrice;
-                rootUpdates[`stocks/${id}/history`] = history;
-                rootUpdates[`stocks/${id}/change`] = s.change || 0;
-                rootUpdates[`stocks/${id}/lastSplitTimestamp`] = splitTs;
-            });
+            const top100List = [...top100Ids];
+
+            statusEl.innerText = `종목 주가 반영 중 (top ${top100List.length}개)...`;
+            const STOCK_SPLIT_PARALLEL = 20;
+            for (let i = 0; i < top100List.length; i += STOCK_SPLIT_PARALLEL) {
+                const slice = top100List.slice(i, i + STOCK_SPLIT_PARALLEL);
+                await Promise.all(slice.map((id) => {
+                    const s = stocksData[id];
+                    const newPrice = Math.max(1, Math.floor((s.price || 0) / ratio));
+                    const history = (s.history || [s.price]).map(p => Math.max(1, Math.floor((Number(p) || 0) / ratio)));
+                    return update(ref(db, `stocks/${id}`), {
+                        price: newPrice,
+                        history,
+                        change: s.change != null ? s.change : 0,
+                        lastSplitTimestamp: splitTs
+                    });
+                }));
+            }
 
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
             const userIds   = Object.keys(usersData);
+            const holdingPairs = [];
             userIds.forEach((uid) => {
                 const user = usersData[uid];
                 if (!user?.stocks) return;
@@ -3088,29 +3097,19 @@
                     const q = Math.floor(Number(info.qty) || 0);
                     if (q <= 0) return;
                     const newQty = Math.floor(q * ratio);
-                    rootUpdates[`users/${uid}/stocks/${stockId}/qty`] = newQty;
-                    rootUpdates[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
+                    const newAvg = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
+                    holdingPairs.push({ uid, stockId, qty: newQty, avg: newAvg });
                 });
             });
 
-            statusEl.innerText = `원자 반영 중 (종목 ${top100Ids.size}개 + 유저 보유분)...`;
-            try {
-                await update(ref(db), rootUpdates);
-            } catch (e1) {
-                console.warn('[executeSplit] root update failed; stocks then users:', e1?.message || e1);
-                const stockRel = {};
-                top100Ids.forEach((id) => {
-                    ['price', 'history', 'change', 'lastSplitTimestamp'].forEach((field) => {
-                        const full = `stocks/${id}/${field}`;
-                        if (rootUpdates[full] !== undefined) stockRel[`${id}/${field}`] = rootUpdates[full];
-                    });
+            statusEl.innerText = `유저 보유 반영 중 (${holdingPairs.length}건)...`;
+            const HOLD_PATHS_PER_UPDATE = 400;
+            for (let i = 0; i < holdingPairs.length; i += HOLD_PATHS_PER_UPDATE) {
+                const batch = {};
+                holdingPairs.slice(i, i + HOLD_PATHS_PER_UPDATE).forEach(({ uid, stockId, qty, avg }) => {
+                    batch[`users/${uid}/stocks/${stockId}`] = { qty, avg };
                 });
-                await update(ref(db, 'stocks/'), stockRel);
-                const userOnly = {};
-                Object.keys(rootUpdates).forEach((k) => {
-                    if (k.startsWith('users/')) userOnly[k.replace(/^users\//, '')] = rootUpdates[k];
-                });
-                if (Object.keys(userOnly).length > 0) await update(ref(db, 'users/'), userOnly);
+                await update(ref(db), batch);
             }
             statusEl.innerText = `종목·유저 반영 완료 (${userIds.length}명 스캔)`;
 
@@ -4285,7 +4284,6 @@
 
     async function autoSplitStocksByThreshold({ thresholdWon, ratioN }) {
         const logEl = document.getElementById('daily-auto-split-log');
-        const USER_BATCH_SIZE = 500;
         const ratio = ratioN;
         const emailNorm = (auth.currentUser?.email || '').toLowerCase();
         if (emailNorm !== ADMIN_EMAIL.toLowerCase()) {
@@ -4359,19 +4357,13 @@
             const splitTs = Date.now();
             const events = [];
 
-            const stockUpdates = {};
             splittable.forEach((id) => {
                 const s = stocksData[id];
                 const oldPrice = s?.price || 0;
                 const newPrice = Math.max(1, Math.floor(oldPrice / ratio));
-                const history = (s.history || [s.price]).map(p => Math.max(1, Math.floor((Number(p) || 0) / ratio)));
-                stockUpdates[`stocks/${id}/price`] = newPrice;
-                stockUpdates[`stocks/${id}/history`] = history;
-                stockUpdates[`stocks/${id}/change`] = s.change || 0;
-                stockUpdates[`stocks/${id}/lastSplitTimestamp`] = splitTs;
                 events.push({
                     stockId: id,
-                    stockName: s.name || id,
+                    stockName: (s && s.name) || id,
                     thresholdWon,
                     ratioN: ratio,
                     oldPrice,
@@ -4379,35 +4371,50 @@
                 });
             });
 
-            await update(ref(db), stockUpdates);
+            /** RTDB: 루트 update로 stocks/id/price·lastSplitTimestamp 등을 나눠 쓰면 경로별 newData가 잘려 stocks 규칙(.write)이 실패할 수 있음 → 종목 노드 단위 병합 */
+            const STOCK_SPLIT_PARALLEL = 20;
+            for (let i = 0; i < splittable.length; i += STOCK_SPLIT_PARALLEL) {
+                const slice = splittable.slice(i, i + STOCK_SPLIT_PARALLEL);
+                await Promise.all(slice.map((id) => {
+                    const s = stocksData[id];
+                    const oldPrice = s?.price || 0;
+                    const newPrice = Math.max(1, Math.floor(oldPrice / ratio));
+                    const history = (s.history || [s.price]).map(p => Math.max(1, Math.floor((Number(p) || 0) / ratio)));
+                    return update(ref(db, `stocks/${id}`), {
+                        price: newPrice,
+                        history,
+                        change: s.change != null ? s.change : 0,
+                        lastSplitTimestamp: splitTs
+                    });
+                }));
+            }
 
             const usersSnap = await get(ref(db, 'users/'));
             const usersData = usersSnap.val() || {};
             const userIds = Object.keys(usersData);
 
-            const uidToPaths = new Map();
+            /** users/.../stocks/sid/qty·avg 를 따로 쓰면 stocks/$stockId .validate 가 qty+avg 동시 존재를 못 보고 실패할 수 있음 → 객체 한 번에 기록 */
+            const holdingPairs = [];
             userIds.forEach((uid) => {
                 const user = usersData[uid];
                 if (!user?.stocks) return;
-                const paths = {};
                 Object.entries(user.stocks).forEach(([stockId, info]) => {
                     if (!targetSet.has(stockId)) return;
                     if (!info) return;
                     const q = Math.floor(Number(info.qty) || 0);
                     if (q <= 0) return;
                     const newQty = Math.floor(q * ratio);
-                    paths[`users/${uid}/stocks/${stockId}/qty`] = newQty;
-                    paths[`users/${uid}/stocks/${stockId}/avg`] = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
+                    const newAvg = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
+                    holdingPairs.push({ uid, stockId, qty: newQty, avg: newAvg });
                 });
-                if (Object.keys(paths).length > 0) uidToPaths.set(uid, paths);
             });
 
-            const uidsWithUpdates = [...uidToPaths.keys()];
-            const uidChunks = chunkArray(uidsWithUpdates, USER_BATCH_SIZE);
-            for (let i = 0; i < uidChunks.length; i++) {
-                const chunk = uidChunks[i];
+            const HOLD_PATHS_PER_UPDATE = 400;
+            for (let i = 0; i < holdingPairs.length; i += HOLD_PATHS_PER_UPDATE) {
                 const batch = {};
-                chunk.forEach((uid) => Object.assign(batch, uidToPaths.get(uid)));
+                holdingPairs.slice(i, i + HOLD_PATHS_PER_UPDATE).forEach(({ uid, stockId, qty, avg }) => {
+                    batch[`users/${uid}/stocks/${stockId}`] = { qty, avg };
+                });
                 await update(ref(db), batch);
             }
 
