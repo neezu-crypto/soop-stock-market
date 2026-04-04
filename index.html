@@ -3101,6 +3101,20 @@ function processCoinsSnap(snap) {
             try { refreshCircuitFreezeOnAllListCards(); } catch (_) { /* noop */ }
         });
     } else {
+        const searchQ = document.getElementById('search-input')?.value?.trim() || '';
+        let resyncListFromBulk = false;
+        if (isCoinMarket() && !searchQ) {
+            for (const id of new Set([...Object.keys(favoriteCoins), ...Object.keys(ownedCoins)])) {
+                const row = favoriteCoins[id] || ownedCoins[id];
+                const rp = Number(row?.price);
+                if (Number.isFinite(rp) && rp > 0) continue;
+                const nc = newCoins.find((c) => c.id === id);
+                if (nc && Number(nc.price) > 0) {
+                    resyncListFromBulk = true;
+                    break;
+                }
+            }
+        }
         newCoins.forEach((ns) => {
             const old = allCoins.find((os) => os.id === ns.id);
             if (old && (old.price !== ns.price || old.change !== ns.change)) {
@@ -3115,6 +3129,11 @@ function processCoinsSnap(snap) {
             }
         });
         allCoins = newCoins;
+        if (resyncListFromBulk) {
+            queueMicrotask(() => {
+                try { refreshMainStockListView(); } catch (_) { /* noop */ }
+            });
+        }
     }
     updateUI(false);
 }
@@ -6959,6 +6978,26 @@ window.toggleFavoriteCoin = function (stockId) {
     }
 };
 
+/**
+ * 코인 탭에서 즐겨찾기/보유 행은 per-id 구독 전 `{ id }` 플레이스홀더일 수 있고,
+ * `coins/` 전체 스냅샷(allCoins)이 먼저 도착해도 목록 병합에 쓰이지 않아 주가가 0으로 보인다.
+ * 시세가 비어 있으면 allCoins에서 보강한다.
+ */
+function enrichCoinListRow(s) {
+    if (!isCoinMarket() || !s?.id) return s;
+    const p = Number(s.price);
+    if (Number.isFinite(p) && p > 0) return s;
+    const ac = allCoins.find((c) => c.id === s.id);
+    if (!ac || !(Number(ac.price) > 0)) return s;
+    return {
+        ...ac,
+        ...s,
+        price: ac.price,
+        change: ac.change !== undefined && ac.change !== null ? ac.change : s.change,
+        volume: ac.volume !== undefined ? ac.volume : s.volume
+    };
+}
+
 // ── 즐겨찾기 목록 렌더링 ────────────────────────────────
 function renderFavoriteCoinList() {
     const listDiv  = document.getElementById('stock-list');
@@ -6986,7 +7025,10 @@ function renderFavoriteCoinList() {
     if (searchVal.trim()) return;
 
     const fragment = document.createDocumentFragment();
-    items.sort((a, b) => (b.price || 0) - (a.price || 0)).forEach((s) => {
+    items
+        .map((row) => enrichCoinListRow(row))
+        .sort((a, b) => (b.price || 0) - (a.price || 0))
+        .forEach((s) => {
         let card = stockElements[s.id];
         if (!card) {
             card = createStockCard(s);
@@ -7023,7 +7065,7 @@ function renderFavoriteCoinList() {
         fragment.appendChild(card);
     });
     Object.keys(stockElements).forEach((id) => {
-        if (!items.find((s) => s.id === id)) {
+        if (!items.find((row) => row.id === id)) {
             stockElements[id]?.remove();
             delete stockElements[id];
         }
@@ -7302,7 +7344,8 @@ function renderSearchResults() {
 
     listDiv.innerHTML = '';
     stockElements     = {};
-    items.forEach(s => {
+    items.forEach((raw) => {
+        const s      = enrichCoinListRow(raw);
         const card   = createStockCard(s);
         const favBtn = document.createElement('button');
         const isFav  = isCoinMarket() ? !!favoriteCoins[s.id] : !!favorites[s.id];
