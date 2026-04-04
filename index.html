@@ -1378,8 +1378,9 @@
     <!-- 탭 버튼 -->
     <div class="portfolio-tabs">
         <button class="portfolio-tab-btn active" id="tab-btn-stocks" onclick="switchPortfolioTab('stocks')">📈 내 주식</button>
-        <button class="portfolio-tab-btn rank-tab" id="tab-btn-ranking" disabled
-            style="opacity:0.45; cursor:not-allowed; position:relative;">
+        <button type="button" class="portfolio-tab-btn rank-tab" id="tab-btn-ranking" disabled
+            style="opacity:0.45; cursor:not-allowed; position:relative;"
+            onclick="switchPortfolioTab('ranking')">
             👑 자산 랭킹
         </button>
     </div>
