@@ -2960,7 +2960,11 @@ window.setActiveMarket = function (mode) {
     document.getElementById('btn-market-coin')?.classList.toggle('active', m === 'coin');
     updateWalletTradeCapLabel();
     try { updateSyncStrategy(); } catch (_) { /* noop */ }
-    try { refreshMainStockListView(); } catch (_) { /* noop */ }
+    try {
+        const sq = document.getElementById('search-input')?.value?.trim() || '';
+        if (sq) void handleSearch(sq);
+        else refreshMainStockListView();
+    } catch (_) { /* noop */ }
 };
 
 function candleBufferKey(stockId, market) {
@@ -7176,6 +7180,9 @@ async function loadStockNameCache() {
     } catch(e) {}
 }
 
+// 검색 비동기 작업 취소용 — 새 검색·주식/코인 탭 전환 시 이전 fetch/UI 갱신 무시
+let searchRequestGen = 0;
+
 // 검색어 입력 처리 — 이름 캐시 기반 검색 후 가격 조회
 async function handleSearch(query) {
     const listDiv  = document.getElementById('stock-list');
@@ -7186,12 +7193,14 @@ async function handleSearch(query) {
 
     // 검색어 없으면 즐겨찾기 목록으로 복귀
     if (!q) {
+        searchRequestGen++;
         searchResults = {};
         if (searchUnsub) { searchUnsub(); searchUnsub = null; }
         renderFavoriteList();
         return;
     }
 
+    const myGen = ++searchRequestGen;
     listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">🔍 검색 중...</div>`;
     if (emptyDiv) emptyDiv.style.display = 'none';
 
@@ -7199,6 +7208,7 @@ async function handleSearch(query) {
         if (Object.keys(stockNameCache).length === 0) {
             await loadStockNameCache();
         }
+        if (myGen !== searchRequestGen) return;
 
         searchResults = {};
         const coinMode = isCoinMarket();
@@ -7213,6 +7223,7 @@ async function handleSearch(query) {
             }
         });
 
+        if (myGen !== searchRequestGen) return;
         renderSearchResults();
 
         const needsPrice = Object.keys(searchResults).filter((id) =>
@@ -7225,35 +7236,35 @@ async function handleSearch(query) {
                 try {
                     const path = coinMode ? `coins/${id}` : `stocks/${id}`;
                     const snap = await get(ref(db, path));
+                    if (myGen !== searchRequestGen) return;
                     if (!snap.exists()) return;
                     const data = snap.val();
-                    if (document.getElementById('search-input')?.value?.trim() === q) {
-                        const resolved = { ...data, id };
-                        searchResults[id] = resolved;
-                        if (coinMode) {
-                            const idx = allCoins.findIndex((s) => s?.id === id);
-                            if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...resolved };
-                            else allCoins.push(resolved);
-                        } else {
-                            const idx = allStocks.findIndex((s) => s?.id === id);
-                            if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...resolved };
-                            else allStocks.push(resolved);
-                        }
-                        const card = stockElements[id];
-                        if (card && myData) {
-                            const pos = coinMode
-                                ? ((myData?.coins || {})[id] || { qty: 0, avg: 0 })
-                                : ((myData?.stocks || {})[id] || { qty: 0, avg: 0 });
-                            updateCardContent(card, searchResults[id], pos);
-                            if (!card.querySelector('.btn-favorite')) {
-                                const favBtn = document.createElement('button');
-                                const isFav = coinMode ? !!favoriteCoins[id] : !!favorites[id];
-                                favBtn.className   = 'btn-favorite';
-                                favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
-                                favBtn.textContent = isFav ? '⭐' : '☆';
-                                favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
-                                card.querySelector('.price-group')?.appendChild(favBtn);
-                            }
+                    if (document.getElementById('search-input')?.value?.trim() !== q) return;
+                    const resolved = { ...data, id };
+                    searchResults[id] = resolved;
+                    if (coinMode) {
+                        const idx = allCoins.findIndex((s) => s?.id === id);
+                        if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...resolved };
+                        else allCoins.push(resolved);
+                    } else {
+                        const idx = allStocks.findIndex((s) => s?.id === id);
+                        if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...resolved };
+                        else allStocks.push(resolved);
+                    }
+                    const card = stockElements[id];
+                    if (card && myData) {
+                        const pos = coinMode
+                            ? ((myData?.coins || {})[id] || { qty: 0, avg: 0 })
+                            : ((myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+                        updateCardContent(card, searchResults[id], pos);
+                        if (!card.querySelector('.btn-favorite')) {
+                            const favBtn = document.createElement('button');
+                            const isFav = coinMode ? !!favoriteCoins[id] : !!favorites[id];
+                            favBtn.className   = 'btn-favorite';
+                            favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+                            favBtn.textContent = isFav ? '⭐' : '☆';
+                            favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
+                            card.querySelector('.price-group')?.appendChild(favBtn);
                         }
                     }
                 } catch (e) { /* noop */ }
