@@ -15,4 +15,3 @@ database.rules.json
 
 # 로컬 전용 (GitHub Desktop에서 변경 표시 제외)
 functions/index.js
-firebase.json

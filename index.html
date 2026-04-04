@@ -4307,8 +4307,11 @@ setInterval(() => {
 
 /** database.rules.json users/$uid/stocks/$stockId · cash 범위와 맞춤 (최대 자산 500억) */
 const USER_CASH_MAX = 50000000000;
-const USER_STOCK_QTY_MAX = 100000000;
 const USER_STOCK_AVG_MAX = 50000000000;
+/** 종목당 보유 수량 상한 없음(실수 방지로 JS 안전 정수까지만 클라이언트에서 정규화) */
+const USER_STOCK_QTY_CAP = Number.MAX_SAFE_INTEGER;
+/** 서로 다른 종목 최대 10개 (사용자 페이지 정책; 규칙·trade 서버와 동일) */
+const MAX_OWNED_STOCK_SYMBOLS = 10;
 
 /** users/.../stocks/$stockId 규칙 통과용 — qty·avg만 숫자로 정리(레거시 문자열·배열 stocks 등 제거) */
 function normalizeUserStocksForRules(raw) {
@@ -4316,7 +4319,7 @@ function normalizeUserStocksForRules(raw) {
     if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return o;
     Object.entries(raw).forEach(([sid, p]) => {
         if (p == null || typeof p !== 'object' || Array.isArray(p)) return;
-        const q = Math.floor(Math.max(0, Math.min(USER_STOCK_QTY_MAX, Number(p.qty))));
+        const q = Math.floor(Math.max(0, Math.min(USER_STOCK_QTY_CAP, Number(p.qty))));
         const a = Math.round(Math.max(0, Math.min(USER_STOCK_AVG_MAX, Number(p.avg))));
         if (q > 0 && Number.isFinite(a)) o[sid] = { qty: q, avg: a };
     });
@@ -4398,13 +4401,13 @@ window.trade = async function (id, type, qty = 1) {
         return;
     }
 
-    // 보유 종목 10종목 제한 — 매수 시 신규 종목 체크
+    // 보유 종목 수 제한 — 매수 시 신규 종목 체크
     if (type === 'buy') {
         const currentQtyOfStock = myData?.stocks?.[id]?.qty || 0;
         if (currentQtyOfStock === 0) {
             const ownedStockCount = Object.values(myData?.stocks || {}).filter(s => s.qty > 0).length;
-            if (ownedStockCount >= 10) {
-                alert('보유 종목은 최대 10종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.');
+            if (ownedStockCount >= MAX_OWNED_STOCK_SYMBOLS) {
+                alert(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
                 return;
             }
         }
@@ -4570,7 +4573,7 @@ try {
                 const uqPre = Math.floor(Math.max(0, Number(userStock.qty) || 0));
                 if (uqPre === 0) {
                     const ownedCount = Object.values(preUser.stocks || {}).filter(s => Math.floor(Math.max(0, Number(s?.qty) || 0)) > 0).length;
-                    if (ownedCount >= 10) {
+                    if (ownedCount >= MAX_OWNED_STOCK_SYMBOLS) {
                         stockTxAbort.reason = "종목한도";
                         return;
                     }
@@ -4639,7 +4642,7 @@ try {
                 if (cash < totalBuyPrice) return;
                 const totalCost = (us.qty * us.avg) + totalBuyPrice;
                 const newQty = us.qty + qty;
-                if (newQty > USER_STOCK_QTY_MAX) return;
+                if (newQty > USER_STOCK_QTY_CAP) return;
                 const nextAvg = Math.round(totalCost / newQty);
                 if (!Number.isFinite(nextAvg)) return;
                 const avgClamped = Math.max(0, Math.min(USER_STOCK_AVG_MAX, nextAvg));
@@ -4726,7 +4729,7 @@ try {
     } catch (error) {
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
         else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
-        else if (error.message === "종목한도") alert('보유 종목은 최대 10종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.');
+        else if (error.message === "종목한도") alert(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
         else if (error.message === "트랜잭션중단") { /* 정상 중단 — 알림 없음 */ }
         else if (error.message === "유저동기화실패") alert("잔고 동기화에 실패했습니다. 새로고침 후 다시 시도해주세요.");
         else alert("거래 중 오류가 발생했습니다.");
