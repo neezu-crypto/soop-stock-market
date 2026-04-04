@@ -1435,9 +1435,25 @@
     const functions = getFunctions(app);
     const adminStockSplitFn = httpsCallable(functions, 'adminStockSplit');
 
+    /**
+     * Callable 미배포·리전 불일치·일시 다운 시 브라우저 RTDB 경로로 폴백.
+     * 미배포 URL은 CORS preflight 404 → Firebase JS SDK가 code/message 모두 "internal"만 주는 경우가 많아
+     * functions/not-found 외에 internal 도 휴리스틱으로 처리함 (서버가 던진 상세 internal 메시지는 폴백하지 않음).
+     */
     function shouldFallbackAdminStockSplit(err) {
-        const c = err && err.code;
-        return c === 'functions/not-found' || c === 'functions/unavailable';
+        const c = String(err?.code || '');
+        if (c === 'functions/not-found' || c === 'functions/unavailable') return true;
+        const msg = String(err?.message || '').toLowerCase();
+        if (c === 'functions/internal' || c === 'internal') {
+            if (msg === 'internal' || !msg.trim()) return true;
+            if (
+                /failed to fetch|load failed|network error|preflight|cross-origin|access control|fetch.*\b404\b|\b404\b|cors|not found|bad gateway|gateway timeout|cloudfunctions\.net/i.test(
+                    msg
+                )
+            )
+                return true;
+        }
+        return false;
     }
     let auth;
     try {
