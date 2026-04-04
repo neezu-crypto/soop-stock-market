@@ -2190,32 +2190,42 @@
             }
         });
 
-        requestRealtimeUnsubs.rankingAccess = onValue(ref(db, 'assetRankingRequests/'), (snap) => {
-            try {
-                const data = snap.val() || {};
-                const keys = Object.keys(data);
-                let added = [];
-                if (prevRankingAccessKeys !== null) {
-                    added = keys.filter((k) => !prevRankingAccessKeys.has(k));
+        requestRealtimeUnsubs.rankingAccess = onValue(
+            ref(db, 'assetRankingRequests/'),
+            (snap) => {
+                try {
+                    const data = snap.val() || {};
+                    const keys = Object.keys(data);
+                    let added = [];
+                    if (prevRankingAccessKeys !== null) {
+                        added = keys.filter((k) => !prevRankingAccessKeys.has(k));
+                    }
+                    prevRankingAccessKeys = new Set(keys);
+                    const hi = new Set(added);
+                    if (added.length) {
+                        added.forEach((id) => {
+                            const r = data[id];
+                            if (r && String(r.status || '').toLowerCase() === 'pending') {
+                                notifyAdminNewRequest('새 자산 랭킹 열람 신청', `${r.nickname || ''} @${r.soopId || ''}`);
+                            }
+                        });
+                    }
+                    renderAssetRankingAccessRequestsList(data, hi);
+                    setAdminInboxCount('ranking-req', countPendingStandard(data));
+                } catch (err) {
+                    const el = document.getElementById('asset-ranking-access-list');
+                    if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+                    setAdminInboxCount('ranking-req', 0);
                 }
-                prevRankingAccessKeys = new Set(keys);
-                const hi = new Set(added);
-                if (added.length) {
-                    added.forEach((id) => {
-                        const r = data[id];
-                        if (r && String(r.status || '').toLowerCase() === 'pending') {
-                            notifyAdminNewRequest('새 자산 랭킹 열람 신청', `${r.nickname || ''} @${r.soopId || ''}`);
-                        }
-                    });
-                }
-                renderAssetRankingAccessRequestsList(data, hi);
-                setAdminInboxCount('ranking-req', countPendingStandard(data));
-            } catch (err) {
+            },
+            (err) => {
                 const el = document.getElementById('asset-ranking-access-list');
-                if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+                if (el) {
+                    el.innerHTML = `<div style="color:#ef4444;">assetRankingRequests 읽기 실패: ${escapeHtml(err?.message || 'permission')}. Rules에 부모 <b>assetRankingRequests/.read</b>(관리자) 배포 여부를 확인하세요.</div>`;
+                }
                 setAdminInboxCount('ranking-req', 0);
             }
-        });
+        );
 
         requestRealtimeUnsubs.asset = onValue(
             ref(db, 'assetRequests'),
