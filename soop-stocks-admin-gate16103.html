@@ -1420,6 +1420,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
     import { getDatabase, ref, get, update, set, remove, onValue, serverTimestamp, runTransaction, push } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, initializeAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
@@ -1430,6 +1431,14 @@
     };
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
+    /** Gen2 callable 기본 리전(us-central1). Functions를 다른 리전에 배포했다면 getFunctions(app, 'asia-northeast3') 등으로 맞출 것 */
+    const functions = getFunctions(app);
+    const adminStockSplitFn = httpsCallable(functions, 'adminStockSplit');
+
+    function shouldFallbackAdminStockSplit(err) {
+        const c = err && err.code;
+        return c === 'functions/not-found' || c === 'functions/unavailable';
+    }
     let auth;
     try {
         // Keep Admin session sticky like the user-facing page.
@@ -3052,6 +3061,35 @@
             `이 작업은 되돌릴 수 없습니다.`
         )) return;
 
+        statusEl.innerText = '서버(Cloud Functions) 액면분할 시도 중...';
+        try {
+            const { data } = await adminStockSplitFn({ kind: 'top100', ratioN: ratio });
+            if (data && data.ok) {
+                if (data.skipped) {
+                    statusEl.innerText = data.reason === 'no_splittable'
+                        ? '분할 대상 종목이 없습니다.'
+                        : '서버에서 스킵되었습니다.';
+                    await loadMaintenanceStatus();
+                    await loadStocksOnce();
+                    return;
+                }
+                statusEl.innerText =
+                    `✅ ${ratio}:1 액면분할 완료! (서버 처리: 종목 ${data.stocksUpdated}개, 보유 경로 ${data.userHoldingPathsUpdated}건)`;
+                await loadMaintenanceStatus();
+                await loadStocksOnce();
+                return;
+            }
+        } catch (serverErr) {
+            if (!shouldFallbackAdminStockSplit(serverErr)) {
+                try { await set(ref(db, 'siteConfig/maintenance'), false); } catch (_) {}
+                statusEl.innerText = '❌ 실패: ' + (serverErr.message || serverErr);
+                alert('액면분할 중 오류: ' + (serverErr.message || serverErr));
+                await loadMaintenanceStatus();
+                return;
+            }
+            statusEl.innerText = 'Functions 미배포/일시 중단 — 브라우저(RTDDB)로 진행합니다...';
+        }
+
         try {
             statusEl.innerText = '🔴 점검 모드 활성화 중...';
             await set(ref(db, 'siteConfig/maintenance'), true);
@@ -4312,6 +4350,65 @@
         if (logEl) {
             logEl.style.display = 'block';
             logEl.innerHTML = '';
+        }
+
+        try {
+            const { data } = await adminStockSplitFn({
+                kind: 'threshold',
+                ratioN: ratio,
+                thresholdWon,
+            });
+            if (data && data.ok) {
+                if (data.skipped) {
+                    if (logEl) {
+                        logEl.innerHTML =
+                            data.reason === 'no_splittable'
+                                ? `<div style="color:#64748b;">기준가·분할 조건에 맞는 종목 없음 — 자동 분할 스킵 (서버)</div>`
+                                : `<div style="color:#64748b;">서버에서 자동 분할을 스킵했습니다.</div>`;
+                    }
+                    await loadMaintenanceStatus();
+                    await loadStocksOnce();
+                    return;
+                }
+                if (logEl) {
+                    const thresholdStr = thresholdWon.toLocaleString();
+                    (data.events || []).forEach((ev) => {
+                        logEl.innerHTML += `
+                        <div style="color:#94a3b8; margin-bottom:6px;">
+                            종목명: <b style="color:#f8fafc;">${escapeHtml(ev.stockName)}</b>
+                            : ${thresholdStr}원 돌파 -> ${ev.ratioN}배 액면분할 완료
+                            (새 주가: ${(ev.newPrice != null ? ev.newPrice : 0).toLocaleString()}원)
+                            <span style="color:#64748b;"> · 서버</span>
+                        </div>
+                    `;
+                    });
+                }
+                await loadMaintenanceStatus();
+                await loadStocksOnce();
+                return;
+            }
+        } catch (callableErr) {
+            if (!shouldFallbackAdminStockSplit(callableErr)) {
+                console.error('[DailyAutoSplit] callable failed:', callableErr);
+                await logDailyAutoSplitFailure(callableErr, {
+                    thresholdWon,
+                    ratioN,
+                    splittableIds: [],
+                });
+                if (logEl) {
+                    logEl.innerHTML += `
+                    <div style="color:#ef4444; margin-top:8px;">
+                        ❌ 자동 액면분할(서버) 실패: ${escapeHtml(callableErr?.message || String(callableErr))}
+                    </div>
+                `;
+                }
+                await loadMaintenanceStatus();
+                await loadStocksOnce();
+                return;
+            }
+            if (logEl) {
+                logEl.innerHTML = `<div style="color:#94a3b8;">Cloud Functions 미배포/다운 — 브라우저에서 RTDB 직접 반영합니다.</div>`;
+            }
         }
 
         let maintenanceEnabled = false;
