@@ -506,6 +506,10 @@
                 <span class="inbox-label">📡 중계</span>
                 <span class="inbox-count" data-inbox-count="relay">…</span>
             </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="ranking-req" title="자산 랭킹 열람 신청 검수로 이동">
+                <span class="inbox-label">👑 랭킹</span>
+                <span class="inbox-count" data-inbox-count="ranking-req">…</span>
+            </button>
         </div>
     </div>
 
@@ -1479,33 +1483,33 @@
         </div>
     </div>
 
-    <!-- 👑 구독자 신청 검수 -->
-    <div class="container" style="display:block; border-color: #f59e0b;">
+    <!-- 👑 유저 자산 랭킹 열람 신청 검수 -->
+    <div id="admin-accordion-ranking-access" class="container admin-accordion-anchor" style="display:block; border-color: #f59e0b;">
         <div class="accordion-header">
-            <h1>👑 구독자 신청 검수</h1>
+            <h1>👑 유저 자산 랭킹 열람 신청 검수</h1>
             <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            유저가 신청한 구독자 인증 목록입니다. SOOP에서 실제 구독 여부 확인 후 <b>수락</b>하면 자산 랭킹이 활성화됩니다.<br>
-            <span style="color:#38bdf8;">Firebase DB의 <b>subscribeRequests/{uid}</b> 경로를 변경합니다.</span>
+            별풍선 <b>50개</b> 약정 후 신청된 건입니다. 후원 확인 후 <b>수락</b>하면 해당 유저에게 자산 랭킹이 <b>12시간</b> 열람됩니다.<br>
+            <span style="color:#38bdf8;">Firebase: <b>assetRankingRequests/{uid}</b> · 승인 시 <b>accessExpiresAt</b> 저장. 예전 <b>subscribeRequests</b>만 승인된 유저는 메인 앱에서 레거시로 랭킹이 열릴 수 있습니다.</span>
         </div>
 
         <!-- 일괄 만료 처리 -->
         <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155; margin-bottom:14px;">
-            <div style="font-size:13px; color:#f59e0b; font-weight:800; margin-bottom:8px;">📋 일괄 만료 처리</div>
-            <div style="font-size:12px; color:#64748b; margin-bottom:8px;">만료된 구독자 닉네임을 줄바꿈으로 구분하여 입력하세요.</div>
-            <textarea id="expire-nicknames" placeholder="닉네임1&#10;닉네임2&#10;닉네임3"
+            <div style="font-size:13px; color:#f59e0b; font-weight:800; margin-bottom:8px;">📋 일괄 만료 처리 (랭킹 신청)</div>
+            <div style="font-size:12px; color:#64748b; margin-bottom:8px;">닉네임을 줄바꿈으로 구분하여 입력하세요. (<b>assetRankingRequests</b>만 처리)</div>
+            <textarea id="expire-ranking-nicknames" placeholder="닉네임1&#10;닉네임2&#10;닉네임3"
                 style="width:100%; height:80px; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:10px; border-radius:8px; font-size:13px; resize:none; box-sizing:border-box; margin-bottom:8px;"></textarea>
-            <div id="expire-status" style="font-size:12px; color:#64748b; margin-bottom:8px; min-height:16px;"></div>
-            <button class="btn-danger" style="width:100%; font-size:13px;" onclick="bulkExpireSubscribers()">🗑 일괄 만료 처리</button>
+            <div id="expire-ranking-status" style="font-size:12px; color:#64748b; margin-bottom:8px; min-height:16px;"></div>
+            <button class="btn-danger" style="width:100%; font-size:13px;" onclick="bulkExpireAssetRankingRequests()">🗑 일괄 만료 처리</button>
         </div>
 
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
             <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
         </div>
-        <div id="subscribe-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        <div id="asset-ranking-access-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
         </div>
     </div>
@@ -1605,12 +1609,12 @@
         return v && String(v.status || '').trim().toLowerCase() === 'pending';
     }
 
-    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null };
+    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null };
 
     function paintAdminRequestInbox() {
         const box = document.getElementById('admin-request-inbox');
         if (!box) return;
-        ['listing', 'asset', 'ad', 'chart-ad', 'relay'].forEach((k) => {
+        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req'].forEach((k) => {
             const el = box.querySelector(`[data-inbox-count="${k}"]`);
             const chip = el && el.closest('.admin-inbox-chip');
             const v = adminInboxCounts[k];
@@ -1644,6 +1648,7 @@
             ad: 'admin-accordion-ad',
             'chart-ad': 'admin-accordion-chart-ad',
             relay: 'admin-accordion-relay',
+            'ranking-req': 'admin-accordion-ranking-access',
         };
         const id = idMap[key];
         const el = id ? document.getElementById(id) : null;
@@ -1780,12 +1785,12 @@
     };
 
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
-    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, subscribe: null, asset: null };
+    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, asset: null };
     let prevListingKeys = null;
     let prevAdKeys = null;
     let prevChartKeys = null;
     let prevRelayKeys = null;
-    let prevSubscribeKeys = null;
+    let prevRankingAccessKeys = null;
     let prevAssetKeys = null;
 
     function playAdminRequestBeep() {
@@ -1821,7 +1826,7 @@
     }
 
     function stopRealtimeRequestListeners() {
-        ['listing', 'ad', 'chart', 'relay', 'subscribe', 'asset'].forEach((k) => {
+        ['listing', 'ad', 'chart', 'relay', 'rankingAccess', 'asset'].forEach((k) => {
             const u = requestRealtimeUnsubs[k];
             if (u) {
                 u();
@@ -1832,7 +1837,7 @@
         prevAdKeys = null;
         prevChartKeys = null;
         prevRelayKeys = null;
-        prevSubscribeKeys = null;
+        prevRankingAccessKeys = null;
         prevAssetKeys = null;
     }
 
@@ -2016,8 +2021,17 @@
         });
     }
 
-    function renderSubscribeRequestsList(data, highlightIds) {
-        const listEl = document.getElementById('subscribe-request-list');
+    const RANKING_ACCESS_DURATION_MS = 12 * 60 * 60 * 1000;
+
+    function getAssetRankingAccessExpiresAtMs(req) {
+        if (!req || req.status !== 'approved') return null;
+        if (typeof req.accessExpiresAt === 'number' && req.accessExpiresAt > 0) return req.accessExpiresAt;
+        if (typeof req.approvedAt === 'number' && req.approvedAt > 0) return req.approvedAt + RANKING_ACCESS_DURATION_MS;
+        return null;
+    }
+
+    function renderAssetRankingAccessRequestsList(data, highlightIds) {
+        const listEl = document.getElementById('asset-ranking-access-list');
         if (!listEl) return;
         const entries = Object.entries(data).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
         if (entries.length === 0) {
@@ -2027,11 +2041,17 @@
         listEl.innerHTML = '';
         entries.forEach(([uid, req]) => {
             const date        = new Date(req.createdAt).toLocaleString('ko-KR');
-            const statusColor = req.status === 'approved' ? '#22c55e' : req.status === 'expired' ? '#64748b' : '#f59e0b';
-            const statusText  = req.status === 'approved' ? '✅ 승인됨' : req.status === 'expired' ? '⬛ 만료됨' : '⏳ 대기중';
+            const st          = String(req.status || '').toLowerCase();
+            const statusColor = st === 'approved' ? '#22c55e' : st === 'expired' ? '#64748b' : st === 'rejected' ? '#ef4444' : '#f59e0b';
+            const statusText  = st === 'approved' ? '✅ 승인됨' : st === 'expired' ? '⬛ 만료됨' : st === 'rejected' ? '❌ 거절' : '⏳ 대기중';
+            const costNum     = typeof req.cost === 'number' ? req.cost : 50;
+            const expMs       = getAssetRankingAccessExpiresAtMs(req);
+            const expLine     = st === 'approved' && expMs
+                ? `<div style="font-size:11px; color:${Date.now() >= expMs ? '#f59e0b' : '#94a3b8'}; margin-bottom:8px;">열람 만료 시각(12h): ${new Date(expMs).toLocaleString('ko-KR')}${Date.now() >= expMs ? ' · <b>시간 경과</b> (앱에서 랭킹 차단)' : ''}</div>`
+                : (st === 'approved' ? '<div style="font-size:11px; color:#64748b; margin-bottom:8px;">열람 만료 시각: (승인 시각 없음 — 구 데이터)</div>' : '');
             const card = document.createElement('div');
             const isHi = highlightIds && highlightIds.has(uid);
-            card.className = 'request-card' + (req.status === 'pending' ? ' pending' : '') + (isHi ? ' just-arrived' : '');
+            card.className = 'request-card' + (st === 'pending' ? ' pending' : '') + (isHi ? ' just-arrived' : '');
             card.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <div>
@@ -2040,22 +2060,27 @@
                     </div>
                     <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
                 </div>
+                <div style="font-size:11px; color:#64748b; margin-bottom:6px;">별풍선 약정: <b>${costNum}</b>개</div>
                 <div style="font-size:11px; color:#475569; margin-bottom:10px;">UID: ${escapeHtml(uid)} · ${date}</div>
-                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                ${expLine}
+                <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
                     <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
                         style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
-                    ${req.status !== 'approved' ? `<button type="button" class="btn-sub-approve"
-                        style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>` : ''}
-                    ${req.status === 'approved' ? `<button type="button" class="btn-sub-expire"
+                    ${st === 'pending' ? `<button type="button" class="btn-ranking-approve"
+                        style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>
+                    <button type="button" class="btn-ranking-reject"
+                        style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
+                    ${st === 'approved' ? `<button type="button" class="btn-ranking-expire"
                         style="background:#475569; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">만료</button>` : ''}
-                    <button type="button" class="btn-sub-delete"
+                    <button type="button" class="btn-ranking-delete"
                         style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
                 </div>
             `;
             listEl.appendChild(card);
-            card.querySelector('.btn-sub-approve')?.addEventListener('click', () => window.approveSubscriber(uid));
-            card.querySelector('.btn-sub-expire')?.addEventListener('click', () => window.expireSubscriber(uid));
-            card.querySelector('.btn-sub-delete')?.addEventListener('click', () => window.deleteSubscribeRequest(uid));
+            card.querySelector('.btn-ranking-approve')?.addEventListener('click', () => window.approveAssetRankingAccess(uid));
+            card.querySelector('.btn-ranking-reject')?.addEventListener('click', () => window.rejectAssetRankingAccess(uid));
+            card.querySelector('.btn-ranking-expire')?.addEventListener('click', () => window.expireAssetRankingAccess(uid));
+            card.querySelector('.btn-ranking-delete')?.addEventListener('click', () => window.deleteAssetRankingAccess(uid));
             if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
         });
     }
@@ -2165,26 +2190,30 @@
             }
         });
 
-        requestRealtimeUnsubs.subscribe = onValue(ref(db, 'subscribeRequests/'), (snap) => {
+        requestRealtimeUnsubs.rankingAccess = onValue(ref(db, 'assetRankingRequests/'), (snap) => {
             try {
                 const data = snap.val() || {};
                 const keys = Object.keys(data);
                 let added = [];
-                if (prevSubscribeKeys !== null) {
-                    added = keys.filter((k) => !prevSubscribeKeys.has(k));
+                if (prevRankingAccessKeys !== null) {
+                    added = keys.filter((k) => !prevRankingAccessKeys.has(k));
                 }
-                prevSubscribeKeys = new Set(keys);
+                prevRankingAccessKeys = new Set(keys);
                 const hi = new Set(added);
                 if (added.length) {
                     added.forEach((id) => {
                         const r = data[id];
-                        if (r) notifyAdminNewRequest('새 구독자 인증 신청', `${r.nickname || ''} @${r.soopId || ''}`);
+                        if (r && String(r.status || '').toLowerCase() === 'pending') {
+                            notifyAdminNewRequest('새 자산 랭킹 열람 신청', `${r.nickname || ''} @${r.soopId || ''}`);
+                        }
                     });
                 }
-                renderSubscribeRequestsList(data, hi);
+                renderAssetRankingAccessRequestsList(data, hi);
+                setAdminInboxCount('ranking-req', countPendingStandard(data));
             } catch (err) {
-                const el = document.getElementById('subscribe-request-list');
+                const el = document.getElementById('asset-ranking-access-list');
                 if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+                setAdminInboxCount('ranking-req', 0);
             }
         });
 
@@ -4843,10 +4872,15 @@
         logEl.innerHTML    = '';
 
         try {
-            // 1. 전체 유저 데이터 읽기
+            // 1. 전체 유저 데이터 읽기 (부모 users/.read 는 관리자 이메일만 — database.rules.json)
             logEl.innerHTML += '<div>유저 데이터 읽는 중...</div>';
             const usersSnap = await get(ref(db, 'users/'));
-            if (!usersSnap.exists()) { logEl.innerHTML += '<div style="color:#ef4444;">유저 데이터 없음</div>'; return; }
+            if (!usersSnap.exists()) {
+                logEl.innerHTML += '<div style="color:#ef4444;">유저 데이터 없음</div>';
+                chipEl.className   = 'status-chip expired';
+                chipEl.textContent = '데이터 없음';
+                return;
+            }
             const users = usersSnap.val();
 
             // 2. 전체 종목 현재가 읽기
@@ -4857,12 +4891,16 @@
             // 3. 유저별 자산 계산
             logEl.innerHTML += '<div>자산 계산 중...</div>';
             const assetList = Object.entries(users).map(([uid, u]) => {
-                let total = Math.floor(u.cash || 0);
-                if (u.stocks) {
+                let total = Math.floor(Number(u.cash) || 0);
+                if (!Number.isFinite(total) || total < 0) total = 0;
+                if (u.stocks && typeof u.stocks === 'object') {
                     Object.entries(u.stocks).forEach(([stockId, s]) => {
-                        if (!s.qty || s.qty <= 0) return;
-                        const price = stocks[stockId]?.price || 0;
-                        total += Math.floor(price * s.qty);
+                        const qty = Number(s?.qty);
+                        if (!Number.isFinite(qty) || qty <= 0) return;
+                        const price = Number(stocks[stockId]?.price);
+                        const p = Number.isFinite(price) && price >= 0 ? price : 0;
+                        const add = Math.floor(p * qty);
+                        if (Number.isFinite(add)) total += add;
                     });
                 }
                 return { uid, totalAsset: total };
@@ -4887,14 +4925,21 @@
             chipEl.className   = 'status-chip active';
             chipEl.textContent = '완료';
             lastEl.textContent = nowStr;
-            logEl.innerHTML += `<div style="color:#22c55e;">✅ 완료 — 총 ${assetList.length}명 집계, TOP 100 저장 (${nowStr})</div>`;
-            logEl.innerHTML += `<div style="color:#94a3b8;">1위: ${top100[0]?.totalAsset.toLocaleString()}원 / 100위: ${top100[99]?.totalAsset.toLocaleString()}원</div>`;
+            logEl.innerHTML += `<div style="color:#22c55e;">✅ 완료 — 총 ${assetList.length}명 집계, TOP ${top100.length} 저장 (${nowStr})</div>`;
+            if (top100.length > 0) {
+                const topVal = top100[0].totalAsset;
+                const tailVal = top100[top100.length - 1].totalAsset;
+                logEl.innerHTML += `<div style="color:#94a3b8;">1위: ${topVal.toLocaleString()}원 · 노출 구간 최저: ${tailVal.toLocaleString()}원</div>`;
+            }
             logEl.scrollTop = logEl.scrollHeight;
 
         } catch(e) {
             chipEl.className   = 'status-chip expired';
             chipEl.textContent = '오류';
-            logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${e.message}</div>`;
+            logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${escapeHtml(e.message || String(e))}</div>`;
+            if (e && (e.code === 'PERMISSION_DENIED' || String(e.message || '').includes('permission'))) {
+                logEl.innerHTML += '<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정(등록 이메일)으로 로그인했는지, <b>users/</b> 일괄 읽기 규칙이 배포됐는지 확인하세요.</div>';
+            }
         }
     };
 
@@ -4922,36 +4967,49 @@
         } catch(e) { alert('삭제 실패: ' + e.message); }
     };
 
-    // ── 구독자 신청 검수 (목록 onValue) ─────────────────────────
+    // ── 유저 자산 랭킹 열람 신청 검수 (assetRankingRequests) ─────
 
-    window.approveSubscriber = async function(uid) {
+    window.approveAssetRankingAccess = async function(uid) {
         if (!isAdmin()) return;
         try {
-            await update(ref(db, `subscribeRequests/${uid}`), { status: 'approved', approvedAt: Date.now() });
-            alert('✅ 승인 완료!');
+            const approvedAt = Date.now();
+            await update(ref(db, `assetRankingRequests/${uid}`), {
+                status: 'approved',
+                approvedAt,
+                accessExpiresAt: approvedAt + RANKING_ACCESS_DURATION_MS
+            });
+            alert('✅ 승인 완료! (열람 12시간)');
         } catch(e) { alert('승인 실패: ' + e.message); }
     };
 
-    window.expireSubscriber = async function(uid) {
+    window.rejectAssetRankingAccess = async function(uid) {
         if (!isAdmin()) return;
-        if (!confirm('이 구독자를 만료 처리하시겠습니까?')) return;
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
-            await update(ref(db, `subscribeRequests/${uid}`), { status: 'expired', expiredAt: Date.now() });
+            await update(ref(db, `assetRankingRequests/${uid}`), { status: 'rejected', rejectedAt: Date.now() });
+        } catch(e) { alert('거절 실패: ' + e.message); }
+    };
+
+    window.expireAssetRankingAccess = async function(uid) {
+        if (!isAdmin()) return;
+        if (!confirm('이 열람 권한을 만료 처리하시겠습니까?')) return;
+        try {
+            await update(ref(db, `assetRankingRequests/${uid}`), { status: 'expired', expiredAt: Date.now() });
         } catch(e) { alert('만료 처리 실패: ' + e.message); }
     };
 
-    window.deleteSubscribeRequest = async function(uid) {
+    window.deleteAssetRankingAccess = async function(uid) {
         if (!isAdmin()) return;
         if (!confirm('이 신청을 삭제하시겠습니까?')) return;
         try {
-            await set(ref(db, `subscribeRequests/${uid}`), null);
+            await set(ref(db, `assetRankingRequests/${uid}`), null);
         } catch(e) { alert('삭제 실패: ' + e.message); }
     };
 
-    window.bulkExpireSubscribers = async function() {
+    window.bulkExpireAssetRankingRequests = async function() {
         if (!isAdmin()) return;
-        const text      = document.getElementById('expire-nicknames').value.trim();
-        const statusEl  = document.getElementById('expire-status');
+        const text      = document.getElementById('expire-ranking-nicknames').value.trim();
+        const statusEl  = document.getElementById('expire-ranking-status');
         if (!text) { statusEl.style.color = '#ef4444'; statusEl.textContent = '닉네임을 입력해주세요.'; return; }
 
         const nicknames = text.split('\n').map(n => n.trim()).filter(n => n.length > 0);
@@ -4961,7 +5019,7 @@
         statusEl.textContent = `처리 중... (0/${nicknames.length})`;
 
         try {
-            const snap = await get(ref(db, 'subscribeRequests/'));
+            const snap = await get(ref(db, 'assetRankingRequests/'));
             if (!snap.exists()) { statusEl.style.color = '#ef4444'; statusEl.textContent = '데이터 없음'; return; }
 
             const allData = snap.val();
@@ -4970,8 +5028,8 @@
             for (const nickname of nicknames) {
                 const entry = Object.entries(allData).find(([, v]) => v.nickname === nickname);
                 if (entry) {
-                    const [uid] = entry;
-                    await update(ref(db, `subscribeRequests/${uid}`), { status: 'expired', expiredAt: Date.now() });
+                    const [u] = entry;
+                    await update(ref(db, `assetRankingRequests/${u}`), { status: 'expired', expiredAt: Date.now() });
                     processed++;
                     statusEl.textContent = `처리 중... (${processed}/${nicknames.length})`;
                 } else {
@@ -4983,7 +5041,6 @@
             if (notFound.length > 0) msg += ` 미발견: ${notFound.join(', ')}`;
             statusEl.style.color = processed > 0 ? '#22c55e' : '#f59e0b';
             statusEl.textContent = msg;
-            // 목록은 onValue가 자동 갱신
         } catch(e) {
             statusEl.style.color = '#ef4444';
             statusEl.textContent = '오류: ' + e.message;
