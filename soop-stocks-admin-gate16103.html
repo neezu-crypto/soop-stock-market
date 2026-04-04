@@ -143,6 +143,68 @@
         }
         .realtime-bar .live-dot { margin-right: 0; }
 
+        /* ── 상단 신청 인박스 ── */
+        .admin-inbox {
+            display: none;
+            flex-direction: column;
+            box-sizing: border-box;
+            gap: 10px;
+            margin-bottom: 18px;
+            padding: 14px 14px 12px;
+            background: linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,41,59,0.92));
+            border: 1px solid #334155;
+            border-radius: 14px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+        }
+        .admin-inbox-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #94a3b8;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .admin-inbox-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .admin-inbox-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.15s, border-color 0.15s, transform 0.1s;
+            max-width: 100%;
+        }
+        .admin-inbox-chip:hover {
+            background: #1e293b;
+            border-color: #475569;
+        }
+        .admin-inbox-chip:active { transform: scale(0.98); }
+        .admin-inbox-chip .inbox-label { color: #94a3b8; font-weight: 600; }
+        .admin-inbox-chip .inbox-count {
+            min-width: 1.25em;
+            font-variant-numeric: tabular-nums;
+            color: #64748b;
+        }
+        .admin-inbox-chip.has-pending {
+            border-color: rgba(245,158,11,0.45);
+            background: rgba(245,158,11,0.08);
+        }
+        .admin-inbox-chip.has-pending .inbox-count { color: #fbbf24; font-weight: 800; }
+        .admin-inbox.is-visible { display: flex; }
+        .admin-accordion-anchor { scroll-margin-top: 14px; }
+
         /* ── 아코디언 ── */
         .accordion-header {
             display: flex; align-items: center; justify-content: space-between;
@@ -208,6 +270,15 @@
             .accordion-sep {
                 margin-top: 16px;
                 padding-top: 16px;
+            }
+            .admin-inbox {
+                padding: 12px 12px 10px;
+                margin-bottom: 14px;
+            }
+            .admin-inbox-chip {
+                flex: 1 1 calc(50% - 4px);
+                min-width: calc(50% - 4px);
+                justify-content: space-between;
             }
             .info-box {
                 font-size: 0.9375rem;
@@ -411,6 +482,32 @@
 </div>
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
+
+    <div id="admin-request-inbox" class="admin-inbox" aria-label="검수 대기 신청 요약">
+        <div class="admin-inbox-title"><span>📥</span> 검수 대기 · 바로가기</div>
+        <div class="admin-inbox-row">
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="listing" title="상장 신청 검수로 이동">
+                <span class="inbox-label">📋 상장</span>
+                <span class="inbox-count" data-inbox-count="listing">…</span>
+            </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="asset" title="자산 지원 신청으로 이동">
+                <span class="inbox-label">💰 자산</span>
+                <span class="inbox-count" data-inbox-count="asset">…</span>
+            </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="ad" title="홍보 신청 검수로 이동">
+                <span class="inbox-label">📬 홍보</span>
+                <span class="inbox-count" data-inbox-count="ad">…</span>
+            </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="chart-ad" title="차트 배너 신청 검수로 이동">
+                <span class="inbox-label">📺 차트</span>
+                <span class="inbox-count" data-inbox-count="chart-ad">…</span>
+            </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="relay" title="중계방 신청 검수로 이동">
+                <span class="inbox-label">📡 중계</span>
+                <span class="inbox-count" data-inbox-count="relay">…</span>
+            </button>
+        </div>
+    </div>
 
     <!-- 📊 실시간 랭킹 바로가기 -->
     <div style="margin-bottom:20px;">
@@ -1125,7 +1222,7 @@
     </div>
 
     <!-- 📬 홍보 신청 검수 -->
-    <div class="container" style="display:block; border-color: #22c55e;">
+    <div id="admin-accordion-ad" class="container admin-accordion-anchor" style="display:block; border-color: #22c55e;">
         <div class="accordion-header">
             <h1>📬 홍보 신청 검수</h1>
             <span class="accordion-arrow open">▼</span>
@@ -1144,7 +1241,7 @@
     </div>
 
     <!-- 📺 차트 배너 신청 검수 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="admin-accordion-chart-ad" class="container admin-accordion-anchor" style="display:block; border-color: #38bdf8;">
         <div class="accordion-header">
             <h1>📺 차트 배너 신청 검수</h1>
             <span class="accordion-arrow">▼</span>
@@ -1163,7 +1260,7 @@
     </div>
 
     <!-- 📡 중계방 신청 검수 -->
-    <div class="container" style="display:block; border-color: #ef4444;">
+    <div id="admin-accordion-relay" class="container admin-accordion-anchor" style="display:block; border-color: #ef4444;">
         <div class="accordion-header">
             <h1>📡 중계방 신청 검수</h1>
             <span class="accordion-arrow">▼</span>
@@ -1325,7 +1422,7 @@
     </div>
 
     <!-- 📋 상장 신청 검수 -->
-    <div class="container" style="display:block; border-color: #6366f1;">
+    <div id="admin-accordion-listing" class="container admin-accordion-anchor" style="display:block; border-color: #6366f1;">
         <div class="accordion-header">
             <h1>📋 상장 신청 검수</h1>
             <span class="accordion-arrow">▼</span>
@@ -1345,7 +1442,7 @@
     </div>
 
     <!-- 💰 자산 지원 신청 검수 -->
-    <div class="container" style="display:block; border-color: #8b5cf6;">
+    <div id="admin-accordion-asset" class="container admin-accordion-anchor" style="display:block; border-color: #8b5cf6;">
         <div class="accordion-header">
             <h1>💰 자산 지원 신청</h1>
             <span class="accordion-arrow">▼</span>
@@ -1508,6 +1605,72 @@
         return v && String(v.status || '').trim().toLowerCase() === 'pending';
     }
 
+    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null };
+
+    function paintAdminRequestInbox() {
+        const box = document.getElementById('admin-request-inbox');
+        if (!box) return;
+        ['listing', 'asset', 'ad', 'chart-ad', 'relay'].forEach((k) => {
+            const el = box.querySelector(`[data-inbox-count="${k}"]`);
+            const chip = el && el.closest('.admin-inbox-chip');
+            const v = adminInboxCounts[k];
+            if (el) el.textContent = v === null || v === undefined ? '…' : String(v);
+            if (chip) chip.classList.toggle('has-pending', typeof v === 'number' && v > 0);
+        });
+    }
+
+    function resetAdminInboxCounts() {
+        Object.keys(adminInboxCounts).forEach((k) => { adminInboxCounts[k] = null; });
+        paintAdminRequestInbox();
+    }
+
+    function setAdminInboxCount(key, n) {
+        adminInboxCounts[key] = typeof n === 'number' && Number.isFinite(n) ? n : 0;
+        paintAdminRequestInbox();
+    }
+
+    function countPendingStandard(data) {
+        return Object.values(data || {}).filter((r) => r && String(r.status || '').trim() === 'pending').length;
+    }
+
+    function countPendingAsset(data) {
+        return Object.values(data || {}).filter((r) => isPendingStatus(r)).length;
+    }
+
+    function scrollAdminToRequestSection(key) {
+        const idMap = {
+            listing: 'admin-accordion-listing',
+            asset: 'admin-accordion-asset',
+            ad: 'admin-accordion-ad',
+            'chart-ad': 'admin-accordion-chart-ad',
+            relay: 'admin-accordion-relay',
+        };
+        const id = idMap[key];
+        const el = id ? document.getElementById(id) : null;
+        if (!el) return;
+        const body = el.querySelector('.accordion-body');
+        const arrow = el.querySelector('.accordion-arrow');
+        if (body && !body.classList.contains('open')) {
+            body.classList.add('open');
+            if (arrow) arrow.classList.add('open');
+        }
+        requestAnimationFrame(() => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
+    function showAdminRequestInbox() {
+        document.getElementById('admin-request-inbox')?.classList.add('is-visible');
+    }
+
+    function hideAdminRequestInbox() {
+        const b = document.getElementById('admin-request-inbox');
+        if (b) {
+            b.classList.remove('is-visible');
+            resetAdminInboxCounts();
+        }
+    }
+
     async function renderAssetRequestsTable(data, highlightIds) {
         const tbody = document.getElementById('asset-requests-tbody');
         if (!tbody) {
@@ -1522,6 +1685,7 @@
         console.log('[assetRequests][Stage4] pending rows:', pending.length);
         if (pending.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" style="padding:12px;color:#64748b;text-align:center;">대기 중인 신청이 없습니다.</td></tr>';
+            setAdminInboxCount('asset', countPendingAsset(raw));
             return;
         }
         try {
@@ -1567,9 +1731,11 @@
             });
         });
         console.log('[assetRequests][Stage4] table HTML updated, row count:', pending.length);
+            setAdminInboxCount('asset', countPendingAsset(raw));
         } catch (err) {
             console.error('[assetRequests][Stage4] render failed:', err?.message || err);
             tbody.innerHTML = `<tr><td colspan="8" style="padding:12px;color:#ef4444;">렌더 오류: ${escapeHtml(err?.message || String(err))}</td></tr>`;
+            setAdminInboxCount('asset', 0);
         }
     }
 
@@ -1896,6 +2062,7 @@
 
     function startRealtimeRequestListeners() {
         stopRealtimeRequestListeners();
+        resetAdminInboxCounts();
         maybeRequestNotifPermission();
 
         requestRealtimeUnsubs.ad = onValue(ref(db, 'adRequests/'), (snap) => {
@@ -1915,9 +2082,11 @@
                     });
                 }
                 renderAdRequestsList(data, hi);
+                setAdminInboxCount('ad', countPendingStandard(data));
             } catch (err) {
                 const el = document.getElementById('ad-request-list');
                 if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+                setAdminInboxCount('ad', 0);
             }
         });
 
@@ -1938,9 +2107,11 @@
                     });
                 }
                 renderChartAdRequestsList(data, hi);
+                setAdminInboxCount('chart-ad', countPendingStandard(data));
             } catch (err) {
                 const el = document.getElementById('chart-ad-request-list');
                 if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+                setAdminInboxCount('chart-ad', 0);
             }
         });
 
@@ -1961,9 +2132,11 @@
                     });
                 }
                 renderListingRequestsList(data, hi);
+                setAdminInboxCount('listing', countPendingStandard(data));
             } catch (err) {
                 const el = document.getElementById('listing-request-list');
                 if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+                setAdminInboxCount('listing', 0);
             }
         });
 
@@ -1984,9 +2157,11 @@
                     });
                 }
                 renderRelayRequestsList(data, hi);
+                setAdminInboxCount('relay', countPendingStandard(data));
             } catch (err) {
                 const el = document.getElementById('relay-request-list');
                 if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+                setAdminInboxCount('relay', 0);
             }
         });
 
@@ -2045,6 +2220,7 @@
                 if (el) {
                     el.innerHTML = `<tr><td colspan="8" style="padding:12px;color:#ef4444;">assetRequests 읽기 실패: ${escapeHtml(err?.message || 'permission')}. Rules·로그인·배포 여부를 확인하세요.</td></tr>`;
                 }
+                setAdminInboxCount('asset', 0);
             }
         );
 
@@ -2242,6 +2418,7 @@
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-section').style.display = 'block';
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
+            showAdminRequestInbox();
             await loadStocksOnce();
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
@@ -2254,6 +2431,7 @@
                 console.warn("[Admin Auth] Access Denied: Email mismatch", user.email);
                 stopDailyAutoSettingsListener();
                 stopRealtimeRequestListeners();
+                hideAdminRequestInbox();
                 alert("관리자 권한이 없습니다.");
                 document.getElementById('login-section').style.display = 'flex';
                 document.getElementById('admin-section').style.display = 'none';
@@ -2262,6 +2440,7 @@
                 pendingLogoutUiTimeout = setTimeout(() => {
                     stopDailyAutoSettingsListener();
                     stopRealtimeRequestListeners();
+                    hideAdminRequestInbox();
                     document.getElementById('login-section').style.display = 'flex';
                     document.getElementById('admin-section').style.display = 'none';
                 }, LOGOUT_UI_DEBOUNCE_MS);
@@ -4810,6 +4989,14 @@
             statusEl.textContent = '오류: ' + e.message;
         }
     };
+
+    document.getElementById('admin-request-inbox')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-admin-scroll]');
+        if (!btn) return;
+        e.preventDefault();
+        const key = btn.getAttribute('data-admin-scroll');
+        if (key) scrollAdminToRequestSection(key);
+    });
 
     // ── 아코디언 토글 ─────────────────────────────────────────
     document.querySelectorAll('.accordion-header').forEach(header => {
