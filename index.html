@@ -2372,6 +2372,11 @@ function shouldUseFullStocksTreeListener() {
     return auth.currentUser?.email === 'skftodwocks2@gmail.com';
 }
 
+/** 코인 시장도 동일: 관리자만 coins/ 전체 onValue — 일반 유저는 coins/{id} per-path만 (향후 코인 탭 공개 시) */
+function shouldUseFullCoinsTreeListener() {
+    return auth.currentUser?.email === 'skftodwocks2@gmail.com';
+}
+
 function upsertAllStocksCacheRow(row) {
     if (!row?.id) return;
     const i = allStocks.findIndex((x) => x.id === row.id);
@@ -2796,13 +2801,26 @@ onValue(ref(db, 'siteConfig/coinMarketMinTotalWon'), (snap) => {
     else delete siteConfig.coinMarketMinTotalWon;
 });
 
-// 중계방 실시간 구독 (신규 수락/만료 감지)
-onValue(ref(db, 'relayRequests'), (snap) => {
-    const data = snap.exists() ? snap.val() : {};
-    // 로컬스토리지에 저장
-    localStorage.setItem('relayData', JSON.stringify(data));
-    renderRelayPanel(data);
-});
+// 중계방: 승인(approved) 건만 쿼리 구독 — pending/rejected 히스토리 대량 다운로드 방지 (rules에 .indexOn status 필요)
+let relayRequestsQueryUnsub = null;
+function subscribeRelayApprovedRequestsOnly() {
+    if (relayRequestsQueryUnsub || !db) return;
+    try {
+        const q = query(ref(db, 'relayRequests'), orderByChild('status'), equalTo('approved'));
+        relayRequestsQueryUnsub = onValue(
+            q,
+            (snap) => {
+                const data = snap.exists() ? snap.val() || {} : {};
+                localStorage.setItem('relayData', JSON.stringify(data));
+                renderRelayPanel(data);
+            },
+            (err) => console.warn('[relay] query onValue:', err?.message || err)
+        );
+    } catch (e) {
+        console.warn('[relay] subscribeRelayApprovedRequestsOnly', e);
+    }
+}
+subscribeRelayApprovedRequestsOnly();
 
 // 서킷브레이커 실시간 구독
 onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
@@ -3163,8 +3181,12 @@ function applyMainCoinsDataSync() {
     if (mode !== mainCoinsSyncMode) {
         const msg = {
             closed: '마감·점검 → coins/ 리스너 제거',
-            regular: '정규장 → coins/ onValue',
-            offpeak: '비정규장 → coins/ onValue'
+            regular: shouldUseFullCoinsTreeListener()
+                ? '정규장 → 관리자만 coins/ 전체 onValue · 일반 유저는 coins/{id}만'
+                : '정규장 → coins/ 전체 구독 생략(대역폭) · coins/{id} per-path만',
+            offpeak: shouldUseFullCoinsTreeListener()
+                ? '비정규장 → 관리자만 coins/ 전체 onValue · 일반 유저는 coins/{id}만'
+                : '비정규장 → coins/ 전체 구독 생략 · coins/{id} per-path만'
         };
         console.log(`[sync-strategy] coins ${mainCoinsSyncMode ?? 'init'} → ${mode}: ${msg[mode]}`);
         mainCoinsSyncMode = mode;
@@ -3177,14 +3199,41 @@ function applyMainCoinsDataSync() {
             }
             return;
         }
+        if (!shouldUseFullCoinsTreeListener()) {
+            if (typeof coinsUnsubscribe === 'function') {
+                coinsUnsubscribe();
+                coinsUnsubscribe = null;
+            }
+            logAuthTrail('[sync-strategy] applyMainCoinsDataSync skip full coins/ (non-admin bandwidth)');
+            seedAllCoinsFromPerCoinCaches();
+            return;
+        }
         if (typeof coinsUnsubscribe === 'function') return;
-        logAuthTrail('[DB] applyMainCoinsDataSync → onValue path: coins/');
+        logAuthTrail('[DB] applyMainCoinsDataSync → onValue path: coins/ (admin)');
         coinsUnsubscribe = onValue(ref(db, 'coins/'), processCoinsSnap, (err) => {
             console.warn('[sync-strategy] coins/ onValue 오류:', err?.message || err);
         });
     } catch (err) {
         logAuthTrailError('applyMainCoinsDataSync', err);
     }
+}
+
+/** coins/ 전체 리스너 없을 때 allCoins 를 즐겨찾기·보유·검색 캐시로 채워 목록·거래 보조에 사용 */
+function seedAllCoinsFromPerCoinCaches() {
+    if (!isCoinMarket()) return;
+    const byId = {};
+    Object.assign(byId, favoriteCoins, ownedCoins);
+    Object.values(searchResults).forEach((row) => {
+        if (row?.id) byId[row.id] = { ...byId[row.id], ...row, id: row.id };
+    });
+    const merged = Object.values(byId);
+    allCoins = merged;
+    if (merged.length === 0) return;
+    queueMicrotask(() => {
+        try {
+            refreshMainStockListView();
+        } catch (_) { /* noop */ }
+    });
 }
 
 function processCoinsSnap(snap) {
