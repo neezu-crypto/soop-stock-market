@@ -3730,33 +3730,19 @@ setTimeout(() => {
     }
 }, 5000);
 
-// ── 실시간 접속자 집계 (presence/{uid}/{sessionId}/connectedAt) ──
+// ── 실시간 접속자: presence는 Cloud Function이 집계 → siteStats/connectionCount 스칼라만 구독 (다운로드 절감) ──
 const PRESENCE_HEARTBEAT_MS = 2 * 60 * 1000; // 주기적 갱신 — onDisconnect 실패 시에도 TTL로 고스트 제거
-const PRESENCE_TTL_MS       = 6 * 60 * 1000; // 마지막 갱신 후 이 시간 초과 시 집계에서 제외 (하트비트의 약 3배)
-
-function countActivePresenceSessions(data) {
-    if (!data || typeof data !== 'object') return 0;
-    const now = Date.now();
-    let count = 0;
-    for (const sessions of Object.values(data)) {
-        if (!sessions || typeof sessions !== 'object') continue;
-        for (const v of Object.values(sessions)) {
-            if (v && typeof v.connectedAt === 'number' && (now - v.connectedAt) <= PRESENCE_TTL_MS) count++;
-        }
-    }
-    return count;
-}
 
 function subscribePresenceCountOnce() {
     if (presenceCountUnsub) return;
-    logAuthTrail('[DB] subscribePresenceCountOnce onValue path: presence');
+    logAuthTrail('[DB] subscribePresenceCountOnce onValue path: siteStats/connectionCount');
     try {
-    presenceCountUnsub = onValue(ref(db, 'presence'), (snap) => {
-        const data = snap.exists() ? snap.val() : {};
-        const count = countActivePresenceSessions(data);
-        const el = document.getElementById('online-count');
-        if (el) el.innerText = count.toLocaleString();
-    });
+        presenceCountUnsub = onValue(ref(db, 'siteStats/connectionCount'), (snap) => {
+            const n = snap.exists() ? Number(snap.val()) : 0;
+            const count = Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+            const el = document.getElementById('online-count');
+            if (el) el.innerText = count.toLocaleString();
+        });
     } catch (err) {
         logAuthTrailError('subscribePresenceCountOnce', err);
     }
