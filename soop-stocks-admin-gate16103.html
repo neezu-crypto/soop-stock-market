@@ -660,6 +660,53 @@
                     </div>
                 <button class="btn-primary" style="margin-top:10px; width:100%; background:#7c3aed; color:white;" onclick="saveMarketParams()">💾 임팩트 감쇄 저장</button>
                 </div>
+
+                <!-- 코인 매매 변동 계수 (메인 앱 코인 체결 impact 배수) -->
+                <div style="margin-top:14px; background:#0f172a; border-radius:8px; padding:12px; border:1px solid #f59e0b;">
+                    <div style="font-size:12px; color:#f59e0b; font-weight:800; margin-bottom:6px;">🪙 코인 매매 변동 계수</div>
+                    <div style="font-size:11px; color:#64748b; margin-bottom:10px;">
+                        메인 페이지 코인 거래 시 <b>impact</b>에 곱해지는 배수입니다. (<code>siteConfig/marketParams/coinImpactMultiplier</code>)<br>
+                        <span style="color:#94a3b8;">자동 갱신은 이 관리자 탭이 열려 있는 동안에만 동작합니다.</span>
+                    </div>
+                    <div class="data-status-bar" style="margin-bottom:10px;">
+                        <span>RTDB 현재값: <b id="coin-impact-rtdb-status" style="color:#f8fafc;">—</b></span>
+                        <span id="coin-impact-auto-chip" class="status-chip none">자동 꺼짐</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                        <span style="font-size:12px; color:#94a3b8; white-space:nowrap;">수동 배수</span>
+                        <input type="number" id="coin-impact-multiplier" value="1.85" min="0.01" max="20" step="0.01"
+                            style="flex:1; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:14px; outline:none;">
+                        <button type="button" class="btn-primary" style="margin-top:0; width:auto; padding:8px 14px; font-size:12px;" onclick="saveCoinImpactMultiplier()">저장</button>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div>
+                            <div style="font-size:12px; color:#22c55e; font-weight:700;">주기 랜덤 갱신</div>
+                            <div style="font-size:10px; color:#64748b;">최소~최대 사이 값을 N초마다 DB에 기록</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="coin-impact-auto-toggle" onchange="toggleCoinImpactAuto(this.checked)">
+                            <span class="toggle-slider" style="--checked-color:#22c55e;"></span>
+                        </label>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px;">
+                        <div>
+                            <div style="font-size:10px; color:#64748b; margin-bottom:4px;">간격(초)</div>
+                            <input type="number" id="coin-impact-auto-interval" value="30" min="5" max="3600" step="1"
+                                style="width:100%; box-sizing:border-box; background:#1e293b; border:1px solid #334155; color:#22c55e; padding:6px 8px; border-radius:6px; font-size:13px; font-weight:700; outline:none;">
+                        </div>
+                        <div>
+                            <div style="font-size:10px; color:#64748b; margin-bottom:4px;">최소</div>
+                            <input type="number" id="coin-impact-auto-min" value="1.2" min="0.01" max="20" step="0.01"
+                                style="width:100%; box-sizing:border-box; background:#1e293b; border:1px solid #334155; color:#f8fafc; padding:6px 8px; border-radius:6px; font-size:13px; outline:none;">
+                        </div>
+                        <div>
+                            <div style="font-size:10px; color:#64748b; margin-bottom:4px;">최대</div>
+                            <input type="number" id="coin-impact-auto-max" value="2.5" min="0.01" max="20" step="0.01"
+                                style="width:100%; box-sizing:border-box; background:#1e293b; border:1px solid #334155; color:#f8fafc; padding:6px 8px; border-radius:6px; font-size:13px; outline:none;">
+                        </div>
+                    </div>
+                    <div id="coin-impact-auto-status" style="font-size:12px; color:#64748b;">자동 갱신 꺼짐</div>
+                </div>
             </div>
 
             <!-- 시뮬레이터 -->
@@ -2510,10 +2557,17 @@
             await loadMarketHours();
             startRealtimeRequestListeners();
             startDailyAutoSettingsListener();
+            try {
+                await loadSellConfig();
+                await loadMarketParams();
+            } catch (e) {
+                console.warn('[Admin] reload sell/marketParams', e);
+            }
         } else {
             if (user) {
                 // Auth user exists but isn't admin.
                 console.warn("[Admin Auth] Access Denied: Email mismatch", user.email);
+                try { stopCoinImpactAutoIntervalOnly(); } catch (_) { /* noop */ }
                 stopDailyAutoSettingsListener();
                 stopRealtimeRequestListeners();
                 hideAdminRequestInbox();
@@ -2523,6 +2577,7 @@
             } else {
                 // Debounce null -> avoid UI flicker during transient refresh reconnect.
                 pendingLogoutUiTimeout = setTimeout(() => {
+                    try { stopCoinImpactAutoIntervalOnly(); } catch (_) { /* noop */ }
                     stopDailyAutoSettingsListener();
                     stopRealtimeRequestListeners();
                     hideAdminRequestInbox();
@@ -3857,6 +3912,8 @@
 
     // ── 매도 하락 가중치 설정 ──────────────────────────────────
     let autoModeTimer = null;
+    let coinImpactAutoTimer = null;
+    let coinImpactAutoCountdownTimer = null;
 
     async function loadSellConfig() {
         try {
@@ -3896,6 +3953,34 @@
         }
     }
 
+    function stopCoinImpactAutoIntervalOnly() {
+        if (coinImpactAutoTimer) {
+            clearInterval(coinImpactAutoTimer);
+            coinImpactAutoTimer = null;
+        }
+        if (coinImpactAutoCountdownTimer) {
+            clearInterval(coinImpactAutoCountdownTimer);
+            coinImpactAutoCountdownTimer = null;
+        }
+        const chip = document.getElementById('coin-impact-auto-chip');
+        const st = document.getElementById('coin-impact-auto-status');
+        if (chip) {
+            chip.className = 'status-chip none';
+            chip.textContent = '자동 꺼짐';
+        }
+        if (st && !document.getElementById('coin-impact-auto-toggle')?.checked) {
+            st.style.color = '#64748b';
+            st.textContent = '자동 갱신 꺼짐';
+        }
+    }
+
+    function updateCoinImpactRtdbStatusUI(val) {
+        const el = document.getElementById('coin-impact-rtdb-status');
+        if (!el) return;
+        const n = Number(val);
+        el.textContent = Number.isFinite(n) && n > 0 ? n.toFixed(4) : '(미설정 → 앱 기본 1.85)';
+    }
+
     async function loadMarketParams() {
         try {
             const snap = await get(ref(db, 'siteConfig/marketParams'));
@@ -3904,11 +3989,176 @@
             const impactRefPriceManwon = Math.max(1, Math.round(Number(impactRefPrice) / 10000));
             const inputEl = document.getElementById('auto-impact-reference-price');
             if (inputEl) inputEl.value = String(impactRefPriceManwon);
+
+            const cim = Number(d?.coinImpactMultiplier);
+            const multInput = document.getElementById('coin-impact-multiplier');
+            if (multInput && Number.isFinite(cim) && cim > 0) multInput.value = String(cim);
+            updateCoinImpactRtdbStatusUI(cim);
+
+            const intEl = document.getElementById('coin-impact-auto-interval');
+            const minEl = document.getElementById('coin-impact-auto-min');
+            const maxEl = document.getElementById('coin-impact-auto-max');
+            const toggleEl = document.getElementById('coin-impact-auto-toggle');
+            if (intEl && d?.coinImpactAutoIntervalSec != null) intEl.value = String(Math.max(5, Number(d.coinImpactAutoIntervalSec) || 30));
+            if (minEl && d?.coinImpactAutoMin != null) minEl.value = String(d.coinImpactAutoMin);
+            if (maxEl && d?.coinImpactAutoMax != null) maxEl.value = String(d.coinImpactAutoMax);
+
+            stopCoinImpactAutoIntervalOnly();
+            if (toggleEl) toggleEl.checked = !!d?.coinImpactAutoEnabled;
+            const adminEmailOk =
+                auth.currentUser &&
+                (auth.currentUser.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+            if (adminEmailOk && d?.coinImpactAutoEnabled) {
+                startCoinImpactAutoFromRestore();
+            }
         } catch (e) {
             const inputEl = document.getElementById('auto-impact-reference-price');
             if (inputEl) inputEl.value = '10'; // default: 100,000 won
+            updateCoinImpactRtdbStatusUI(null);
         }
     }
+
+    window.saveCoinImpactMultiplier = async function() {
+        if (!isAdmin()) return;
+        const multInput = document.getElementById('coin-impact-multiplier');
+        if (!multInput) return;
+        const v = Number(multInput.value);
+        if (!Number.isFinite(v) || v <= 0) {
+            alert('변동 계수는 0보다 큰 숫자여야 합니다.');
+            return;
+        }
+        const rounded = Math.round(v * 10000) / 10000;
+        try {
+            await update(ref(db, 'siteConfig/marketParams'), {
+                coinImpactMultiplier: rounded,
+                coinImpactMultiplierUpdatedAt: Date.now(),
+                updatedAt: Date.now()
+            });
+            multInput.value = String(rounded);
+            updateCoinImpactRtdbStatusUI(rounded);
+            alert('✅ 코인 변동 계수가 저장되었습니다.');
+        } catch (err) {
+            alert('저장 실패: ' + (err?.message || err));
+        }
+    };
+
+    function startCoinImpactAutoFromRestore() {
+        const interval = Math.max(5, Number(document.getElementById('coin-impact-auto-interval')?.value) || 30);
+        startCoinImpactAutoCore(interval);
+    }
+
+    function startCoinImpactAutoCore(intervalSec) {
+        stopCoinImpactAutoIntervalOnly();
+        const statusEl = document.getElementById('coin-impact-auto-status');
+        const chip = document.getElementById('coin-impact-auto-chip');
+
+        const tick = async () => {
+            const min = Number(document.getElementById('coin-impact-auto-min')?.value);
+            const max = Number(document.getElementById('coin-impact-auto-max')?.value);
+            if (!Number.isFinite(min) || !Number.isFinite(max)) return;
+            const lo = Math.min(min, max);
+            const hi = Math.max(min, max);
+            if (lo <= 0 || hi <= 0 || lo >= hi) {
+                if (statusEl) {
+                    statusEl.style.color = '#ef4444';
+                    statusEl.textContent = '❌ 최소·최대를 확인하세요 (0보다 크고 최소 < 최대)';
+                }
+                return;
+            }
+            const v = randInRange(lo, hi, 4);
+            try {
+                await update(ref(db, 'siteConfig/marketParams'), {
+                    coinImpactMultiplier: v,
+                    coinImpactMultiplierUpdatedAt: Date.now(),
+                    updatedAt: Date.now()
+                });
+                const multInput = document.getElementById('coin-impact-multiplier');
+                if (multInput) multInput.value = String(v);
+                updateCoinImpactRtdbStatusUI(v);
+                const now = new Date().toLocaleTimeString('ko-KR');
+                if (statusEl) {
+                    statusEl.style.color = '#22c55e';
+                    statusEl.textContent = `✅ ${now} → coinImpactMultiplier = ${v}`;
+                }
+            } catch (e) {
+                if (statusEl) {
+                    statusEl.style.color = '#ef4444';
+                    statusEl.textContent = '❌ 갱신 실패: ' + (e?.message || e);
+                }
+            }
+        };
+
+        if (chip) {
+            chip.className = 'status-chip active';
+            chip.textContent = '자동 켜짐';
+        }
+        tick();
+        coinImpactAutoTimer = setInterval(tick, intervalSec * 1000);
+
+        let countdown = intervalSec;
+        coinImpactAutoCountdownTimer = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) countdown = intervalSec;
+            const tgl = document.getElementById('coin-impact-auto-toggle');
+            if (!tgl?.checked) {
+                clearInterval(coinImpactAutoCountdownTimer);
+                coinImpactAutoCountdownTimer = null;
+                return;
+            }
+            const base = (document.getElementById('coin-impact-auto-status')?.textContent || '').split(' |')[0];
+            if (statusEl) statusEl.textContent = `${base} | 다음: ${countdown}초`;
+        }, 1000);
+    }
+
+    window.toggleCoinImpactAuto = async function(enabled) {
+        if (!isAdmin()) return;
+        const toggleEl = document.getElementById('coin-impact-auto-toggle');
+        if (enabled) {
+            const interval = Math.max(5, Number(document.getElementById('coin-impact-auto-interval')?.value) || 30);
+            const min = Number(document.getElementById('coin-impact-auto-min')?.value);
+            const max = Number(document.getElementById('coin-impact-auto-max')?.value);
+            const lo = Math.min(min, max);
+            const hi = Math.max(min, max);
+            if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo <= 0 || hi <= 0 || lo >= hi) {
+                alert('최소·최대는 0보다 크고, 최소가 최대보다 작아야 합니다.');
+                if (toggleEl) toggleEl.checked = false;
+                return;
+            }
+            try {
+                await update(ref(db, 'siteConfig/marketParams'), {
+                    coinImpactAutoEnabled: true,
+                    coinImpactAutoMin: lo,
+                    coinImpactAutoMax: hi,
+                    coinImpactAutoIntervalSec: interval,
+                    updatedAt: Date.now()
+                });
+            } catch (e) {
+                alert('자동 설정 저장 실패: ' + (e?.message || e));
+                if (toggleEl) toggleEl.checked = false;
+                return;
+            }
+            startCoinImpactAutoCore(interval);
+        } else {
+            stopCoinImpactAutoIntervalOnly();
+            try {
+                await update(ref(db, 'siteConfig/marketParams'), {
+                    coinImpactAutoEnabled: false,
+                    updatedAt: Date.now()
+                });
+            } catch (e) {
+                alert('자동 해제 저장 실패: ' + (e?.message || e));
+            }
+            const st = document.getElementById('coin-impact-auto-status');
+            if (st) {
+                st.style.color = '#64748b';
+                st.textContent = '자동 갱신 꺼짐';
+            }
+        }
+    };
+
+    window.addEventListener('beforeunload', () => {
+        stopCoinImpactAutoIntervalOnly();
+    });
 
     window.saveMarketParams = async function() {
         if (!isAdmin()) return;
