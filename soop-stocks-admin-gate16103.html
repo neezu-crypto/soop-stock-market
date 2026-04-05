@@ -1373,12 +1373,56 @@
             전체 유저의 자산(현금+보유주식 평가금)을 계산해 상위 100위를 <b>assetRanking/</b> 경로에 저장합니다.<br>
             <span style="color:#f59e0b;">⚠️ 유저 수가 많을수록 시간이 걸립니다. 장 마감 후 실행을 권장합니다.</span>
         </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; margin-bottom:10px; cursor:pointer;">
+            <input type="checkbox" id="asset-rank-chain-stock-holders" checked style="accent-color:#f59e0b;">
+            집계 완료 후 <b>종목별 익명 보유 TOP3</b>도 같이 갱신
+        </label>
         <div class="data-status-bar" style="margin-bottom:12px;">
             <span>마지막 집계: <b id="asset-rank-last" style="color:#f8fafc;">-</b></span>
             <span id="asset-rank-chip" class="status-chip none">미실행</span>
         </div>
         <div id="asset-rank-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:120px; overflow-y:auto; display:none;"></div>
         <button class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="calcAssetRanking()">📊 자산 랭킹 집계 실행</button>
+        </div>
+        </div>
+    </div>
+
+    <!-- 📈 종목별 익명 보유 TOP3 -->
+    <div class="container" style="display:block; border-color: #a855f7;">
+        <div class="accordion-header">
+            <h1>📈 종목별 익명 보유 TOP3</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            종목마다 보유 수량이 많은 <b>상위 3인</b>만 <b>익명</b>으로 <b>stockHolderRanking/{종목ID}</b>에 저장합니다. (UID·닉네임 없음)<br>
+            유저는 자산·보유 랭킹 <b>열람 권한(별풍선 40개·12h)</b>이 있을 때 차트에서만 확인합니다.<br>
+            <span style="color:#f59e0b;">⚠️ 자동 갱신은 이 관리자 탭이 열려 있는 동안만 동작합니다.</span>
+        </div>
+        <div class="data-status-bar" style="margin-bottom:12px;">
+            <span>마지막 집계: <b id="stock-holder-rank-last" style="color:#f8fafc;">-</b></span>
+            <span id="stock-holder-rank-chip" class="status-chip none">대기</span>
+        </div>
+        <div id="stock-holder-rank-log" style="background:#0f172a; border-radius:8px; padding:10px 14px; font-size:12px; color:#64748b; min-height:40px; margin-bottom:12px; max-height:140px; overflow-y:auto; display:none;"></div>
+        <button class="btn-primary" style="background:#a855f7; color:white; margin-bottom:12px;" onclick="calcStockHolderTop3Ranking()">📈 익명 보유 TOP3 집계 실행</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div>
+                <div style="font-size:13px; color:#22c55e; font-weight:800;">주기 자동 갱신</div>
+                <div style="font-size:11px; color:#64748b;">N시간마다 위 집계를 반복</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" id="stock-holder-auto-toggle" onchange="toggleStockHolderAuto(this.checked)">
+                <span class="toggle-slider" style="--checked-color:#22c55e;"></span>
+            </label>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <span style="font-size:12px; color:#94a3b8;">간격</span>
+            <input type="number" id="stock-holder-auto-interval" value="3" min="1" max="168" step="1"
+                style="width:72px; background:#0f172a; border:1px solid #334155; color:#22c55e; padding:8px; border-radius:8px; font-size:14px; font-weight:700; text-align:center; outline:none;">
+            <span style="font-size:12px; color:#94a3b8;">시간</span>
+        </div>
+        <div id="stock-holder-auto-status" style="font-size:12px; color:#64748b;">자동 갱신 꺼짐</div>
         </div>
         </div>
     </div>
@@ -1392,7 +1436,7 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            매일 지정한 시각에 <b>자산 랭킹 집계</b>와 <b>오래된 캔들 정리</b>를 자동 실행합니다.<br>
+            매일 지정한 시각에 <b>자산 랭킹 집계</b>, 선택 시 <b>종목별 익명 보유 TOP3</b>, <b>오래된 캔들 정리</b>를 자동 실행합니다.<br>
             <span style="color:#f59e0b;">⚠️ 관리자 페이지가 열려있는 동안만 동작합니다. 새 창으로 열어두세요.</span>
         </div>
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; min-height:22px;">
@@ -1427,6 +1471,10 @@
             <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
                 <input type="checkbox" id="auto-run-candle" checked style="accent-color:#6366f1;" onchange="persistDailyAutoSettings()">
                 🗑 오래된 캔들 정리
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="auto-run-stock-holders" checked style="accent-color:#a855f7;" onchange="persistDailyAutoSettings()">
+                📈 종목별 익명 보유 TOP3 갱신
             </label>
         </div>
         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
@@ -1547,7 +1595,7 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            별풍선 <b>30개</b> 약정 후 신청된 건입니다. 후원 확인 후 <b>수락</b>하면 해당 유저에게 자산 랭킹이 <b>12시간</b> 열람됩니다.<br>
+            별풍선 <b>40개</b>(구 30개 신청 건 포함) 약정 후 신청된 건입니다. 후원 확인 후 <b>수락</b>하면 <b>자산 TOP100 + 차트 종목별 익명 보유 TOP3</b>가 동일 <b>12시간</b> 열람됩니다.<br>
             <span style="color:#38bdf8;">Firebase: <b>assetRankingRequests/{uid}</b> · 승인 시 <b>accessExpiresAt</b> 저장. 예전 <b>subscribeRequests</b>만 승인된 유저는 메인 앱에서 레거시로 랭킹이 열릴 수 있습니다.</span>
         </div>
 
@@ -1575,7 +1623,8 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
     import { getDatabase, ref, get, update, set, remove, onValue, serverTimestamp, runTransaction, push } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-    import { getAuth, initializeAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+    import { getAuth, initializeAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, browserPopupRedirectResolver,
+        indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 
     const firebaseConfig = {
@@ -1611,12 +1660,21 @@
         }
         return false;
     }
+    function authPopupResolverArgs() {
+        return typeof browserPopupRedirectResolver !== 'undefined' && browserPopupRedirectResolver
+            ? [browserPopupRedirectResolver]
+            : [];
+    }
+
     let auth;
     try {
-        // Keep Admin session sticky like the user-facing page.
+        // index.html 과 동일: 팝업 리졸버 없으면 일부 환경에서 signInWithPopup → auth/argument-error
         const authOpts = {
             persistence: [indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence],
         };
+        if (typeof browserPopupRedirectResolver !== 'undefined' && browserPopupRedirectResolver) {
+            authOpts.popupRedirectResolver = browserPopupRedirectResolver;
+        }
         auth = initializeAuth(app, authOpts);
     } catch (e) {
         auth = getAuth(app);
@@ -2099,7 +2157,7 @@
             const st          = String(req.status || '').toLowerCase();
             const statusColor = st === 'approved' ? '#22c55e' : st === 'expired' ? '#64748b' : st === 'rejected' ? '#ef4444' : '#f59e0b';
             const statusText  = st === 'approved' ? '✅ 승인됨' : st === 'expired' ? '⬛ 만료됨' : st === 'rejected' ? '❌ 거절' : '⏳ 대기중';
-            const costNum     = typeof req.cost === 'number' ? req.cost : 30;
+            const costNum     = typeof req.cost === 'number' ? req.cost : 40;
             const expMs       = getAssetRankingAccessExpiresAtMs(req);
             const expLine     = st === 'approved' && expMs
                 ? `<div style="font-size:11px; color:${Date.now() >= expMs ? '#f59e0b' : '#94a3b8'}; margin-bottom:8px;">열람 만료 시각(12h): ${new Date(expMs).toLocaleString('ko-KR')}${Date.now() >= expMs ? ' · <b>시간 경과</b> (앱에서 랭킹 차단)' : ''}</div>`
@@ -2489,7 +2547,10 @@
     });
 
     // ── 인증 ────────────────────────────────────────────────
-    window.login  = () => signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
+    window.login = () =>
+        signInWithPopup(auth, provider, ...authPopupResolverArgs()).catch((err) =>
+            alert('로그인 실패: ' + (err?.message || err?.code || err))
+        );
     window.logout = () => signOut(auth);
 
     // ── 점검 모드 ────────────────────────────────────────────
@@ -2560,6 +2621,7 @@
             try {
                 await loadSellConfig();
                 await loadMarketParams();
+                await loadStockHolderScheduler();
             } catch (e) {
                 console.warn('[Admin] reload sell/marketParams', e);
             }
@@ -2568,6 +2630,7 @@
                 // Auth user exists but isn't admin.
                 console.warn("[Admin Auth] Access Denied: Email mismatch", user.email);
                 try { stopCoinImpactAutoIntervalOnly(); } catch (_) { /* noop */ }
+                try { stopStockHolderAutoIntervalOnly(); } catch (_) { /* noop */ }
                 stopDailyAutoSettingsListener();
                 stopRealtimeRequestListeners();
                 hideAdminRequestInbox();
@@ -2578,6 +2641,7 @@
                 // Debounce null -> avoid UI flicker during transient refresh reconnect.
                 pendingLogoutUiTimeout = setTimeout(() => {
                     try { stopCoinImpactAutoIntervalOnly(); } catch (_) { /* noop */ }
+                    try { stopStockHolderAutoIntervalOnly(); } catch (_) { /* noop */ }
                     stopDailyAutoSettingsListener();
                     stopRealtimeRequestListeners();
                     hideAdminRequestInbox();
@@ -3914,6 +3978,8 @@
     let autoModeTimer = null;
     let coinImpactAutoTimer = null;
     let coinImpactAutoCountdownTimer = null;
+    let stockHolderAutoTimer = null;
+    let stockHolderAutoCountdownTimer = null;
 
     async function loadSellConfig() {
         try {
@@ -4158,6 +4224,7 @@
 
     window.addEventListener('beforeunload', () => {
         stopCoinImpactAutoIntervalOnly();
+        stopStockHolderAutoIntervalOnly();
     });
 
     window.saveMarketParams = async function() {
@@ -4617,6 +4684,7 @@
         minute: 0,
         runRanking: true,
         runCandle: true,
+        runStockHolders: true,
         autoSplitEnabled: false,
         // Admin input is "만원" => convert to won in execution.
         autoSplitThreshold: 100,
@@ -4677,6 +4745,7 @@
                 minute: clampDailyAutoHourMin(minEl?.value, 0, 59),
                 runRanking: document.getElementById('auto-run-ranking').checked,
                 runCandle: document.getElementById('auto-run-candle').checked,
+                runStockHolders: document.getElementById('auto-run-stock-holders')?.checked !== false,
                 autoSplitEnabled,
                 autoSplitThreshold,
                 autoSplitRatio,
@@ -4720,6 +4789,8 @@
             if (minEl) minEl.value = String(clampDailyAutoHourMin(d.minute, 0, 59));
             document.getElementById('auto-run-ranking').checked = d.runRanking !== false;
             document.getElementById('auto-run-candle').checked = d.runCandle !== false;
+            const shEl = document.getElementById('auto-run-stock-holders');
+            if (shEl) shEl.checked = d.runStockHolders !== false;
             const splitEnabledEl   = document.getElementById('auto-split-enabled');
             const splitThresholdEl = document.getElementById('auto-split-price-threshold');
             const splitRatioEl     = document.getElementById('auto-split-ratio');
@@ -5115,6 +5186,7 @@
 
             const runRanking      = document.getElementById('auto-run-ranking').checked;
             const runCandle       = document.getElementById('auto-run-candle').checked;
+            const runStockHolders = document.getElementById('auto-run-stock-holders')?.checked !== false;
 
             const splitEnabledEl   = document.getElementById('auto-split-enabled');
             const splitThresholdEl = document.getElementById('auto-split-price-threshold');
@@ -5136,6 +5208,7 @@
             }
 
             if (runRanking)      await calcAssetRanking(true);
+            if (runStockHolders) await calcStockHolderTop3Ranking(true);
             if (runCandle)       await pruneAllCandles(true);
 
             const doneMs = Date.now();
@@ -5239,12 +5312,234 @@
             }
             logEl.scrollTop = logEl.scrollHeight;
 
+            const chainEl = document.getElementById('asset-rank-chain-stock-holders');
+            if (chainEl && chainEl.checked) {
+                logEl.innerHTML += '<div style="color:#94a3b8;">종목별 익명 보유 TOP3 연쇄 집계 중...</div>';
+                logEl.scrollTop = logEl.scrollHeight;
+                await calcStockHolderTop3Ranking(true);
+            }
+
         } catch(e) {
             chipEl.className   = 'status-chip expired';
             chipEl.textContent = '오류';
             logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${escapeHtml(e.message || String(e))}</div>`;
             if (e && (e.code === 'PERMISSION_DENIED' || String(e.message || '').includes('permission'))) {
                 logEl.innerHTML += '<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정(등록 이메일)으로 로그인했는지, <b>users/</b> 일괄 읽기 규칙이 배포됐는지 확인하세요.</div>';
+            }
+        }
+    };
+
+    function stopStockHolderAutoIntervalOnly() {
+        if (stockHolderAutoTimer) {
+            clearInterval(stockHolderAutoTimer);
+            stockHolderAutoTimer = null;
+        }
+        if (stockHolderAutoCountdownTimer) {
+            clearInterval(stockHolderAutoCountdownTimer);
+            stockHolderAutoCountdownTimer = null;
+        }
+    }
+
+    async function persistStockHolderScheduler() {
+        const intervalHours = Math.max(1, Math.min(168, parseInt(document.getElementById('stock-holder-auto-interval')?.value, 10) || 3));
+        const enabled = !!document.getElementById('stock-holder-auto-toggle')?.checked;
+        await update(ref(db, 'siteConfig/stockHolderRankingScheduler'), {
+            enabled,
+            intervalHours,
+            updatedAt: Date.now()
+        });
+    }
+
+    async function loadStockHolderScheduler() {
+        try {
+            const snap = await get(ref(db, 'siteConfig/stockHolderRankingScheduler'));
+            const d = snap.exists() ? snap.val() : {};
+            const iv = Math.max(1, Math.min(168, Number(d.intervalHours) || 3));
+            const intEl = document.getElementById('stock-holder-auto-interval');
+            if (intEl) intEl.value = String(iv);
+            const tgl = document.getElementById('stock-holder-auto-toggle');
+            stopStockHolderAutoIntervalOnly();
+            if (tgl) tgl.checked = !!d.enabled;
+            const adminEmailOk =
+                auth.currentUser &&
+                (auth.currentUser.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+            const st = document.getElementById('stock-holder-auto-status');
+            if (adminEmailOk && d.enabled) {
+                startStockHolderAutoCore(iv);
+            } else if (st) {
+                st.style.color = '#64748b';
+                st.textContent = d.enabled ? '자동 켜짐(저장됨) — 관리자 로그인 시 시작' : '자동 갱신 꺼짐';
+            }
+        } catch (_) { /* noop */ }
+    }
+
+    function startStockHolderAutoCore(intervalHours) {
+        stopStockHolderAutoIntervalOnly();
+        const statusEl = document.getElementById('stock-holder-auto-status');
+        const ms = Math.max(1, Math.min(168, intervalHours)) * 3600000;
+        let nextAt = Date.now() + ms;
+        let lastLine = '';
+        let running = false;
+
+        if (statusEl) {
+            statusEl.style.color = '#94a3b8';
+            statusEl.textContent = '첫 집계 실행 중…';
+        }
+
+        const bumpCountdown = () => {
+            const tgl = document.getElementById('stock-holder-auto-toggle');
+            if (!tgl?.checked) {
+                if (stockHolderAutoCountdownTimer) {
+                    clearInterval(stockHolderAutoCountdownTimer);
+                    stockHolderAutoCountdownTimer = null;
+                }
+                return;
+            }
+            const remain = Math.max(0, nextAt - Date.now());
+            const h = Math.floor(remain / 3600000);
+            const m = Math.floor((remain % 3600000) / 60000);
+            if (statusEl) {
+                const base = lastLine || '주기 자동 갱신';
+                statusEl.textContent = `${base} | 다음까지 약 ${h}시간 ${m}분`;
+            }
+        };
+
+        const runTick = async () => {
+            if (running) return;
+            running = true;
+            try {
+                await calcStockHolderTop3Ranking(true);
+                nextAt = Date.now() + ms;
+                lastLine = `✅ 집계 완료 ${new Date().toLocaleString('ko-KR')}`;
+                if (statusEl) {
+                    statusEl.style.color = '#22c55e';
+                    statusEl.textContent = lastLine;
+                }
+                bumpCountdown();
+            } finally {
+                running = false;
+            }
+        };
+
+        void (async () => {
+            await runTick();
+            bumpCountdown();
+            stockHolderAutoCountdownTimer = setInterval(bumpCountdown, 60000);
+        })();
+
+        stockHolderAutoTimer = setInterval(() => { void runTick(); }, ms);
+    }
+
+    window.toggleStockHolderAuto = async function(enabled) {
+        if (!isAdmin()) return;
+        const toggleEl = document.getElementById('stock-holder-auto-toggle');
+        try {
+            await persistStockHolderScheduler();
+        } catch (e) {
+            alert('자동 설정 저장 실패: ' + (e?.message || e));
+            if (toggleEl) toggleEl.checked = !enabled;
+            return;
+        }
+        if (enabled) {
+            const h = Math.max(1, Math.min(168, parseInt(document.getElementById('stock-holder-auto-interval')?.value, 10) || 3));
+            startStockHolderAutoCore(h);
+        } else {
+            stopStockHolderAutoIntervalOnly();
+            const st = document.getElementById('stock-holder-auto-status');
+            if (st) {
+                st.style.color = '#64748b';
+                st.textContent = '자동 갱신 꺼짐';
+            }
+        }
+    };
+
+    window.calcStockHolderTop3Ranking = async function(silent = false) {
+        if (!isAdmin()) return;
+        if (!silent && !confirm('종목별 익명 보유 TOP3를 집계합니다. 계속하시겠습니까?')) return;
+
+        const chipEl = document.getElementById('stock-holder-rank-chip');
+        const lastEl = document.getElementById('stock-holder-rank-last');
+        const logEl  = document.getElementById('stock-holder-rank-log');
+
+        if (chipEl) {
+            chipEl.className   = 'status-chip loading';
+            chipEl.textContent = '집계 중';
+        }
+        if (logEl) {
+            logEl.style.display = 'block';
+            if (!silent) logEl.innerHTML = '';
+        }
+
+        const appendLog = (html) => {
+            if (!logEl) return;
+            logEl.innerHTML += html;
+            logEl.scrollTop = logEl.scrollHeight;
+        };
+
+        try {
+            appendLog('<div>유저·종목 읽는 중...</div>');
+            const [usersSnap, stocksSnap] = await Promise.all([
+                get(ref(db, 'users/')),
+                get(ref(db, 'stocks/'))
+            ]);
+            if (!usersSnap.exists()) {
+                appendLog('<div style="color:#ef4444;">유저 데이터 없음</div>');
+                if (chipEl) {
+                    chipEl.className   = 'status-chip expired';
+                    chipEl.textContent = '데이터 없음';
+                }
+                return;
+            }
+            const users = usersSnap.val();
+            const stocks = stocksSnap.exists() ? stocksSnap.val() : {};
+            const stockIds = Object.keys(stocks);
+
+            const byStock = {};
+            stockIds.forEach((id) => { byStock[id] = []; });
+
+            Object.values(users).forEach((u) => {
+                if (!u?.stocks || typeof u.stocks !== 'object') return;
+                Object.entries(u.stocks).forEach(([stockId, s]) => {
+                    const qty = Math.floor(Number(s?.qty) || 0);
+                    if (qty <= 0) return;
+                    if (!byStock[stockId]) byStock[stockId] = [];
+                    byStock[stockId].push(qty);
+                });
+            });
+
+            appendLog(`<div>${stockIds.length}개 종목 · 쓰기 청크 처리 중...</div>`);
+
+            const now = Date.now();
+            const keys = Object.keys(byStock);
+            const CHUNK = 150;
+            for (let i = 0; i < keys.length; i += CHUNK) {
+                const slice = keys.slice(i, i + CHUNK);
+                const updates = {};
+                for (const stockId of slice) {
+                    const arr = (byStock[stockId] || []).sort((a, b) => b - a).slice(0, 3);
+                    const holders = arr.map((qty, idx) => ({ rank: idx + 1, qty }));
+                    updates[`stockHolderRanking/${stockId}/updatedAt`] = now;
+                    updates[`stockHolderRanking/${stockId}/holders`] = holders;
+                }
+                await update(ref(db), updates);
+            }
+
+            const nowStr = new Date(now).toLocaleString('ko-KR');
+            if (chipEl) {
+                chipEl.className   = 'status-chip active';
+                chipEl.textContent = '완료';
+            }
+            if (lastEl) lastEl.textContent = nowStr;
+            appendLog(`<div style="color:#22c55e;">✅ 완료 — ${keys.length}개 종목 (${nowStr})</div>`);
+
+        } catch (e) {
+            if (chipEl) {
+                chipEl.className   = 'status-chip expired';
+                chipEl.textContent = '오류';
+            }
+            appendLog(`<div style="color:#ef4444;">❌ 오류: ${escapeHtml(e.message || String(e))}</div>`);
+            if (e && (e.code === 'PERMISSION_DENIED' || String(e.message || '').includes('permission'))) {
+                appendLog('<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정으로 로그인했는지, <b>stockHolderRanking</b> 쓰기 규칙이 배포됐는지 확인하세요.</div>');
             }
         }
     };
