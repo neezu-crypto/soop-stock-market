@@ -1258,62 +1258,9 @@
         }
         .power-save-desc  { font-size: 13px; color: var(--text-sub); }
 
-		/* 리셋 위크 이동 배너 (테마 primary와 통일) */
-.header-challenge-banner {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(56, 189, 248, 0.1);
-    padding: 8px 16px;
-    border-radius: 50px;
-    text-decoration: none;
-    color: var(--primary);
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin-bottom: 20px;
-    border: 1px solid rgba(56, 189, 248, 0.35);
-    transition: all 0.3s ease;
-}
-
-.header-challenge-banner:hover {
-    background: rgba(56, 189, 248, 0.18);
-    transform: translateY(-2px);
-    border-color: var(--primary);
-    color: var(--text-main);
-}
-
-.badge-challenge {
-    background: var(--primary);
-    color: var(--on-primary);
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 800;
-}
-
-.header-challenge-banner i {
-    font-size: 0.9rem;
-}
-
-/* 모바일 대응 */
-@media (max-width: 600px) {
-    .header-challenge-banner {
-        font-size: 0.75rem;
-        padding: 6px 12px;
-        margin-bottom: 15px;
-    }
-}
     </style>
 </head>
-<body class="market-state-pending"><header>
-        <a href="https://neezu-crypto.github.io/streamer-challenge-reset-week-official/" target="_blank" class="header-challenge-banner">
-            <span class="badge-challenge">CHALLENGE</span>
-            <i class="fa-solid fa-trophy"></i> 
-            스트리머의 도전: 리셋 위크 챌린지 바로가기
-            <i class="fa-solid fa-chevron-right"></i>
-        </a>
-
-        </header>
+<body class="market-state-pending">
 
 <!-- ── 계정 초기화 안내 모달 ── -->
 <div id="account-warn-overlay">
@@ -1404,7 +1351,7 @@
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
-                    <div class="intro-update-text"><b>👑 자산 랭킹 열람</b> — TOP100 순위 보기 · 별풍선 30개 · 승인 후 12시간 열람</div>
+                    <div class="intro-update-text"><b>👑 자산·보유 랭킹 열람</b> — TOP100 + 차트에서 종목별 익명 보유 TOP3 · 별풍선 40개 · 승인 후 12시간</div>
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
@@ -1494,7 +1441,7 @@
             <div class="subscribe-gate-icon">👑</div>
             <div id="ranking-gate-copy-default">
                 <div class="subscribe-gate-title">자산 랭킹 열람 신청</div>
-                <div class="subscribe-gate-desc">자산 랭킹 TOP100 순위 보기<br>별풍선 30개<br>12시간 동안 열람 가능</div>
+                <div class="subscribe-gate-desc">자산 랭킹 TOP100 · 차트에서 종목별 <b>익명</b> 보유 1~3위<br>별풍선 40개 · 동일 12시간 열람</div>
             </div>
             <div id="ranking-gate-copy-expired" style="display:none;">
                 <div class="subscribe-gate-title">열람 기간이 만료되었습니다</div>
@@ -1510,7 +1457,7 @@
                 <div id="sub-status" class="subscribe-status"></div>
                 <div class="privacy-agree">
                     <input type="checkbox" id="sub-privacy-agree">
-                    <label for="sub-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 자산 랭킹 열람 검수 목적으로 수집됩니다.</label>
+                    <label for="sub-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 랭킹 열람 검수 목적으로 수집됩니다. 종목별 보유 순위는 익명 스냅샷만 제공됩니다.</label>
                 </div>
                 <div class="subscribe-gate-btns">
                     <button type="button" class="btn-subscribe-soop" onclick="openStarBalloonGiftForRanking()">🎈 별풍선 보내기</button>
@@ -1535,10 +1482,11 @@
                 <div id="my-rank-context" style="font-size:11px; color:var(--input-border); margin-top:6px;">-</div>
             </div>
             <!-- 상위 100위 목록 -->
-            <div style="font-size:11px; color:var(--muted); margin-bottom:6px; display:flex; justify-content:space-between;">
+            <div style="font-size:11px; color:var(--muted); margin-bottom:6px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
                 <span>TOP 100 자산 랭킹</span>
                 <span id="ranking-updated-at">-</span>
             </div>
+            <div style="font-size:10px; color:var(--input-border); line-height:1.5; margin-bottom:8px;">💡 종목 차트를 열면 해당 주식 <b>익명</b> 보유 1~3위(수량만)를 볼 수 있습니다. 닉·계정과 연결되지 않습니다.</div>
             <div id="asset-ranking-list" style="display:flex; flex-direction:column; gap:4px; max-height:300px; overflow-y:auto;">
                 <div style="font-size:12px; color:var(--muted); text-align:center; padding:16px 0;">불러오는 중...</div>
             </div>
@@ -1739,6 +1687,9 @@
             <span>차트를 호버하면 캔들 정보가 표시됩니다</span>
         </div>
 
+        <!-- 종목별 익명 보유 TOP3 (자산·보유 랭킹 열람 권한 + 주식 차트만) -->
+        <div id="chart-holder-ranking" style="display:none; margin:0 12px 10px; padding:10px 12px; border-radius:10px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); font-size:11px; color:var(--text-sub); line-height:1.55;"></div>
+
         <!-- 캔들 차트 -->
         <div class="chart-canvas-wrap">
             <canvas id="candleChart"></canvas>
@@ -1923,7 +1874,7 @@
                 <div style="width:1px; height:16px; background:var(--border);"></div>
                 <div class="wallet-market-toggle" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                     <button type="button" id="btn-market-stock" class="market-mode-btn active" onclick="setActiveMarket('stock')" title="주식 시장">📈 주식</button>
-                    <button type="button" id="btn-market-coin" class="market-mode-btn" onclick="setActiveMarket('coin')" title="고액 회원 전용 · 현금 공유">🪙 코인</button>
+                    <button type="button" id="btn-market-coin" class="market-mode-btn" onclick="setActiveMarket('coin')" title="코인 시장">🪙 코인</button>
                 </div>
             </div>
             <button type="button" id="btn-open-asset-request" onclick="window.openAssetRequestModal()"
@@ -1971,15 +1922,15 @@
     <div id="extend-request-bar" style="display:none;"></div>
 
     <header>
-        <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장</h1>
-        <p style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
+        <h1 id="main-market-title" style="font-size:20px;margin:0;">📈 스트리머 주식시장</h1>
+        <p id="main-market-subtitle" style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
             관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.
         </p>
         <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
 
-    <!-- 실시간 주가 랭킹 바로가기 -->
-    <div style="display:flex; align-items:center; justify-content:space-between; background:var(--card-bg); border-radius:12px; padding:12px 16px; margin-bottom:20px; border:1px dashed var(--border);">
+    <!-- 실시간 주가 랭킹 바로가기 (주식 탭에서만 표시) -->
+    <div id="live-ranking-banner-wrap" style="display:flex; align-items:center; justify-content:space-between; background:var(--card-bg); border-radius:12px; padding:12px 16px; margin-bottom:20px; border:1px dashed var(--border);">
         <div style="font-size:13px; color:var(--text-sub); line-height:1.5;">
             📊 <b style="color:var(--text-main);">실시간 주가 랭킹</b>은 개발자가 라이브 방송으로 직접 공개합니다.
         </div>
@@ -2281,6 +2232,11 @@ function getEffectiveFrozenUntil(stockId) {
 /** 종목 카드에 서킷 동결 배지·스타일 반영 (renderFavoriteList / 검색 / processStocksSnap 공통) */
 function refreshCircuitFreezeOnStockCard(card, stockId) {
     if (!card || !stockId) return;
+    if (isCoinMarket()) {
+        card.classList.remove('circuit-frozen');
+        card.querySelector('.circuit-freeze-overlay')?.remove();
+        return;
+    }
     const frozenUntil = getEffectiveFrozenUntil(stockId);
     const isFrozen    = frozenUntil && frozenUntil > Date.now();
     if (!isFrozen) {
@@ -2358,7 +2314,7 @@ let allStocks        = [];
 /** 코인 시장 전체 시세 캐시 (stocks/ 와 동일 id·이름 공유, 가격·거래는 독립) */
 let allCoins         = [];
 let allBanners       = {}; // stocksBanner/{id} 캐시
-/** 'stock' | 'coin' — 메인 리스트·매매 기준 시장 (코인은 관리자 계정에서만 노출·활성) */
+/** 'stock' | 'coin' — 메인 리스트·매매 기준 시장 */
 let activeMarket     = 'stock';
 let coinsUnsubscribe = null;
 let mainCoinsSyncMode = null;
@@ -2399,7 +2355,7 @@ let rankingAccessLegacyCache = null;
 let rankingAccessExpiryTimer = null;
 let rankingAccessRemainingInterval = null;
 const RANKING_ACCESS_DURATION_MS = 12 * 60 * 60 * 1000;
-const ASSET_RANKING_ACCESS_BALLOON_COST = 30;
+const ASSET_RANKING_ACCESS_BALLOON_COST = 40;
 
 // ── 보유 주식 구독 상태 ──────────────────────────────────────
 let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
@@ -2410,7 +2366,7 @@ function shouldUseFullStocksTreeListener() {
     return auth.currentUser?.email === 'skftodwocks2@gmail.com';
 }
 
-/** 코인 시장도 동일: 관리자만 coins/ 전체 onValue — 일반 유저는 coins/{id} per-path만 (향후 코인 탭 공개 시) */
+/** 코인 시장도 주식과 동일: 관리자만 coins/ 전체 onValue — 일반 유저는 coins/{id} per-path만 */
 function shouldUseFullCoinsTreeListener() {
     return auth.currentUser?.email === 'skftodwocks2@gmail.com';
 }
@@ -2833,12 +2789,6 @@ onValue(ref(db, 'siteConfig/marketHours'), (snap) => {
     applyMarketState();
 });
 
-// 코인 시장 최소 총자산(스칼라) — 루트 onValue 없이도 운영 변경 즉시 반영
-onValue(ref(db, 'siteConfig/coinMarketMinTotalWon'), (snap) => {
-    if (snap.exists() && typeof snap.val() === 'number') siteConfig.coinMarketMinTotalWon = snap.val();
-    else delete siteConfig.coinMarketMinTotalWon;
-});
-
 // 중계방: 승인(approved) 건만 쿼리 구독 — pending/rejected 히스토리 대량 다운로드 방지 (rules에 .indexOn status 필요)
 let relayRequestsQueryUnsub = null;
 function subscribeRelayApprovedRequestsOnly() {
@@ -2973,12 +2923,10 @@ const COIN_MAX_TRADE_PER_ORDER_WON  = 10000000000;
 const DEFAULT_COIN_MARKET_IMPACT_MULTIPLIER = 1.85;
 let liveCoinImpactMultiplier = DEFAULT_COIN_MARKET_IMPACT_MULTIPLIER;
 
-/** 코인 시장 UI·구독·거래 — 테스트 기간에는 관리자(이 이메일)만 허용 */
-const COIN_MARKET_ADMIN_EMAIL = 'skftodwocks2@gmail.com';
-
-function isCoinMarketAdmin() {
+/** 코인 시장: Firebase 로그인(익명 포함) 사용자 이용 가능 */
+function canUseCoinMarket() {
     try {
-        return auth?.currentUser?.email === COIN_MARKET_ADMIN_EMAIL;
+        return !!auth?.currentUser?.uid;
     } catch (_) {
         return false;
     }
@@ -3028,11 +2976,11 @@ function teardownCoinMarketClientSubscriptions() {
 }
 
 /**
- * 비관리자: 코인 시장 UI 숨김·항상 주식 모드·코인 RTDB 구독 해제.
- * 관리자: 지갑/탭 표시, sessionStorage 로 코인 모드 복원.
+ * 미로그인: 코인 시장 UI 숨김·주식 모드·코인 RTDB 구독 해제.
+ * 로그인: 지갑/코인 탭 표시, sessionStorage 로 코인 모드 복원.
  */
 function applyCoinMarketFeatureVisibility() {
-    const show = isCoinMarketAdmin();
+    const show = canUseCoinMarket();
     const wrap = document.getElementById('coin-market-wallet-ui');
     const tabBtn = document.getElementById('tab-btn-coins');
     if (wrap) {
@@ -3059,18 +3007,13 @@ function applyCoinMarketFeatureVisibility() {
     updateWalletTradeCapLabel();
     document.getElementById('btn-market-stock')?.classList.toggle('active', activeMarket === 'stock');
     document.getElementById('btn-market-coin')?.classList.toggle('active', activeMarket === 'coin');
+    updateMarketTabChrome();
     try { updateSyncStrategy(); } catch (_) { /* noop */ }
     try { refreshMainStockListView(); } catch (_) { /* noop */ }
 }
 
 function isCoinMarket() {
-    return isCoinMarketAdmin() && activeMarket === 'coin';
-}
-
-function getCoinMarketMinWealthWon() {
-    const v = siteConfig?.coinMarketMinTotalWon;
-    if (typeof v === 'number' && v > 0 && Number.isFinite(v)) return v;
-    return 1000000000;
+    return canUseCoinMarket() && activeMarket === 'coin';
 }
 
 function computeTotalWealthWon() {
@@ -3088,14 +3031,14 @@ function computeTotalWealthWon() {
         if (Number.isFinite(p) && p > 0) w += Math.floor(p * qty);
     };
     Object.entries(myData?.stocks || {}).forEach(([id, p]) => addStockVal(id, Math.floor(Number(p?.qty) || 0)));
-    if (isCoinMarketAdmin()) {
-        Object.entries(myData?.coins || {}).forEach(([id, p]) => addCoinVal(id, Math.floor(Number(p?.qty) || 0)));
+    if (myData?.coins) {
+        Object.entries(myData.coins).forEach(([id, p]) => addCoinVal(id, Math.floor(Number(p?.qty) || 0)));
     }
     return w;
 }
 
 function canAccessCoinMarket() {
-    return isCoinMarketAdmin();
+    return canUseCoinMarket();
 }
 
 function updateWalletTradeCapLabel() {
@@ -3104,9 +3047,27 @@ function updateWalletTradeCapLabel() {
     el.textContent = isCoinMarket() ? '100억원' : '1억원';
 }
 
+function updateMainMarketHeaderTitle() {
+    const el = document.getElementById('main-market-title');
+    if (!el) return;
+    el.textContent = isCoinMarket() ? '🪙 스트리머 코인시장' : '📈 스트리머 주식시장';
+}
+
+function updateMarketTabChrome() {
+    updateMainMarketHeaderTitle();
+    const sub = document.getElementById('main-market-subtitle');
+    if (sub) {
+        sub.textContent = isCoinMarket()
+            ? '코인 시세는 주식과 별도입니다. 스트리머 검색 후 ⭐ 즐겨찾기하면 코인 탭에서 시세·거래를 확인할 수 있습니다.'
+            : '관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.';
+    }
+    const ban = document.getElementById('live-ranking-banner-wrap');
+    if (ban) ban.style.display = isCoinMarket() ? 'none' : '';
+}
+
 window.setActiveMarket = function (mode) {
     const m = mode === 'coin' ? 'coin' : 'stock';
-    if (m === 'coin' && !isCoinMarketAdmin()) return;
+    if (m === 'coin' && !canUseCoinMarket()) return;
     if (m === activeMarket) return;
     activeMarket = m;
     try { sessionStorage.setItem('soop_active_market', activeMarket); } catch (_) { /* noop */ }
@@ -3114,6 +3075,7 @@ window.setActiveMarket = function (mode) {
     document.getElementById('btn-market-stock')?.classList.toggle('active', m === 'stock');
     document.getElementById('btn-market-coin')?.classList.toggle('active', m === 'coin');
     updateWalletTradeCapLabel();
+    updateMarketTabChrome();
     try { updateSyncStrategy(); } catch (_) { /* noop */ }
     try {
         const sq = document.getElementById('search-input')?.value?.trim() || '';
@@ -3550,7 +3512,7 @@ document.getElementById('my-stocks-list').addEventListener('click', (e) => {
 });
 
 document.getElementById('my-coins-list')?.addEventListener('click', (e) => {
-    if (!isCoinMarketAdmin()) return;
+    if (!canUseCoinMarket()) return;
     const item = e.target.closest('.my-stock-item');
     if (!item) return;
     setActiveMarket('coin');
@@ -3620,7 +3582,7 @@ function renderMyPortfolio() {
 }
 
 function renderMyCoinPortfolio() {
-    if (!isCoinMarketAdmin()) return;
+    if (!canUseCoinMarket()) return;
     const portfolioDiv       = document.getElementById('my-coins-list');
     const totalAssetsDisplay = document.getElementById('total-assets');
     if (!portfolioDiv) return;
@@ -4077,7 +4039,8 @@ window.logout = async function() {
 /**
  * 서킷브레이커 감지 — 발동 시 로컬 동결만 적용(관리자만 siteConfig/frozenStocks에 기록 가능)
  */
-async function checkCircuitBreaker(stockId, candles) {
+async function checkCircuitBreaker(stockId, candles, market = 'stock') {
+    if (market === 'coin') return;
     if (!candles || candles.length < 2) return;
 
     const now   = Date.now();
@@ -4253,7 +4216,9 @@ async function flushCandlestick(stockId, opts = {}) {
         console.warn('[candle] flush 실패 (무시):', e.message);
     }
 
-    checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId, market).data);
+    if (market !== 'coin') {
+        checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId, market).data, market);
+    }
 }
 
 // pruneOldCandles — 관리자 페이지에서만 실행 (클라이언트 제거)
@@ -4322,6 +4287,8 @@ window.openChartModal = function(stockId) {
 
     // 하단 광고 배너 1회 fetch
     fetchChartBanner();
+
+    void refreshChartModalHolderRanking(stockId);
 };
 
 // ── 차트 모달 하단 광고 배너 1회 fetch ──────────────────────
@@ -4378,6 +4345,69 @@ function updateChartModalHeader(s) {
     changeEl.className   = `stock-title-change ${isUp ? 'up' : 'down'}`;
 }
 
+/** 차트 모달용 — 랭킹 탭을 열지 않았어도 권한 판별 */
+async function fetchRankingAccessRecordForViewer() {
+    if (!userUID || !db) return null;
+    try {
+        const [snapN, snapL] = await Promise.all([
+            get(ref(db, `assetRankingRequests/${userUID}`)),
+            get(ref(db, `subscribeRequests/${userUID}`))
+        ]);
+        return mergeRankingAccessSnapshot(
+            snapN.exists() ? snapN.val() : null,
+            snapL.exists() ? snapL.val() : null
+        );
+    } catch (_) {
+        return null;
+    }
+}
+
+/** 자산·보유 랭킹 번들 승인 + 유효 기간 중일 때만 종목별 익명 보유 TOP3 (주식·코인 각 스냅샷) */
+async function refreshChartModalHolderRanking(stockId) {
+    const wrap = document.getElementById('chart-holder-ranking');
+    if (!wrap || !stockId) return;
+    const coinQ = chartModalMarket === 'coin';
+    const rec = await fetchRankingAccessRecordForViewer();
+    const st = String(rec?.status || '').toLowerCase();
+    if (st !== 'approved' || !isRankingViewingActive(rec)) {
+        wrap.style.display = 'block';
+        wrap.innerHTML =
+            '<div style="color:var(--text-sub); line-height:1.55; font-size:12px;">자산 랭킹 열람권을 구매하면 종목별 보유량 TOP3 랭킹 확인 가능합니다.</div>';
+        return;
+    }
+    wrap.style.display = 'block';
+    wrap.innerHTML = '<span style="color:var(--muted);">보유 스냅샷 불러오는 중…</span>';
+    const rankPath = coinQ ? `coinHolderRanking/${stockId}` : `stockHolderRanking/${stockId}`;
+    const unitLabel = coinQ ? '코인' : '주';
+    try {
+        const snap = await get(ref(db, rankPath));
+        if (!snap.exists()) {
+            wrap.innerHTML = '<span style="color:var(--muted);">📊 집계 데이터 없음 · 관리자 집계 후 확인할 수 있습니다.</span>';
+            return;
+        }
+        const d = snap.val() || {};
+        const holders = Array.isArray(d.holders) ? d.holders : [];
+        const updatedAt = d.updatedAt
+            ? new Date(d.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })
+            : '-';
+        if (holders.length === 0) {
+            wrap.innerHTML = `<div style="font-weight:800; color:#f59e0b; margin-bottom:4px;">익명 보유 상위</div><div style="color:var(--muted);">표시할 데이터가 없습니다.</div><div style="font-size:10px; margin-top:6px; color:var(--input-border);">${updatedAt} 기준 · 닉네임·계정과 연결되지 않음</div>`;
+            return;
+        }
+        const lines = holders
+            .map((h) => {
+                const r = Number(h.rank) || 0;
+                const q = Math.floor(Number(h.qty) || 0);
+                const medal = r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `${r}위`;
+                return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;"><span style="font-weight:700; color:var(--text-main);">${medal} 익명</span><span style="font-weight:800; color:#f59e0b;">${q.toLocaleString()}${unitLabel}</span></div>`;
+            })
+            .join('');
+        wrap.innerHTML = `<div style="font-weight:800; color:#f59e0b; margin-bottom:2px;">익명 보유 상위 (스냅샷·${coinQ ? '코인' : '주식'})</div>${lines}<div style="font-size:10px; margin-top:8px; color:var(--input-border);">${updatedAt} 기준 · 소유자 추적 불가</div>`;
+    } catch (_) {
+        wrap.innerHTML = '<span style="color:#f87171;">불러오기 실패</span>';
+    }
+}
+
 // ── 차트 모달 닫기 ───────────────────────────────────────────
 function closeChartModal() {
     document.getElementById('chart-modal-overlay').classList.remove('active');
@@ -4387,6 +4417,11 @@ function closeChartModal() {
     chartModalMarket  = 'stock';
     candleDataCache   = [];
     chartIsLoading    = false;
+    const hr = document.getElementById('chart-holder-ranking');
+    if (hr) {
+        hr.style.display = 'none';
+        hr.innerHTML = '';
+    }
 }
 document.getElementById('chart-modal-close-btn').addEventListener('click', closeChartModal);
 document.getElementById('chart-modal-overlay').addEventListener('click', (e) => {
@@ -4434,7 +4469,7 @@ async function fetchCandles(stockId) {
 
         if (local.length > 0 && !isStale) {
             candleDataCache = local.sort((a, b) => a.t - b.t);
-            checkCircuitBreaker(stockId, candleDataCache);
+            checkCircuitBreaker(stockId, candleDataCache, cm);
         } else {
             const path = cm === 'coin' ? `coinCandles/${stockId}` : `candlesticks/${stockId}`;
             const snap = await get(ref(db, path));
@@ -4443,7 +4478,7 @@ async function fetchCandles(stockId) {
                 candleDataCache = Object.values(raw)
                     .map(c => ({ o: c.o, h: c.h, l: c.l, c: c.c, v: c.v || 0, t: c.t }))
                     .sort((a, b) => a.t - b.t);
-                checkCircuitBreaker(stockId, candleDataCache);
+                checkCircuitBreaker(stockId, candleDataCache, cm);
                 candleDataCache.forEach((c) => saveCandleToLocal(stockId, c, cm));
             } else {
                 candleDataCache = local.length > 0 ? local : [];
@@ -4948,7 +4983,7 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     const tradeMarket = (opts && opts.market) || activeMarket;
     const isCoin = tradeMarket === 'coin';
-    if (isCoin && !isCoinMarketAdmin()) return;
+    if (isCoin && !canUseCoinMarket()) return;
 
     const now = Date.now();
 
@@ -4981,12 +5016,14 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         return;
     }
 
-    // 서킷브레이커 — 관리자 동결(siteConfig) + 클라이언트 서킷(localCircuitFreeze)
-    const frozenUntil = getEffectiveFrozenUntil(id);
-    if (frozenUntil && frozenUntil > currentTime && !isAdmin) {
-        const remain = Math.ceil((frozenUntil - currentTime) / 1000);
-        alert(`🚫 서킷브레이커 발동 중! (${remain}초 후 해제)`);
-        return;
+    // 서킷브레이커 — 주식 시장만 적용 (코인은 미적용)
+    if (!isCoin) {
+        const frozenUntil = getEffectiveFrozenUntil(id);
+        if (frozenUntil && frozenUntil > currentTime && !isAdmin) {
+            const remain = Math.ceil((frozenUntil - currentTime) / 1000);
+            alert(`🚫 서킷브레이커 발동 중! (${remain}초 후 해제)`);
+            return;
+        }
     }
 
     if (isTrading === id) return; // 같은 종목 중복 거래 방지
@@ -5489,7 +5526,7 @@ try {
 // ── 모바일 보유 주식 패널 슬라이드 ──────────────────────────
 // ── 포트폴리오 탭 전환 ──────────────────────────────────────
 window.switchPortfolioTab = function(tab) {
-    if (tab === 'coins' && !isCoinMarketAdmin()) return;
+    if (tab === 'coins' && !canUseCoinMarket()) return;
     document.getElementById('portfolio-panel-stocks').style.display   = tab === 'stocks'  ? 'flex' : 'none';
     document.getElementById('portfolio-panel-coins').style.display    = tab === 'coins'  ? 'flex' : 'none';
     document.getElementById('portfolio-panel-ranking').style.display  = tab === 'ranking' ? 'block' : 'none';
@@ -5741,7 +5778,7 @@ async function loadAssetRanking() {
                 if (Number.isFinite(p) && p > 0) myAsset += p * s.qty;
             });
         }
-        if (isCoinMarketAdmin() && myData?.coins) {
+        if (myData?.coins) {
             Object.entries(myData.coins).forEach(([id, s]) => {
                 if (!s.qty || s.qty <= 0) return;
                 const row = favoriteCoins[id] || ownedCoins[id] || allCoins.find((st) => st.id === id);
@@ -5997,10 +6034,24 @@ window.saveAlertSetting = function() {
     closeAlertModal();
 };
 
-// 주가 변동 시 알림 체크
-function checkPriceAlert(stockId, stockName, prevPrice, newPrice) {
+function userHoldsStockForAlert(stockId) {
+    return Math.floor(Math.max(0, Number(myData?.stocks?.[stockId]?.qty) || 0)) > 0;
+}
+function userHoldsCoinForAlert(stockId) {
+    return Math.floor(Math.max(0, Number(myData?.coins?.[stockId]?.qty) || 0)) > 0;
+}
+
+// 주가 변동 시 알림 체크 — sourceMarket: 'stock' | 'coin' (해당 시장 보유 시에만 알림, 둘 다 보유 시 설정 공유)
+function checkPriceAlert(stockId, stockName, prevPrice, newPrice, sourceMarket) {
     const setting = alertSettings[stockId];
     if (!setting || !setting.enabled) return;
+    if (sourceMarket === 'stock') {
+        if (!userHoldsStockForAlert(stockId)) return;
+    } else if (sourceMarket === 'coin') {
+        if (!userHoldsCoinForAlert(stockId)) return;
+    } else {
+        return;
+    }
     if (!notifPermission || Notification.permission !== 'granted') return;
     if (!prevPrice || prevPrice === newPrice) return;
 
@@ -6950,7 +7001,7 @@ function applyStocksMode() {
         if (ownedStocks[id]) subscribeToOwned(id);
     });
 
-    if (isCoinMarketAdmin()) {
+    if (canUseCoinMarket()) {
         const coinIds = [...new Set([...Object.keys(favoriteCoins), ...Object.keys(ownedCoins)])];
         const badCoin = coinIds.filter((id) => id == null || id === '' || String(id) === 'undefined');
         if (badCoin.length) console.warn('[sync-strategy] applyStocksMode suspicious coin ids:', badCoin);
@@ -7128,7 +7179,7 @@ function subscribeToFavorite(stockId) {
         if (prevPrice !== data.price) {
             sparklinePriceCache[stockId].push(data.price);
             if (sparklinePriceCache[stockId].length > 20) sparklinePriceCache[stockId].shift();
-            checkPriceAlert(stockId, data.name || stockId, prevPrice, data.price);
+            checkPriceAlert(stockId, data.name || stockId, prevPrice, data.price, 'stock');
         }
     } else {
         // 최초 구독 시 현재가로 초기값 설정
@@ -7189,7 +7240,7 @@ window.toggleFavoriteForActiveMarket = function (stockId) {
 };
 
 window.toggleFavoriteCoin = function (stockId) {
-    if (!isCoinMarketAdmin()) return;
+    if (!canUseCoinMarket()) return;
     if (favoriteCoins[stockId]) {
         unsubscribeFromFavoriteCoin(stockId);
         saveFavoriteCoinsToLocal();
@@ -7595,7 +7646,7 @@ function renderSearchResults() {
 
 // ── 초기 즐겨찾기 로드 (로컬스토리지 → Firebase 구독) ──
 function initFavoriteCoins() {
-    if (!isCoinMarketAdmin()) return;
+    if (!canUseCoinMarket()) return;
     loadFavoriteCoinsFromLocal().forEach((id) => subscribeToFavoriteCoin(id));
 }
 
@@ -7637,6 +7688,7 @@ function subscribeToOwned(stockId) {
             if (prevPrice !== data.price) {
                 sparklinePriceCache[stockId].push(data.price);
                 if (sparklinePriceCache[stockId].length > 20) sparklinePriceCache[stockId].shift();
+                checkPriceAlert(stockId, data.name || stockId, prevPrice, data.price, 'stock');
             }
         } else {
             if (!sparklinePriceCache[stockId]) sparklinePriceCache[stockId] = [data.price];
@@ -7703,7 +7755,7 @@ function loadFavoriteCoinsFromLocal() {
 }
 
 function subscribeToFavoriteCoin(stockId) {
-    if (!isCoinMarketAdmin()) return;
+    if (!canUseCoinMarket()) return;
     if (favoriteCoinUnsubs[stockId]) return;
     if (stockId == null || stockId === '' || String(stockId) === 'undefined') return;
     try {
@@ -7716,7 +7768,7 @@ function subscribeToFavoriteCoin(stockId) {
                 if (prevPrice !== data.price) {
                     sparklineCoinPriceCache[stockId].push(data.price);
                     if (sparklineCoinPriceCache[stockId].length > 20) sparklineCoinPriceCache[stockId].shift();
-                    checkPriceAlert(stockId, data.name || stockId, prevPrice, data.price);
+                    checkPriceAlert(stockId, data.name || stockId, prevPrice, data.price, 'coin');
                 }
             } else if (!sparklineCoinPriceCache[stockId]) {
                 sparklineCoinPriceCache[stockId] = [data.price];
@@ -7744,7 +7796,7 @@ function unsubscribeFromFavoriteCoin(stockId) {
 }
 
 function subscribeToOwnedCoin(stockId) {
-    if (!isCoinMarketAdmin()) return;
+    if (!canUseCoinMarket()) return;
     if (ownedCoinUnsubs[stockId]) return;
     if (stockId == null || stockId === '' || String(stockId) === 'undefined') return;
     try {
@@ -7757,6 +7809,7 @@ function subscribeToOwnedCoin(stockId) {
                 if (prevPrice !== data.price) {
                     sparklineCoinPriceCache[stockId].push(data.price);
                     if (sparklineCoinPriceCache[stockId].length > 20) sparklineCoinPriceCache[stockId].shift();
+                    checkPriceAlert(stockId, data.name || stockId, prevPrice, data.price, 'coin');
                 }
             } else if (!sparklineCoinPriceCache[stockId]) {
                 sparklineCoinPriceCache[stockId] = [data.price];
@@ -7772,7 +7825,7 @@ function subscribeToOwnedCoin(stockId) {
 }
 
 function syncOwnedCoinSubscriptions() {
-    if (!isCoinMarketAdmin()) return;
+    if (!canUseCoinMarket()) return;
     if (!myData?.coins) return;
     const currentOwned = new Set(
         Object.keys(myData.coins).filter((id) => (myData.coins[id]?.qty || 0) > 0)
@@ -7923,7 +7976,7 @@ document.addEventListener('keydown', (e) => {
         <p>초기 지급되는 가상 자산 100만원은 게임 내에서만 유효합니다. 게임 자산은 현금으로 환전되거나 양도될 수 없습니다. 서비스 점검, 오류, 운영 정책 변경으로 인해 자산이 변동될 수 있습니다.</p>
 
         <h3>제4조 후원 및 유료 서비스</h3>
-        <p>배너 광고, 중계방 등록, 차트 배너, <b style="color:var(--text-main);">자산 랭킹 열람</b> 등 유료·유료성 신청 서비스는 SOOP 별풍선 후원을 전제로 운영됩니다. 자산 랭킹 열람은 신청 시 안내된 별풍선 개수(현재 <b style="color:var(--text-main);">30개</b>)에 대한 약정 후 운영진 검수를 거쳐 승인되며, 승인 시점부터 정해진 기간(현재 <b style="color:var(--text-main);">12시간</b>) 동안 랭킹 화면을 이용할 수 있습니다. 기간 만료 후에는 동일 절차로 재신청할 수 있습니다. 별풍선 후원 자체는 SOOP 플랫폼 정책에 따르며 환불은 SOOP 환불 정책을 따릅니다. 배너·중계 등 기간형 서비스의 노출 기간은 운영진 승인 및 약정 내용에 따라 산정되며, 서비스 점검으로 인한 노출 손실은 운영진 판단에 따라 보전될 수 있습니다.</p>
+        <p>배너 광고, 중계방 등록, 차트 배너, <b style="color:var(--text-main);">자산·보유 랭킹 열람</b> 등 유료·유료성 신청 서비스는 SOOP 별풍선 후원을 전제로 운영됩니다. 자산·보유 랭킹 열람은 신청 시 안내된 별풍선 개수(현재 <b style="color:var(--text-main);">40개</b>) 약정 후 운영진 검수를 거쳐 승인되며, 승인 시점부터 정해진 기간(현재 <b style="color:var(--text-main);">12시간</b>) 동안 <b>자산 TOP100</b> 및 <b>종목별 익명 보유 1~3위(수량만)</b> 열람이 함께 가능합니다. 기간 만료 후에는 동일 절차로 재신청할 수 있습니다. 별풍선 후원 자체는 SOOP 플랫폼 정책에 따르며 환불은 SOOP 환불 정책을 따릅니다. 배너·중계 등 기간형 서비스의 노출 기간은 운영진 승인 및 약정 내용에 따라 산정되며, 서비스 점검으로 인한 노출 손실은 운영진 판단에 따라 보전될 수 있습니다.</p>
 
         <h3>제5조 운영 정책</h3>
         <p>운영진은 서비스 안정성을 위해 사전 고지 없이 점검, 종목 조정, 주가 수정을 진행할 수 있습니다. 어뷰징, 비정상적 거래, 운영 방해 행위가 확인될 경우 제재 없이 계정이 초기화될 수 있습니다. 운영진의 모든 결정은 최종적이며 별도 이의 제기 절차가 없습니다.</p>

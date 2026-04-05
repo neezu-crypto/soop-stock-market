@@ -1214,6 +1214,22 @@
             <button type="button" class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="syncCoinsFromStocks()">코인 시장 종목 생성 (미존재만)</button>
         </div>
         <div id="sync-coins-status" style="font-size:13px; color:#94a3b8; margin-top:8px;"></div>
+        <div class="info-box" style="margin-top:16px; border-color:#a855f7; color:#e9d5ff;">
+            <b>🤖 코인 시세 자동 조정 (유동성 시뮬)</b> — <code>coins/</code> 시세 <b>상위 10개</b> 중 무작위 1종목을 고른 뒤, <b>연속 매수·매도</b>를 관리자 권한으로 실행해 체결 임팩트만 반영합니다. (유저 잔고·보유 없음 · <code>adminExecuteCoinTrade</code>)<br>
+            <span style="color:#94a3b8;">관리자 탭이 열려 있는 동안만 자동 반복이 동작합니다.</span>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px;">
+            <button type="button" class="btn-primary" style="background:#a855f7; color:white;" onclick="runCoinLiquidityBotOnce(false)">🎲 1회 실행</button>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                <input type="checkbox" id="coin-liquidity-bot-toggle" onchange="toggleCoinLiquidityBot(this.checked)">
+                자동 반복
+            </label>
+            <span style="font-size:12px; color:#94a3b8;">간격</span>
+            <input type="number" id="coin-liquidity-bot-interval" value="120" min="30" max="7200" step="10"
+                style="width:72px; background:#0f172a; border:1px solid #334155; color:#e9d5ff; padding:6px 8px; border-radius:8px; font-size:13px; text-align:center;">
+            <span style="font-size:12px; color:#94a3b8;">초</span>
+        </div>
+        <div id="coin-liquidity-bot-status" style="font-size:12px; color:#94a3b8; margin-top:8px;">대기</div>
         </div>
         </div>
     </div>
@@ -1347,7 +1363,7 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            모든 종목의 분봉 데이터 중 <b>6시간(360분) 이전</b> 캔들을 Firebase에서 삭제합니다.<br>
+            <code>candlesticks/</code> 및 <code>coinCandles/</code> 분봉 데이터 중 <b>6시간(360분) 이전</b> 캔들을 Firebase에서 삭제합니다.<br>
             <span style="color:#38bdf8;">candlesticks/{stockId} 경로의 오래된 데이터를 정리합니다.</span><br>
             <span style="color:#f59e0b;">⚠️ 종목 수가 많을수록 시간이 걸릴 수 있습니다.</span>
         </div>
@@ -1396,8 +1412,8 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            종목마다 보유 수량이 많은 <b>상위 3인</b>만 <b>익명</b>으로 <b>stockHolderRanking/{종목ID}</b>에 저장합니다. (UID·닉네임 없음)<br>
-            유저는 자산·보유 랭킹 <b>열람 권한(별풍선 40개·12h)</b>이 있을 때 차트에서만 확인합니다.<br>
+            주식은 <b>stockHolderRanking/{종목ID}</b>, 코인은 <b>coinHolderRanking/{종목ID}</b>에 보유 수량 상위 3인을 <b>익명</b>으로 저장합니다. (UID·닉네임 없음)<br>
+            유저는 자산·보유 랭킹 <b>열람 권한(별풍선 40개·12h)</b>이 있을 때 차트에서 주식·코인 각각 확인합니다.<br>
             <span style="color:#f59e0b;">⚠️ 자동 갱신은 이 관리자 탭이 열려 있는 동안만 동작합니다.</span>
         </div>
         <div class="data-status-bar" style="margin-bottom:12px;">
@@ -3030,6 +3046,195 @@
         }
     };
 
+    /**
+     * coins/ 노드만 갱신 — 메인 앱 코인 체결과 동일하게 coinImpactMultiplier 적용 (유저 잔고 없음).
+     */
+    window.adminExecuteCoinTrade = async function (stockId, type, opts) {
+        opts = opts || {};
+        const silent = !!opts.silent;
+        const skipRender = !!opts.skipRender;
+        if (!isAdmin()) return { ok: false, error: 'not_admin' };
+
+        let qty;
+        if (opts.qty != null && opts.qty !== '') {
+            qty = Math.floor(Number(opts.qty));
+        } else {
+            qty = 5;
+        }
+        if (!Number.isFinite(qty)) qty = NaN;
+        if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+            if (!silent) showAdminToast('수량은 1~100 사이의 정수여야 합니다.', 'error');
+            return { ok: false, error: 'invalid_qty' };
+        }
+        const t = type === 'sell' ? 'sell' : 'buy';
+        const coinRef = ref(db, `coins/${stockId}`);
+        if (!silent) {
+            /* no row buttons for coin — optional future */
+        }
+
+        try {
+            const [cfgSnap, mpSnap, preSnap] = await Promise.all([
+                get(ref(db, 'siteConfig/sellConfig')),
+                get(ref(db, 'siteConfig/marketParams')),
+                get(coinRef)
+            ]);
+            const sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
+            const marketParamsCache = mpSnap.exists() ? mpSnap.val() : {};
+            const safeNum = (v, def) => {
+                const n = Number(v);
+                return Number.isFinite(n) ? n : def;
+            };
+            const basePrice  = Math.max(1, safeNum(sellConfigCache.basePrice  ?? 10000, 10000));
+            const scalePrice = Math.max(1, safeNum(sellConfigCache.scalePrice ?? 90000, 90000));
+            const impactCoef = safeNum(sellConfigCache.impact     ?? 0.0005, 0.0005);
+            const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice ?? 100000, 100000));
+            const coinMult = safeNum(marketParamsCache?.coinImpactMultiplier ?? 1.85, 1.85);
+
+            let currentPrice = Number(preSnap.exists() ? preSnap.val()?.price : NaN);
+            if (!Number.isFinite(currentPrice) || currentPrice <= 0) currentPrice = 100000000;
+
+            let sellPressure = 1;
+            if (t === 'sell') {
+                sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
+            }
+            const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
+            const effectiveImpactCoef = impactCoef * dampingFactor;
+            let impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure * coinMult;
+
+            const txResult = await runTransaction(coinRef, (currentStock) => {
+                if (currentStock == null) return currentStock;
+                const row = typeof currentStock === 'object' ? currentStock : {};
+                let prevPrice = Number(row?.price);
+                if (!Number.isFinite(prevPrice) || prevPrice <= 0) {
+                    prevPrice = Math.max(1, Number(currentPrice) || 100000000);
+                }
+                let newPrice;
+                if (t === 'buy') {
+                    newPrice = Math.round(prevPrice * (1 + impact));
+                } else {
+                    newPrice = Math.round(prevPrice * (1 - impact));
+                }
+                const addBuy  = t === 'buy' ? qty : 0;
+                const addSell = t === 'sell' ? qty : 0;
+                const changeVal = prevPrice > 0 ? (((newPrice - prevPrice) / prevPrice) * 100) : 0;
+                const baseVol = Number(row.volume);
+                const baseBuy = Number(row.buyVol);
+                const baseSell = Number(row.sellVol);
+                const nextStock = {
+                    ...row,
+                    price:   newPrice,
+                    volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
+                    buyVol:  (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
+                    sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
+                    change:  changeVal.toFixed(2)
+                };
+                const sanitized = {};
+                Object.keys(nextStock).forEach((k) => {
+                    const v = nextStock[k];
+                    if (v !== undefined) sanitized[k] = v;
+                });
+                return sanitized;
+            });
+
+            if (!txResult.committed) {
+                if (!silent) showAdminToast('코인 거래 미반영 (트랜잭션)', 'error');
+                return { ok: false, error: 'not_committed' };
+            }
+            const nv = txResult.snapshot.val();
+            if (allStocksData[stockId] && nv) {
+                /* 이름 동기화용 캐시가 있으면 보조 */
+            }
+            try { await invalidateStaticCache(); } catch (_) { /* noop */ }
+            if (!skipRender) {
+                try { renderAdminStockList({ resetScroll: false }); } catch (_) { /* noop */ }
+            }
+            if (!silent) {
+                const nm = nv?.name || allStocksData[stockId]?.name || stockId;
+                showAdminToast(`[코인 ${nm}] ${t === 'buy' ? '매수' : '매도'} ${qty} · 현재가 ${(nv?.price ?? 0).toLocaleString()}원`);
+            }
+            return { ok: true, price: nv?.price };
+        } catch (e) {
+            console.error('[adminExecuteCoinTrade]', e);
+            if (!silent) showAdminToast('코인 실패: ' + (e?.message || String(e)), 'error');
+            return { ok: false, error: e?.message || String(e) };
+        }
+    };
+
+    let coinLiquidityBotTimer = null;
+    function stopCoinLiquidityBotTimer() {
+        if (coinLiquidityBotTimer) {
+            clearInterval(coinLiquidityBotTimer);
+            coinLiquidityBotTimer = null;
+        }
+    }
+
+    window.toggleCoinLiquidityBot = function (enabled) {
+        if (!isAdmin()) return;
+        stopCoinLiquidityBotTimer();
+        const st = document.getElementById('coin-liquidity-bot-status');
+        if (!enabled) {
+            if (st) { st.textContent = '자동 반복 꺼짐'; st.style.color = '#94a3b8'; }
+            return;
+        }
+        const tick = async () => {
+            await runCoinLiquidityBotOnce(true);
+        };
+        void tick();
+        const ivSec = Math.max(30, Math.min(7200, parseInt(document.getElementById('coin-liquidity-bot-interval')?.value, 10) || 120));
+        coinLiquidityBotTimer = setInterval(() => { void tick(); }, ivSec * 1000);
+        if (st) { st.textContent = `자동 반복 켜짐 (${ivSec}초 간격)`; st.style.color = '#86efac'; }
+    };
+
+    window.runCoinLiquidityBotOnce = async function (fromAuto = false) {
+        if (!isAdmin()) return;
+        const st = document.getElementById('coin-liquidity-bot-status');
+        try {
+            const snap = await get(ref(db, 'coins/'));
+            if (!snap.exists()) {
+                if (st && !fromAuto) { st.textContent = 'coins/ 데이터 없음'; st.style.color = '#f87171'; }
+                return;
+            }
+            const data = snap.val() || {};
+            const rows = Object.entries(data)
+                .map(([id, v]) => ({ id, price: Number(v?.price) || 0 }))
+                .filter((r) => r.price > 0)
+                .sort((a, b) => b.price - a.price)
+                .slice(0, 10);
+            if (rows.length === 0) {
+                if (st && !fromAuto) { st.textContent = '유효 시세 코인 없음'; st.style.color = '#f87171'; }
+                return;
+            }
+            const pick = rows[Math.floor(Math.random() * rows.length)].id;
+            const steps = 4 + Math.floor(Math.random() * 8);
+            if (st) {
+                st.textContent = `실행 중… ${pick} · ${steps}연속`;
+                st.style.color = '#fbbf24';
+            }
+            for (let i = 0; i < steps; i++) {
+                const side = Math.random() < 0.5 ? 'buy' : 'sell';
+                const qty = 1 + Math.floor(Math.random() * 20);
+                const r = await adminExecuteCoinTrade(pick, side, { qty, silent: true, skipRender: true });
+                if (!r?.ok) break;
+                await new Promise((res) => setTimeout(res, 200 + Math.random() * 500));
+            }
+            const done = new Date().toLocaleTimeString('ko-KR');
+            if (st) {
+                st.textContent = `✅ ${done} · ${pick} ${steps}틱 완료`;
+                st.style.color = '#86efac';
+            }
+            try { renderAdminStockList({ resetScroll: false }); } catch (_) { /* noop */ }
+        } catch (e) {
+            if (st) {
+                st.textContent = '오류: ' + (e?.message || e);
+                st.style.color = '#f87171';
+            }
+        }
+    };
+
+    window.addEventListener('beforeunload', () => {
+        stopCoinLiquidityBotTimer();
+    });
+
     const macroTickBusy = {};
 
     function stopAdminMacro(stockId, reason) {
@@ -3320,6 +3525,13 @@
             if (duplicateFoundCount === 0) return alert("✅ 중복이 없습니다.");
             if (confirm(`${duplicateFoundCount}개의 중복 종목을 삭제하시겠습니까?`)) {
                 await update(ref(db, 'stocks/'), deleteUpdates);
+                const coinDel = {};
+                Object.keys(deleteUpdates).forEach((k) => {
+                    if (deleteUpdates[k] === null) coinDel[k] = null;
+                });
+                if (Object.keys(coinDel).length > 0) {
+                    await update(ref(db, 'coins/'), coinDel);
+                }
                 alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
             }
         } catch (e) { alert("오류 발생: " + e.message); }
@@ -3388,6 +3600,13 @@
             if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
             if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
                 await update(ref(db, 'stocks/'), deleteUpdates);
+                const coinDel = {};
+                Object.keys(deleteUpdates).forEach((k) => {
+                    if (deleteUpdates[k] === null) coinDel[k] = null;
+                });
+                if (Object.keys(coinDel).length > 0) {
+                    await update(ref(db, 'coins/'), coinDel);
+                }
                 await set(ref(db, 'siteConfig/stockCacheVersion'), Date.now()); // 캐시 무효화
                 alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
@@ -4626,40 +4845,46 @@
         let totalDeleted = 0;
         let stockCount   = 0;
 
-        try {
-            const snap = await get(ref(db, 'candlesticks/'));
+        async function pruneCandleBranch(label, basePath) {
+            const snap = await get(ref(db, basePath));
             if (!snap.exists()) {
-                statusEl.textContent = '삭제할 데이터 없음';
-                statusEl.style.color = '#64748b';
-                chipEl.className     = 'status-chip none';
-                chipEl.textContent   = '데이터 없음';
+                logEl.innerHTML += `<div style="color:#64748b;">[${label}] 데이터 없음</div>`;
                 return;
             }
-
-            const allStocks = snap.val();
-            const stockIds  = Object.keys(allStocks);
-
-            for (const stockId of stockIds) {
-                const candles   = allStocks[stockId];
-                const toDelete  = Object.keys(candles).filter(ts => parseInt(ts) < cutoff);
+            const allRows = snap.val();
+            for (const stockId of Object.keys(allRows)) {
+                const candles  = allRows[stockId];
+                if (!candles || typeof candles !== 'object') continue;
+                const toDelete = Object.keys(candles).filter((ts) => parseInt(ts, 10) < cutoff);
                 if (toDelete.length === 0) continue;
-
                 for (const ts of toDelete) {
-                    await set(ref(db, `candlesticks/${stockId}/${ts}`), null);
+                    await set(ref(db, `${basePath}${stockId}/${ts}`), null);
                     totalDeleted++;
                 }
                 stockCount++;
-                logEl.innerHTML += `<div style="color:#94a3b8;">${stockId}: ${toDelete.length}개 삭제</div>`;
+                logEl.innerHTML += `<div style="color:#94a3b8;">[${label}] ${stockId}: ${toDelete.length}개 삭제</div>`;
                 logEl.scrollTop = logEl.scrollHeight;
             }
+        }
+
+        try {
+            await pruneCandleBranch('주식', 'candlesticks/');
+            await pruneCandleBranch('코인', 'coinCandles/');
 
             const now = new Date().toLocaleString('ko-KR');
-            statusEl.textContent = `완료 (${now})`;
-            statusEl.style.color = '#22c55e';
-            chipEl.className     = 'status-chip active';
-            chipEl.textContent   = '완료';
-            logEl.innerHTML += `<div style="color:#22c55e; margin-top:6px;">✅ 총 ${stockCount}개 종목 / ${totalDeleted}개 캔들 삭제 완료</div>`;
-            logEl.scrollTop = logEl.scrollHeight;
+            if (totalDeleted === 0 && stockCount === 0) {
+                statusEl.textContent = '삭제할 오래된 캔들 없음';
+                statusEl.style.color = '#64748b';
+                chipEl.className     = 'status-chip none';
+                chipEl.textContent   = '해당 없음';
+            } else {
+                statusEl.textContent = `완료 (${now})`;
+                statusEl.style.color = '#22c55e';
+                chipEl.className     = 'status-chip active';
+                chipEl.textContent   = '완료';
+                logEl.innerHTML += `<div style="color:#22c55e; margin-top:6px;">✅ 총 ${stockCount}개 종목 구간 / ${totalDeleted}개 캔들 삭제 (주식+코인)</div>`;
+                logEl.scrollTop = logEl.scrollHeight;
+            }
 
         } catch(e) {
             statusEl.textContent = '오류 발생';
@@ -5314,7 +5539,7 @@
 
             const chainEl = document.getElementById('asset-rank-chain-stock-holders');
             if (chainEl && chainEl.checked) {
-                logEl.innerHTML += '<div style="color:#94a3b8;">종목별 익명 보유 TOP3 연쇄 집계 중...</div>';
+                logEl.innerHTML += '<div style="color:#94a3b8;">주식·코인 종목별 익명 보유 TOP3 연쇄 집계 중...</div>';
                 logEl.scrollTop = logEl.scrollHeight;
                 await calcStockHolderTop3Ranking(true);
             }
@@ -5455,7 +5680,7 @@
 
     window.calcStockHolderTop3Ranking = async function(silent = false) {
         if (!isAdmin()) return;
-        if (!silent && !confirm('종목별 익명 보유 TOP3를 집계합니다. 계속하시겠습니까?')) return;
+        if (!silent && !confirm('주식·코인 종목별 익명 보유 TOP3를 집계합니다. 계속하시겠습니까?')) return;
 
         const chipEl = document.getElementById('stock-holder-rank-chip');
         const lastEl = document.getElementById('stock-holder-rank-last');
@@ -5477,10 +5702,11 @@
         };
 
         try {
-            appendLog('<div>유저·종목 읽는 중...</div>');
-            const [usersSnap, stocksSnap] = await Promise.all([
+            appendLog('<div>유저·주식·코인 읽는 중...</div>');
+            const [usersSnap, stocksSnap, coinsSnap] = await Promise.all([
                 get(ref(db, 'users/')),
-                get(ref(db, 'stocks/'))
+                get(ref(db, 'stocks/')),
+                get(ref(db, 'coins/'))
             ]);
             if (!usersSnap.exists()) {
                 appendLog('<div style="color:#ef4444;">유저 데이터 없음</div>');
@@ -5492,28 +5718,42 @@
             }
             const users = usersSnap.val();
             const stocks = stocksSnap.exists() ? stocksSnap.val() : {};
+            const coins = coinsSnap.exists() ? coinsSnap.val() : {};
             const stockIds = Object.keys(stocks);
+            const coinIds = Object.keys(coins);
 
             const byStock = {};
             stockIds.forEach((id) => { byStock[id] = []; });
+            const byCoin = {};
+            coinIds.forEach((id) => { byCoin[id] = []; });
 
             Object.values(users).forEach((u) => {
-                if (!u?.stocks || typeof u.stocks !== 'object') return;
-                Object.entries(u.stocks).forEach(([stockId, s]) => {
-                    const qty = Math.floor(Number(s?.qty) || 0);
-                    if (qty <= 0) return;
-                    if (!byStock[stockId]) byStock[stockId] = [];
-                    byStock[stockId].push(qty);
-                });
+                if (u?.stocks && typeof u.stocks === 'object') {
+                    Object.entries(u.stocks).forEach(([stockId, s]) => {
+                        const qty = Math.floor(Number(s?.qty) || 0);
+                        if (qty <= 0) return;
+                        if (!byStock[stockId]) byStock[stockId] = [];
+                        byStock[stockId].push(qty);
+                    });
+                }
+                if (u?.coins && typeof u.coins === 'object') {
+                    Object.entries(u.coins).forEach(([coinId, s]) => {
+                        const qty = Math.floor(Number(s?.qty) || 0);
+                        if (qty <= 0) return;
+                        if (!byCoin[coinId]) byCoin[coinId] = [];
+                        byCoin[coinId].push(qty);
+                    });
+                }
             });
 
-            appendLog(`<div>${stockIds.length}개 종목 · 쓰기 청크 처리 중...</div>`);
+            appendLog(`<div>주식 ${stockIds.length}개 · 코인 ${coinIds.length}개 · 쓰기 청크 처리 중...</div>`);
 
             const now = Date.now();
-            const keys = Object.keys(byStock);
             const CHUNK = 150;
-            for (let i = 0; i < keys.length; i += CHUNK) {
-                const slice = keys.slice(i, i + CHUNK);
+
+            const stockKeys = Object.keys(byStock);
+            for (let i = 0; i < stockKeys.length; i += CHUNK) {
+                const slice = stockKeys.slice(i, i + CHUNK);
                 const updates = {};
                 for (const stockId of slice) {
                     const arr = (byStock[stockId] || []).sort((a, b) => b - a).slice(0, 3);
@@ -5524,13 +5764,26 @@
                 await update(ref(db), updates);
             }
 
+            const coinKeys = Object.keys(byCoin);
+            for (let i = 0; i < coinKeys.length; i += CHUNK) {
+                const slice = coinKeys.slice(i, i + CHUNK);
+                const updates = {};
+                for (const coinId of slice) {
+                    const arr = (byCoin[coinId] || []).sort((a, b) => b - a).slice(0, 3);
+                    const holders = arr.map((qty, idx) => ({ rank: idx + 1, qty }));
+                    updates[`coinHolderRanking/${coinId}/updatedAt`] = now;
+                    updates[`coinHolderRanking/${coinId}/holders`] = holders;
+                }
+                await update(ref(db), updates);
+            }
+
             const nowStr = new Date(now).toLocaleString('ko-KR');
             if (chipEl) {
                 chipEl.className   = 'status-chip active';
                 chipEl.textContent = '완료';
             }
             if (lastEl) lastEl.textContent = nowStr;
-            appendLog(`<div style="color:#22c55e;">✅ 완료 — ${keys.length}개 종목 (${nowStr})</div>`);
+            appendLog(`<div style="color:#22c55e;">✅ 완료 — 주식 ${stockKeys.length}개 · 코인 ${coinKeys.length}개 (${nowStr})</div>`);
 
         } catch (e) {
             if (chipEl) {
@@ -5539,7 +5792,7 @@
             }
             appendLog(`<div style="color:#ef4444;">❌ 오류: ${escapeHtml(e.message || String(e))}</div>`);
             if (e && (e.code === 'PERMISSION_DENIED' || String(e.message || '').includes('permission'))) {
-                appendLog('<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정으로 로그인했는지, <b>stockHolderRanking</b> 쓰기 규칙이 배포됐는지 확인하세요.</div>');
+                appendLog('<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정으로 로그인했는지, <b>stockHolderRanking</b>·<b>coinHolderRanking</b> 쓰기 규칙이 배포됐는지 확인하세요.</div>');
             }
         }
     };
