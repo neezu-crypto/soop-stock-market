@@ -651,6 +651,16 @@
             z-index: 6000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
         }
         .promo-modal-overlay.active { opacity: 1; pointer-events: auto; }
+        /* 인라인 z-index:4000 등으로 낮아지면 계정 경고(4000)·절전(8888) 아래에 깔려 입력 포커스/클릭이 막힐 수 있음 */
+        #chart-ad-modal.promo-modal-overlay {
+            z-index: 6200;
+        }
+        #chart-ad-modal .promo-modal-content {
+            text-align: left;
+        }
+        #chart-ad-modal .promo-modal-header h2 {
+            text-align: center;
+        }
         .promo-modal-content {
             background: var(--card-bg); width: 90%; max-width: 400px;
             border-radius: 24px; border: 1px solid var(--primary);
@@ -1950,7 +1960,7 @@
     </div>
 </div>
 
-<div id="chart-ad-modal" class="promo-modal-overlay" style="z-index:4000;">
+<div id="chart-ad-modal" class="promo-modal-overlay">
     <div class="promo-modal-content" style="max-width:420px;">
         <div class="promo-modal-header">
             <h2>📺 차트 하단 배너 신청</h2>
@@ -6544,8 +6554,19 @@ window.openChartAdModal = () => {
     document.getElementById('chart-ad-privacy-agree').checked = false;
     closeChartModal();
     document.getElementById('chart-ad-modal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            try {
+                document.getElementById('chart-ad-nickname')?.focus({ preventScroll: true });
+            } catch (_) { /* noop */ }
+        });
+    });
 };
-window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
+window.closeChartAdModal = () => {
+    document.getElementById('chart-ad-modal')?.classList.remove('active');
+    document.body.style.overflow = '';
+};
 
 // 이미지 URL 입력 시 미리보기 + 기간 입력 시 비용 표시
 document.addEventListener('input', (e) => {
