@@ -4722,9 +4722,9 @@ setInterval(() => {
     } catch (_) { /* noop */ }
 }, 1000);
 
-/** database.rules.json users/$uid/stocks/$stockId · cash 범위와 맞춤 (최대 자산 500억) */
-const USER_CASH_MAX = 50000000000;
-const USER_STOCK_AVG_MAX = 50000000000;
+/** database.rules.json users/$uid/stocks/$stockId · cash 범위와 맞춤 (최대 자산 5조) */
+const USER_CASH_MAX = 5000000000000;
+const USER_STOCK_AVG_MAX = 5000000000000;
 /** 종목당 보유 수량 상한 없음(실수 방지로 JS 안전 정수까지만 클라이언트에서 정규화) */
 const USER_STOCK_QTY_CAP = Number.MAX_SAFE_INTEGER;
 /** 서로 다른 종목 최대 10개 (사용자 페이지 정책; 규칙·trade 서버와 동일) */
