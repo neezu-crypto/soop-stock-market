@@ -645,6 +645,12 @@
             100% { border-color: var(--primary); box-shadow: 0 0 5px var(--primary); }
         }
         .promo-active .banner-circle { animation: promo-glow 2s infinite; border-width: 3px; }
+        .banner-reload-hint {
+            font-size: 11px; line-height: 1.45; color: var(--muted); text-align: center;
+            max-width: 100px; padding: 6px 4px; border-radius: 8px;
+            background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25);
+            margin-bottom: 4px;
+        }
         .promo-badge {
             position: absolute; top: -2px; right: 5px;
             background: var(--up-color); color: white; font-size: 10px; padding: 2px 6px;
@@ -1924,10 +1930,13 @@
         </div>
     </div>
     <main id="stock-list"></main>
-    <div class="banner-container" id="banner-list">
+    <div class="banner-container" id="banner-sidebar">
+        <div id="banner-reload-hint" class="banner-reload-hint" style="display: none;" role="status" aria-live="polite"></div>
+        <div id="banner-list">
         <div onclick="openPromoModal()" class="banner-item">
             <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
             <div class="banner-name">문의하기</div>
+        </div>
         </div>
     </div>
 </div>
@@ -6252,6 +6261,21 @@ window.submitPromoRequest = async function() {
     }
 };
 
+// ── 배너: 초기 로드 후에도 홍보 배너 데이터가 비어 있으면 새로고침 유도 ──
+function updateBannerReloadHint() {
+    const hint = document.getElementById('banner-reload-hint');
+    const bannerList = document.getElementById('banner-list');
+    if (!hint || !bannerList || !isBannerRendered) return;
+    const promoCount = bannerList.querySelectorAll('.banner-item.promo-active').length;
+    const hasBannerData = Object.values(allBanners).some((b) => b && b.bannerImg);
+    if (promoCount === 0 && !hasBannerData) {
+        hint.style.display = 'block';
+        hint.innerHTML = '로딩이 완료되었습니다.<br>새로고침을 부탁드립니다.';
+    } else {
+        hint.style.display = 'none';
+    }
+}
+
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
 function renderBanners() {
     const bannerList = document.getElementById('banner-list');
@@ -6324,6 +6348,7 @@ function renderBanners() {
             }
         }, 0);
     });
+    updateBannerReloadHint();
 }
 
 // 첫 방문 시 모듈·Firebase 지연 후에도 장 상태·배너·동결 UI 한 번 더 동기화
@@ -6765,7 +6790,7 @@ function saveStaticCache(data) {
 async function loadBannersFromFirebase(remoteVer) {
     const snap = await get(ref(db, 'stocksBanner/'));
     allBanners = {};
-    if (!snap.exists()) { renderBanners(); isBannerRendered = true; return; }
+    if (!snap.exists()) { isBannerRendered = true; renderBanners(); return; }
 
     Object.entries(snap.val()).forEach(([id, banner]) => { allBanners[id] = banner; });
 
@@ -6786,8 +6811,8 @@ async function loadBannersFromFirebase(remoteVer) {
     const existing = loadStaticCache() || {};
     saveStaticCache({ ...existing, banners: cacheData, bannerCacheVersion: remoteVer });
 
-    renderBanners();
     isBannerRendered = true;
+    renderBanners();
 }
 
 (async () => {
@@ -6805,13 +6830,14 @@ async function loadBannersFromFirebase(remoteVer) {
     // 버전 일치 + 캐시 있으면 캐시 사용
     if (cached?.banners && localVer === remoteVer) {
         Object.assign(allBanners, cached.banners);
+        try { renderBanners(); } catch (e) { console.warn('[Init] renderBanners (cache hit, sync)', e); }
 
         // 만료일 + 신규/삭제 배너 동기화 (Firebase 1회 read)
         get(ref(db, 'stocksBanner/')).then(async snap => {
             if (!snap.exists()) {
                 allBanners = {};
-                renderBanners();
                 isBannerRendered = true;
+                renderBanners();
                 return;
             }
             const fbIds = Object.keys(snap.val());
@@ -6843,16 +6869,19 @@ async function loadBannersFromFirebase(remoteVer) {
                 const existing = loadStaticCache() || {};
                 saveStaticCache({ ...existing, banners: cacheData });
             }
-            renderBanners();
             isBannerRendered = true;
-        }).catch(() => { renderBanners(); isBannerRendered = true; });
+            renderBanners();
+        }).catch(() => { isBannerRendered = true; renderBanners(); });
         return;
     }
 
     // 버전 불일치 또는 캐시 없음 → Firebase에서 새로 로드
     try {
         await loadBannersFromFirebase(remoteVer);
-    } catch(e) {}
+    } catch (e) {
+        isBannerRendered = true;
+        try { renderBanners(); } catch (_) { /* noop */ }
+    }
 })();
 
 // ══════════════════════════════════════════════════════════
