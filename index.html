@@ -1933,7 +1933,7 @@
     <div id="extend-request-bar" style="display:none;"></div>
 
     <header>
-        <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
+        <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장</h1>
         <p style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
             관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.
         </p>
@@ -2231,7 +2231,7 @@ window.submitAssetRequest = async function() {
 
 // ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
-let siteConfigReady = false; // siteConfig onValue 첫 스냅샷 후 true — 그 전에는 시장 오픈으로 간주하지 않음
+let siteConfigReady = false; // siteConfig 초기 get(또는 타임아웃) 후 true — 그 전에는 시장 오픈으로 간주하지 않음
 /** 클라이언트 전용 서킷 동결(관리자만 siteConfig/frozenStocks에 기록 가능) */
 let localCircuitFreeze = {};
 function getEffectiveFrozenUntil(stockId) {
@@ -2715,7 +2715,7 @@ setInterval(() => {
     }
 }, 30000);
 
-// ── siteConfig: get 부트스트랩 + onValue (권한/오프라인 시 onValue만으로는 영원 대기할 수 있음)
+// ── siteConfig: 초기 1회 get(전체) + 하위 경로 onValue만 — 루트 onValue 제거로 중복 다운로드 방지
 function recoverMarketUiVisible(reason, err) {
     console.warn('[Init] recoverMarketUiVisible:', reason, err?.message || err || '');
     try {
@@ -2768,10 +2768,6 @@ get(ref(db, 'siteConfig')).then((snap) => {
     applySiteConfigHydration(null, 'get(catch)');
 });
 
-onValue(ref(db, 'siteConfig'), (snap) => {
-    applySiteConfigHydration(snap, 'onValue');
-});
-
 setTimeout(() => {
     if (!siteConfigReady) {
         console.warn('[Init] siteConfig still not ready after 6s — forcing hydration');
@@ -2790,6 +2786,12 @@ onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
 onValue(ref(db, 'siteConfig/marketHours'), (snap) => {
     siteConfig.marketHours = snap.exists() ? snap.val() : null;
     applyMarketState();
+});
+
+// 코인 시장 최소 총자산(스칼라) — 루트 onValue 없이도 운영 변경 즉시 반영
+onValue(ref(db, 'siteConfig/coinMarketMinTotalWon'), (snap) => {
+    if (snap.exists() && typeof snap.val() === 'number') siteConfig.coinMarketMinTotalWon = snap.val();
+    else delete siteConfig.coinMarketMinTotalWon;
 });
 
 // 중계방 실시간 구독 (신규 수락/만료 감지)
@@ -3426,10 +3428,11 @@ function applyMarketState() {
     }
 }
 
-// ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
+// ── 보유 주식/코인 클릭 → 지갑 주식·코인 탭 연동 + 검색창 ────────────────────────────
 document.getElementById('my-stocks-list').addEventListener('click', (e) => {
     const item = e.target.closest('.my-stock-item');
     if (item) {
+        setActiveMarket('stock');
         selectStockForSearch(item.getAttribute('data-name'), item.getAttribute('data-id'));
     }
 });
@@ -3438,7 +3441,7 @@ document.getElementById('my-coins-list')?.addEventListener('click', (e) => {
     if (!isCoinMarketAdmin()) return;
     const item = e.target.closest('.my-stock-item');
     if (!item) return;
-    if (!isCoinMarket()) setActiveMarket('coin');
+    setActiveMarket('coin');
     if (!isCoinMarket()) return;
     selectStockForSearch(item.getAttribute('data-name'), item.getAttribute('data-id'));
 });
