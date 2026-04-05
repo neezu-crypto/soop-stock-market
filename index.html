@@ -100,6 +100,41 @@
         .btn-listing-request { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:white; border:none; padding:11px 20px; border-radius:10px; font-size:13px; font-weight:800; cursor:pointer; transition:opacity 0.2s; }
         .btn-listing-request:hover { opacity:0.85; }
 
+        /* 자산 지원 모달 — 이벤트(축제/기념 컨셉) */
+        .btn-asset-event {
+            flex: 1;
+            min-width: 88px;
+            border: none;
+            padding: 12px 14px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 800;
+            font-size: 13px;
+            letter-spacing: 0.04em;
+            color: #3f0d1a;
+            background: linear-gradient(125deg, #fef08a 0%, #fb923c 38%, #f43f5e 72%, #c026d3 100%);
+            background-size: 180% 180%;
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.22) inset,
+                0 2px 16px rgba(244, 63, 94, 0.35),
+                0 2px 8px rgba(192, 38, 211, 0.2);
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease, background-position 0.35s ease;
+        }
+        .btn-asset-event:hover {
+            filter: brightness(1.07) saturate(1.05);
+            background-position: 100% 50%;
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.35) inset,
+                0 4px 22px rgba(244, 63, 94, 0.45),
+                0 0 24px rgba(250, 204, 21, 0.25);
+            transform: translateY(-1px);
+        }
+        .btn-asset-event:active {
+            transform: translateY(0);
+            filter: brightness(0.96);
+        }
+
         /* ── 정규장 연장 요청 버튼 ── */
         .extend-request-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(245,158,11,0.06); border:1px dashed rgba(245,158,11,0.25); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
         .extend-request-bar.off-peak { background:rgba(56,189,248,0.06); border-color:rgba(56,189,248,0.25); }
@@ -1775,9 +1810,9 @@
             <button type="button" onclick="window.closeAssetRequestModal()" style="flex:1; min-width:88px; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button type="button" id="asset-request-submit" disabled onclick="window.submitAssetRequest()"
                 style="flex:1; min-width:88px; background:var(--primary); color:var(--on-primary); border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px; opacity:0.45;">제출</button>
-            <button type="button"
+            <button type="button" class="btn-asset-event"
                 onclick="window.open('https://www.sooplive.com/station/skftodwocks2/post/190426505','_blank','noopener,noreferrer')"
-                style="flex:1; min-width:88px; background:rgba(56,189,248,0.12); color:var(--primary); border:1px solid rgba(56,189,248,0.35); padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">이벤트</button>
+                title="SOOP 스테이션 이벤트 공지">🎉 이벤트</button>
         </div>
     </div>
 </div>
