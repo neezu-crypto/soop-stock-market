@@ -645,12 +645,43 @@
             100% { border-color: var(--primary); box-shadow: 0 0 5px var(--primary); }
         }
         .promo-active .banner-circle { animation: promo-glow 2s infinite; border-width: 3px; }
-        .banner-reload-hint {
-            font-size: 11px; line-height: 1.45; color: var(--muted); text-align: center;
-            max-width: 100px; padding: 6px 4px; border-radius: 8px;
-            background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25);
-            margin-bottom: 4px;
+        /* 배너 캐시 이슈 시 거래 화면 전체 차단 — 새로고침만 유도 (점검/마감 오버레이 아래) */
+        #banner-reload-overlay {
+            position: fixed; inset: 0; z-index: 10040;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            padding: 24px; box-sizing: border-box;
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(6px);
         }
+        #banner-reload-overlay.active { display: flex; }
+        .banner-reload-overlay-box {
+            text-align: center; max-width: 400px; width: 100%;
+            padding: 40px 32px 36px;
+            background: var(--card-bg); border-radius: 24px;
+            border: 1px solid var(--primary);
+            box-shadow: 0 0 48px rgba(56, 189, 248, 0.25);
+        }
+        .banner-reload-overlay-icon { font-size: 48px; margin-bottom: 16px; line-height: 1; }
+        .banner-reload-overlay-title {
+            font-size: 20px; font-weight: 800; color: var(--text-main);
+            margin: 0 0 12px;
+            line-height: 1.35;
+        }
+        .banner-reload-overlay-desc {
+            font-size: 14px; color: var(--text-sub); line-height: 1.65;
+            margin: 0 0 28px;
+        }
+        .banner-reload-overlay-btn {
+            width: 100%; max-width: 280px; margin: 0 auto;
+            display: block; padding: 16px 24px; border: none; border-radius: 14px;
+            font-size: 16px; font-weight: 800; cursor: pointer;
+            background: var(--primary); color: var(--bg-color);
+            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.35);
+            transition: filter 0.2s, transform 0.15s;
+        }
+        .banner-reload-overlay-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+        .banner-reload-overlay-btn:active { transform: translateY(0); }
+        body.banner-reload-overlay-open { overflow: hidden !important; }
         .promo-badge {
             position: absolute; top: -2px; right: 5px;
             background: var(--up-color); color: white; font-size: 10px; padding: 2px 6px;
@@ -1306,6 +1337,16 @@
     </div>
 </div>
 
+<!-- ── 배너 동기화 실패 시 전면 안내 (새로고침만) — z-index: 점검(10050)보다 낮음 ── -->
+<div id="banner-reload-overlay" aria-modal="true" role="alertdialog" aria-labelledby="banner-reload-title" aria-describedby="banner-reload-desc" aria-hidden="true">
+    <div class="banner-reload-overlay-box">
+        <div class="banner-reload-overlay-icon" aria-hidden="true">🔄</div>
+        <h2 id="banner-reload-title" class="banner-reload-overlay-title">로딩이 완료되었습니다</h2>
+        <p id="banner-reload-desc" class="banner-reload-overlay-desc">새로고침을 부탁드립니다.</p>
+        <button type="button" class="banner-reload-overlay-btn" onclick="location.reload()">새로고침</button>
+    </div>
+</div>
+
 <!-- ── 인트로 오버레이 ── -->
 <div id="intro-overlay">
     <div class="intro-content">
@@ -1931,7 +1972,6 @@
     </div>
     <main id="stock-list"></main>
     <div class="banner-container" id="banner-sidebar">
-        <div id="banner-reload-hint" class="banner-reload-hint" style="display: none;" role="status" aria-live="polite"></div>
         <div id="banner-list">
         <div onclick="openPromoModal()" class="banner-item">
             <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
@@ -6298,18 +6338,34 @@ window.submitPromoRequest = async function() {
     }
 };
 
-// ── 배너: 초기 로드 후에도 홍보 배너 데이터가 비어 있으면 새로고침 유도 ──
+function isMaintenanceOverlayVisible() {
+    const el = document.getElementById('maintenance-overlay');
+    if (!el) return false;
+    return window.getComputedStyle(el).display !== 'none';
+}
+
+// ── 배너: 홍보 데이터가 비어 있으면 거래 화면 전체를 가리고 새로고침만 허용 ──
 function updateBannerReloadHint() {
-    const hint = document.getElementById('banner-reload-hint');
+    const overlay = document.getElementById('banner-reload-overlay');
     const bannerList = document.getElementById('banner-list');
-    if (!hint || !bannerList || !isBannerRendered) return;
+    if (!overlay || !bannerList || !isBannerRendered) return;
+    if (isMaintenanceOverlayVisible()) {
+        overlay.classList.remove('active');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('banner-reload-overlay-open');
+        return;
+    }
     const promoCount = bannerList.querySelectorAll('.banner-item.promo-active').length;
     const hasBannerData = Object.values(allBanners).some((b) => b && b.bannerImg);
     if (promoCount === 0 && !hasBannerData) {
-        hint.style.display = 'block';
-        hint.innerHTML = '로딩이 완료되었습니다.<br>새로고침을 부탁드립니다.';
+        overlay.classList.add('active');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('banner-reload-overlay-open');
+        try { overlay.querySelector('.banner-reload-overlay-btn')?.focus({ preventScroll: true }); } catch (_) { /* noop */ }
     } else {
-        hint.style.display = 'none';
+        overlay.classList.remove('active');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('banner-reload-overlay-open');
     }
 }
 
