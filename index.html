@@ -1771,10 +1771,13 @@
         <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">사유 (선택)</label>
         <textarea id="asset-request-reason" rows="3" maxlength="500" placeholder="간단히 적어주세요."
             style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text-main); font-size:13px; resize:vertical; margin-bottom:14px;"></textarea>
-        <div style="display:flex; gap:10px;">
-            <button type="button" onclick="window.closeAssetRequestModal()" style="flex:1; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" onclick="window.closeAssetRequestModal()" style="flex:1; min-width:88px; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button type="button" id="asset-request-submit" disabled onclick="window.submitAssetRequest()"
-                style="flex:1; background:var(--primary); color:var(--on-primary); border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px; opacity:0.45;">제출</button>
+                style="flex:1; min-width:88px; background:var(--primary); color:var(--on-primary); border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px; opacity:0.45;">제출</button>
+            <button type="button"
+                onclick="window.open('https://www.sooplive.com/station/skftodwocks2/post/190426505','_blank','noopener,noreferrer')"
+                style="flex:1; min-width:88px; background:rgba(56,189,248,0.12); color:var(--primary); border:1px solid rgba(56,189,248,0.35); padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">이벤트</button>
         </div>
     </div>
 </div>
