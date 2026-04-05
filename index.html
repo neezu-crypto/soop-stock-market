@@ -994,6 +994,9 @@
             justify-content: space-between;
             gap: 14px;
             flex-wrap: wrap;
+            box-sizing: border-box;
+            max-width: 100%;
+            width: 100%;
             background: linear-gradient(135deg, rgba(56,189,248,0.08) 0%, rgba(30,41,59,0.95) 45%, rgba(15,23,42,0.98) 100%);
             border: 1px solid rgba(56,189,248,0.28);
             border-radius: 14px;
@@ -1005,8 +1008,8 @@
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            flex: 1;
-            min-width: 200px;
+            flex: 1 1 0;
+            min-width: 0;
         }
         .live-ranking-banner__icon {
             flex-shrink: 0;
@@ -1032,6 +1035,10 @@
             font-style: normal;
             color: var(--primary-light);
         }
+        .live-ranking-banner__inner > div:last-child {
+            min-width: 0;
+            flex: 1;
+        }
         .live-ranking-banner__desc {
             margin: 0;
             font-size: 12px;
@@ -1039,6 +1046,8 @@
             color: var(--text-sub);
             line-height: 1.55;
             max-width: 42ch;
+            overflow-wrap: anywhere;
+            word-break: keep-all;
         }
         .live-ranking-banner__cta {
             flex-shrink: 0;
@@ -1058,6 +1067,8 @@
             box-shadow: 0 4px 14px rgba(239,68,68,0.35);
             transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
             white-space: nowrap;
+            box-sizing: border-box;
+            max-width: 100%;
         }
         .live-ranking-banner__cta:hover {
             filter: brightness(1.08);
@@ -1071,13 +1082,25 @@
             font-size: 16px;
             line-height: 1;
         }
-        @media (max-width: 520px) {
+        /* 좁은 화면·태블릿 세로: 한 줄에 CTA를 두면 우측으로 삐져나감 → 세로 스택 */
+        @media (max-width: 768px) {
             .live-ranking-banner {
                 flex-direction: column;
                 align-items: stretch;
             }
-            .live-ranking-banner__cta {
+            .live-ranking-banner__inner {
+                flex: none;
                 width: 100%;
+            }
+            .live-ranking-banner__desc {
+                max-width: none;
+            }
+            .live-ranking-banner__cta {
+                align-self: stretch;
+                width: 100%;
+                max-width: none;
+                white-space: normal;
+                text-align: center;
             }
         }
 
