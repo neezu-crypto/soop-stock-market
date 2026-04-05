@@ -2325,6 +2325,29 @@ const ASSET_RANKING_ACCESS_BALLOON_COST = 30;
 let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
 let ownedUnsubs      = {};    // { stockId: unsubscribe함수 }
 
+/** 관리자만 stocks/ 전체 onValue — 일반 유저는 즐겨찾기·보유 per-path만으로 RTDB 다운로드 대폭 절감 */
+function shouldUseFullStocksTreeListener() {
+    return auth.currentUser?.email === 'skftodwocks2@gmail.com';
+}
+
+function upsertAllStocksCacheRow(row) {
+    if (!row?.id) return;
+    const i = allStocks.findIndex((x) => x.id === row.id);
+    if (i >= 0) allStocks[i] = { ...allStocks[i], ...row };
+    else allStocks.push({ ...row });
+}
+
+function stockRowForId(id) {
+    if (id == null || id === '') return null;
+    return favorites[id] || ownedStocks[id] || searchResults[id] || allStocks.find((s) => s.id === id) || null;
+}
+
+function stockNameForId(id) {
+    const r = stockRowForId(id);
+    if (r?.name) return r.name;
+    return stockNameCache[id] || id;
+}
+
 // ── 서킷브레이커(CB) 및 거래량 상태 ──────────────────────────
 // 종목별 서킷브레이커 상태 관리 (동결 시간, 마지막 발동 시각, 예약 타이머)
 const circuitBreakerState = {}; 
@@ -2746,7 +2769,7 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
         if (frozenUntil > now) {
             const wasNotFrozen = !prev[stockId] || prev[stockId] <= now;
             if (wasNotFrozen) {
-                const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
+                const stockName = stockNameForId(stockId);
                 alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
 
                 // 즐겨찾기/보유 종목이면 브라우저 알림 발송
@@ -2785,7 +2808,7 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
     // 이전에 동결됐다가 해제된 종목 감지 (Firebase에서 삭제된 경우)
     Object.keys(prev).forEach(stockId => {
         if (!siteConfig.frozenStocks[stockId] && prev[stockId] > now) {
-            const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
+            const stockName = stockNameForId(stockId);
             const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
             if (isMyStock && notifPermission && Notification.permission === 'granted') {
                 new Notification(`✅ ${stockName} 거래 재개!`, {
@@ -2931,7 +2954,7 @@ function computeTotalWealthWon() {
     let w = Math.floor(Math.max(0, Number(myData?.cash) || 0));
     const addStockVal = (id, qty) => {
         if (!qty || qty <= 0) return;
-        const row = favorites[id] || ownedStocks[id] || allStocks.find(s => s.id === id);
+        const row = stockRowForId(id);
         const p = Number(row?.price);
         if (Number.isFinite(p) && p > 0) w += Math.floor(p * qty);
     };
@@ -2981,10 +3004,8 @@ function candleBufferKey(stockId, market) {
 }
 
 /**
- * stocks/ 전체 목록 동기화: 장 운영 중(정규·비정규) 모두 onValue — 변경 시에만 전송되어 폴링보다 대역폭 절약
- * 마감/점검=중단
- * (즐겨찾기·보유 개별 구독은 applyStocksMode에서 처리)
- * 관리자도 여기서 allStocks 캐시만 갱신 — 메인 카드 UI는 refreshMainStockListView(즐겨찾기+보유)로 제한
+ * stocks/ 전체 목록: 관리자만 onValue(전체 트리). 일반 유저는 stocks/{id}만 구독 → 다운로드 대폭 절감.
+ * 마감/점검=전체 리스너 중단 (즐겨찾기·보유 per-path는 applyStocksMode)
  */
 function applyMainStocksDataSync() {
     logAuthTrail('[sync-strategy] applyMainStocksDataSync START', { dbOk: !!db, prevMode: mainStocksSyncMode });
@@ -3005,8 +3026,8 @@ function applyMainStocksDataSync() {
     if (mode !== mainStocksSyncMode) {
         const msg = {
             closed: '점검·siteConfig 대기·또는 전체 오픈 시간 밖 → stocks/ 리스너 제거',
-            regular: '정규장(또는 정규 시간 미설정/관리자) → stocks/ onValue',
-            offpeak: '전체 오픈 시간 내·비정규장 → stocks/ onValue (비정규도 실시간·폴링 없음)'
+            regular: '정규장 → 관리자만 stocks/ 전체 onValue · 일반 유저는 stocks/{id}만',
+            offpeak: '비정규장 → 관리자만 stocks/ 전체 onValue · 일반 유저는 stocks/{id}만'
         };
         console.log(`[sync-strategy] ${mainStocksSyncMode ?? 'init'} → ${mode}: ${msg[mode]}`);
         mainStocksSyncMode = mode;
@@ -3025,7 +3046,19 @@ function applyMainStocksDataSync() {
         logAuthTrail('[sync-strategy] applyMainStocksDataSync END (closed)');
         return;
     }
-    // regular | offpeak — 동일: stocks/ 전체 onValue (30초 폴링 제거)
+    if (!shouldUseFullStocksTreeListener()) {
+        if (typeof stocksUnsubscribe === 'function') {
+            stocksUnsubscribe();
+            stocksUnsubscribe = null;
+        }
+        if (stocksPollTimer) {
+            clearInterval(stocksPollTimer);
+            stocksPollTimer = null;
+        }
+        logAuthTrail('[sync-strategy] applyMainStocksDataSync skip full stocks/ (non-admin bandwidth)');
+        return;
+    }
+    // regular | offpeak — 관리자만: stocks/ 전체 onValue
     if (stocksPollTimer) {
         clearInterval(stocksPollTimer);
         stocksPollTimer = null;
@@ -3735,6 +3768,8 @@ onAuthStateChanged(auth, async (user) => {
                 favorites = {};
                 favoriteCoins = {};
                 searchResults = {};
+                allStocks = [];
+                allCoins = [];
                 stockElements = {};
                 myData = { cash: 1000000, stocks: {}, coins: {} };
                 lastTradeTime = 0;
@@ -3926,7 +3961,7 @@ async function checkCircuitBreaker(stockId, candles) {
 
             const frozenUntil = Date.now() + 180000; // 3분 동결
             localCircuitFreeze[stockId] = frozenUntil;
-            const stockName = allStocks.find(s => s.id === stockId)?.name || stockId;
+            const stockName = stockNameForId(stockId);
             alert(`⚠️ [서킷브레이커] "${stockName}" 종목이 3분간 거래 동결됩니다.`);
 
             if (favoriteUnsubs[stockId]) { favoriteUnsubs[stockId](); delete favoriteUnsubs[stockId]; }
@@ -4112,7 +4147,7 @@ window.openChartModal = function(stockId) {
     chartModalMarket = isCoinMarket() ? 'coin' : 'stock';
     const s = chartModalMarket === 'coin'
         ? (favoriteCoins[stockId] || ownedCoins[stockId] || searchResults[stockId] || allCoins.find((x) => x.id === stockId))
-        : (favorites[stockId] || ownedStocks[stockId] || searchResults[stockId] || allStocks.find((x) => x.id === stockId));
+        : stockRowForId(stockId);
     if (!s) return;
 
     chartModalStockId = stockId;
@@ -4794,7 +4829,7 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
     const currentTime = now;
 
     // 공지 종목 거래 차단
-    const stockInfo = allStocks.find(s => s.id === id);
+    const stockInfo = stockRowForId(id);
     if (stockInfo?.name?.includes('[공지]')) {
         alert('📢 공지 종목은 거래할 수 없습니다.');
         return;
@@ -4847,7 +4882,9 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
 
     const maxOrderWon = isCoin ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
     const maxLabel    = isCoin ? '100억원' : '1억원';
-    const stockForCheck = (isCoin ? allCoins : allStocks).find((s) => s.id === id);
+    const stockForCheck = isCoin
+        ? (favoriteCoins[id] || ownedCoins[id] || searchResults[id] || allCoins.find((s) => s.id === id))
+        : stockRowForId(id);
     if (stockForCheck) {
         if (type === 'sell') {
             const estSellPrice = Math.round(stockForCheck.price * (1 - 0.0005));
@@ -5550,7 +5587,7 @@ async function loadAssetRanking() {
         if (myData?.stocks) {
             Object.entries(myData.stocks).forEach(([id, s]) => {
                 if (!s.qty || s.qty <= 0) return;
-                const row = favorites[id] || ownedStocks[id] || allStocks.find((st) => st.id === id);
+                const row = stockRowForId(id);
                 const p = Number(row?.price);
                 if (Number.isFinite(p) && p > 0) myAsset += p * s.qty;
             });
@@ -6940,6 +6977,7 @@ function subscribeToFavorite(stockId) {
         data.link          = allBanners[stockId].link;
     }
     favorites[stockId] = data;
+    upsertAllStocksCacheRow(data);
     renderFavoriteList();
 });
     } catch (err) {
@@ -7441,6 +7479,7 @@ function subscribeToOwned(stockId) {
 
         ownedStocks[stockId] = data;
         if (favorites[stockId]) favorites[stockId] = data;
+        upsertAllStocksCacheRow(data);
         renderFavoriteList();
         renderMyPortfolio();
     });
