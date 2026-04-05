@@ -884,6 +884,35 @@
         }
         #chart-modal-overlay.active .chart-modal { transform: translateY(0); }
 
+        /* 모바일: 차트 세로(220px)는 유지 · 하단 거래·배너까지 오버레이 스크롤로 도달 */
+        @media (max-width: 768px) {
+            #chart-modal-overlay {
+                align-items: flex-start;
+                justify-content: center;
+                padding: 12px 0 max(16px, env(safe-area-inset-bottom, 0px));
+                overflow-y: auto;
+                overflow-x: hidden;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+            }
+            #chart-modal-overlay.active .chart-modal {
+                margin-bottom: 20px;
+            }
+            .chart-modal {
+                max-height: none;
+                overflow: visible;
+                width: 94%;
+                flex-shrink: 0;
+            }
+            .chart-canvas-wrap {
+                flex: 0 0 auto;
+                flex-grow: 0;
+                max-height: none;
+                min-height: 220px;
+                height: 220px;
+            }
+        }
+
         .chart-modal-header {
             padding: 18px 24px;
             display: flex; align-items: center; justify-content: space-between;
