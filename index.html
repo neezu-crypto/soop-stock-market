@@ -2311,6 +2311,20 @@ const firebaseConfig = {
 };
 const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
+
+/** Firebase 서버와의 시각 차이(ms). Date.now()+값 ≈ 서버 시각 — 정규/비정규장·쿨다운이 로컬 시계 조작에 흔들리지 않게 함 */
+let serverTimeOffsetMs = 0;
+try {
+    onValue(ref(db, '.info/serverTimeOffset'), (snap) => {
+        const v = snap.val();
+        serverTimeOffsetMs = typeof v === 'number' && Number.isFinite(v) ? v : 0;
+    }, () => { /* keep last offset */ });
+} catch (_) { /* noop */ }
+
+function serverNowMs() {
+    return Date.now() + (Number.isFinite(serverTimeOffsetMs) ? serverTimeOffsetMs : 0);
+}
+
 /** Incognito 등에서 IndexedDB/localStorage 실패 시 inMemory로 폴백 + 팝업 리졸버 명시(내부 ref/_key 오류 방지) */
 let auth;
 try {
@@ -3137,7 +3151,7 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
 function isMarketOpen() {
     const mh = siteConfig.marketHours;
     if (!mh || !mh.enabled) return true;
-    const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    const now     = new Date(new Date(serverNowMs()).toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
     const nowMins = now.getHours() * 60 + now.getMinutes();
     const [oh, om] = (mh.open  || '00:00').split(':').map(Number);
     const [ch, cm] = (mh.close || '23:59').split(':').map(Number);
@@ -3152,7 +3166,7 @@ function isRegularMarket() {
     const mh = siteConfig.marketHours;
     if (!mh || !mh.enabled) return true; // 시간 제한 없으면 항상 실시간
     if (!mh.regularOpen || !mh.regularClose) return true; // 정규장 미설정 시 실시간
-    const now     = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    const now     = new Date(new Date(serverNowMs()).toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
     const nowMins = now.getHours() * 60 + now.getMinutes();
     const [roh, rom] = mh.regularOpen.split(':').map(Number);
     const [rch, rcm] = mh.regularClose.split(':').map(Number);
@@ -5387,7 +5401,7 @@ function hydrateLastTradeTimeFromOffPeakStorage() {
         try { localStorage.removeItem(key); } catch (_) { /* noop */ }
         return;
     }
-    const now = Date.now();
+    const now = serverNowMs();
     if (now - ts >= 30000) {
         try { localStorage.removeItem(key); } catch (_) { /* noop */ }
         return;
@@ -5418,7 +5432,7 @@ function getTradeCooldownMs() {
                 let raw;
                 try { raw = localStorage.getItem(k); } catch (_) { raw = null; }
                 const ts = raw ? parseInt(raw, 10) : NaN;
-                if (Number.isFinite(ts) && ts > 0 && (Date.now() - ts) < 30000) return 30000;
+                if (Number.isFinite(ts) && ts > 0 && (serverNowMs() - ts) < 30000) return 30000;
             }
         }
         return 1000; // 안전한 기본값
@@ -5432,7 +5446,7 @@ function isGlobalTradeCooldownActive() {
     if (ms <= 0) return false;
     const ts = Number(lastTradeTime);
     if (!Number.isFinite(ts) || ts <= 0) return false;
-    return Date.now() - ts < ms;
+    return serverNowMs() - ts < ms;
 }
 
 function isTradeButtonDisabled(stockId) {
@@ -5491,7 +5505,7 @@ function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId, options) {
     const dis = isTradeButtonDisabled(stockId);
     const ltForRem = Number(lastTradeTime);
     const rem = isGlobalTradeCooldownActive()
-        ? Math.max(1, Math.ceil((getTradeCooldownMs() - (Date.now() - (Number.isFinite(ltForRem) && ltForRem > 0 ? ltForRem : 0))) / 1000))
+        ? Math.max(1, Math.ceil((getTradeCooldownMs() - (serverNowMs() - (Number.isFinite(ltForRem) && ltForRem > 0 ? ltForRem : 0))) / 1000))
         : 0;
     const offPeakOpen = !isRegularMarket() && isMarketOpen();
     [buyBtn, sellBtn].forEach((btn, i) => {
@@ -5619,7 +5633,7 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
 
     if (isCoin && !canUseCoinMarket()) return;
 
-    const now = Date.now();
+    const now = serverNowMs();
 
     // Hard-Stop: 새로고침/클릭 타이밍이 UI보다 빠르더라도, 로컬 저장된 쿨다운으로 즉시 차단
     if (!isAdmin) {
@@ -5954,6 +5968,7 @@ try {
             throw new Error("트랜잭션중단");
         }
 
+        const tradeTsCommitted = serverNowMs();
         const userTxResult = await runTransaction(userRef, (current) => {
             const c = current || { cash: 1000000, stocks: {}, coins: {} };
             const cash = clampUserCash(c.cash ?? 1000000);
@@ -5964,7 +5979,7 @@ try {
             const usQty = Math.floor(Math.max(0, Number(rawPos?.qty) || 0));
             const usAvg = Math.round(Math.max(0, Math.min(USER_STOCK_AVG_MAX, Number(rawPos?.avg) || 0)));
             const us = { qty: usQty, avg: usAvg };
-            const tradeTs = Date.now();
+            const tradeTs = tradeTsCommitted;
             let nextUser;
             if (type === 'buy') {
                 const totalBuyPrice = finalTradePrice * qty;
@@ -6064,14 +6079,13 @@ try {
         sound.currentTime = 0;
         sound.play().catch(() => {});
 
-        const tradeTs = Date.now();
-        lastTradeTime = tradeTs;
+        lastTradeTime = tradeTsCommitted;
         if (userUID) {
             const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
             if (isAdminUser) {
                 clearOffPeakTradeTimeStorageForUid(userUID);
             } else if (isMarketOpen() && !isRegularMarket()) {
-                persistOffPeakTradeTime(tradeTs);
+                persistOffPeakTradeTime(tradeTsCommitted);
             } else {
                 clearOffPeakTradeTimeStorageForUid(userUID);
             }
