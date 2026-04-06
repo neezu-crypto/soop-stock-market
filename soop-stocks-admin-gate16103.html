@@ -963,6 +963,16 @@
                             style="width:100%; background:#1e293b; border:1px solid #475569; color:#38bdf8; padding:10px 12px; border-radius:8px; font-size:15px; outline:none;">
                     </div>
                 </div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+                    <button type="button" class="btn-primary" style="background:#38bdf8; color:#0f172a; font-size:13px; padding:8px 14px; border:none; border-radius:8px; font-weight:800; cursor:pointer;"
+                        onclick="marketHoursRegularStartNow()">⚡ 즉시시작</button>
+                    <button type="button" class="btn-primary" style="background:#334155; color:#e2e8f0; font-size:13px; padding:8px 14px; border:1px solid #475569; border-radius:8px; font-weight:800; cursor:pointer;"
+                        onclick="marketHoursExtendRegular1h()">+1시간 연장</button>
+                </div>
+                <div style="font-size:11px; color:#64748b; margin-top:8px; line-height:1.45;">
+                    <b>즉시시작</b> — 정규장 시작을 지금(KST)으로 맞추고, 기존 정규장 길이만큼 종료 시각을 함께 이동합니다.<br>
+                    <b>+1시간 연장</b> — 정규장 종료 시각만 60분 늘립니다. 자정을 넘어 익일 새벽 시각으로 설정될 수 있습니다.
+                </div>
             </div>
 
             <button class="btn-primary" style="background:#f59e0b; color:#0f172a; margin-top:4px;" onclick="saveMarketHours()">
@@ -3908,6 +3918,49 @@
         }
     };
 
+    function kstNowMinutes() {
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+        return now.getHours() * 60 + now.getMinutes();
+    }
+    function parseTimeToMinutes(s) {
+        const [h, m] = (s || '00:00').split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return 0;
+        return h * 60 + m;
+    }
+    function formatMinutesToTime(mins) {
+        const m = ((mins % 1440) + 1440) % 1440;
+        const h = Math.floor(m / 60);
+        const mi = m % 60;
+        return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
+    }
+    /** 정규장 구간 길이(분). 익일 종료(시작 시각이 종료보다 늦은 문자열 비교)는 자정 넘김으로 계산 */
+    function regularSessionDurationMinutes(regularOpen, regularClose) {
+        const a = parseTimeToMinutes(regularOpen);
+        const b = parseTimeToMinutes(regularClose);
+        if (a === b) return 0;
+        if (a < b) return b - a;
+        return (1440 - a) + b;
+    }
+
+    async function persistMarketHoursFromInputs() {
+        const open         = document.getElementById('market-open').value;
+        const close        = document.getElementById('market-close').value;
+        const regularOpen  = document.getElementById('regular-open').value;
+        const regularClose = document.getElementById('regular-close').value;
+        if (!open || !close || !regularOpen || !regularClose)
+            throw new Error('모든 시각을 입력해주세요.');
+        if (open === close)
+            throw new Error('전체 오픈/마감 시각이 같습니다.');
+        if (regularOpen === regularClose)
+            throw new Error('정규장 시작/종료 시각이 같습니다.');
+        const snap    = await get(ref(db, 'siteConfig/marketHours'));
+        const current = snap.exists() ? snap.val() : {};
+        await set(ref(db, 'siteConfig/marketHours'), {
+            ...current, open, close, regularOpen, regularClose
+        });
+        renderMarketHoursStatus({ ...current, open, close, regularOpen, regularClose });
+    }
+
     window.saveMarketHours = async function() {
         if (!isAdmin()) return;
         const open         = document.getElementById('market-open').value;
@@ -3932,13 +3985,59 @@
         if (!confirm(confirmMsg)) return;
 
         try {
-            const snap    = await get(ref(db, 'siteConfig/marketHours'));
-            const current = snap.exists() ? snap.val() : {};
-            await set(ref(db, 'siteConfig/marketHours'), {
-                ...current, open, close, regularOpen, regularClose
-            });
-            renderMarketHoursStatus({ ...current, open, close, regularOpen, regularClose });
+            await persistMarketHoursFromInputs();
             alert(`✅ 시장 운영 시간이 저장되었습니다!`);
+        } catch (e) {
+            alert('저장 실패: ' + e.message);
+        }
+    };
+
+    /** 정규장 시작을 현재 KST로, 종료는 기존 구간 길이만큼 유지해 이동 후 저장 */
+    window.marketHoursRegularStartNow = async function() {
+        if (!isAdmin()) return;
+        const ro = document.getElementById('regular-open').value;
+        const rc = document.getElementById('regular-close').value;
+        const dur = regularSessionDurationMinutes(ro, rc);
+        if (dur <= 0)
+            return alert('정규장 유지 시간을 계산할 수 없습니다. 시작·종료 시각을 확인해주세요.');
+        const nowM = kstNowMinutes();
+        const newRo = formatMinutesToTime(nowM);
+        const newRc = formatMinutesToTime(nowM + dur);
+        const h = Math.floor(dur / 60);
+        const mm = dur % 60;
+        const durStr = h > 0 ? `${h}시간 ${mm}분` : `${mm}분`;
+        const overnightN = newRo > newRc;
+        const msg =
+            `정규장을 지금(KST ${newRo})부터 시작하고, 종료는 ${newRc}${overnightN ? ' (익일)' : ''}로 설정합니다.\n` +
+            `(기존 정규장 길이 유지: ${durStr})\n\nFirebase에 저장하시겠습니까?`;
+        if (!confirm(msg)) return;
+        document.getElementById('regular-open').value = newRo;
+        document.getElementById('regular-close').value = newRc;
+        try {
+            await persistMarketHoursFromInputs();
+            alert('✅ 시장 운영 시간이 저장되었습니다!');
+        } catch (e) {
+            alert('저장 실패: ' + e.message);
+        }
+    };
+
+    /** 정규장 종료 시각만 +60분 (자정 이후 시각 허용, HH:mm은 당일 0~23:59 표기) */
+    window.marketHoursExtendRegular1h = async function() {
+        if (!isAdmin()) return;
+        const ro = document.getElementById('regular-open').value;
+        const rc = document.getElementById('regular-close').value;
+        const newRc = formatMinutesToTime(parseTimeToMinutes(rc) + 60);
+        if (newRc === ro)
+            return alert('연장 후 정규장 종료 시각이 시작 시각과 같아 저장할 수 없습니다. 다른 시간을 수동으로 조정해 주세요.');
+        const overnightO = ro > rc;
+        const overnightN = ro > newRc;
+        const msg =
+            `정규장 종료: ${rc} → ${newRc}${overnightO || overnightN ? ' (자정·익일 구간 포함 가능)' : ''}\n\nFirebase에 저장하시겠습니까?`;
+        if (!confirm(msg)) return;
+        document.getElementById('regular-close').value = newRc;
+        try {
+            await persistMarketHoursFromInputs();
+            alert('✅ 시장 운영 시간이 저장되었습니다!');
         } catch (e) {
             alert('저장 실패: ' + e.message);
         }
