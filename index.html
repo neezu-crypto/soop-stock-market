@@ -750,7 +750,8 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 1000;
             max-height: 70vh; display: flex; flex-direction: column;
         }
-        .my-stocks-title { font-size: 16px; font-weight: 800; color: var(--primary); margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; display: flex; justify-content: space-between; }
+        .my-stocks-title { font-size: 16px; font-weight: 800; color: var(--primary); margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: baseline; }
+        .portfolio-holdings-badge { font-size: 12px; font-weight: 700; color: var(--text-sub); margin-left: 6px; white-space: nowrap; }
         .my-stocks-list { overflow-y: auto; flex: 1; }
         .my-stocks-list::-webkit-scrollbar { width: 4px; }
         .my-stocks-list::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
@@ -1660,7 +1661,7 @@
     <div class="left-rail-panes">
 <div class="my-stocks-container" id="my-stocks-container">
     <div class="my-stocks-title">
-        <span>내 포트폴리오</span>
+        <span>내 포트폴리오 <span id="portfolio-holdings-badge" class="portfolio-holdings-badge" title="보유 종목 수 / 최대 보유 가능 종목 수(주식·코인 각각)"></span></span>
         <span id="total-assets" style="font-size: 14px; color: var(--text-sub); align-self: flex-end;" onclick="openAssetHistory()" title="최근 7일 자산 변화 보기">평가중...</span>
     </div>
     <!-- 탭 버튼 -->
@@ -3783,19 +3784,49 @@ function portfolioSubPaneVisible(elId) {
     return window.getComputedStyle(el).display !== 'none';
 }
 
+function countOwnedSymbolsInBook(book) {
+    if (!book || typeof book !== 'object') return 0;
+    return Object.values(book).filter((s) => s && Math.floor(Math.max(0, Number(s.qty) || 0)) > 0).length;
+}
+
+/** 좌측 포트폴리오 제목 옆 N/10 — 현재 탭(주식·코인) 기준 */
+function updatePortfolioHoldingsBadge() {
+    const el = document.getElementById('portfolio-holdings-badge');
+    if (!el) return;
+    const max = typeof MAX_OWNED_STOCK_SYMBOLS === 'number' ? MAX_OWNED_STOCK_SYMBOLS : 10;
+    let tab = 'stocks';
+    if (portfolioSubPaneVisible('portfolio-panel-coins')) tab = 'coins';
+    else if (portfolioSubPaneVisible('portfolio-panel-ranking')) tab = 'ranking';
+    else if (portfolioSubPaneVisible('portfolio-panel-stocks')) tab = 'stocks';
+    if (tab === 'ranking') {
+        el.textContent = '';
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = '';
+    if (tab === 'coins' && !canUseCoinMarket()) {
+        el.textContent = '';
+        return;
+    }
+    const book = tab === 'coins' ? (myData?.coins || {}) : (myData?.stocks || {});
+    const n = countOwnedSymbolsInBook(book);
+    el.textContent = `${n}/${max}`;
+}
+
 // ── 내 보유 주식 패널 ────────────────────────────────────────
 function renderMyPortfolio() {
     const portfolioDiv       = document.getElementById('my-stocks-list');
     const totalAssetsDisplay = document.getElementById('total-assets');
-    if (!portfolioDiv || !myData?.stocks) return;
+    if (!portfolioDiv) return;
 
-    const userStocks = myData.stocks;
+    const userStocks = myData?.stocks || {};
     const stockIds   = Object.keys(userStocks).filter(id => userStocks[id] && userStocks[id].qty > 0);
     let totalStockValue = 0;
 
     if (stockIds.length === 0) {
         portfolioDiv.innerHTML = '<div class="no-stock-msg">보유 중인 주식이 없습니다.</div>';
         if (totalAssetsDisplay && portfolioSubPaneVisible('portfolio-panel-stocks')) totalAssetsDisplay.innerText = '0원';
+        try { updatePortfolioHoldingsBadge(); } catch (_) { /* noop */ }
         return;
     }
 
@@ -3836,6 +3867,7 @@ function renderMyPortfolio() {
     if (totalAssetsDisplay && portfolioSubPaneVisible('portfolio-panel-stocks')) {
         totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
     }
+    try { updatePortfolioHoldingsBadge(); } catch (_) { /* noop */ }
 }
 
 function renderMyCoinPortfolio() {
@@ -3851,6 +3883,7 @@ function renderMyCoinPortfolio() {
     if (coinIds.length === 0) {
         portfolioDiv.innerHTML = '<div class="no-stock-msg">보유 중인 코인이 없습니다.</div>';
         if (totalAssetsDisplay && portfolioSubPaneVisible('portfolio-panel-coins')) totalAssetsDisplay.innerText = '0원';
+        try { updatePortfolioHoldingsBadge(); } catch (_) { /* noop */ }
         return;
     }
 
@@ -3890,6 +3923,7 @@ function renderMyCoinPortfolio() {
     if (totalAssetsDisplay && portfolioSubPaneVisible('portfolio-panel-coins')) {
         totalAssetsDisplay.innerText = `코인 평가 ${totalCoinValue.toLocaleString()}원`;
     }
+    try { updatePortfolioHoldingsBadge(); } catch (_) { /* noop */ }
 }
 
 /** 검색 비동기 렌더 후 해당 종목 카드로 스크롤 (검색창으로 스크롤하지 않음) */
@@ -5035,8 +5069,53 @@ async function runAutoTradeLoop(id) {
             stopAutoTrade(id);
             return;
         }
+        if (side === 'buy') {
+            if (!myData) {
+                console.warn('[autoTrade] 사용자 데이터 없음 → 자동매매 종료', id);
+                stopAutoTrade(id);
+                return;
+            }
+            const cash = Number(myData.cash) || 0;
+            if (cash < 1) {
+                console.warn('[autoTrade] 잔고 없음 → 자동매매 종료', id);
+                stopAutoTrade(id);
+                return;
+            }
+            const fromModal = source === 'modal' && chartModalStockId === id;
+            const coinQ = fromModal ? (chartModalMarket === 'coin') : isCoinMarket();
+            const stRow = resolveStockForTradeQty(id, source);
+            if (!stRow || !Number.isFinite(Number(stRow.price)) || Number(stRow.price) <= 0) {
+                console.warn('[autoTrade] 시세 없음 → 자동매매 종료', id);
+                stopAutoTrade(id);
+                return;
+            }
+            const estPrice = Math.round(Number(stRow.price) * (1 + 0.0005));
+            const maxWon = coinQ ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
+            const maxAfford = Math.floor(cash / Math.max(1, estPrice));
+            const maxByCap = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
+            if (Math.min(maxAfford, maxByCap) < 1) {
+                console.warn('[autoTrade] 잔고·1회 한도상 매수 불가 → 자동매매 종료', id);
+                stopAutoTrade(id);
+                return;
+            }
+            const book = coinQ ? (myData.coins || {}) : (myData.stocks || {});
+            const currentQtyOf = Math.floor(Math.max(0, Number(book[id]?.qty) || 0));
+            if (currentQtyOf === 0) {
+                const ownedCount = Object.values(book).filter((s) => s && Math.floor(Math.max(0, Number(s.qty) || 0)) > 0).length;
+                if (ownedCount >= MAX_OWNED_STOCK_SYMBOLS) {
+                    console.warn('[autoTrade] 보유 종목 수 한도 → 자동매매 종료', id);
+                    stopAutoTrade(id);
+                    return;
+                }
+            }
+        }
         const qty = calcMaxQty(id, side, parseInt(inputEl.value, 10) || 1);
-        const opts = source === 'modal' ? { market: chartModalMarket } : {};
+        if (!Number.isInteger(qty) || qty < 1) {
+            console.warn('[autoTrade] 유효 수량 없음 → 자동매매 종료', id, side, qty);
+            stopAutoTrade(id);
+            return;
+        }
+        const opts = { ...(source === 'modal' ? { market: chartModalMarket } : {}), autoTrade: true };
         await window.trade(id, side, qty, opts);
         if (!autoTradeState[id] || autoTradeState[id].side !== side) return;
         const ms = getTradeCooldownMs();
@@ -5174,6 +5253,15 @@ window.handleModalTradeButtonClick = function (e, type) {
 
 // ── 매매 가능 최대 수량 계산 ─────────────────────────────────
 // 입력값이 가능 범위 초과 시 자동으로 최대값으로 보정
+/** calcMaxQty와 동일 규칙으로 시세 객체 조회 (자동매매 사전검증 등) */
+function resolveStockForTradeQty(stockId, source) {
+    const fromModal = source === 'modal' && chartModalStockId === stockId;
+    const coinQ = fromModal ? (chartModalMarket === 'coin') : isCoinMarket();
+    return coinQ
+        ? (favoriteCoins[stockId] || ownedCoins[stockId] || searchResults[stockId])
+        : (favorites[stockId] || ownedStocks[stockId] || searchResults[stockId]);
+}
+
 function calcMaxQty(stockId, type, inputQty) {
     let v = Math.min(Math.max(1, inputQty), 100);
     if (!myData) return v;
@@ -5505,6 +5593,15 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     const tradeMarket = (opts && opts.market) || activeMarket;
     const isCoin = tradeMarket === 'coin';
+    const autoTrade = opts && opts.autoTrade === true;
+    const tradeNotify = (msg) => {
+        if (autoTrade) console.warn('[trade][auto]', msg);
+        else alert(msg);
+    };
+    const abortAutoIf = () => {
+        if (autoTrade) stopAutoTrade(id);
+    };
+
     if (isCoin && !canUseCoinMarket()) return;
 
     const now = Date.now();
@@ -5522,10 +5619,11 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         const remaining = Math.ceil((cooldownMs - (now - lastTs)) / 1000);
         const isOffPeakNow = !isRegularMarket() && isMarketOpen();
         if (isOffPeakNow) {
-            alert(`비정규장 매매 제한: ${remaining}초 후 가능합니다.`);
+            tradeNotify(`비정규장 매매 제한: ${remaining}초 후 가능합니다.`);
         } else {
-            alert(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
+            tradeNotify(`거래가 너무 빠릅니다! ${remaining}초 후에 다시 시도해주세요.`);
         }
+        abortAutoIf();
         return;
     }
 
@@ -5534,7 +5632,8 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
     // 공지 종목 거래 차단
     const stockInfo = stockRowForId(id);
     if (stockInfo?.name?.includes('[공지]')) {
-        alert('📢 공지 종목은 거래할 수 없습니다.');
+        tradeNotify('📢 공지 종목은 거래할 수 없습니다.');
+        abortAutoIf();
         return;
     }
 
@@ -5543,32 +5642,44 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         const frozenUntil = getEffectiveFrozenUntil(id);
         if (frozenUntil && frozenUntil > currentTime && !isAdmin) {
             const remain = Math.ceil((frozenUntil - currentTime) / 1000);
-            alert(`🚫 서킷브레이커 발동 중! (${remain}초 후 해제)`);
+            tradeNotify(`🚫 서킷브레이커 발동 중! (${remain}초 후 해제)`);
+            abortAutoIf();
             return;
         }
     }
 
     if (isTrading === id) return; // 같은 종목 중복 거래 방지
     if (isTrading) {} // 다른 종목은 허용
-    if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
-    if (!auth.currentUser?.uid) return alert("로그인이 필요합니다.");
+    if (!userUID || !myData) {
+        tradeNotify("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
+        abortAutoIf();
+        return;
+    }
+    if (!auth.currentUser?.uid) {
+        tradeNotify("로그인이 필요합니다.");
+        abortAutoIf();
+        return;
+    }
     if (userUID !== auth.currentUser.uid) userUID = auth.currentUser.uid;
 
     // 4. 점검 모드 + 시장 마감 체크 (관리자는 무시)
     if (siteConfig.maintenance === true && !isAdmin) {
-        alert('🔧 현재 점검 중입니다. 잠시 후 다시 이용해주세요.');
+        tradeNotify('🔧 현재 점검 중입니다. 잠시 후 다시 이용해주세요.');
+        abortAutoIf();
         return;
     }
 	
     if (!isMarketOpen() && !isAdmin) {
         const mh = siteConfig.marketHours;
-        alert(`🕐 현재 시장 마감 시간입니다.\n운영 시간: ${mh?.open || '--:--'} ~ ${mh?.close || '--:--'} KST`);
+        tradeNotify(`🕐 현재 시장 마감 시간입니다.\n운영 시간: ${mh?.open || '--:--'} ~ ${mh?.close || '--:--'} KST`);
+        abortAutoIf();
         return;
     }
 
     // 서버 사이드 이중 검증 — 클라이언트 우회 방지
     if (qty < 1 || qty > 100 || !Number.isInteger(qty)) {
-        alert(isCoin ? '거래 수량은 1~100코인 사이여야 합니다.' : '거래 수량은 1~100주 사이여야 합니다.');
+        tradeNotify(isCoin ? '거래 수량은 1~100코인 사이여야 합니다.' : '거래 수량은 1~100주 사이여야 합니다.');
+        abortAutoIf();
         return;
     }
 
@@ -5579,7 +5690,8 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         if (currentQtyOf === 0) {
             const ownedCount = Object.values(book).filter((s) => s.qty > 0).length;
             if (ownedCount >= MAX_OWNED_STOCK_SYMBOLS) {
-                alert(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
+                tradeNotify(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
+                abortAutoIf();
                 return;
             }
         }
@@ -5595,14 +5707,16 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
             const estSellPrice = Math.round(stockForCheck.price * (1 - 0.0005));
             const estReceive   = Math.round(estSellPrice * qty * (1 - 0.003));
             if (estReceive > maxOrderWon) {
-                alert(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 수령액: ${estReceive.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
+                tradeNotify(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 수령액: ${estReceive.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
+                abortAutoIf();
                 return;
             }
         } else {
             const estBuyPrice  = Math.round(stockForCheck.price * (1 + 0.0005));
             const estTotal     = estBuyPrice * qty;
             if (estTotal > maxOrderWon) {
-                alert(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 구매액: ${estTotal.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
+                tradeNotify(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 구매액: ${estTotal.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
+                abortAutoIf();
                 return;
             }
         }
@@ -5618,7 +5732,11 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
 
 const tradeUid = auth.currentUser?.uid;
 if (!tradeUid) {
-    alert('로그인 정보가 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+    tradeNotify('로그인 정보가 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+    abortAutoIf();
+    isTrading = null;
+    try { updateUI(true); } catch (_) { /* noop */ }
+    try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
     return;
 }
 const stockRef = ref(db, isCoin ? `coins/${id}` : `stocks/${id}`);
@@ -5946,6 +6064,15 @@ try {
         try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
 
     } catch (error) {
+        if (autoTrade) {
+            if (error.message === "트랜잭션중단") {
+                console.warn('[trade][auto] 트랜잭션 중단 → 자동매매 종료');
+            } else {
+                console.warn('[trade][auto] stopped:', error.message);
+            }
+            stopAutoTrade(id);
+            return;
+        }
         if (error.message === "잔액부족") alert("잔액이 부족합니다!");
         else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
         else if (error.message === "종목한도") alert(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
@@ -5955,7 +6082,11 @@ try {
     }
     } catch (outerErr) {
         console.warn('[Trade] unexpected', outerErr?.message || outerErr);
-        alert("거래 중 오류가 발생했습니다.");
+        if (autoTrade) {
+            stopAutoTrade(id);
+        } else {
+            alert("거래 중 오류가 발생했습니다.");
+        }
     } finally {
         isTrading = null;
         try { updateUI(true); } catch (_) { /* noop */ }
@@ -6070,6 +6201,7 @@ window.switchPortfolioTab = function(tab) {
     if (tab === 'stocks' || tab === 'coins') {
         try { updateUI(false); } catch (_) { /* noop */ }
     }
+    try { updatePortfolioHoldingsBadge(); } catch (_) { /* noop */ }
 };
 
 function setRankingGateCopyMode(mode) {
