@@ -3120,7 +3120,7 @@
                     volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
                     buyVol:  (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
                     sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
-                    change:  changeVal.toFixed(2)
+                    change:  changeVal.toFixed(4)
                 };
                 const sanitized = {};
                 Object.keys(nextStock).forEach((k) => {

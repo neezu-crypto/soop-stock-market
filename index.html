@@ -3873,7 +3873,7 @@ function renderMyCoinPortfolio() {
             </div>
             <div class="my-stock-details">
                 <span>${info.qty}코인 보유</span>
-                <span>평균 ${info.avg.toLocaleString()}원</span>
+                <span>평균 매수 ${info.avg.toLocaleString()}원${priceLoaded ? ` · 시세 ${currentPrice.toLocaleString()}원` : ''}</span>
             </div>`;
         portfolioDiv.appendChild(item);
     });
@@ -4580,15 +4580,28 @@ async function fetchChartBanner() {
     }
 }
 
+function parseMarketChangePct(s) {
+    const n = parseFloat(s?.change);
+    return Number.isFinite(n) ? n : 0;
+}
+/** 코인은 고가·저임팩트라 등락이 0.00%로만 보이기 쉬워 소수 자릿수를 늘림 */
+function formatMarketChangePctDisplay(n, isCoin) {
+    const dec = isCoin ? 4 : 2;
+    const s = n.toFixed(dec);
+    return (n >= 0 ? '+' : '') + s + '%';
+}
+
 // 차트 모달 헤더의 종목명·현재가·변동률 업데이트
 function updateChartModalHeader(s) {
-    const isUp = (s.change || 0) >= 0;
+    const ch = parseMarketChangePct(s);
+    const isUp = ch >= 0;
+    const coin = isCoinMarket();
     document.getElementById('cm-name').textContent   = s.name;
     const priceEl = document.getElementById('cm-price');
     priceEl.textContent  = `${(s.price || 0).toLocaleString()}원`;
     priceEl.className    = `stock-title-price ${isUp ? 'up' : 'down'}`;
     const changeEl = document.getElementById('cm-change');
-    changeEl.textContent = `${isUp ? '+' : ''}${s.change || 0}%`;
+    changeEl.textContent = formatMarketChangePctDisplay(ch, coin);
     changeEl.className   = `stock-title-change ${isUp ? 'up' : 'down'}`;
 }
 
@@ -5538,7 +5551,7 @@ try {
                 volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
                 buyVol:  (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
                 sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
-                change:  changeVal.toFixed(2)
+                change:  isCoin ? changeVal.toFixed(4) : changeVal.toFixed(2)
             };
             const sanitized = {};
             Object.keys(nextStock).forEach((k) => {
@@ -7018,8 +7031,11 @@ function createStockCard(s) {
 
 // 기존 카드의 주가·변동률·보유량 등 내용만 업데이트
 function updateCardContent(card, s, userStock) {
-    const isUp = (s.change || 0) >= 0;
-    const posUnit = isCoinMarket() ? '코인' : '주';
+    const coin = isCoinMarket();
+    const changeNum = parseMarketChangePct(s);
+    const isUp = changeNum >= 0;
+    const marketChStr = formatMarketChangePctDisplay(changeNum, coin);
+    const posUnit = coin ? '코인' : '주';
     let myProfit = 0, profitClass = 'steady';
     if (userStock.qty > 0 && userStock.avg > 0) {
         myProfit    = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
@@ -7038,7 +7054,7 @@ function updateCardContent(card, s, userStock) {
             </div>
             <div class="price-group">
                 <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
-                <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${s.change || 0}%</div>
+                <div class="price-change ${isUp ? 'up' : 'down'}">${marketChStr}</div>
             </div>
             <div class="chart-wrap">${createSparkline(s.id, s.price, isUp)}</div>
             <div class="trade-input-wrap">
@@ -7082,7 +7098,7 @@ function updateCardContent(card, s, userStock) {
     if (priceEl) { priceEl.textContent = `${(s.price || 0).toLocaleString()}원`; priceEl.className = `current-price ${isUp ? 'up' : 'down'}`; }
 
     const changeEl = card.querySelector('.price-change');
-    if (changeEl) { changeEl.textContent = `${isUp ? '+' : ''}${s.change || 0}%`; changeEl.className = `price-change ${isUp ? 'up' : 'down'}`; }
+    if (changeEl) { changeEl.textContent = marketChStr; changeEl.className = `price-change ${isUp ? 'up' : 'down'}`; }
 
     const chartWrap = card.querySelector('.chart-wrap');
     if (chartWrap) chartWrap.innerHTML = createSparkline(s.id, s.price, isUp);
