@@ -240,12 +240,15 @@
     let stocksUnsub = null;
     let coinsUnsub  = null;
 
-    function buildRankingRows(items, priceUnit) {
+    /** 코인은 RTDB change가 소수 4자리까지 저장될 수 있어 주식(2자리)과 구분 */
+    function buildRankingRows(items, priceUnit, isCoin) {
+        const dec = isCoin ? 4 : 2;
         return items.map((s, i) => {
             const rank     = i + 1;
-            const change   = parseFloat(s.change) || 0;
+            const rawCh    = parseFloat(s.change);
+            const change   = Number.isFinite(rawCh) ? rawCh : 0;
             const changeCls = change > 0 ? 'price-up' : change < 0 ? 'price-down' : 'price-flat';
-            const changeStr = change > 0 ? `+${change.toFixed(2)}%` : `${change.toFixed(2)}%`;
+            const changeStr = change > 0 ? `+${change.toFixed(dec)}%` : `${change.toFixed(dec)}%`;
             const medal    = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
             const rankCls  = rank <= 3 ? 'top3' : '';
             return `<tr>
@@ -311,7 +314,7 @@
             } else {
                 const stocks = sortByPriceDesc(Object.entries(snap.val()));
                 countEl.textContent = `주식 ${stocks.length}종목`;
-                tbodyS.innerHTML = stocks.length ? buildRankingRows(stocks, '원') : emptyRow;
+                tbodyS.innerHTML = stocks.length ? buildRankingRows(stocks, '원', false) : emptyRow;
             }
             touchTime();
             statusEl.textContent = '실시간 구독 중';
@@ -323,7 +326,7 @@
             } else {
                 const coins = sortByPriceDesc(Object.entries(snap.val()));
                 countCoin.textContent = `코인 ${coins.length}종목`;
-                tbodyC.innerHTML = coins.length ? buildRankingRows(coins, '원') : emptyRow;
+                tbodyC.innerHTML = coins.length ? buildRankingRows(coins, '원', true) : emptyRow;
             }
             touchTime();
             statusEl.textContent = '실시간 구독 중';
