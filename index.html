@@ -1595,7 +1595,7 @@
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
-                    <div class="intro-update-text"><b>👑 자산·보유 랭킹 열람</b> — TOP100 + 차트에서 종목별 익명 보유 TOP3 · 별풍선 40개 · 승인 후 12시간</div>
+                    <div class="intro-update-text"><b>👑 자산·보유 랭킹 열람</b> — TOP100 + 차트에서 종목별 익명 보유 TOP3 · 별풍선 30개 · 승인 후 12시간</div>
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
@@ -1685,7 +1685,7 @@
             <div class="subscribe-gate-icon">👑</div>
             <div id="ranking-gate-copy-default">
                 <div class="subscribe-gate-title">자산 랭킹 열람 신청</div>
-                <div class="subscribe-gate-desc">자산 랭킹 TOP100 · 차트에서 종목별 <b>익명</b> 보유 1~3위<br>별풍선 40개 · 동일 12시간 열람</div>
+                <div class="subscribe-gate-desc">자산 랭킹 TOP100 · 차트에서 종목별 <b>익명</b> 보유 1~3위<br>별풍선 30개 · 동일 12시간 열람</div>
             </div>
             <div id="ranking-gate-copy-expired" style="display:none;">
                 <div class="subscribe-gate-title">열람 기간이 만료되었습니다</div>
@@ -2602,7 +2602,7 @@ let rankingAccessLegacyCache = null;
 let rankingAccessExpiryTimer = null;
 let rankingAccessRemainingInterval = null;
 const RANKING_ACCESS_DURATION_MS = 12 * 60 * 60 * 1000;
-const ASSET_RANKING_ACCESS_BALLOON_COST = 40;
+const ASSET_RANKING_ACCESS_BALLOON_COST = 30;
 
 // ── 보유 주식 구독 상태 ──────────────────────────────────────
 let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
@@ -8270,7 +8270,7 @@ document.addEventListener('keydown', (e) => {
         <p>초기 지급되는 가상 자산 100만원은 게임 내에서만 유효합니다. 게임 자산은 현금으로 환전되거나 양도될 수 없습니다. 서비스 점검, 오류, 운영 정책 변경으로 인해 자산이 변동될 수 있습니다.</p>
 
         <h3>제4조 후원 및 유료 서비스</h3>
-        <p>배너 광고, 중계방 등록, 차트 배너, <b style="color:var(--text-main);">자산·보유 랭킹 열람</b> 등 유료·유료성 신청 서비스는 SOOP 별풍선 후원을 전제로 운영됩니다. 자산·보유 랭킹 열람은 신청 시 안내된 별풍선 개수(현재 <b style="color:var(--text-main);">40개</b>) 약정 후 운영진 검수를 거쳐 승인되며, 승인 시점부터 정해진 기간(현재 <b style="color:var(--text-main);">12시간</b>) 동안 <b>자산 TOP100</b> 및 <b>종목별 익명 보유 1~3위(수량만)</b> 열람이 함께 가능합니다. 기간 만료 후에는 동일 절차로 재신청할 수 있습니다. 별풍선 후원 자체는 SOOP 플랫폼 정책에 따르며 환불은 SOOP 환불 정책을 따릅니다. 배너·중계 등 기간형 서비스의 노출 기간은 운영진 승인 및 약정 내용에 따라 산정되며, 서비스 점검으로 인한 노출 손실은 운영진 판단에 따라 보전될 수 있습니다.</p>
+        <p>배너 광고, 중계방 등록, 차트 배너, <b style="color:var(--text-main);">자산·보유 랭킹 열람</b> 등 유료·유료성 신청 서비스는 SOOP 별풍선 후원을 전제로 운영됩니다. 자산·보유 랭킹 열람은 신청 시 안내된 별풍선 개수(현재 <b style="color:var(--text-main);">30개</b>) 약정 후 운영진 검수를 거쳐 승인되며, 승인 시점부터 정해진 기간(현재 <b style="color:var(--text-main);">12시간</b>) 동안 <b>자산 TOP100</b> 및 <b>종목별 익명 보유 1~3위(수량만)</b> 열람이 함께 가능합니다. 기간 만료 후에는 동일 절차로 재신청할 수 있습니다. 별풍선 후원 자체는 SOOP 플랫폼 정책에 따르며 환불은 SOOP 환불 정책을 따릅니다. 배너·중계 등 기간형 서비스의 노출 기간은 운영진 승인 및 약정 내용에 따라 산정되며, 서비스 점검으로 인한 노출 손실은 운영진 판단에 따라 보전될 수 있습니다.</p>
 
         <h3>제5조 운영 정책</h3>
         <p>운영진은 서비스 안정성을 위해 사전 고지 없이 점검, 종목 조정, 주가 수정을 진행할 수 있습니다. 어뷰징, 비정상적 거래, 운영 방해 행위가 확인될 경우 제재 없이 계정이 초기화될 수 있습니다. 운영진의 모든 결정은 최종적이며 별도 이의 제기 절차가 없습니다.</p>
