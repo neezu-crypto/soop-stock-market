@@ -2987,14 +2987,11 @@
                     prevPrice = Math.max(1, Number(currentPrice) || 10000);
                 }
                 let newPrice;
-                if (t === 'buy') {
-                    newPrice = Math.round(prevPrice * (1 + impact));
-                } else {
-                    newPrice = Math.round(prevPrice * (1 - impact));
-                }
+                const rawNewPrice = t === 'buy' ? prevPrice * (1 + impact) : prevPrice * (1 - impact);
+                newPrice = Math.round(rawNewPrice);
                 const addBuy  = t === 'buy' ? qty : 0;
                 const addSell = t === 'sell' ? qty : 0;
-                const changeVal = prevPrice > 0 ? (((newPrice - prevPrice) / prevPrice) * 100) : 0;
+                const changeVal = prevPrice > 0 ? (((rawNewPrice - prevPrice) / prevPrice) * 100) : 0;
                 const baseVol = Number(row.volume);
                 const baseBuy = Number(row.buyVol);
                 const baseSell = Number(row.sellVol);
@@ -3109,14 +3106,11 @@
                     prevPrice = Math.max(1, Number(currentPrice) || 100000000);
                 }
                 let newPrice;
-                if (t === 'buy') {
-                    newPrice = Math.round(prevPrice * (1 + impact));
-                } else {
-                    newPrice = Math.round(prevPrice * (1 - impact));
-                }
+                const rawNewPrice = t === 'buy' ? prevPrice * (1 + impact) : prevPrice * (1 - impact);
+                newPrice = Math.round(rawNewPrice);
                 const addBuy  = t === 'buy' ? qty : 0;
                 const addSell = t === 'sell' ? qty : 0;
-                const changeVal = prevPrice > 0 ? (((newPrice - prevPrice) / prevPrice) * 100) : 0;
+                const changeVal = prevPrice > 0 ? (((rawNewPrice - prevPrice) / prevPrice) * 100) : 0;
                 const baseVol = Number(row.volume);
                 const baseBuy = Number(row.buyVol);
                 const baseSell = Number(row.sellVol);

@@ -2173,13 +2173,13 @@
         <input type="text" id="search-input" placeholder="스트리머 검색...">
     </header>
 
-    <!-- 실시간 주가 랭킹 바로가기 (주식 탭에서만 표시) -->
+    <!-- 실시간 주가·코인 랭킹 라이브 바로가기 (주식·코인 탭 공통) -->
     <div id="live-ranking-banner-wrap" class="live-ranking-banner" style="display:none;">
         <div class="live-ranking-banner__inner">
             <div class="live-ranking-banner__icon" aria-hidden="true">📊</div>
             <div>
-                <p class="live-ranking-banner__title"><em>실시간 주가 랭킹</em> 라이브 공개</p>
-                <p class="live-ranking-banner__desc">순위·변동은 방송에서 개발자가 직접 안내합니다. SOOP 라이브로 함께 확인해 보세요.</p>
+                <p class="live-ranking-banner__title"><em>실시간 주가 / 코인 랭킹</em> 라이브 공개</p>
+                <p class="live-ranking-banner__desc">주가·코인 순위와 변동은 방송에서 개발자가 직접 안내합니다. SOOP 라이브로 함께 확인해 보세요.</p>
             </div>
         </div>
         <a class="live-ranking-banner__cta" href="https://play.sooplive.com/skftodwocks2" target="_blank" rel="noopener noreferrer">
@@ -3309,7 +3309,7 @@ function updateMarketTabChrome() {
             : '관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.';
     }
     const ban = document.getElementById('live-ranking-banner-wrap');
-    if (ban) ban.style.display = isCoinMarket() ? 'none' : 'flex';
+    if (ban) ban.style.display = 'flex';
 }
 
 window.setActiveMarket = function (mode) {
@@ -5483,6 +5483,7 @@ try {
             const row = typeof currentStock === 'object' ? currentStock : {};
             stockTxAbort.reason = null;
             let newPrice;
+            let rawNewPrice;
             let prevPrice = Number(row?.price);
             if (!Number.isFinite(prevPrice) || prevPrice <= 0) {
                 prevPrice = Math.max(1, Number(currentPrice) || (isCoin ? 100000000 : 10000));
@@ -5491,7 +5492,8 @@ try {
             const preBook = isCoin ? (preUser.coins || {}) : (preUser.stocks || {});
 
             if (type === 'buy') {
-                newPrice        = Math.round(prevPrice * (1 + impact));
+                rawNewPrice     = prevPrice * (1 + impact);
+                newPrice        = Math.round(rawNewPrice);
                 finalTradePrice = Math.round(newPrice * (1 + spread));
                 const totalBuyPrice = finalTradePrice * qty;
 
@@ -5518,13 +5520,15 @@ try {
                     return;
                 }
 
-                newPrice        = Math.round(prevPrice * (1 - impact));
+                rawNewPrice     = prevPrice * (1 - impact);
+                newPrice        = Math.round(rawNewPrice);
                 finalTradePrice = Math.round(newPrice * (1 - spread));
             }
 
             const addBuy  = type === 'buy' ? qty : 0;
             const addSell = type === 'sell' ? qty : 0;
-            const changeVal = prevPrice > 0 ? (((newPrice - prevPrice) / prevPrice) * 100) : 0;
+            /* 코인·고가 종목: 정수 원 반올림 후 가격이 같아도 실제 체결 방향은 반영 (등락률이 0으로만 고정되는 현상 방지) */
+            const changeVal = prevPrice > 0 ? (((rawNewPrice - prevPrice) / prevPrice) * 100) : 0;
             const baseVol = Number(row.volume);
             const baseBuy = Number(row.buyVol);
             const baseSell = Number(row.sellVol);
