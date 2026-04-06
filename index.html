@@ -502,6 +502,14 @@
         .btn-trade-sell:hover { filter: brightness(1.15); }
         .btn-trade-buy:disabled,
         .btn-trade-sell:disabled { background: #444 !important; opacity: 0.5; cursor: not-allowed; }
+        .btn-trade-buy.btn-auto-trade-on, .btn-trade-sell.btn-auto-trade-on {
+            box-shadow: 0 0 0 2px rgba(250,204,21,0.85);
+            outline: none;
+        }
+        .chart-modal-trade .modal-buy.btn-auto-trade-on,
+        .chart-modal-trade .modal-sell.btn-auto-trade-on {
+            box-shadow: 0 0 0 2px rgba(250,204,21,0.85);
+        }
         .btn { border: none; border-radius: 6px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
         .btn-buy  { background: var(--up-color); color: white; padding: 8px 12px; }
         .btn-sell { background: var(--down-color); color: white; padding: 8px 12px; }
@@ -1964,8 +1972,8 @@
                            text-align:center; -moz-appearance:textfield;">
                 <span style="font-size:11px; color:var(--hint); white-space:nowrap;">최대 100주</span>
             </div>
-            <button class="modal-buy"  data-trade-type="buy"  onclick="tradeFromModal('buy')" >매수</button>
-            <button class="modal-sell" data-trade-type="sell" onclick="tradeFromModal('sell')">매도</button>
+            <button class="modal-buy"  data-trade-type="buy" type="button" title="탭: 1회 매수 · 3초 이상 누르면 자동매수(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'buy')" >매수</button>
+            <button class="modal-sell" data-trade-type="sell" type="button" title="탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'sell')">매도</button>
         </div>
 
         <!-- 차트 모달 하단 광고 배너 -->
@@ -2575,6 +2583,8 @@ let isTrading        = null; // 거래 중인 종목 ID (null이면 미거래)
 let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0; // 비정규장: localStorage `lastOffPeakTradeTime_${uid}`와 동기화
+/** 종목별 자동매매 — { side: 'buy'|'sell', source: 'card'|'modal' } */
+let autoTradeState = {};
 /** 직전 applyMarketState에서의 정규장 여부 — 비정규장→정규장 전환 시 비정규 쿨다운 해제 */
 let lastApplyRegular = null;
 let marketCheckTimer = null;
@@ -4686,6 +4696,10 @@ async function refreshChartModalHolderRanking(stockId) {
 
 // ── 차트 모달 닫기 ───────────────────────────────────────────
 function closeChartModal() {
+    const closingModalId = chartModalStockId;
+    if (closingModalId && autoTradeState[closingModalId]?.source === 'modal') {
+        try { stopAutoTrade(closingModalId); } catch (_) { /* noop */ }
+    }
     document.getElementById('chart-modal-overlay').classList.remove('active');
     document.body.style.overflow = '';
     if (candleChartInstance) { candleChartInstance.destroy(); candleChartInstance = null; }
@@ -4983,6 +4997,181 @@ window.tradeWithInput = function(id, type) {
     window.trade(id, type, qty);
 };
 
+const AUTO_TRADE_LONG_PRESS_MS = 3000;
+let longPressTimer = null;
+let longPressArmed = null;
+let longPressSuppressNextClick = false;
+
+function stopAutoTrade(id) {
+    if (!id || !autoTradeState[id]) return;
+    delete autoTradeState[id];
+    try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
+}
+
+async function runAutoTradeLoop(id) {
+    const st0 = autoTradeState[id];
+    if (!st0) return;
+    const { side, source } = st0;
+    while (autoTradeState[id] && autoTradeState[id].side === side && autoTradeState[id].source === source) {
+        if (!isTradingUiUnlocked()) {
+            stopAutoTrade(id);
+            return;
+        }
+        if (source === 'modal') {
+            const ov = document.getElementById('chart-modal-overlay');
+            if (!ov?.classList.contains('active') || chartModalStockId !== id) {
+                stopAutoTrade(id);
+                return;
+            }
+        }
+        while (isTradeButtonDisabled(id) && autoTradeState[id]?.side === side) {
+            await new Promise((r) => setTimeout(r, 200));
+        }
+        if (!autoTradeState[id] || autoTradeState[id].side !== side) return;
+        const inputEl = source === 'modal'
+            ? document.getElementById('modal-qty-input')
+            : document.getElementById(`qty-${id}`);
+        if (!inputEl) {
+            stopAutoTrade(id);
+            return;
+        }
+        const qty = calcMaxQty(id, side, parseInt(inputEl.value, 10) || 1);
+        const opts = source === 'modal' ? { market: chartModalMarket } : {};
+        await window.trade(id, side, qty, opts);
+        if (!autoTradeState[id] || autoTradeState[id].side !== side) return;
+        const ms = getTradeCooldownMs();
+        if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+    }
+}
+
+function startAutoTrade(id, side, source) {
+    if (autoTradeState[id]) stopAutoTrade(id);
+    autoTradeState[id] = { side, source };
+    refreshTradeCooldownButtons();
+    (async () => {
+        try {
+            await runAutoTradeLoop(id);
+        } catch (err) {
+            console.warn('[autoTrade]', err);
+            stopAutoTrade(id);
+        }
+    })();
+}
+
+function clearAutoTradeLongPressTimer() {
+    if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+    }
+    longPressArmed = null;
+}
+
+(function setupAutoTradeLongPress() {
+    function onCardTradePointerDown(e) {
+        const btn = e.target.closest('.btn-trade-buy, .btn-trade-sell');
+        if (!btn || btn.disabled) return;
+        const card = btn.closest('.stock-card');
+        const id = card?.getAttribute('data-id');
+        if (!id) return;
+        const type = btn.classList.contains('btn-trade-buy') ? 'buy' : 'sell';
+        const ast = autoTradeState[id];
+        if (ast && ast.source === 'card' && ast.side === type) return;
+        clearAutoTradeLongPressTimer();
+        longPressArmed = { id, type, source: 'card' };
+        longPressTimer = setTimeout(() => {
+            longPressTimer = null;
+            if (!longPressArmed || longPressArmed.id !== id || longPressArmed.type !== type || longPressArmed.source !== 'card') return;
+            longPressSuppressNextClick = true;
+            longPressArmed = null;
+            startAutoTrade(id, type, 'card');
+            try { navigator.vibrate?.(30); } catch (_) { /* noop */ }
+        }, AUTO_TRADE_LONG_PRESS_MS);
+    }
+    function onCardTradePointerEnd() {
+        if (longPressTimer) clearAutoTradeLongPressTimer();
+    }
+    function onCardTradeClickCapture(e) {
+        const btn = e.target.closest('.btn-trade-buy, .btn-trade-sell');
+        if (!btn || !longPressSuppressNextClick) return;
+        longPressSuppressNextClick = false;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    }
+    function onModalTradePointerDown(e) {
+        const btn = e.target.closest('.modal-buy, .modal-sell');
+        if (!btn || btn.disabled || !chartModalStockId) return;
+        const id = chartModalStockId;
+        const type = btn.classList.contains('modal-buy') ? 'buy' : 'sell';
+        const ast = autoTradeState[id];
+        if (ast && ast.source === 'modal' && ast.side === type) return;
+        clearAutoTradeLongPressTimer();
+        longPressArmed = { id, type, source: 'modal' };
+        longPressTimer = setTimeout(() => {
+            longPressTimer = null;
+            if (!longPressArmed || longPressArmed.id !== id || longPressArmed.type !== type || longPressArmed.source !== 'modal') return;
+            if (chartModalStockId !== id) return;
+            longPressSuppressNextClick = true;
+            longPressArmed = null;
+            startAutoTrade(id, type, 'modal');
+            try { navigator.vibrate?.(30); } catch (_) { /* noop */ }
+        }, AUTO_TRADE_LONG_PRESS_MS);
+    }
+    function onModalTradePointerEnd() {
+        if (longPressTimer) clearAutoTradeLongPressTimer();
+    }
+    function onModalTradeClickCapture(e) {
+        const btn = e.target.closest('.modal-buy, .modal-sell');
+        if (!btn || !longPressSuppressNextClick) return;
+        longPressSuppressNextClick = false;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    }
+    const sl = document.getElementById('stock-list');
+    if (sl) {
+        sl.addEventListener('pointerdown', onCardTradePointerDown);
+        sl.addEventListener('pointerup', onCardTradePointerEnd);
+        sl.addEventListener('pointercancel', onCardTradePointerEnd);
+        sl.addEventListener('click', onCardTradeClickCapture, true);
+    }
+    const mt = document.querySelector('.chart-modal-trade');
+    if (mt) {
+        mt.addEventListener('pointerdown', onModalTradePointerDown);
+        mt.addEventListener('pointerup', onModalTradePointerEnd);
+        mt.addEventListener('pointercancel', onModalTradePointerEnd);
+        mt.addEventListener('click', onModalTradeClickCapture, true);
+    }
+})();
+
+window.handleTradeButtonClick = function (e, id, type) {
+    e.stopPropagation();
+    if (longPressSuppressNextClick) {
+        longPressSuppressNextClick = false;
+        return;
+    }
+    const ast = autoTradeState[id];
+    if (ast && ast.source === 'card' && ast.side === type) {
+        stopAutoTrade(id);
+        return;
+    }
+    tradeWithInput(id, type);
+};
+
+window.handleModalTradeButtonClick = function (e, type) {
+    e.stopPropagation();
+    if (!chartModalStockId) return;
+    const id = chartModalStockId;
+    if (longPressSuppressNextClick) {
+        longPressSuppressNextClick = false;
+        return;
+    }
+    const ast = autoTradeState[id];
+    if (ast && ast.source === 'modal' && ast.side === type) {
+        stopAutoTrade(id);
+        return;
+    }
+    tradeFromModal(type);
+};
+
 // ── 매매 가능 최대 수량 계산 ─────────────────────────────────
 // 입력값이 가능 범위 초과 시 자동으로 최대값으로 보정
 function calcMaxQty(stockId, type, inputQty) {
@@ -5152,11 +5341,42 @@ function isTradeButtonDisabled(stockId) {
     return false;
 }
 
-function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId) {
+function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId, options) {
+    const defaultTradeBtnTitle = (isBuy) => (isBuy
+        ? '탭: 1회 매수 · 3초 이상 누르면 자동매수(탭으로 종료)'
+        : '탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)');
+    const ctx = (options && options.context) || 'card';
+    const auto = autoTradeState[stockId];
+    const autoHere = auto && (
+        (ctx === 'card' && auto.source === 'card') ||
+        (ctx === 'modal' && auto.source === 'modal')
+    );
+    const autoBuy = autoHere && auto.side === 'buy';
+    const autoSell = autoHere && auto.side === 'sell';
+
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) {
-        if (buyBtn) { buyBtn.disabled = false; buyBtn.textContent = '매수'; buyBtn.style.opacity = ''; buyBtn.title = ''; }
-        if (sellBtn) { sellBtn.disabled = false; sellBtn.textContent = '매도'; sellBtn.style.opacity = ''; sellBtn.title = ''; }
+        [buyBtn, sellBtn].forEach((btn, i) => {
+            if (!btn) return;
+            const isBuy = i === 0;
+            const label = isBuy ? '매수' : '매도';
+            const autoLabel = isBuy ? '자동매수 중' : '자동매도 중';
+            btn.disabled = false;
+            btn.style.opacity = '';
+            if (isBuy && autoBuy) {
+                btn.classList.add('btn-auto-trade-on');
+                btn.textContent = autoLabel;
+                btn.title = '탭하면 자동매매 종료';
+            } else if (!isBuy && autoSell) {
+                btn.classList.add('btn-auto-trade-on');
+                btn.textContent = autoLabel;
+                btn.title = '탭하면 자동매매 종료';
+            } else {
+                btn.classList.remove('btn-auto-trade-on');
+                btn.textContent = label;
+                btn.title = defaultTradeBtnTitle(isBuy);
+            }
+        });
         return;
     }
     const dis = isTradeButtonDisabled(stockId);
@@ -5169,6 +5389,32 @@ function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId) {
         if (!btn) return;
         const isBuy = i === 0;
         const label = isBuy ? '매수' : '매도';
+        const autoLabel = isBuy ? '자동매수 중' : '자동매도 중';
+        if (isBuy && autoBuy) {
+            btn.classList.add('btn-auto-trade-on');
+            if (dis) btn.disabled = true;
+            else {
+                btn.disabled = false;
+                try { btn.removeAttribute('disabled'); } catch (_) { /* noop */ }
+            }
+            btn.style.opacity = dis ? '0.55' : '';
+            btn.textContent = autoLabel;
+            btn.title = '탭하면 자동매매 종료';
+            return;
+        }
+        if (!isBuy && autoSell) {
+            btn.classList.add('btn-auto-trade-on');
+            if (dis) btn.disabled = true;
+            else {
+                btn.disabled = false;
+                try { btn.removeAttribute('disabled'); } catch (_) { /* noop */ }
+            }
+            btn.style.opacity = dis ? '0.55' : '';
+            btn.textContent = autoLabel;
+            btn.title = '탭하면 자동매매 종료';
+            return;
+        }
+        btn.classList.remove('btn-auto-trade-on');
         if (dis) {
             btn.disabled = true;
         } else {
@@ -5181,13 +5427,13 @@ function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId) {
             btn.title = `비정규장 거래 재사용 대기시간: ${rem}초`;
         } else if (dis && isGlobalTradeCooldownActive() && isRegularMarket()) {
             btn.textContent = `${rem}초 후`;
-            btn.title = '';
+            btn.title = defaultTradeBtnTitle(isBuy);
         } else if (dis && isTrading === stockId) {
             btn.textContent = label;
-            btn.title = '';
+            btn.title = defaultTradeBtnTitle(isBuy);
         } else {
             btn.textContent = label;
-            btn.title = '';
+            btn.title = defaultTradeBtnTitle(isBuy);
         }
     });
 }
@@ -5206,7 +5452,7 @@ function refreshChartModalTradeButtons() {
     if (!id) return;
     const wrap = document.querySelector('.chart-modal-trade');
     if (!wrap) return;
-    applyTradeCooldownStateToButtons(wrap.querySelector('.modal-buy'), wrap.querySelector('.modal-sell'), id);
+    applyTradeCooldownStateToButtons(wrap.querySelector('.modal-buy'), wrap.querySelector('.modal-sell'), id, { context: 'modal' });
 }
 
 function refreshTradeCooldownButtons() {
@@ -7067,11 +7313,13 @@ function updateCardContent(card, s, userStock) {
                     <span class="trade-qty-hint">${maxHint}</span>
                 </div>
                 <div class="trade-btn-row">
-                    <button class="btn-trade-buy"  data-trade-type="buy"
-                        onclick="event.stopPropagation(); tradeWithInput('${s.id}','buy')"
+                    <button class="btn-trade-buy"  data-trade-type="buy" type="button"
+                        title="탭: 1회 매수 · 3초 이상 누르면 자동매수(탭으로 종료)"
+                        onclick="event.stopPropagation(); handleTradeButtonClick(event,'${s.id}','buy')"
                         ${isTradeButtonDisabled(s.id) ? 'disabled' : ''}>매수</button>
-                    <button class="btn-trade-sell" data-trade-type="sell"
-                        onclick="event.stopPropagation(); tradeWithInput('${s.id}','sell')"
+                    <button class="btn-trade-sell" data-trade-type="sell" type="button"
+                        title="탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)"
+                        onclick="event.stopPropagation(); handleTradeButtonClick(event,'${s.id}','sell')"
                         ${isTradeButtonDisabled(s.id) ? 'disabled' : ''}>매도</button>
                 </div>
             </div>
