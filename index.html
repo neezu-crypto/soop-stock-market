@@ -2339,6 +2339,14 @@ try {
     auth = getAuth(app);
 }
 
+function isSoopAdminEmail() {
+    try {
+        return auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    } catch (_) {
+        return false;
+    }
+}
+
 // ── 자산 지원 신청 (assetRequests/) ─────────────────────────
 let assetRequestStatusUnsub = null;
 
@@ -2494,6 +2502,7 @@ let siteConfigReady = false; // siteConfig 초기 get(또는 타임아웃) 후 t
 /** 클라이언트 전용 서킷 동결(관리자만 siteConfig/frozenStocks에 기록 가능) */
 let localCircuitFreeze = {};
 function getEffectiveFrozenUntil(stockId) {
+    if (isSoopAdminEmail()) return 0;
     const a = siteConfig?.frozenStocks?.[stockId] || 0;
     const b = localCircuitFreeze[stockId] || 0;
     return Math.max(a, b);
@@ -3090,7 +3099,7 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
     Object.entries(siteConfig.frozenStocks).forEach(([stockId, frozenUntil]) => {
         if (frozenUntil > now) {
             const wasNotFrozen = !prev[stockId] || prev[stockId] <= now;
-            if (wasNotFrozen) {
+            if (wasNotFrozen && !isSoopAdminEmail()) {
                 const stockName = stockNameForId(stockId);
                 alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
 
@@ -3132,6 +3141,7 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
     // 이전에 동결됐다가 해제된 종목 감지 (Firebase에서 삭제된 경우)
     Object.keys(prev).forEach(stockId => {
         if (!siteConfig.frozenStocks[stockId] && prev[stockId] > now) {
+            if (isSoopAdminEmail()) return;
             const stockName = stockNameForId(stockId);
             const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
             if (isMyStock && notifPermission && Notification.permission === 'granted') {
@@ -4348,6 +4358,7 @@ window.logout = async function() {
  */
 async function checkCircuitBreaker(stockId, candles, market = 'stock') {
     if (market === 'coin') return;
+    if (isSoopAdminEmail()) return;
     if (!candles || candles.length < 2) return;
 
     const now   = Date.now();
@@ -5669,7 +5680,7 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
     // 서킷브레이커 — 주식 시장만 적용 (코인은 미적용)
     if (!isCoin) {
         const frozenUntil = getEffectiveFrozenUntil(id);
-        if (frozenUntil && frozenUntil > currentTime && !isAdmin) {
+        if (frozenUntil && frozenUntil > currentTime) {
             const remain = Math.ceil((frozenUntil - currentTime) / 1000);
             tradeNotify(`🚫 서킷브레이커 발동 중! (${remain}초 후 해제)`);
             abortAutoIf();
