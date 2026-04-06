@@ -13,5 +13,5 @@ firebase-debug.log*
 # 파이어베이스 보안 규칙 파일 무시 (보안 권장)
 database.rules.json
 
-# 로컬 전용 (GitHub Desktop에서 변경 표시 제외)
-functions/index.js
+# database.rules.json 복사본 — 배포 전 npm run sync-rules 로 생성
+functions/rules/open.json

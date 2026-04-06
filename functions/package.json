@@ -5,6 +5,9 @@
     "node": "20"
   },
   "main": "index.js",
+  "scripts": {
+    "sync-rules": "node -e \"require('fs').copyFileSync(require('path').join('..','database.rules.json'), require('path').join('rules','open.json'))\""
+  },
   "dependencies": {
     "firebase-admin": "^12.5.0",
     "firebase-functions": "^4.7.0"
