@@ -3095,6 +3095,8 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
                 if (ownedUnsubs[stockId])    { ownedUnsubs[stockId]();    delete ownedUnsubs[stockId]; }
                 if (favPollTimers[stockId])  { clearInterval(favPollTimers[stockId]); delete favPollTimers[stockId]; }
 
+                try { stopAutoTrade(stockId); } catch (_) { /* noop */ }
+
                 // 동결 해제 시점에 재구독 + 해제 알림
                 const remaining = frozenUntil - now;
                 setTimeout(() => {
@@ -4361,6 +4363,7 @@ async function checkCircuitBreaker(stockId, candles, market = 'stock') {
 
             const frozenUntil = Date.now() + 180000; // 3분 동결
             localCircuitFreeze[stockId] = frozenUntil;
+            try { stopAutoTrade(stockId); } catch (_) { /* noop */ }
             const stockName = stockNameForId(stockId);
             alert(`⚠️ [서킷브레이커] "${stockName}" 종목이 3분간 거래 동결됩니다.`);
 
@@ -5118,7 +5121,9 @@ async function runAutoTradeLoop(id) {
         const opts = { ...(source === 'modal' ? { market: chartModalMarket } : {}), autoTrade: true };
         await window.trade(id, side, qty, opts);
         if (!autoTradeState[id] || autoTradeState[id].side !== side) return;
-        const ms = getTradeCooldownMs();
+        const fromModalDelay = source === 'modal' && chartModalStockId === id;
+        const coinAutoDelay = fromModalDelay ? (chartModalMarket === 'coin') : isCoinMarket();
+        const ms = getTradeCooldownMsForTrade(coinAutoDelay, true);
         if (ms > 0) await new Promise((r) => setTimeout(r, ms));
     }
 }
@@ -5390,6 +5395,14 @@ function hydrateLastTradeTimeFromOffPeakStorage() {
     lastTradeTime = Math.max(lastTradeTime || 0, ts);
 }
 
+/** 코인 자동매매만 1초 간격(수동 코인 매매는 쿨다운 없음) */
+const COIN_AUTO_TRADE_COOLDOWN_MS = 1000;
+
+function getTradeCooldownMsForTrade(isCoin, autoTrade) {
+    if (isCoin) return autoTrade ? COIN_AUTO_TRADE_COOLDOWN_MS : 0;
+    return getTradeCooldownMs();
+}
+
 /** 정규장: 1초 / 비정규장(장 운영 중): 30초 — 관리자 0 */
 function getTradeCooldownMs() {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
@@ -5414,6 +5427,7 @@ function getTradeCooldownMs() {
 }
 
 function isGlobalTradeCooldownActive() {
+    if (isCoinMarket()) return false;
     const ms = getTradeCooldownMs();
     if (ms <= 0) return false;
     const ts = Number(lastTradeTime);
@@ -5427,6 +5441,13 @@ function isTradeButtonDisabled(stockId) {
     if (isGlobalTradeCooldownActive()) return true;
     if (isTrading === stockId) return true;
     return false;
+}
+
+/** 카드 템플릿용 — 자동매매 중인 매수/매도 버튼은 쿨다운·체결 중에도 눌러 종료할 수 있게 비활성화하지 않음 */
+function shouldDisableTradeButtonForCardTemplate(stockId, side) {
+    const ast = autoTradeState[stockId];
+    if (ast && ast.source === 'card' && ast.side === side) return false;
+    return isTradeButtonDisabled(stockId);
 }
 
 function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId, options) {
@@ -5480,26 +5501,20 @@ function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId, options) {
         const autoLabel = isBuy ? '자동매수 중' : '자동매도 중';
         if (isBuy && autoBuy) {
             btn.classList.add('btn-auto-trade-on');
-            if (dis) btn.disabled = true;
-            else {
-                btn.disabled = false;
-                try { btn.removeAttribute('disabled'); } catch (_) { /* noop */ }
-            }
-            btn.style.opacity = dis ? '0.55' : '';
+            btn.disabled = false;
+            try { btn.removeAttribute('disabled'); } catch (_) { /* noop */ }
+            btn.style.opacity = '';
             btn.textContent = autoLabel;
-            btn.title = '탭하면 자동매매 종료';
+            btn.title = '탭하면 자동매매 종료 (쿨다운 중에도 끌 수 있음)';
             return;
         }
         if (!isBuy && autoSell) {
             btn.classList.add('btn-auto-trade-on');
-            if (dis) btn.disabled = true;
-            else {
-                btn.disabled = false;
-                try { btn.removeAttribute('disabled'); } catch (_) { /* noop */ }
-            }
-            btn.style.opacity = dis ? '0.55' : '';
+            btn.disabled = false;
+            try { btn.removeAttribute('disabled'); } catch (_) { /* noop */ }
+            btn.style.opacity = '';
             btn.textContent = autoLabel;
-            btn.title = '탭하면 자동매매 종료';
+            btn.title = '탭하면 자동매매 종료 (쿨다운 중에도 끌 수 있음)';
             return;
         }
         btn.classList.remove('btn-auto-trade-on');
@@ -5612,7 +5627,7 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         try { hydrateLastTradeTimeFromOffPeakStorage(); } catch (_) { /* noop */ }
     }
 
-    const cooldownMs = getTradeCooldownMs();
+    const cooldownMs = getTradeCooldownMsForTrade(isCoin, autoTrade);
     const lt = Number(lastTradeTime);
     const lastTs = Number.isFinite(lt) && lt > 0 ? lt : 0;
     if (!isAdmin && cooldownMs > 0 && lastTs > 0 && (now - lastTs < cooldownMs)) {
@@ -7448,11 +7463,11 @@ function updateCardContent(card, s, userStock) {
                     <button class="btn-trade-buy"  data-trade-type="buy" type="button"
                         title="탭: 1회 매수 · 3초 이상 누르면 자동매수(탭으로 종료)"
                         onclick="event.stopPropagation(); handleTradeButtonClick(event,'${s.id}','buy')"
-                        ${isTradeButtonDisabled(s.id) ? 'disabled' : ''}>매수</button>
+                        ${shouldDisableTradeButtonForCardTemplate(s.id, 'buy') ? 'disabled' : ''}>매수</button>
                     <button class="btn-trade-sell" data-trade-type="sell" type="button"
                         title="탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)"
                         onclick="event.stopPropagation(); handleTradeButtonClick(event,'${s.id}','sell')"
-                        ${isTradeButtonDisabled(s.id) ? 'disabled' : ''}>매도</button>
+                        ${shouldDisableTradeButtonForCardTemplate(s.id, 'sell') ? 'disabled' : ''}>매도</button>
                 </div>
             </div>
         `;
