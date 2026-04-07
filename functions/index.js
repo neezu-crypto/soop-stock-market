@@ -85,26 +85,44 @@ function clampInt(n, min, max) {
   return Math.min(max, Math.max(min, v));
 }
 
+function finiteOr(n, fallback) {
+  const x = Number(n);
+  return Number.isFinite(x) ? x : fallback;
+}
+
+/** RTDB는 value에 undefined가 있으면 트랜잭션 커밋이 실패할 수 있어 1단계에서 제거 */
+function stripUndefinedShallow(obj) {
+  const out = {};
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return out;
+  Object.keys(obj).forEach((k) => {
+    const v = obj[k];
+    if (v !== undefined) out[k] = v;
+  });
+  return out;
+}
+
 /** 메인 앱 `window.trade`(주식)와 동일한 가격·임팩트 계산 — prevPrice는 트랜잭션 내 현재가 */
 function computeStockTradePrices(side, prevPrice, qty, sellConfig, marketParams) {
-  const basePrice = Math.max(1, Number(sellConfig.basePrice ?? 10000));
-  const scalePrice = Math.max(1, Number(sellConfig.scalePrice ?? 90000));
-  const impactCoef = Number(sellConfig.impact ?? 0.0005);
-  const spread = Number(sellConfig.spread ?? 0.001);
-  const impactRefPriceWon = Math.max(1, Number(marketParams?.impactRefPrice ?? 100000));
+  const basePrice = Math.max(1, finiteOr(sellConfig.basePrice, 10000));
+  const scalePrice = Math.max(1, finiteOr(sellConfig.scalePrice, 90000));
+  const impactCoef = finiteOr(sellConfig.impact, 0.0005);
+  const spread = finiteOr(sellConfig.spread, 0.001);
+  const impactRefPriceWon = Math.max(1, finiteOr(marketParams?.impactRefPrice, 100000));
   const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
   const effectiveImpactCoef = impactCoef * dampingFactor;
   let sellPressure = 1;
   if (side === "sell") {
     sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
   }
-  const impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
+  let impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
+  if (!Number.isFinite(impact) || impact < 0) impact = 0;
   let rawNewPrice;
   if (side === "buy") {
     rawNewPrice = prevPrice * (1 + impact);
   } else {
     rawNewPrice = prevPrice * (1 - impact);
   }
+  if (!Number.isFinite(rawNewPrice) || rawNewPrice <= 0) rawNewPrice = prevPrice;
   const newPrice = Math.max(1, Math.round(rawNewPrice));
   const tradePrice =
     side === "buy"
@@ -201,42 +219,45 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   let lastNewPrice = 0;
   let lastPrevPrice = 0;
 
-  const stockTx = await stockRef.transaction((cur) => {
-    if (!cur || typeof cur !== "object") return undefined;
-    const row = cur;
-    let prevPrice = Number(row.price);
-    if (!Number.isFinite(prevPrice) || prevPrice <= 0) prevPrice = 10000;
+  let stockTx = { committed: false };
+  for (let attempt = 0; attempt < 8; attempt++) {
+    stockTx = await stockRef.transaction((cur) => {
+      if (!cur || typeof cur !== "object" || Array.isArray(cur)) return undefined;
+      const row = cur;
+      let prevPrice = Number(row.price);
+      if (!Number.isFinite(prevPrice) || prevPrice <= 0) prevPrice = 10000;
 
-    const { newPrice, tradePrice, impact, changeStr } = computeStockTradePrices(
-      side,
-      prevPrice,
-      qty,
-      sellConfig,
-      marketParams
-    );
-    lastImpact = impact;
-    lastTradePrice = tradePrice;
-    lastNewPrice = newPrice;
-    lastPrevPrice = prevPrice;
+      const { newPrice, tradePrice, impact, changeStr } = computeStockTradePrices(
+        side,
+        prevPrice,
+        qty,
+        sellConfig,
+        marketParams
+      );
+      lastImpact = impact;
+      lastTradePrice = tradePrice;
+      lastNewPrice = newPrice;
+      lastPrevPrice = prevPrice;
 
-    // 잔액·보유는 클로저(preCash/preHaveQty)가 아니라 users 트랜잭션에서만 검증한다.
-    // 여기서 선읽기 값으로 막으면, 체결가가 바뀌는 동시성 상황에서 undefined → 커밋 실패(사용자 로그의 "contention")가 난다.
-
-    const { history: _h, ...rest } = row;
-    const addBuy = side === "buy" ? qty : 0;
-    const addSell = side === "sell" ? qty : 0;
-    const baseVol = Number(row.volume);
-    const baseBuy = Number(row.buyVol);
-    const baseSell = Number(row.sellVol);
-    return {
-      ...rest,
-      price: newPrice,
-      volume: (Number.isFinite(baseVol) ? baseVol : 0) + qty,
-      buyVol: (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
-      sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
-      change: changeStr
-    };
-  });
+      const { history: _h, ...rest } = row;
+      const addBuy = side === "buy" ? qty : 0;
+      const addSell = side === "sell" ? qty : 0;
+      const baseVol = Number(row.volume);
+      const baseBuy = Number(row.buyVol);
+      const baseSell = Number(row.sellVol);
+      const merged = {
+        ...rest,
+        price: newPrice,
+        volume: (Number.isFinite(baseVol) ? baseVol : 0) + qty,
+        buyVol: (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
+        sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
+        change: changeStr
+      };
+      return stripUndefinedShallow(merged);
+    });
+    if (stockTx.committed) break;
+    await new Promise((r) => setTimeout(r, 35 * (attempt + 1)));
+  }
 
   if (!stockTx.committed) {
     throw new HttpsError(
