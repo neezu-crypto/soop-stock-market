@@ -1195,6 +1195,23 @@
                 <button type="button" class="btn-primary" style="width:100%; margin-top:8px; background:#0e7490; color:#ecfeff; border:1px solid #06b6d4; font-weight:800;"
                     onclick="resetAllVolumesForRanking()">📊 전체 거래량만 초기화 (주식 + 코인)</button>
             </div>
+            <div style="margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
+                <div class="info-box" style="background:rgba(239,68,68,0.12); border-color:#ef4444;">
+                    <b>⚠️ 코인시장 유저 보유량 초기화</b><br>
+                    모든 유저의 <code>users/{uid}/coins</code>를 삭제합니다. (코인 보유량 전부 초기화)<br>
+                    <span style="color:#fecaca;">되돌릴 수 없습니다. 버그 복구용으로만 사용하세요.</span>
+                </div>
+                <div class="info-box" style="background:rgba(245,158,11,0.12); border-color:#f59e0b; margin-top:10px;">
+                    <b>🪙 코인 시세 전체 초기화</b><br>
+                    모든 코인 종목의 <code>price</code>를 <b>100,000,000원</b>으로 일괄 수정합니다.<br>
+                    <span style="color:#fde68a;">코인 시장 리셋 작업 시 함께 사용하세요.</span>
+                </div>
+                <button type="button" class="btn-primary" style="width:100%; margin-top:8px; background:#b45309; color:#fff; border:1px solid #f59e0b; font-weight:800;"
+                    onclick="resetAllCoinPricesToInitial()">🪙 코인 시세 전체 1억 초기화</button>
+                <button type="button" class="btn-danger" style="width:100%; margin-top:8px; background:#7f1d1d; color:#fff; border:1px solid #ef4444; font-weight:800;"
+                    onclick="resetAllUserCoinHoldings()">🧨 유저 코인 보유량 전체 삭제</button>
+                <div id="reset-user-coins-status" style="font-size:12px; color:#94a3b8; margin-top:8px;">대기 중</div>
+            </div>
         </div>
         </div>
         </div>
@@ -4086,6 +4103,84 @@
             await loadStocksOnce();
         } catch (e) {
             alert('초기화 실패: ' + e.message);
+        }
+    };
+
+    window.resetAllUserCoinHoldings = async function() {
+        if (!isAdmin()) return;
+        const statusEl = document.getElementById('reset-user-coins-status');
+        if (!confirm(
+            '⚠️ 모든 유저의 코인 보유량(users/{uid}/coins)을 삭제합니다.\n' +
+            '이 작업은 되돌릴 수 없습니다.\n\n계속하시겠습니까?'
+        )) return;
+
+        if (statusEl) statusEl.textContent = '유저 데이터 조회 중...';
+        try {
+            const usersSnap = await get(ref(db, 'users/'));
+            if (!usersSnap.exists()) {
+                if (statusEl) statusEl.textContent = '유저 데이터가 없습니다.';
+                return;
+            }
+            const users = usersSnap.val() || {};
+            const updates = {};
+            Object.entries(users).forEach(([uid, user]) => {
+                if (user && typeof user === 'object' && user.coins && typeof user.coins === 'object') {
+                    updates[`users/${uid}/coins`] = null;
+                }
+            });
+
+            const targetCount = Object.keys(updates).length;
+            if (targetCount === 0) {
+                if (statusEl) statusEl.textContent = '삭제할 코인 보유 데이터가 없습니다.';
+                alert('삭제할 유저 코인 보유 데이터가 없습니다.');
+                return;
+            }
+
+            if (statusEl) statusEl.textContent = `삭제 중... (${targetCount}명)`;
+            await update(ref(db), updates);
+            if (statusEl) statusEl.textContent = `완료: ${targetCount}명 코인 보유량 삭제`;
+            alert(`✅ 완료: ${targetCount}명의 코인 보유량(users/*/coins)을 삭제했습니다.`);
+        } catch (e) {
+            if (statusEl) statusEl.textContent = '실패: ' + (e?.message || e);
+            alert('유저 코인 보유량 초기화 실패: ' + (e?.message || e));
+        }
+    };
+
+    window.resetAllCoinPricesToInitial = async function() {
+        if (!isAdmin()) return;
+        const statusEl = document.getElementById('reset-user-coins-status');
+        if (!confirm(
+            '🪙 모든 코인 종목의 시세를 100,000,000원으로 초기화합니다.\n' +
+            '계속하시겠습니까?'
+        )) return;
+
+        const INITIAL_COIN_PRICE = 100000000;
+        if (statusEl) statusEl.textContent = '코인 데이터 조회 중...';
+        try {
+            const coinsSnap = await get(ref(db, 'coins/'));
+            if (!coinsSnap.exists()) {
+                if (statusEl) statusEl.textContent = 'coins/ 데이터가 없습니다.';
+                return;
+            }
+            const coins = coinsSnap.val() || {};
+            const updates = {};
+            Object.keys(coins).forEach((id) => {
+                updates[`${id}/price`] = INITIAL_COIN_PRICE;
+                updates[`${id}/change`] = '0.0000';
+            });
+            const count = Object.keys(coins).length;
+            if (count === 0) {
+                if (statusEl) statusEl.textContent = '초기화할 코인 종목이 없습니다.';
+                return;
+            }
+            if (statusEl) statusEl.textContent = `코인 시세 초기화 중... (${count}종목)`;
+            await update(ref(db, 'coins/'), updates);
+            if (statusEl) statusEl.textContent = `완료: ${count}개 코인 시세를 1억으로 초기화`;
+            alert(`✅ 완료: ${count}개 코인 시세를 100,000,000원으로 초기화했습니다.`);
+            try { await loadCoinsTop10Once(); } catch (_) { /* noop */ }
+        } catch (e) {
+            if (statusEl) statusEl.textContent = '실패: ' + (e?.message || e);
+            alert('코인 시세 초기화 실패: ' + (e?.message || e));
         }
     };
 
