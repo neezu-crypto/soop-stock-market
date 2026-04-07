@@ -172,11 +172,11 @@
             #relay-tab.has-relay {
                 border-color: var(--up-color);
                 box-shadow: 3px 3px 14px rgba(239,68,68,0.3);
-                animation: relay-pulse 2s ease-in-out infinite;
+                animation: relay-blink 1.6s steps(1, end) infinite;
             }
-            @keyframes relay-pulse {
-                0%, 100% { box-shadow: 3px 3px 14px rgba(239,68,68,0.3); }
-                50%       { box-shadow: 3px 3px 20px rgba(239,68,68,0.55); }
+            @keyframes relay-blink {
+                0%, 39% { box-shadow: 3px 3px 22px rgba(239,68,68,0.62); }
+                40%, 100% { box-shadow: 3px 3px 10px rgba(239,68,68,0.18); }
             }
             #relay-tab .tab-icon { font-size: 16px; }
             #relay-tab .tab-label {
@@ -498,10 +498,13 @@
         }
         .btn-trade-buy  { flex: 1; background: var(--up-color); color: white; padding: 7px 0; font-size: 12px; font-weight: 800; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
         .btn-trade-sell { flex: 1; background: var(--down-color); color: white; padding: 7px 0; font-size: 12px; font-weight: 800; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .btn-trade-maxsell { width: 56px; flex: 0 0 auto; background: #7f1d1d; color: #fff; padding: 7px 0; font-size: 12px; font-weight: 900; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
         .btn-trade-buy:hover  { filter: brightness(1.15); }
         .btn-trade-sell:hover { filter: brightness(1.15); }
+        .btn-trade-maxsell:hover { filter: brightness(1.15); }
         .btn-trade-buy:disabled,
         .btn-trade-sell:disabled { background: #444 !important; opacity: 0.5; cursor: not-allowed; }
+        .btn-trade-maxsell:disabled { background: #444 !important; opacity: 0.5; cursor: not-allowed; }
         .btn-trade-buy.btn-auto-trade-on, .btn-trade-sell.btn-auto-trade-on {
             box-shadow: 0 0 0 2px rgba(250,204,21,0.85);
             outline: none;
@@ -1261,6 +1264,7 @@
         }
         .chart-modal-trade .modal-buy    { background: var(--up-color); color: white; }
         .chart-modal-trade .modal-buy10  { background: #991b1b; color: white; }
+        .chart-modal-trade .modal-maxsell { background: #7f1d1d; color: #fff; font-weight: 900; }
         .chart-modal-trade .modal-sell   { background: var(--down-color); color: white; }
         .chart-modal-trade .modal-sell10 { background: #1e3a8a; color: white; }
         .chart-modal-trade button:hover { filter: brightness(1.15); transform: translateY(-1px); }
@@ -1974,6 +1978,7 @@
                 <span style="font-size:11px; color:var(--hint); white-space:nowrap;">최대 100주</span>
             </div>
             <button class="modal-buy"  data-trade-type="buy" type="button" title="탭: 1회 매수 · 3초 이상 누르면 자동매수(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'buy')" >매수</button>
+            <button class="modal-maxsell" data-trade-type="sell" type="button" title="전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료 적용" onclick="handleModalMaxSellButtonClick(event)">MAX</button>
             <button class="modal-sell" data-trade-type="sell" type="button" title="탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'sell')">매도</button>
         </div>
 
@@ -2233,6 +2238,8 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp, push, query, orderByChild, equalTo }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+import { getFunctions, httpsCallable }
+                             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 import { getAuth, initializeAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, browserPopupRedirectResolver,
     indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } 
     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
@@ -2311,6 +2318,7 @@ const firebaseConfig = {
 };
 const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
+const fns  = getFunctions(app, "us-central1");
 
 /** Firebase 서버와의 시각 차이(ms). Date.now()+값 ≈ 서버 시각 — 정규/비정규장·쿨다운이 로컬 시계 조작에 흔들리지 않게 함 */
 let serverTimeOffsetMs = 0;
@@ -3068,6 +3076,11 @@ onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
 onValue(ref(db, 'siteConfig/marketHours'), (snap) => {
     siteConfig.marketHours = snap.exists() ? snap.val() : null;
     applyMarketState();
+});
+
+// 주식 매매를 Cloud Function으로 처리할지 여부 (1단계 롤아웃 — 기본 OFF)
+onValue(ref(db, 'siteConfig/useServerTrade'), (snap) => {
+    siteConfig.useServerTrade = snap.val() === true;
 });
 
 // 중계방: 승인(approved) 건만 쿼리 구독 — pending/rejected 히스토리 대량 다운로드 방지 (rules에 .indexOn status 필요)
@@ -5281,6 +5294,36 @@ window.handleModalTradeButtonClick = function (e, type) {
     tradeFromModal(type);
 };
 
+window.handleMaxSellButtonClick = function (e, id) {
+    e.stopPropagation();
+    if (!id) return;
+    const market = isCoinMarket() ? 'coin' : 'stock';
+    const book = market === 'coin' ? (myData?.coins || {}) : (myData?.stocks || {});
+    const curQty = Math.floor(Math.max(0, Number(book?.[id]?.qty) || 0));
+    if (curQty <= 0) {
+        alert('보유 수량이 없어 전량매도를 진행할 수 없습니다.');
+        return;
+    }
+    const ok = confirm('전량매도 시 해당 종목의 보유수량을 전부 매도하며, 8%의 추가 수수료가 발생합니다.\n\n계속 진행하시겠습니까?');
+    if (!ok) return;
+    sellAllHoldingsByFunction(id, market);
+};
+
+window.handleModalMaxSellButtonClick = function (e) {
+    e.stopPropagation();
+    if (!chartModalStockId) return;
+    const market = chartModalMarket === 'coin' ? 'coin' : 'stock';
+    const book = market === 'coin' ? (myData?.coins || {}) : (myData?.stocks || {});
+    const curQty = Math.floor(Math.max(0, Number(book?.[chartModalStockId]?.qty) || 0));
+    if (curQty <= 0) {
+        alert('보유 수량이 없어 전량매도를 진행할 수 없습니다.');
+        return;
+    }
+    const ok = confirm('전량매도 시 해당 종목의 보유수량을 전부 매도하며, 8%의 추가 수수료가 발생합니다.\n\n계속 진행하시겠습니까?');
+    if (!ok) return;
+    sellAllHoldingsByFunction(chartModalStockId, market);
+};
+
 // ── 매매 가능 최대 수량 계산 ─────────────────────────────────
 // 입력값이 가능 범위 초과 시 자동으로 최대값으로 보정
 /** calcMaxQty와 동일 규칙으로 시세 객체 조회 (자동매매 사전검증 등) */
@@ -5420,11 +5463,10 @@ function hydrateLastTradeTimeFromOffPeakStorage() {
     lastTradeTime = Math.max(lastTradeTime || 0, ts);
 }
 
-/** 코인 자동매매만 1초 간격(수동 코인 매매는 쿨다운 없음) */
-const COIN_AUTO_TRADE_COOLDOWN_MS = 1000;
-
 function getTradeCooldownMsForTrade(isCoin, autoTrade) {
-    if (isCoin) return autoTrade ? COIN_AUTO_TRADE_COOLDOWN_MS : 0;
+    // 코인/주식 모두 정규장·비정규장 공통 쿨다운 적용
+    // (정규장 1초 / 비정규장 30초, 관리자 제외)
+    if (isCoin) return getTradeCooldownMs();
     return getTradeCooldownMs();
 }
 
@@ -5626,6 +5668,47 @@ function clampUserCash(n) {
     return Math.max(0, Math.min(USER_CASH_MAX, x));
 }
 
+let isLiquidatingAll = false;
+async function sellAllHoldingsByFunction(stockId, market) {
+    if (!stockId) return;
+    if (isLiquidatingAll) return;
+    if (!myData) { alert('데이터 로딩 중입니다.'); return; }
+    const isCoin = market === 'coin';
+    const book = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
+    const curQty = Math.floor(Math.max(0, Number(book?.[stockId]?.qty) || 0));
+    if (curQty <= 0) { alert('보유 수량이 없습니다.'); return; }
+
+    isLiquidatingAll = true;
+    isTrading = stockId;
+    try { updateUI(false); } catch (_) { /* noop */ }
+    try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
+    try {
+        const liquidateAll = httpsCallable(fns, 'liquidateAll');
+        await liquidateAll({ stockId, market: isCoin ? 'coin' : 'stock' });
+        // MAX 전량매도도 일반 거래와 동일하게 쿨다운 기준 시각을 갱신
+        const tradeTsCommitted = serverNowMs();
+        lastTradeTime = tradeTsCommitted;
+        if (userUID) {
+            const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+            if (isAdminUser) {
+                clearOffPeakTradeTimeStorageForUid(userUID);
+            } else if (isMarketOpen() && !isRegularMarket()) {
+                persistOffPeakTradeTime(tradeTsCommitted);
+            } else {
+                clearOffPeakTradeTimeStorageForUid(userUID);
+            }
+        }
+    } catch (e) {
+        console.error('[MAX SELL][function]', e);
+        alert('전량매도 중 오류가 발생했습니다.');
+    } finally {
+        isLiquidatingAll = false;
+        isTrading = null;
+        try { updateUI(true); } catch (_) { /* noop */ }
+        try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
+    }
+}
+
 // ── 거래 함수 ────────────────────────────────────────────────
 window.trade = async function (id, type, qty = 1, opts = {}) {
 
@@ -5779,8 +5862,68 @@ if (!tradeUid) {
     try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
     return;
 }
+
+const userRef = ref(db, `users/${tradeUid}`);
+
+// ── 1단계: 주식만 서버 Callable `trade` (siteConfig/useServerTrade === true) · 코인·플래그 OFF → 아래 클라 RTDB 경로
+if (!isCoin && siteConfig.useServerTrade === true) {
+    try {
+        const tradeFn = httpsCallable(fns, 'trade');
+        await tradeFn({ stockId: id, side: type, qty });
+        const tradeTsCommitted = serverNowMs();
+        lastTradeTime = tradeTsCommitted;
+        if (userUID) {
+            const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+            if (isAdminUser) {
+                clearOffPeakTradeTimeStorageForUid(userUID);
+            } else if (isMarketOpen() && !isRegularMarket()) {
+                persistOffPeakTradeTime(tradeTsCommitted);
+            } else {
+                clearOffPeakTradeTimeStorageForUid(userUID);
+            }
+        }
+        const uSnap = await get(userRef);
+        if (uSnap.exists()) {
+            const v = uSnap.val();
+            myData.cash = v.cash ?? 1000000;
+            myData.stocks = v.stocks || {};
+            myData.coins = v.coins || {};
+        }
+        const stSnap = await get(ref(db, `stocks/${id}`));
+        if (stSnap.exists()) {
+            const data = { ...stSnap.val(), id };
+            const idx = allStocks.findIndex((s) => s?.id === id);
+            if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...data };
+            else allStocks.push(data);
+            if (favorites[id]) favorites[id] = data;
+            if (ownedStocks[id]) ownedStocks[id] = data;
+            if (searchResults[id]) searchResults[id] = data;
+        }
+        const sound = type === 'buy' ? buySound : sellSound;
+        sound.currentTime = 0;
+        sound.play().catch(() => {});
+    } catch (e) {
+        const code = e?.code || '';
+        const raw = e?.message || '';
+        if (autoTrade) stopAutoTrade(id);
+        if (code === 'functions/unauthenticated') {
+            if (!autoTrade) tradeNotify('로그인이 필요합니다.');
+        } else if (code === 'functions/failed-precondition') {
+            if (!autoTrade) tradeNotify(raw || '거래할 수 없습니다.');
+        } else if (code === 'functions/not-found') {
+            if (!autoTrade) tradeNotify('종목을 찾을 수 없습니다.');
+        } else if (code === 'functions/invalid-argument') {
+            if (!autoTrade) tradeNotify(raw || '잘못된 요청입니다.');
+        } else {
+            console.error('[trade][server]', e);
+            if (!autoTrade) tradeNotify('거래 중 오류가 발생했습니다.');
+        }
+        return;
+    }
+    return;
+}
+
 const stockRef = ref(db, isCoin ? `coins/${id}` : `stocks/${id}`);
-const userRef  = ref(db, `users/${tradeUid}`);
 
 // 현재 주가 정보 가져오기
 // 새로 상장된 종목은 UI/캐시에 아직 price가 없을 수 있으므로, 클릭 시점에 DB로 보정한다.
@@ -5847,7 +5990,7 @@ const fee        = safeNum(sellConfigCache.fee        ?? 0.003, 0.003);
 
 // 매도 시 주가 비례 하락 가중치
 let sellPressure = 1;
-if (type === 'sell') {
+if (type === 'sell' && !isCoin) {
     sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
 }
 
@@ -5856,7 +5999,7 @@ const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice 
 // Price-Inverse Impact Scaling:
 // Effective Impact = Base Impact * min(1, ReferencePrice / CurrentPrice)
 // => high-priced stocks become "heavier" (smaller price moves per trade).
-const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
+const dampingFactor = isCoin ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
 const effectiveImpactCoef = impactCoef * dampingFactor;
 
 let impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
@@ -6787,7 +6930,22 @@ function saveAssetHistoryToday(totalAsset) {
     const history = loadAssetHistory();
     const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
         .toISOString().slice(0, 10);
-    history[today] = totalAsset;
+    const prev = history[today];
+    const prevClose = typeof prev === 'number' ? prev : Number(prev?.close || 0);
+    const prevHigh = typeof prev === 'number' ? prev : Number(prev?.high || 0);
+    const prevLow = typeof prev === 'number' ? prev : Number(prev?.low || 0);
+    const closeVal = Math.floor(Number(totalAsset));
+    const highVal = Math.max(closeVal, Number.isFinite(prevHigh) && prevHigh > 0 ? prevHigh : closeVal);
+    const lowVal = Math.min(closeVal, Number.isFinite(prevLow) && prevLow > 0 ? prevLow : closeVal);
+    history[today] = {
+        close: closeVal,
+        high: highVal,
+        low: lowVal,
+        updatedAt: Date.now(),
+        // legacy 호환: 기존 코드/데이터에서 숫자 참조 시 안전한 폴백
+        value: closeVal,
+        prevClose: Number.isFinite(prevClose) && prevClose > 0 ? prevClose : closeVal
+    };
     // 최근 30일만 유지
     const keys = Object.keys(history).sort();
     if (keys.length > 30) keys.slice(0, keys.length - 30).forEach(k => delete history[k]);
@@ -6806,7 +6964,31 @@ window.openAssetHistory = function() {
         days.push(d.toISOString().slice(0, 10));
     }
 
-    const values = days.map(d => history[d] || null);
+    const values = days.map((d) => {
+        const row = history[d];
+        if (row == null) return null;
+        if (typeof row === 'number') return row;
+        const close = Number(row.close ?? row.value);
+        return Number.isFinite(close) && close > 0 ? close : null;
+    });
+    const highs = days.map((d) => {
+        const row = history[d];
+        if (row == null) return null;
+        if (typeof row === 'number') return row;
+        const high = Number(row.high);
+        if (Number.isFinite(high) && high > 0) return high;
+        const close = Number(row.close ?? row.value);
+        return Number.isFinite(close) && close > 0 ? close : null;
+    });
+    const lows = days.map((d) => {
+        const row = history[d];
+        if (row == null) return null;
+        if (typeof row === 'number') return row;
+        const low = Number(row.low);
+        if (Number.isFinite(low) && low > 0) return low;
+        const close = Number(row.close ?? row.value);
+        return Number.isFinite(close) && close > 0 ? close : null;
+    });
     const validValues = values.filter(v => v !== null);
     const maxVal = validValues.length > 0 ? Math.max(...validValues) : 1;
     const minVal = validValues.length > 0 ? Math.min(...validValues) : 0;
@@ -6852,7 +7034,12 @@ window.openAssetHistory = function() {
             <div class="asset-day-row">
                 <div class="asset-day-label">${label}</div>
                 <div class="asset-day-bar-wrap"><div class="asset-day-bar" style="width:${Math.max(pct, 4)}%;background:${color};"></div></div>
-                <div class="asset-day-val" style="color:${color};">${val.toLocaleString()}</div>
+                <div class="asset-day-val" style="color:${color};">
+                    ${val.toLocaleString()}
+                    <div style="font-size:10px; color:var(--muted); line-height:1.25; margin-top:2px;">
+                        고 ${highs[i] != null ? highs[i].toLocaleString() : '-'} / 저 ${lows[i] != null ? lows[i].toLocaleString() : '-'}
+                    </div>
+                </div>
             </div>`;
     }).join('');
 
@@ -7493,6 +7680,10 @@ function updateCardContent(card, s, userStock) {
                         title="탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)"
                         onclick="event.stopPropagation(); handleTradeButtonClick(event,'${s.id}','sell')"
                         ${shouldDisableTradeButtonForCardTemplate(s.id, 'sell') ? 'disabled' : ''}>매도</button>
+                    <button class="btn-trade-maxsell" data-trade-type="sell" type="button"
+                        title="전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료 적용"
+                        onclick="event.stopPropagation(); handleMaxSellButtonClick(event,'${s.id}')"
+                        ${shouldDisableTradeButtonForCardTemplate(s.id, 'sell') ? 'disabled' : ''}>MAX</button>
                 </div>
             </div>
         `;

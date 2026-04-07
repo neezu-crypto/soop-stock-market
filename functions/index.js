@@ -85,7 +85,36 @@ function clampInt(n, min, max) {
   return Math.min(max, Math.max(min, v));
 }
 
-exports.trade = onCall({ cors: true }, async (req) => {
+/** 메인 앱 `window.trade`(주식)와 동일한 가격·임팩트 계산 — prevPrice는 트랜잭션 내 현재가 */
+function computeStockTradePrices(side, prevPrice, qty, sellConfig, marketParams) {
+  const basePrice = Math.max(1, Number(sellConfig.basePrice ?? 10000));
+  const scalePrice = Math.max(1, Number(sellConfig.scalePrice ?? 90000));
+  const impactCoef = Number(sellConfig.impact ?? 0.0005);
+  const spread = Number(sellConfig.spread ?? 0.001);
+  const impactRefPriceWon = Math.max(1, Number(marketParams?.impactRefPrice ?? 100000));
+  const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
+  const effectiveImpactCoef = impactCoef * dampingFactor;
+  let sellPressure = 1;
+  if (side === "sell") {
+    sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
+  }
+  const impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
+  let rawNewPrice;
+  if (side === "buy") {
+    rawNewPrice = prevPrice * (1 + impact);
+  } else {
+    rawNewPrice = prevPrice * (1 - impact);
+  }
+  const newPrice = Math.max(1, Math.round(rawNewPrice));
+  const tradePrice =
+    side === "buy"
+      ? Math.max(1, Math.round(newPrice * (1 + spread)))
+      : Math.max(1, Math.round(newPrice * (1 - spread)));
+  const changeStr = prevPrice > 0 ? (((rawNewPrice - prevPrice) / prevPrice) * 100).toFixed(2) : "0.00";
+  return { newPrice, tradePrice, rawNewPrice, impact, changeStr };
+}
+
+exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
 
@@ -97,12 +126,8 @@ exports.trade = onCall({ cors: true }, async (req) => {
   if (side !== "buy" && side !== "sell") throw new HttpsError("invalid-argument", "side must be buy|sell.");
   if (!qty) throw new HttpsError("invalid-argument", "qty must be 1..100.");
 
-  // Load configs + current state
   const db = admin.database();
-  const [cfgSnap, stockSnap] = await Promise.all([
-    db.ref("siteConfig").get(),
-    db.ref(`stocks/${stockId}`).get()
-  ]);
+  const [cfgSnap, preUserSnap] = await Promise.all([db.ref("siteConfig").get(), db.ref(`users/${uid}`).get()]);
 
   const siteConfig = cfgSnap.exists() ? cfgSnap.val() : {};
   if (siteConfig.maintenance === true && !isAdminAuth(auth)) {
@@ -118,88 +143,113 @@ exports.trade = onCall({ cors: true }, async (req) => {
     if (!marketOpen) throw new HttpsError("failed-precondition", "Market closed.");
   }
 
-  if (!stockSnap.exists()) {
-    throw new HttpsError("not-found", "Unknown stock.");
-  }
-  const stock = stockSnap.val();
-  const currentPrice = Number(stock.price || 0);
-  if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
-    throw new HttpsError("failed-precondition", "Stock price unavailable.");
-  }
-
-  // Circuit breaker / freeze (admin bypass)
   const frozenMap = siteConfig.frozenStocks || {};
   const frozenUntil = Number(frozenMap?.[stockId] || 0);
   if (frozenUntil > Date.now() && !isAdminAuth(auth)) {
     throw new HttpsError("failed-precondition", "Circuit breaker active.");
   }
 
-  // Pricing parameters (server authority)
   const sellConfig = siteConfig.sellConfig || {};
-  const basePrice = Number(sellConfig.basePrice ?? 10000);
-  const scalePrice = Number(sellConfig.scalePrice ?? 90000);
-  const impactCoef = Number(sellConfig.impact ?? 0.0005);
-  const spread = Number(sellConfig.spread ?? 0.001);
+  const marketParams = siteConfig.marketParams || {};
   const fee = Number(sellConfig.fee ?? 0.003);
 
-  let sellPressure = 1;
-  if (side === "sell") {
-    sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
+  const preUser = preUserSnap.exists() ? preUserSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
+  const preCash = Number(preUser.cash ?? 1000000);
+  const preStocks = preUser.stocks && typeof preUser.stocks === "object" ? preUser.stocks : {};
+  const preBook = preStocks[stockId] || { qty: 0, avg: 0 };
+  const preHaveQty = Math.floor(Number(preBook.qty || 0));
+
+  const stockRef = db.ref(`stocks/${stockId}`);
+  const preStockSnap = await stockRef.get();
+  let stockRollbackVal = null;
+  if (preStockSnap.exists()) {
+    stockRollbackVal = JSON.parse(JSON.stringify(preStockSnap.val()));
   }
-  const impact = impactCoef * (Math.log2(1 + qty)) * sellPressure;
 
-  // Apply impact to *current* price snapshot
-  const newPrice = side === "buy"
-    ? Math.max(1, Math.round(currentPrice * (1 + impact)))
-    : Math.max(1, Math.round(currentPrice * (1 - impact)));
-  const tradePrice = side === "buy"
-    ? Math.max(1, Math.round(newPrice * (1 + spread)))
-    : Math.max(1, Math.round(newPrice * (1 - spread)));
+  let lastImpact = 0;
+  let lastTradePrice = 0;
+  let lastNewPrice = 0;
+  let lastPrevPrice = 0;
 
-  // 1회 최대 거래 1억원 제한 (admin bypass)
-  if (!isAdminAuth(auth)) {
+  const stockTx = await stockRef.transaction((cur) => {
+    if (!cur || typeof cur !== "object") return undefined;
+    const row = cur;
+    let prevPrice = Number(row.price);
+    if (!Number.isFinite(prevPrice) || prevPrice <= 0) prevPrice = 10000;
+
+    const { newPrice, tradePrice, impact, changeStr } = computeStockTradePrices(
+      side,
+      prevPrice,
+      qty,
+      sellConfig,
+      marketParams
+    );
+    lastImpact = impact;
+    lastTradePrice = tradePrice;
+    lastNewPrice = newPrice;
+    lastPrevPrice = prevPrice;
+
     if (side === "buy") {
-      const est = tradePrice * qty;
-      if (est > 100000000) throw new HttpsError("failed-precondition", "Trade amount limit exceeded.");
+      const totalBuyPrice = tradePrice * qty;
+      if (preCash < totalBuyPrice && !isAdminAuth(auth)) return undefined;
+      if (preHaveQty === 0 && !isAdminAuth(auth)) {
+        const ownedCount = Object.values(preStocks).filter((s) => Math.floor(Number(s?.qty || 0)) > 0).length;
+        if (ownedCount >= 10) return undefined;
+      }
     } else {
-      const est = Math.round(tradePrice * qty * (1 - fee));
-      if (est > 100000000) throw new HttpsError("failed-precondition", "Trade amount limit exceeded.");
+      if (preHaveQty < qty && !isAdminAuth(auth)) return undefined;
     }
+
+    const { history: _h, ...rest } = row;
+    const addBuy = side === "buy" ? qty : 0;
+    const addSell = side === "sell" ? qty : 0;
+    const baseVol = Number(row.volume);
+    const baseBuy = Number(row.buyVol);
+    const baseSell = Number(row.sellVol);
+    return {
+      ...rest,
+      price: newPrice,
+      volume: (Number.isFinite(baseVol) ? baseVol : 0) + qty,
+      buyVol: (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
+      sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
+      change: changeStr
+    };
+  });
+
+  if (!stockTx.committed) {
+    throw new HttpsError("failed-precondition", "Stock update failed (validation or contention).");
   }
 
-  // Update user atomically (per-user transaction)
   const userRef = db.ref(`users/${uid}`);
   const userTx = await userRef.transaction((cur) => {
-    const u = cur || { cash: 1000000, stocks: {} };
+    const u = cur || { cash: 1000000, stocks: {}, coins: {} };
     const cash = Number(u.cash ?? 1000000);
-    const stocks = (u.stocks && typeof u.stocks === "object") ? u.stocks : {};
+    const stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
+    const coins = u.coins && typeof u.coins === "object" ? u.coins : {};
     const us = stocks?.[stockId] || { qty: 0, avg: 0 };
-    const haveQty = Number(us.qty || 0);
-    const haveAvg = Number(us.avg || 0);
+    const haveQty = Math.floor(Number(us.qty || 0));
+    const haveAvg = Math.round(Number(us.avg || 0));
 
     if (side === "buy") {
-      const total = tradePrice * qty;
-      if (cash < total && !isAdminAuth(auth)) return undefined; // abort
-
-      // 10종목 제한 (admin bypass)
+      const total = lastTradePrice * qty;
+      if (cash < total && !isAdminAuth(auth)) return undefined;
       if (!isAdminAuth(auth) && haveQty === 0) {
-        const ownedCount = Object.values(stocks).filter((s) => (s?.qty || 0) > 0).length;
-        if (ownedCount >= 10) return;
+        const ownedCount = Object.values(stocks).filter((s) => Math.floor(Number(s?.qty || 0)) > 0).length;
+        if (ownedCount >= 10) return undefined;
       }
-
-      const totalCost = (haveQty * haveAvg) + total;
+      const totalCost = haveQty * haveAvg + total;
       const newQty = haveQty + qty;
       return {
         ...u,
         cash: cash - total,
         stocks: { ...stocks, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
+        coins,
         lastTradeTime: admin.database.ServerValue.TIMESTAMP
       };
     }
 
-    // sell
-    if (haveQty < qty && !isAdminAuth(auth)) return;
-    const receive = Math.round(tradePrice * qty * (1 - fee));
+    if (haveQty < qty && !isAdminAuth(auth)) return undefined;
+    const receive = Math.round(lastTradePrice * qty * (1 - fee));
     const newQty = haveQty - qty;
     const nextStocks = { ...stocks };
     if (newQty <= 0) {
@@ -211,51 +261,38 @@ exports.trade = onCall({ cors: true }, async (req) => {
       ...u,
       cash: cash + receive,
       stocks: nextStocks,
+      coins,
       lastTradeTime: admin.database.ServerValue.TIMESTAMP
     };
   });
 
   if (!userTx.committed) {
+    if (stockRollbackVal != null) {
+      try {
+        await stockRef.transaction(() => stockRollbackVal);
+      } catch (e) {
+        console.error("[trade] stock rollback failed", e?.message || e);
+      }
+    }
     throw new HttpsError("failed-precondition", "User validation failed (cash/holdings/limits).");
   }
 
-  // Update stock + candlestick (best-effort; will retry on contention)
-  const stockRef = db.ref(`stocks/${stockId}`);
-  await stockRef.transaction((cur) => {
-    if (!cur) return cur;
-    const prevPrice = Number(cur.price || currentPrice);
-    const { history: _h, ...rest } = cur;
-    const addBuy = side === "buy" ? qty : 0;
-    const addSell = side === "sell" ? qty : 0;
-    const nextPrice = newPrice;
-    return {
-      ...rest,
-      price: nextPrice,
-      volume: (Number(cur.volume || 0) + qty),
-      buyVol: (Number(cur.buyVol || 0) + addBuy),
-      sellVol: (Number(cur.sellVol || 0) + addSell),
-      change: prevPrice > 0 ? (((nextPrice - prevPrice) / prevPrice) * 100).toFixed(2) : "0.00"
-    };
-  });
-
-  // Candle aggregation per minute
-  const ts = Math.floor(Date.now() / 60000) * 60; // seconds
+  const ts = Math.floor(Date.now() / 60000) * 60;
   const candleRef = db.ref(`candlesticks/${stockId}/${ts}`);
   await candleRef.transaction((cur) => {
     if (!cur) {
-      return { o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, t: ts };
+      return { o: lastTradePrice, h: lastTradePrice, l: lastTradePrice, c: lastTradePrice, v: qty, t: ts };
     }
     return {
       ...cur,
-      h: Math.max(Number(cur.h || tradePrice), tradePrice),
-      l: Math.min(Number(cur.l || tradePrice), tradePrice),
-      c: tradePrice,
+      h: Math.max(Number(cur.h || lastTradePrice), lastTradePrice),
+      l: Math.min(Number(cur.l || lastTradePrice), lastTradePrice),
+      c: lastTradePrice,
       v: Number(cur.v || 0) + qty,
       t: ts
     };
   });
 
-  // Audit log (optional, helpful)
   const tradeId = db.ref("tradeHistory").push().key;
   if (tradeId) {
     await db.ref(`tradeHistory/${tradeId}`).set({
@@ -263,10 +300,10 @@ exports.trade = onCall({ cors: true }, async (req) => {
       stockId,
       side,
       qty,
-      prevPrice: currentPrice,
-      newPrice,
-      tradePrice,
-      impact,
+      prevPrice: lastPrevPrice,
+      newPrice: lastNewPrice,
+      tradePrice: lastTradePrice,
+      impact: lastImpact,
       createdAt: admin.database.ServerValue.TIMESTAMP
     });
   }
@@ -276,8 +313,8 @@ exports.trade = onCall({ cors: true }, async (req) => {
     stockId,
     side,
     qty,
-    tradePrice,
-    newPrice,
+    tradePrice: lastTradePrice,
+    newPrice: lastNewPrice,
     tradeId: tradeId || null
   };
 });
@@ -333,7 +370,7 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const fee = Number(sellConfig.fee ?? 0.003);
   const impactRefPriceWon = Math.max(1, Number(marketParams.impactRefPrice ?? 100000));
   const coinMul = Number(marketParams.coinImpactMultiplier ?? 1.85);
-  const extraLiquidationFee = 0.05;
+  const extraLiquidationFee = 0.08;
 
   let soldQty = 0;
   let totalReceived = 0;
@@ -352,8 +389,10 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
       if (!cur) return cur;
       const prevPrice = Math.max(1, Number(cur.price || 1));
       let sellPressure = 1;
-      sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
-      const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
+      if (market !== "coin") {
+        sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
+      }
+      const dampingFactor = market === "coin" ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
       let impact = impactCoef * dampingFactor * Math.log2(1 + qty) * sellPressure;
       if (market === "coin") impact *= Number.isFinite(coinMul) && coinMul > 0 ? coinMul : 1.85;
       nextPrice = Math.max(1, Math.round(prevPrice * (1 - impact)));
