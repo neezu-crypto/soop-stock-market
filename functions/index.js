@@ -169,6 +169,63 @@ function computeStockTradePrices(side, prevPrice, qty, sellConfig, marketParams)
   return { newPrice, tradePrice, rawNewPrice, impact, changeStr };
 }
 
+/** 메인 앱 checkCircuitBreaker 와 동일: 최근 10분 고저 대비 변동 ≥30% → siteConfig/frozenStocks (전 유저 동일 적용) */
+const CB_VARIATION_PCT = 30;
+const CB_FREEZE_MS = 180000;
+const CB_COOLDOWN_MS = 600000;
+const CB_RECENT_BUCKET_COUNT = 15;
+const CB_WINDOW_SEC = 600;
+
+async function maybeApplyStockVolatilityCircuitBreaker(db, stockId, auth) {
+  if (isAdminAuth(auth)) return;
+  const now = Date.now();
+  const nowSec = Math.floor(now / 1000);
+  try {
+    const [frozenSnap, coolSnap] = await Promise.all([
+      db.ref(`siteConfig/frozenStocks/${stockId}`).get(),
+      db.ref(`siteConfig/circuitBreakerLastTrigger/${stockId}`).get(),
+    ]);
+    if (frozenSnap.exists()) {
+      const fu = Number(frozenSnap.val());
+      if (Number.isFinite(fu) && fu > now) return;
+    }
+    if (coolSnap.exists()) {
+      const lt = Number(coolSnap.val());
+      if (Number.isFinite(lt) && now - lt < CB_COOLDOWN_MS) return;
+    }
+
+    const startSec = Math.floor(now / 60000) * 60;
+    const keys = [];
+    for (let i = 0; i < CB_RECENT_BUCKET_COUNT; i++) keys.push(startSec - i * 60);
+
+    const snaps = await Promise.all(keys.map((ts) => db.ref(`candlesticks/${stockId}/${ts}`).get()));
+    const candles = snaps
+      .filter((s) => s.exists())
+      .map((s) => {
+        const c = s.val();
+        return { h: Number(c.h), l: Number(c.l), t: Number(c.t) };
+      })
+      .sort((a, b) => a.t - b.t);
+
+    const tenMinsAgo = nowSec - CB_WINDOW_SEC;
+    const recent = candles.filter((c) => c.t >= tenMinsAgo);
+    if (recent.length < 2) return;
+
+    const high = Math.max(...recent.map((c) => c.h));
+    const low = Math.min(...recent.map((c) => c.l));
+    if (!(low > 0) || !Number.isFinite(high)) return;
+    const variation = ((high - low) / low) * 100;
+    if (variation < CB_VARIATION_PCT) return;
+
+    const frozenUntilMs = now + CB_FREEZE_MS;
+    await db.ref(`siteConfig/frozenStocks/${stockId}`).set(frozenUntilMs);
+    await db.ref(`siteConfig/circuitBreakerLastTrigger/${stockId}`).set(now);
+    console.warn("[trade] stock volatility circuit breaker", stockId, variation.toFixed(2));
+  } catch (e) {
+    console.error("[trade] maybeApplyStockVolatilityCircuitBreaker", stockId, e?.message || e);
+  }
+}
+
 exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
@@ -440,6 +497,8 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
     };
   });
 
+  await maybeApplyStockVolatilityCircuitBreaker(db, stockId, auth);
+
   const tradeId = db.ref("tradeHistory").push().key;
   if (tradeId) {
     await db.ref(`tradeHistory/${tradeId}`).set({
@@ -584,6 +643,10 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
       t: ts,
     };
   });
+
+  if (market === "stock") {
+    await maybeApplyStockVolatilityCircuitBreaker(db, stockId, auth);
+  }
 
   return {
     ok: true,

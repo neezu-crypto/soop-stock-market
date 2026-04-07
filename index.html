@@ -4368,6 +4368,7 @@ window.logout = async function() {
 
 /**
  * 서킷브레이커 감지 — 발동 시 로컬 동결만 적용(관리자만 siteConfig/frozenStocks에 기록 가능)
+ * · 주식 + useServerTrade 일 때 변동성 임계는 Cloud Function trade 에서 frozenStocks 기록(전 유저 동일)
  */
 async function checkCircuitBreaker(stockId, candles, market = 'stock') {
     if (market === 'coin') return;
