@@ -204,6 +204,54 @@
         .admin-inbox-chip.has-pending .inbox-count { color: #fbbf24; font-weight: 800; }
         .admin-inbox.is-visible { display: flex; }
         .admin-accordion-anchor { scroll-margin-top: 14px; }
+        .daily-routine-add-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 10px;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            background: #0b1220;
+        }
+        .daily-routine-add-select {
+            flex: 1;
+            background: #111827;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image:
+                linear-gradient(45deg, transparent 50%, #94a3b8 50%),
+                linear-gradient(135deg, #94a3b8 50%, transparent 50%);
+            background-position:
+                calc(100% - 16px) calc(50% - 2px),
+                calc(100% - 10px) calc(50% - 2px);
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
+            padding-right: 34px;
+        }
+        .daily-routine-add-select:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+        .daily-routine-add-btn {
+            width: auto !important;
+            margin-top: 0 !important;
+            padding: 10px 14px !important;
+            border-radius: 8px !important;
+            background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+            color: #eef2ff !important;
+            border: 1px solid rgba(129, 140, 248, 0.45) !important;
+            font-size: 12px !important;
+            font-weight: 800 !important;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.28);
+        }
 
         /* ── 아코디언 ── */
         .accordion-header {
@@ -1524,15 +1572,14 @@
                 oninput="updateDailyAutoNext()" onblur="flushDailyAutoPersist()">
             <span style="color:#64748b;">분</span>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-            <select id="daily-routine-item-type"
-                style="flex:1; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:9px; border-radius:8px; font-size:13px; outline:none;">
+        <div class="daily-routine-add-row">
+            <select id="daily-routine-item-type" class="daily-routine-add-select">
                 <option value="ranking">📊 자산 랭킹 집계</option>
                 <option value="stockHolders">📈 종목별 익명 보유 TOP3 갱신</option>
                 <option value="candlePrune">🗑 오래된 캔들 정리</option>
                 <option value="autoSplit">✂️ 주가 자동 액면분할</option>
             </select>
-            <button type="button" class="btn-primary" style="width:auto; margin-top:0; padding:9px 14px;" onclick="addDailyRoutineItem()">+ 항목 추가</button>
+            <button type="button" class="btn-primary daily-routine-add-btn" onclick="addDailyRoutineItem()">+ 항목 추가</button>
         </div>
         <div id="daily-routine-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></div>
         <div id="daily-auto-split-log"
