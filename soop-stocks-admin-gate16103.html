@@ -1113,6 +1113,14 @@
             <div style="margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
             <div class="info-box" style="background:rgba(239,68,68,0.08); border-color:#ef4444;">⚠️ 모든 종목의 주가를 10,000원으로 초기화합니다. 되돌릴 수 없습니다.</div>
             <button class="btn-danger" style="width:100%; margin-top:8px;" onclick="resetAllPrices()">🔄 전체 주가 초기화 (10,000원)</button>
+            <div style="margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
+                <div class="info-box" style="background:rgba(56,189,248,0.08); border-color:#38bdf8;">
+                    <b>실시간 주가·코인 랭킹</b>에 쓰이는 <b>거래량</b>(<code>volume</code>)과 누적 체결(<code>buyVol</code>, <code>sellVol</code>)만 <b>0</b>으로 초기화합니다.<br>
+                    <span style="color:#94a3b8;">주가·등락률·이름 등 다른 필드는 건드리지 않습니다. 되돌릴 수 없습니다.</span>
+                </div>
+                <button type="button" class="btn-primary" style="width:100%; margin-top:8px; background:#0e7490; color:#ecfeff; border:1px solid #06b6d4; font-weight:800;"
+                    onclick="resetAllVolumesForRanking()">📊 전체 거래량만 초기화 (주식 + 코인)</button>
+            </div>
         </div>
         </div>
         </div>
@@ -3834,6 +3842,51 @@
             alert(`✅ 전체 ${Object.keys(data).length}개 종목 주가가 10,000원으로 초기화됐습니다.`);
             await loadStocksOnce();
         } catch (e) { alert('초기화 실패: ' + e.message); }
+    };
+
+    /** 실시간 랭킹용: stocks/·coins/ 의 volume·buyVol·sellVol 만 0 (주가 유지) */
+    window.resetAllVolumesForRanking = async function() {
+        if (!isAdmin()) return;
+        if (!confirm(
+            '📊 모든 주식·코인 종목의 거래량(volume)과 매수·매도 누적(buyVol, sellVol)을 0으로 초기화합니다.\n\n' +
+            '주가·등락률은 바뀌지 않습니다.\n되돌릴 수 없습니다. 계속하시겠습니까?'
+        )) return;
+        try {
+            const [sSnap, cSnap] = await Promise.all([
+                get(ref(db, 'stocks/')),
+                get(ref(db, 'coins/'))
+            ]);
+            const sData = sSnap.exists() ? sSnap.val() : null;
+            const cData = cSnap.exists() ? cSnap.val() : null;
+            const sUpdates = {};
+            const cUpdates = {};
+            if (sData) {
+                Object.keys(sData).forEach((id) => {
+                    sUpdates[`${id}/volume`] = 0;
+                    sUpdates[`${id}/buyVol`] = 0;
+                    sUpdates[`${id}/sellVol`] = 0;
+                });
+            }
+            if (cData) {
+                Object.keys(cData).forEach((id) => {
+                    cUpdates[`${id}/volume`] = 0;
+                    cUpdates[`${id}/buyVol`] = 0;
+                    cUpdates[`${id}/sellVol`] = 0;
+                });
+            }
+            if (Object.keys(sUpdates).length === 0 && Object.keys(cUpdates).length === 0) {
+                return alert('초기화할 종목이 없습니다.');
+            }
+            if (Object.keys(sUpdates).length) await update(ref(db, 'stocks/'), sUpdates);
+            if (Object.keys(cUpdates).length) await update(ref(db, 'coins/'), cUpdates);
+            try { await invalidateStaticCache(); } catch (_) { /* noop */ }
+            const ns = sData ? Object.keys(sData).length : 0;
+            const nc = cData ? Object.keys(cData).length : 0;
+            alert(`✅ 거래량 필드를 초기화했습니다.\n주식 ${ns}종목 · 코인 ${nc}종목`);
+            await loadStocksOnce();
+        } catch (e) {
+            alert('초기화 실패: ' + e.message);
+        }
     };
 
     // ── 시장 운영 시간 ───────────────────────────────────────
