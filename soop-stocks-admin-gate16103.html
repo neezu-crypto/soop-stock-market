@@ -1006,6 +1006,29 @@
         </div>
     </div>
 
+    <!-- 🪙 코인 시세 TOP10 관리 -->
+    <div class="container" style="display:block; border-color:#0ea5e9;">
+        <div class="accordion-header">
+            <h1>🪙 코인 시세 TOP10 관리</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+            <div class="data-status-bar">
+                <span>코인 데이터: <b id="coins-top10-status">로딩 중...</b></span>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn-success" onclick="toggleCoinsTop10Sort()" style="padding:6px 12px; font-size:12px;">정렬: <span id="coins-top10-sort-label">내림차순</span></button>
+                    <button class="btn-success" onclick="reloadCoinsTop10()" style="padding:6px 12px; font-size:12px;">🔄 새로고침</button>
+                </div>
+            </div>
+            <div class="info-box">
+                <b>가격 기준 TOP10</b>을 내림차순/오름차순으로 확인하고, 각 코인 가격을 직접 수정할 수 있습니다.
+            </div>
+            <div id="coins-top10-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+        </div>
+    </div>
+
     <!-- 🛠 종목 상세 정보 수정 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
         <div class="accordion-header">
@@ -2430,6 +2453,8 @@
     }
 
     let allStocksData = {};
+    let allCoinsData = {};
+    let coinsTop10Sort = 'desc';
 
     // ── 종목 데이터 로드 ─────────────────────────────────────
     async function loadStocksOnce() {
@@ -2447,6 +2472,89 @@
             if (statusEl) statusEl.innerText = '로드 실패';
         }
     }
+    async function loadCoinsTop10Once() {
+        const statusEl = document.getElementById('coins-top10-status');
+        if (statusEl) statusEl.innerText = '로딩 중...';
+        try {
+            const snap = await get(ref(db, 'coins/'));
+            allCoinsData = snap.val() || {};
+            const count = Object.keys(allCoinsData).length;
+            if (statusEl) statusEl.innerText = `${count}개 코인 로드됨`;
+            renderCoinsTop10List();
+        } catch (e) {
+            if (statusEl) statusEl.innerText = '로드 실패';
+        }
+    }
+    function getCoinsTop10Rows() {
+        const rows = Object.entries(allCoinsData)
+            .map(([id, v]) => ({
+                id,
+                name: String(v?.name || id),
+                price: Number(v?.price) || 0,
+                change: Number(v?.change || 0)
+            }))
+            .filter((r) => r.price > 0);
+        rows.sort((a, b) => coinsTop10Sort === 'asc' ? (a.price - b.price) : (b.price - a.price));
+        return rows.slice(0, 10);
+    }
+    function renderCoinsTop10List() {
+        const listEl = document.getElementById('coins-top10-list');
+        const sortLabelEl = document.getElementById('coins-top10-sort-label');
+        if (sortLabelEl) sortLabelEl.textContent = coinsTop10Sort === 'asc' ? '오름차순' : '내림차순';
+        if (!listEl) return;
+        const rows = getCoinsTop10Rows();
+        if (!rows.length) {
+            listEl.innerHTML = '<div style="color:#64748b; font-size:13px; padding:12px; text-align:center;">표시할 코인이 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = rows.map((row, idx) => `
+            <div class="batch-control" style="padding:10px; background:#0f172a; border-radius:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <div style="min-width:24px; color:${idx < 3 ? '#f59e0b' : '#64748b'}; font-weight:800;">${idx + 1}</div>
+                <div style="flex:1; min-width:160px; font-size:13px;">
+                    <div style="font-weight:700; color:#f8fafc;">${escapeHtml(row.name)}</div>
+                    <div style="font-size:11px; color:#64748b;">${escapeHtml(row.id)}</div>
+                </div>
+                <input type="number" id="coin-input-${row.id}" value="${Math.round(row.price)}" style="width:140px; flex:none;">
+                <button type="button" class="btn-success" style="padding:8px 12px; font-size:12px;" onclick="updateSingleCoinPrice('${row.id}')">수정</button>
+            </div>
+        `).join('');
+    }
+    window.toggleCoinsTop10Sort = function() {
+        if (!isAdmin()) return;
+        coinsTop10Sort = coinsTop10Sort === 'desc' ? 'asc' : 'desc';
+        renderCoinsTop10List();
+    };
+    window.reloadCoinsTop10 = async function() {
+        if (!isAdmin()) return;
+        await loadCoinsTop10Once();
+    };
+    window.updateSingleCoinPrice = async function(id) {
+        if (!isAdmin()) return;
+        const inp = document.getElementById(`coin-input-${id}`);
+        const newPrice = Math.floor(Number(inp?.value));
+        if (!Number.isFinite(newPrice) || newPrice <= 0) {
+            alert('정확한 코인 가격(1 이상)을 입력해주세요.');
+            return;
+        }
+        try {
+            const curSnap = await get(ref(db, `coins/${id}`));
+            if (!curSnap.exists()) {
+                alert('해당 코인 데이터를 찾을 수 없습니다.');
+                return;
+            }
+            const cur = curSnap.val() || {};
+            const prevPrice = Math.max(1, Number(cur.price || 1));
+            const change = (((newPrice - prevPrice) / prevPrice) * 100).toFixed(4);
+            await update(ref(db, `coins/${id}`), { price: newPrice, change });
+            if (!allCoinsData[id]) allCoinsData[id] = {};
+            allCoinsData[id].price = newPrice;
+            allCoinsData[id].change = change;
+            showAdminToast(`✅ [코인] ${(cur.name || id)} 가격을 ${newPrice.toLocaleString()}원으로 수정했습니다.`);
+            renderCoinsTop10List();
+        } catch (e) {
+            alert('코인 가격 수정 실패: ' + (e?.message || e));
+        }
+    };
     window.reloadStocks = async function() {
         if (!isAdmin()) return; await loadStocksOnce(); };
 
@@ -2647,6 +2755,7 @@
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
             showAdminRequestInbox();
             await loadStocksOnce();
+            await loadCoinsTop10Once();
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
             await loadMarketHours();
