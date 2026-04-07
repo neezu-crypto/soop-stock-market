@@ -987,7 +987,7 @@
     </div>
 
     <!-- 🔍 개별 종목 관리 -->
-    <div class="container" style="display:block">
+    <div id="admin-accordion-stock-manage" class="container admin-accordion-anchor" style="display:block">
         <div class="accordion-header">
             <h1>🔍 개별 종목 관리</h1>
             <span class="accordion-arrow">▼</span>
@@ -1001,6 +1001,9 @@
         <div class="info-box">종목 이름을 검색하여 가격을 직접 수정할 수 있습니다.</div>
         <input type="text" id="admin-search" placeholder="스트리머 검색..."
             style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box; margin-bottom:15px;">
+        <div id="listing-quick-add-wrap" style="display:none; margin-bottom:12px;">
+            <button type="button" class="btn-primary" style="width:100%; margin-top:0; background:#f59e0b; color:#0f172a;" onclick="goToStreamerListingWithPendingName()">➕ 종목 즉시추가</button>
+        </div>
         <div id="admin-stock-list" class="admin-stock-scroll-host" style="max-height: 300px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
         </div>
         </div>
@@ -1121,7 +1124,7 @@
     </div>
 
     <!-- 📈 주가 일괄 조정 -->
-    <div class="container" style="display:block">
+    <div id="admin-accordion-streamer-listing" class="container admin-accordion-anchor" style="display:block">
         <div class="accordion-header">
             <h1>📈 주가 일괄 조정 (% 단위)</h1>
             <span class="accordion-arrow">▼</span>
@@ -1834,6 +1837,20 @@
         });
     }
 
+    function openAndScrollAdminSectionById(id) {
+        const el = id ? document.getElementById(id) : null;
+        if (!el) return;
+        const body = el.querySelector('.accordion-body');
+        const arrow = el.querySelector('.accordion-arrow');
+        if (body && !body.classList.contains('open')) {
+            body.classList.add('open');
+            if (arrow) arrow.classList.add('open');
+        }
+        requestAnimationFrame(() => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
     function showAdminRequestInbox() {
         document.getElementById('admin-request-inbox')?.classList.add('is-visible');
     }
@@ -2125,6 +2142,8 @@
                 <div style="display:flex; gap:8px; justify-content:flex-end;">
                     <a href="https://www.sooplive.co.kr/station/${escapeHtml(req.soopId)}" target="_blank"
                         style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
+                    <button type="button" class="btn-listing-quickadd"
+                        style="background:#f59e0b; color:#0f172a; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:800; font-size:12px;">즉시추가</button>
                     ${req.status !== 'done' ? `<button type="button" class="btn-listing-done"
                         style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">등록완료</button>` : ''}
                     ${req.status !== 'rejected' ? `<button type="button" class="btn-listing-reject"
@@ -2134,6 +2153,7 @@
                 </div>
             `;
             listEl.appendChild(card);
+            card.querySelector('.btn-listing-quickadd')?.addEventListener('click', () => quickSearchFromListingNickname(req?.name || ''));
             card.querySelector('.btn-listing-done')?.addEventListener('click', () => window.doneListingRequest(reqId));
             card.querySelector('.btn-listing-reject')?.addEventListener('click', () => window.rejectListingRequest(reqId));
             card.querySelector('.btn-listing-delete')?.addEventListener('click', () => window.deleteListingRequest(reqId));
@@ -2455,6 +2475,7 @@
     let allStocksData = {};
     let allCoinsData = {};
     let coinsTop10Sort = 'desc';
+    let pendingListingQuickAddName = '';
 
     // ── 종목 데이터 로드 ─────────────────────────────────────
     async function loadStocksOnce() {
@@ -2876,6 +2897,49 @@
             .filter(([id, s]) => (s.name || '').toLowerCase().includes(searchVal))
             .sort((a, b) => (Number(b[1].price) || 0) - (Number(a[1].price) || 0));
     }
+
+    function setListingQuickAddButtonVisible(visible, nickname) {
+        const wrap = document.getElementById('listing-quick-add-wrap');
+        if (!wrap) return;
+        if (visible) {
+            pendingListingQuickAddName = String(nickname || '').trim();
+            wrap.style.display = 'block';
+        } else {
+            pendingListingQuickAddName = '';
+            wrap.style.display = 'none';
+        }
+    }
+
+    function quickSearchFromListingNickname(nickname) {
+        const name = String(nickname || '').trim();
+        if (!name) return;
+        openAndScrollAdminSectionById('admin-accordion-stock-manage');
+        const input = document.getElementById('admin-search');
+        if (!input) return;
+        input.value = name;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const hitCount = Object.entries(allStocksData).filter(([_, s]) => String(s?.name || '').toLowerCase().includes(name.toLowerCase())).length;
+        const found = hitCount > 0;
+        setListingQuickAddButtonVisible(!found, name);
+        if (!found) {
+            showAdminToast(`'${name}' 종목이 없어 '종목 즉시추가' 버튼을 표시했습니다.`, 'error');
+        }
+    }
+
+    window.goToStreamerListingWithPendingName = function() {
+        if (!isAdmin()) return;
+        const name = String(pendingListingQuickAddName || '').trim();
+        if (!name) {
+            alert('즉시추가할 닉네임이 없습니다.');
+            return;
+        }
+        openAndScrollAdminSectionById('admin-accordion-streamer-listing');
+        const listEl = document.getElementById('list');
+        if (!listEl) return;
+        listEl.value = name;
+        listEl.focus();
+        setListingQuickAddButtonVisible(false, '');
+    };
 
     function buildAdminStockRowEl(id, s) {
         const macroRunning = !!activeMacros[id];
