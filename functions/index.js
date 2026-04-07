@@ -6,7 +6,9 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 
-admin.initializeApp();
+admin.initializeApp({
+  databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com",
+});
 
 setGlobalOptions({
   // Pick the region closest to your users/DB if desired.
@@ -115,12 +117,22 @@ function normalizeStockRow(cur) {
     return null;
   }
   if (typeof cur !== "object" || Array.isArray(cur)) return null;
+  // 일부 export/도구 형식: { ".value": { ... } }
+  if (Object.prototype.hasOwnProperty.call(cur, ".value")) {
+    return normalizeStockRow(cur[".value"]);
+  }
   return cur;
 }
 
 function jsonSanitizeForRtdb(obj) {
   try {
-    return JSON.parse(JSON.stringify(obj));
+    return JSON.parse(
+      JSON.stringify(obj, (_k, v) => {
+        if (v === undefined) return undefined;
+        if (typeof v === "number" && !Number.isFinite(v)) return null;
+        return v;
+      })
+    );
   } catch (e) {
     return stripUndefinedShallow(obj);
   }
@@ -250,11 +262,21 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   let lastPrevPrice = 0;
 
   let stockTx = { committed: false };
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < 15; attempt++) {
     stockTx = await stockRef.transaction((cur) => {
       try {
         const row = normalizeStockRow(cur);
-        if (!row) return undefined;
+        if (!row) {
+          console.error("[trade] normalizeStockRow abort", stockId, {
+            attempt,
+            curType: cur === null ? "null" : typeof cur,
+            curSample:
+              cur != null && typeof cur === "object"
+                ? Object.keys(cur).slice(0, 12)
+                : String(cur).slice(0, 80),
+          });
+          return undefined;
+        }
 
         let prevPrice = Number(row.price);
         if (!Number.isFinite(prevPrice) || prevPrice <= 0) prevPrice = 10000;
@@ -285,7 +307,12 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
           change: changeStr
         };
-        return jsonSanitizeForRtdb(stripUndefinedShallow(merged));
+        const out = jsonSanitizeForRtdb(stripUndefinedShallow(merged));
+        if (!out || typeof out !== "object" || !Number.isFinite(Number(out.price))) {
+          console.error("[trade] stock write sanitize failed", stockId, { attempt });
+          return undefined;
+        }
+        return out;
       } catch (e) {
         console.error("[trade] stockTx callback error", stockId, e?.message || e);
         return undefined;
@@ -296,6 +323,15 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   }
 
   if (!stockTx.committed) {
+    try {
+      const snap = stockTx.snapshot;
+      console.error("[trade] stockTx exhausted retries", stockId, {
+        snapExists: snap?.exists?.(),
+        valType: snap?.exists?.() ? typeof snap.val() : "n/a",
+      });
+    } catch (logErr) {
+      console.error("[trade] stockTx log failed", logErr?.message || logErr);
+    }
     throw new HttpsError(
       "failed-precondition",
       "종목 시세 갱신에 실패했습니다. RTDB의 stocks/{종목ID} 노드가 객체 형태인지 확인하거나 잠시 후 다시 시도해 주세요."
