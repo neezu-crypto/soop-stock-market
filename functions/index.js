@@ -211,6 +211,8 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const fee = Number(sellConfig.fee ?? 0.003);
 
   const preUser = preUserSnap.exists() ? preUserSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
+  /** stocks/ 외 동일: RTDB 트랜잭션 콜백에서 cur가 null로만 오는 경우 대비 */
+  const userSeedForTx = JSON.parse(JSON.stringify(preUser));
   const preCash = Number(preUser.cash ?? 1000000);
   const preStocks = preUser.stocks && typeof preUser.stocks === "object" ? preUser.stocks : {};
   const preBook = preStocks[stockId] || { qty: 0, avg: 0 };
@@ -353,8 +355,21 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   }
 
   const userRef = db.ref(`users/${uid}`);
+  let userTxSeeded = false;
   const userTx = await userRef.transaction((cur) => {
-    const u = cur || { cash: 1000000, stocks: {}, coins: {} };
+    let effectiveCur = cur;
+    if (effectiveCur == null && preUserSnap.exists()) {
+      effectiveCur = userSeedForTx;
+      if (!userTxSeeded) {
+        userTxSeeded = true;
+        console.warn(
+          "[trade] userTx cur was null; seeding from pre-read snapshot",
+          uid,
+          userRef.toString()
+        );
+      }
+    }
+    const u = effectiveCur != null ? effectiveCur : { cash: 1000000, stocks: {}, coins: {} };
     const cash = Number(u.cash ?? 1000000);
     const stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
     const coins = u.coins && typeof u.coins === "object" ? u.coins : {};
