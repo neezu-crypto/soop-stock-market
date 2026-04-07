@@ -219,16 +219,8 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
     lastNewPrice = newPrice;
     lastPrevPrice = prevPrice;
 
-    if (side === "buy") {
-      const totalBuyPrice = tradePrice * qty;
-      if (preCash < totalBuyPrice && !isAdminAuth(auth)) return undefined;
-      if (preHaveQty === 0 && !isAdminAuth(auth)) {
-        const ownedCount = Object.values(preStocks).filter((s) => Math.floor(Number(s?.qty || 0)) > 0).length;
-        if (ownedCount >= 10) return undefined;
-      }
-    } else {
-      if (preHaveQty < qty && !isAdminAuth(auth)) return undefined;
-    }
+    // 잔액·보유는 클로저(preCash/preHaveQty)가 아니라 users 트랜잭션에서만 검증한다.
+    // 여기서 선읽기 값으로 막으면, 체결가가 바뀌는 동시성 상황에서 undefined → 커밋 실패(사용자 로그의 "contention")가 난다.
 
     const { history: _h, ...rest } = row;
     const addBuy = side === "buy" ? qty : 0;
