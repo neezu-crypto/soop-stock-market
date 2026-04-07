@@ -101,6 +101,31 @@ function stripUndefinedShallow(obj) {
   return out;
 }
 
+/** 트랜잭션 콜백의 cur — 레거시로 숫자만 저장된 종목 노드도 처리 (숫자는 typeof object 아님 → 예전 코드는 항상 abort) */
+function normalizeStockRow(cur) {
+  if (cur == null) return null;
+  if (typeof cur === "number") {
+    const p = cur;
+    if (Number.isFinite(p) && p > 0) return { price: p, volume: 0, buyVol: 0, sellVol: 0 };
+    return null;
+  }
+  if (typeof cur === "string") {
+    const p = Number(String(cur).trim());
+    if (Number.isFinite(p) && p > 0) return { price: p, volume: 0, buyVol: 0, sellVol: 0 };
+    return null;
+  }
+  if (typeof cur !== "object" || Array.isArray(cur)) return null;
+  return cur;
+}
+
+function jsonSanitizeForRtdb(obj) {
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch (e) {
+    return stripUndefinedShallow(obj);
+  }
+}
+
 /** 메인 앱 `window.trade`(주식)와 동일한 가격·임팩트 계산 — prevPrice는 트랜잭션 내 현재가 */
 function computeStockTradePrices(side, prevPrice, qty, sellConfig, marketParams) {
   const basePrice = Math.max(1, finiteOr(sellConfig.basePrice, 10000));
@@ -184,9 +209,14 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   if (!preStockSnap.exists()) {
     throw new HttpsError("not-found", "종목을 찾을 수 없습니다.");
   }
-  const stockRollbackVal = JSON.parse(JSON.stringify(preStockSnap.val()));
+  const rawPreVal = preStockSnap.val();
+  const stockRollbackVal = JSON.parse(JSON.stringify(rawPreVal));
+  const preRowForHint = normalizeStockRow(rawPreVal);
+  if (!preRowForHint) {
+    throw new HttpsError("failed-precondition", "종목 데이터 형식이 올바르지 않습니다.");
+  }
 
-  const prevPriceHint = Math.max(1, Number(preStockSnap.val()?.price || 0));
+  const prevPriceHint = Math.max(1, Number(preRowForHint.price || 0));
   const { tradePrice: estTradePrice } = computeStockTradePrices(
     side,
     prevPriceHint,
@@ -222,38 +252,44 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   let stockTx = { committed: false };
   for (let attempt = 0; attempt < 8; attempt++) {
     stockTx = await stockRef.transaction((cur) => {
-      if (!cur || typeof cur !== "object" || Array.isArray(cur)) return undefined;
-      const row = cur;
-      let prevPrice = Number(row.price);
-      if (!Number.isFinite(prevPrice) || prevPrice <= 0) prevPrice = 10000;
+      try {
+        const row = normalizeStockRow(cur);
+        if (!row) return undefined;
 
-      const { newPrice, tradePrice, impact, changeStr } = computeStockTradePrices(
-        side,
-        prevPrice,
-        qty,
-        sellConfig,
-        marketParams
-      );
-      lastImpact = impact;
-      lastTradePrice = tradePrice;
-      lastNewPrice = newPrice;
-      lastPrevPrice = prevPrice;
+        let prevPrice = Number(row.price);
+        if (!Number.isFinite(prevPrice) || prevPrice <= 0) prevPrice = 10000;
 
-      const { history: _h, ...rest } = row;
-      const addBuy = side === "buy" ? qty : 0;
-      const addSell = side === "sell" ? qty : 0;
-      const baseVol = Number(row.volume);
-      const baseBuy = Number(row.buyVol);
-      const baseSell = Number(row.sellVol);
-      const merged = {
-        ...rest,
-        price: newPrice,
-        volume: (Number.isFinite(baseVol) ? baseVol : 0) + qty,
-        buyVol: (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
-        sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
-        change: changeStr
-      };
-      return stripUndefinedShallow(merged);
+        const { newPrice, tradePrice, impact, changeStr } = computeStockTradePrices(
+          side,
+          prevPrice,
+          qty,
+          sellConfig,
+          marketParams
+        );
+        lastImpact = impact;
+        lastTradePrice = tradePrice;
+        lastNewPrice = newPrice;
+        lastPrevPrice = prevPrice;
+
+        const { history: _h, ...rest } = row;
+        const addBuy = side === "buy" ? qty : 0;
+        const addSell = side === "sell" ? qty : 0;
+        const baseVol = Number(row.volume);
+        const baseBuy = Number(row.buyVol);
+        const baseSell = Number(row.sellVol);
+        const merged = {
+          ...rest,
+          price: newPrice,
+          volume: (Number.isFinite(baseVol) ? baseVol : 0) + qty,
+          buyVol: (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
+          sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
+          change: changeStr
+        };
+        return jsonSanitizeForRtdb(stripUndefinedShallow(merged));
+      } catch (e) {
+        console.error("[trade] stockTx callback error", stockId, e?.message || e);
+        return undefined;
+      }
     });
     if (stockTx.committed) break;
     await new Promise((r) => setTimeout(r, 35 * (attempt + 1)));
@@ -262,7 +298,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   if (!stockTx.committed) {
     throw new HttpsError(
       "failed-precondition",
-      "Stock update failed (contention or price data changed — try again)."
+      "종목 시세 갱신에 실패했습니다. RTDB의 stocks/{종목ID} 노드가 객체 형태인지 확인하거나 잠시 후 다시 시도해 주세요."
     );
   }
 
