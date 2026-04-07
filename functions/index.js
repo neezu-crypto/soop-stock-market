@@ -282,6 +282,141 @@ exports.trade = onCall({ cors: true }, async (req) => {
   };
 });
 
+exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" }, async (req) => {
+  const auth = req.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+
+  const uid = auth.uid;
+  const stockId = String(req.data?.stockId || "").trim();
+  const market = String(req.data?.market || "stock").trim().toLowerCase(); // stock | coin
+  if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
+  if (market !== "stock" && market !== "coin") {
+    throw new HttpsError("invalid-argument", "market must be stock|coin.");
+  }
+
+  const db = admin.database();
+  const stockPath = market === "coin" ? "coins" : "stocks";
+  const userBookPath = market === "coin" ? "coins" : "stocks";
+  const candleRoot = market === "coin" ? "coinCandles" : "candlesticks";
+
+  const [cfgSnap, stockSnap] = await Promise.all([
+    db.ref("siteConfig").get(),
+    db.ref(`${stockPath}/${stockId}`).get(),
+  ]);
+  const siteConfig = cfgSnap.exists() ? cfgSnap.val() : {};
+  if (siteConfig.maintenance === true && !isAdminAuth(auth)) {
+    throw new HttpsError("failed-precondition", "Maintenance mode.");
+  }
+  const mh = siteConfig.marketHours;
+  if (mh?.enabled && !isAdminAuth(auth)) {
+    const now = nowKstDate();
+    const open = mh.open || "09:00";
+    const close = mh.close || "04:00";
+    if (!isWithinHours({ open, close }, now)) {
+      throw new HttpsError("failed-precondition", "Market closed.");
+    }
+  }
+  if (!stockSnap.exists()) throw new HttpsError("not-found", "Unknown symbol.");
+
+  const userSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
+  const haveQty0 = Math.floor(Number(userSnap.val()?.qty || 0));
+  if (!Number.isFinite(haveQty0) || haveQty0 <= 0) {
+    throw new HttpsError("failed-precondition", "No holdings.");
+  }
+
+  const sellConfig = siteConfig.sellConfig || {};
+  const marketParams = siteConfig.marketParams || {};
+  const basePrice = Number(sellConfig.basePrice ?? 10000);
+  const scalePrice = Number(sellConfig.scalePrice ?? 90000);
+  const impactCoef = Number(sellConfig.impact ?? 0.0005);
+  const spread = Number(sellConfig.spread ?? 0.001);
+  const fee = Number(sellConfig.fee ?? 0.003);
+  const impactRefPriceWon = Math.max(1, Number(marketParams.impactRefPrice ?? 100000));
+  const coinMul = Number(marketParams.coinImpactMultiplier ?? 1.85);
+  const extraLiquidationFee = 0.05;
+
+  let soldQty = 0;
+  let totalReceived = 0;
+  let chunks = 0;
+
+  while (true) {
+    const bookSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
+    const remain = Math.floor(Number(bookSnap.val()?.qty || 0));
+    if (!Number.isFinite(remain) || remain <= 0) break;
+    const qty = Math.min(remain, 100);
+
+    let tradePrice = 0;
+    let nextPrice = 0;
+    const stockRef = db.ref(`${stockPath}/${stockId}`);
+    const stockTx = await stockRef.transaction((cur) => {
+      if (!cur) return cur;
+      const prevPrice = Math.max(1, Number(cur.price || 1));
+      let sellPressure = 1;
+      sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
+      const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
+      let impact = impactCoef * dampingFactor * Math.log2(1 + qty) * sellPressure;
+      if (market === "coin") impact *= Number.isFinite(coinMul) && coinMul > 0 ? coinMul : 1.85;
+      nextPrice = Math.max(1, Math.round(prevPrice * (1 - impact)));
+      tradePrice = Math.max(1, Math.round(nextPrice * (1 - spread)));
+      return {
+        ...cur,
+        price: nextPrice,
+        volume: Number(cur.volume || 0) + qty,
+        buyVol: Number(cur.buyVol || 0),
+        sellVol: Number(cur.sellVol || 0) + qty,
+        change: prevPrice > 0 ? (((nextPrice - prevPrice) / prevPrice) * 100).toFixed(market === "coin" ? 4 : 2) : "0.00",
+      };
+    });
+    if (!stockTx.committed || !tradePrice) {
+      throw new HttpsError("aborted", "Price update contention.");
+    }
+
+    const receive = Math.round(tradePrice * qty * (1 - fee - extraLiquidationFee));
+    const userRef = db.ref(`users/${uid}`);
+    const userTx = await userRef.transaction((cur) => {
+      const u = cur || { cash: 1000000, stocks: {}, coins: {} };
+      const cash = Number(u.cash ?? 1000000);
+      const stocks = (u.stocks && typeof u.stocks === "object") ? u.stocks : {};
+      const coins = (u.coins && typeof u.coins === "object") ? u.coins : {};
+      const book = market === "coin" ? coins : stocks;
+      const pos = book?.[stockId] || { qty: 0, avg: 0 };
+      const haveQty = Math.floor(Number(pos.qty || 0));
+      if (haveQty < qty && !isAdminAuth(auth)) return;
+      const newQty = haveQty - qty;
+      const nextBook = { ...book };
+      if (newQty <= 0) nextBook[stockId] = null;
+      else nextBook[stockId] = { qty: newQty, avg: Number(pos.avg || 0) };
+      return {
+        ...u,
+        cash: cash + receive,
+        stocks: market === "coin" ? stocks : nextBook,
+        coins: market === "coin" ? nextBook : coins,
+        lastTradeTime: admin.database.ServerValue.TIMESTAMP,
+      };
+    });
+    if (!userTx.committed) throw new HttpsError("aborted", "Holdings changed during liquidation.");
+
+    const ts = Math.floor(Date.now() / 60000) * 60;
+    await db.ref(`${candleRoot}/${stockId}/${ts}`).transaction((cur) => {
+      if (!cur) return { o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, t: ts };
+      return {
+        ...cur,
+        h: Math.max(Number(cur.h || tradePrice), tradePrice),
+        l: Math.min(Number(cur.l || tradePrice), tradePrice),
+        c: tradePrice,
+        v: Number(cur.v || 0) + qty,
+        t: ts,
+      };
+    });
+
+    soldQty += qty;
+    totalReceived += receive;
+    chunks += 1;
+  }
+
+  return { ok: true, stockId, market, soldQty, totalReceived, chunks };
+});
+
 /**
  * 액면분할: Admin SDK로 stocks + 전 users 스캔·갱신 (클라이언트 users/ 대량 읽기 실패 시 대안)
  * kind: "threshold" | "top100"
