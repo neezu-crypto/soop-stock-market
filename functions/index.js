@@ -355,9 +355,9 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   }
   if (!stockSnap.exists()) throw new HttpsError("not-found", "Unknown symbol.");
 
-  const userSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
-  const haveQty0 = Math.floor(Number(userSnap.val()?.qty || 0));
-  if (!Number.isFinite(haveQty0) || haveQty0 <= 0) {
+  const bookSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
+  const qty = Math.floor(Number(bookSnap.val()?.qty || 0));
+  if (!Number.isFinite(qty) || qty <= 0) {
     throw new HttpsError("failed-precondition", "No holdings.");
   }
 
@@ -372,88 +372,80 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const coinMul = Number(marketParams.coinImpactMultiplier ?? 1.85);
   const extraLiquidationFee = 0.08;
 
-  let soldQty = 0;
-  let totalReceived = 0;
-  let chunks = 0;
-
-  while (true) {
-    const bookSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
-    const remain = Math.floor(Number(bookSnap.val()?.qty || 0));
-    if (!Number.isFinite(remain) || remain <= 0) break;
-    const qty = Math.min(remain, 100);
-
-    let tradePrice = 0;
-    let nextPrice = 0;
-    const stockRef = db.ref(`${stockPath}/${stockId}`);
-    const stockTx = await stockRef.transaction((cur) => {
-      if (!cur) return cur;
-      const prevPrice = Math.max(1, Number(cur.price || 1));
-      let sellPressure = 1;
-      if (market !== "coin") {
-        sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
-      }
-      const dampingFactor = market === "coin" ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
-      let impact = impactCoef * dampingFactor * Math.log2(1 + qty) * sellPressure;
-      if (market === "coin") impact *= Number.isFinite(coinMul) && coinMul > 0 ? coinMul : 1.85;
-      nextPrice = Math.max(1, Math.round(prevPrice * (1 - impact)));
-      tradePrice = Math.max(1, Math.round(nextPrice * (1 - spread)));
-      return {
-        ...cur,
-        price: nextPrice,
-        volume: Number(cur.volume || 0) + qty,
-        buyVol: Number(cur.buyVol || 0),
-        sellVol: Number(cur.sellVol || 0) + qty,
-        change: prevPrice > 0 ? (((nextPrice - prevPrice) / prevPrice) * 100).toFixed(market === "coin" ? 4 : 2) : "0.00",
-      };
-    });
-    if (!stockTx.committed || !tradePrice) {
-      throw new HttpsError("aborted", "Price update contention.");
+  let tradePrice = 0;
+  let nextPrice = 0;
+  const stockRef = db.ref(`${stockPath}/${stockId}`);
+  const stockTx = await stockRef.transaction((cur) => {
+    if (!cur) return cur;
+    const prevPrice = Math.max(1, Number(cur.price || 1));
+    let sellPressure = 1;
+    if (market !== "coin") {
+      sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
     }
-
-    const receive = Math.round(tradePrice * qty * (1 - fee - extraLiquidationFee));
-    const userRef = db.ref(`users/${uid}`);
-    const userTx = await userRef.transaction((cur) => {
-      const u = cur || { cash: 1000000, stocks: {}, coins: {} };
-      const cash = Number(u.cash ?? 1000000);
-      const stocks = (u.stocks && typeof u.stocks === "object") ? u.stocks : {};
-      const coins = (u.coins && typeof u.coins === "object") ? u.coins : {};
-      const book = market === "coin" ? coins : stocks;
-      const pos = book?.[stockId] || { qty: 0, avg: 0 };
-      const haveQty = Math.floor(Number(pos.qty || 0));
-      if (haveQty < qty && !isAdminAuth(auth)) return;
-      const newQty = haveQty - qty;
-      const nextBook = { ...book };
-      if (newQty <= 0) nextBook[stockId] = null;
-      else nextBook[stockId] = { qty: newQty, avg: Number(pos.avg || 0) };
-      return {
-        ...u,
-        cash: cash + receive,
-        stocks: market === "coin" ? stocks : nextBook,
-        coins: market === "coin" ? nextBook : coins,
-        lastTradeTime: admin.database.ServerValue.TIMESTAMP,
-      };
-    });
-    if (!userTx.committed) throw new HttpsError("aborted", "Holdings changed during liquidation.");
-
-    const ts = Math.floor(Date.now() / 60000) * 60;
-    await db.ref(`${candleRoot}/${stockId}/${ts}`).transaction((cur) => {
-      if (!cur) return { o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, t: ts };
-      return {
-        ...cur,
-        h: Math.max(Number(cur.h || tradePrice), tradePrice),
-        l: Math.min(Number(cur.l || tradePrice), tradePrice),
-        c: tradePrice,
-        v: Number(cur.v || 0) + qty,
-        t: ts,
-      };
-    });
-
-    soldQty += qty;
-    totalReceived += receive;
-    chunks += 1;
+    const dampingFactor = market === "coin" ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
+    let impact = impactCoef * dampingFactor * Math.log2(1 + qty) * sellPressure;
+    if (market === "coin") impact *= Number.isFinite(coinMul) && coinMul > 0 ? coinMul : 1.85;
+    nextPrice = Math.max(1, Math.round(prevPrice * (1 - impact)));
+    tradePrice = Math.max(1, Math.round(nextPrice * (1 - spread)));
+    return {
+      ...cur,
+      price: nextPrice,
+      volume: Number(cur.volume || 0) + qty,
+      buyVol: Number(cur.buyVol || 0),
+      sellVol: Number(cur.sellVol || 0) + qty,
+      change: prevPrice > 0 ? (((nextPrice - prevPrice) / prevPrice) * 100).toFixed(market === "coin" ? 4 : 2) : "0.00",
+    };
+  });
+  if (!stockTx.committed || !tradePrice) {
+    throw new HttpsError("aborted", "Price update contention.");
   }
 
-  return { ok: true, stockId, market, soldQty, totalReceived, chunks };
+  const receive = Math.round(tradePrice * qty * (1 - fee - extraLiquidationFee));
+  const userRef = db.ref(`users/${uid}`);
+  const userTx = await userRef.transaction((cur) => {
+    const u = cur || { cash: 1000000, stocks: {}, coins: {} };
+    const cash = Number(u.cash ?? 1000000);
+    const stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
+    const coins = u.coins && typeof u.coins === "object" ? u.coins : {};
+    const book = market === "coin" ? coins : stocks;
+    const pos = book?.[stockId] || { qty: 0, avg: 0 };
+    const haveQty = Math.floor(Number(pos.qty || 0));
+    if (haveQty < qty && !isAdminAuth(auth)) return;
+    const newQty = haveQty - qty;
+    const nextBook = { ...book };
+    if (newQty <= 0) nextBook[stockId] = null;
+    else nextBook[stockId] = { qty: newQty, avg: Number(pos.avg || 0) };
+    return {
+      ...u,
+      cash: cash + receive,
+      stocks: market === "coin" ? stocks : nextBook,
+      coins: market === "coin" ? nextBook : coins,
+      lastTradeTime: admin.database.ServerValue.TIMESTAMP,
+    };
+  });
+  if (!userTx.committed) throw new HttpsError("aborted", "Holdings changed during liquidation.");
+
+  const ts = Math.floor(Date.now() / 60000) * 60;
+  await db.ref(`${candleRoot}/${stockId}/${ts}`).transaction((cur) => {
+    if (!cur) return { o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, t: ts };
+    return {
+      ...cur,
+      h: Math.max(Number(cur.h || tradePrice), tradePrice),
+      l: Math.min(Number(cur.l || tradePrice), tradePrice),
+      c: tradePrice,
+      v: Number(cur.v || 0) + qty,
+      t: ts,
+    };
+  });
+
+  return {
+    ok: true,
+    stockId,
+    market,
+    soldQty: qty,
+    totalReceived: receive,
+    chunks: 1,
+  };
 });
 
 /**
