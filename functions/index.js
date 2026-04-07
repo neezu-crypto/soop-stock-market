@@ -120,7 +120,9 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
 
   const uid = auth.uid;
   const stockId = String(req.data?.stockId || "").trim();
-  const side = String(req.data?.side || "").trim(); // 'buy'|'sell'
+  const side = String(req.data?.side || "")
+    .trim()
+    .toLowerCase(); // 클라이언트·프록시에서 대소문자 섞여도 허용
   const qty = clampInt(req.data?.qty, 1, 100);
   if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
   if (side !== "buy" && side !== "sell") throw new HttpsError("invalid-argument", "side must be buy|sell.");
@@ -161,9 +163,37 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
 
   const stockRef = db.ref(`stocks/${stockId}`);
   const preStockSnap = await stockRef.get();
-  let stockRollbackVal = null;
-  if (preStockSnap.exists()) {
-    stockRollbackVal = JSON.parse(JSON.stringify(preStockSnap.val()));
+  if (!preStockSnap.exists()) {
+    throw new HttpsError("not-found", "종목을 찾을 수 없습니다.");
+  }
+  const stockRollbackVal = JSON.parse(JSON.stringify(preStockSnap.val()));
+
+  const prevPriceHint = Math.max(1, Number(preStockSnap.val()?.price || 0));
+  const { tradePrice: estTradePrice } = computeStockTradePrices(
+    side,
+    prevPriceHint,
+    qty,
+    sellConfig,
+    marketParams
+  );
+  if (!isAdminAuth(auth)) {
+    if (side === "buy") {
+      const estTotal = estTradePrice * qty;
+      if (estTotal > 100000000) {
+        throw new HttpsError("failed-precondition", "1회 최대 거래 금액(1억원)을 초과합니다.");
+      }
+      if (preCash < estTotal) {
+        throw new HttpsError("failed-precondition", "잔액이 부족합니다.");
+      }
+    } else {
+      const estReceive = Math.round(estTradePrice * qty * (1 - fee));
+      if (estReceive > 100000000) {
+        throw new HttpsError("failed-precondition", "1회 최대 거래 금액(1억원)을 초과합니다.");
+      }
+      if (preHaveQty < qty) {
+        throw new HttpsError("failed-precondition", "보유 수량이 부족합니다.");
+      }
+    }
   }
 
   let lastImpact = 0;
@@ -217,7 +247,10 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   });
 
   if (!stockTx.committed) {
-    throw new HttpsError("failed-precondition", "Stock update failed (validation or contention).");
+    throw new HttpsError(
+      "failed-precondition",
+      "Stock update failed (contention or price data changed — try again)."
+    );
   }
 
   const userRef = db.ref(`users/${uid}`);

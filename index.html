@@ -5904,18 +5904,21 @@ if (!isCoin && siteConfig.useServerTrade === true) {
         sound.play().catch(() => {});
     } catch (e) {
         const code = e?.code || '';
-        const raw = e?.message || '';
+        const raw = String(e?.message || '')
+            .replace(/^Firebase:\s*/i, '')
+            .replace(/\s*\(functions\/[^)]+\)\.?\s*$/i, '')
+            .trim();
+        console.error('[trade][server]', code, e?.message, e);
         if (autoTrade) stopAutoTrade(id);
         if (code === 'functions/unauthenticated') {
             if (!autoTrade) tradeNotify('로그인이 필요합니다.');
         } else if (code === 'functions/failed-precondition') {
             if (!autoTrade) tradeNotify(raw || '거래할 수 없습니다.');
         } else if (code === 'functions/not-found') {
-            if (!autoTrade) tradeNotify('종목을 찾을 수 없습니다.');
+            if (!autoTrade) tradeNotify(raw || '종목을 찾을 수 없습니다.');
         } else if (code === 'functions/invalid-argument') {
             if (!autoTrade) tradeNotify(raw || '잘못된 요청입니다.');
         } else {
-            console.error('[trade][server]', e);
             if (!autoTrade) tradeNotify('거래 중 오류가 발생했습니다.');
         }
         return;
