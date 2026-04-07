@@ -265,7 +265,21 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   for (let attempt = 0; attempt < 15; attempt++) {
     stockTx = await stockRef.transaction((cur) => {
       try {
-        const row = normalizeStockRow(cur);
+        // get() 직후에도 트랜잭션 콜백에서 cur가 null로만 오는 사례가 있음(로그: curType null × N).
+        // 서버 주기·경합이 아니라 동일 요청 안에서 반복되면 시세는 존재하므로 직전 스냅샷으로 시드한다.
+        let effectiveCur = cur;
+        if (effectiveCur == null && rawPreVal != null) {
+          if (attempt === 0) {
+            console.warn(
+              "[trade] stockTx cur was null; seeding from pre-read snapshot",
+              stockId,
+              stockRef.toString()
+            );
+          }
+          effectiveCur = rawPreVal;
+        }
+
+        const row = normalizeStockRow(effectiveCur);
         if (!row) {
           console.error("[trade] normalizeStockRow abort", stockId, {
             attempt,
