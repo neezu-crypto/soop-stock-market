@@ -5616,6 +5616,127 @@ async function sellAllHoldingsByFunction(stockId, market) {
                 clearOffPeakTradeTimeStorageForUid(userUID);
             }
         }
+        const tradeUid = auth.currentUser?.uid;
+        if (tradeUid) {
+            const userRef = ref(db, `users/${tradeUid}`);
+            const uSnap = await get(userRef);
+            if (uSnap.exists()) {
+                const v = uSnap.val();
+                myData.cash = v.cash ?? 1000000;
+                myData.stocks = v.stocks || {};
+                myData.coins = v.coins || {};
+            }
+            if (isCoin) {
+                const cSnap = await get(ref(db, `coins/${stockId}`));
+                if (cSnap.exists()) {
+                    const data = { ...cSnap.val(), id: stockId };
+                    const idx = allCoins.findIndex((s) => s?.id === stockId);
+                    if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...data };
+                    else allCoins.push(data);
+                    if (favoriteCoins[stockId]) favoriteCoins[stockId] = data;
+                    if (ownedCoins[stockId]) ownedCoins[stockId] = data;
+                    if (searchResults[stockId]) searchResults[stockId] = data;
+                }
+            } else {
+                const stSnap = await get(ref(db, `stocks/${stockId}`));
+                if (stSnap.exists()) {
+                    const data = { ...stSnap.val(), id: stockId };
+                    const idx = allStocks.findIndex((s) => s?.id === stockId);
+                    if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...data };
+                    else allStocks.push(data);
+                    if (favorites[stockId]) favorites[stockId] = data;
+                    if (ownedStocks[stockId]) ownedStocks[stockId] = data;
+                    if (searchResults[stockId]) searchResults[stockId] = data;
+                }
+            }
+        }
+        setTimeout(() => {
+            const id = stockId;
+            const card = stockElements[id];
+            const stockData = isCoin
+                ? (favoriteCoins[id] || ownedCoins[id] || searchResults[id])
+                : (favorites[id] || ownedStocks[id] || searchResults[id]);
+            const currentQty = isCoin ? (myData?.coins?.[id]?.qty || 0) : (myData?.stocks?.[id]?.qty || 0);
+
+            if (isCoin) {
+                if (currentQty > 0 && stockData) {
+                    ownedCoins[id] = { ...stockData, id };
+                } else if (currentQty === 0) {
+                    delete ownedCoins[id];
+                    if (ownedCoinUnsubs[id]) { ownedCoinUnsubs[id](); delete ownedCoinUnsubs[id]; }
+                    if (favCoinPollTimers[id] && !favoriteCoins[id]) {
+                        clearInterval(favCoinPollTimers[id]); delete favCoinPollTimers[id];
+                    }
+                }
+                if (currentQty === 0 && !favoriteCoins[id]) {
+                    const searchVal = document.getElementById('search-input')?.value?.trim() || '';
+                    if (searchVal) {
+                        if (card && stockData) {
+                            updateCardContent(card, stockData, { qty: 0, avg: 0 });
+                            const favBtn = card.querySelector('.btn-favorite');
+                            if (favBtn) { favBtn.textContent = '☆'; favBtn.title = '즐겨찾기 추가'; }
+                        }
+                    } else {
+                        renderFavoriteCoinList();
+                    }
+                    renderMyCoinPortfolio();
+                    return;
+                }
+                if (card && stockData) {
+                    updateCardContent(card, stockData, myData?.coins?.[id] || { qty: 0, avg: 0 });
+                    if (!card.querySelector('.btn-favorite')) {
+                        const favBtn = document.createElement('button');
+                        const isFav = !!favoriteCoins[id];
+                        favBtn.className   = 'btn-favorite';
+                        favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+                        favBtn.textContent = isFav ? '⭐' : '☆';
+                        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
+                        card.querySelector('.price-group')?.appendChild(favBtn);
+                    }
+                }
+                renderMyCoinPortfolio();
+                return;
+            }
+
+            if (currentQty > 0 && stockData) {
+                ownedStocks[id] = { ...stockData, id };
+            } else if (currentQty === 0) {
+                delete ownedStocks[id];
+                if (ownedUnsubs[id]) { ownedUnsubs[id](); delete ownedUnsubs[id]; }
+                if (favPollTimers[id] && !favorites[id]) {
+                    clearInterval(favPollTimers[id]); delete favPollTimers[id];
+                }
+            }
+
+            if (currentQty === 0 && !favorites[id]) {
+                const searchVal = document.getElementById('search-input')?.value?.trim() || '';
+                if (searchVal) {
+                    if (card && stockData) {
+                        updateCardContent(card, stockData, { qty: 0, avg: 0 });
+                        const favBtn = card.querySelector('.btn-favorite');
+                        if (favBtn) { favBtn.textContent = '☆'; favBtn.title = '즐겨찾기 추가'; }
+                    }
+                } else {
+                    renderFavoriteList();
+                }
+                renderMyPortfolio();
+                return;
+            }
+
+            if (card && stockData) {
+                updateCardContent(card, stockData, myData?.stocks?.[id] || { qty: 0, avg: 0 });
+                if (!card.querySelector('.btn-favorite')) {
+                    const favBtn = document.createElement('button');
+                    const isFav  = !!favorites[id];
+                    favBtn.className   = 'btn-favorite';
+                    favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+                    favBtn.textContent = isFav ? '⭐' : '☆';
+                    favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
+                    card.querySelector('.price-group')?.appendChild(favBtn);
+                }
+            }
+            renderMyPortfolio();
+        }, 0);
     } catch (e) {
         console.error('[MAX SELL][function]', e);
         alert('전량매도 중 오류가 발생했습니다.');
