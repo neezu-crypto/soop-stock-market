@@ -1601,6 +1601,7 @@
                 <option value="ranking">📊 자산 랭킹 집계</option>
                 <option value="stockHolders">📈 종목별 익명 보유 TOP3 갱신</option>
                 <option value="candlePrune">🗑 오래된 캔들 정리</option>
+                <option value="userActivityPurge">🧾 유저 활동로그 데이터 삭제</option>
                 <option value="autoSplit">✂️ 주가 자동 액면분할</option>
             </select>
             <button type="button" class="btn-primary daily-routine-add-btn" onclick="addDailyRoutineItem()">+ 항목 추가</button>
@@ -1648,7 +1649,7 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            최근 매매 기록(<code>tradeHistory</code>) 기준으로 매매 주기가 빠른 유저 TOP10을 자동 탐색합니다.<br>
+            최근 10분 매매 기록(<code>tradeHistory</code>) 기준으로 매매 주기가 빠른 유저 TOP10을 자동 탐색합니다.<br>
             현재 장 상태 기준 임계치(정규장 1초 미만 / 비정규장 30초 미만)를 넘는 계정을 자동 제재할 수 있습니다.
         </div>
         <div class="data-status-bar" style="margin-bottom:10px;">
@@ -2941,8 +2942,8 @@
     };
 
     // ── 유저 활동 로그/제재 ─────────────────────────────────────
-    const USER_MONITOR_LOOKBACK_MS = 2 * 60 * 60 * 1000; // 최근 2시간
-    const USER_MONITOR_LIMIT = 5000; // 최근 N건 tradeHistory 스캔
+    const USER_MONITOR_LOOKBACK_MS = 10 * 60 * 1000; // 최근 10분
+    const USER_MONITOR_LIMIT = 600; // 최근 N건 tradeHistory 스캔
     const USER_MONITOR_PER_UID_MAX = 20; // 유저별 계산용 최근 체결 수
     let userMonitorRows = [];
 
@@ -5708,6 +5709,7 @@
         if (type === 'ranking') return { type: 'ranking' };
         if (type === 'candlePrune') return { type: 'candlePrune' };
         if (type === 'stockHolders') return { type: 'stockHolders' };
+        if (type === 'userActivityPurge') return { type: 'userActivityPurge' };
         return null;
     }
 
@@ -5728,7 +5730,7 @@
                 });
                 return;
             }
-            if (t === 'ranking' || t === 'candlePrune' || t === 'stockHolders') {
+            if (t === 'ranking' || t === 'candlePrune' || t === 'stockHolders' || t === 'userActivityPurge') {
                 out.push({ type: t });
             }
         });
@@ -5778,6 +5780,7 @@
             ranking: '📊 자산 랭킹 집계',
             stockHolders: '📈 종목별 익명 보유 TOP3 갱신',
             candlePrune: '🗑 오래된 캔들 정리',
+            userActivityPurge: '🧾 유저 활동로그 데이터 삭제',
             autoSplit: '✂️ 주가 자동 액면분할',
         };
         listEl.innerHTML = rows.map((it, idx) => {
@@ -6247,6 +6250,19 @@
         }
     }
 
+    async function purgeUserActivityLogs(silent = false) {
+        if (!isAdmin()) return;
+        if (!silent && !confirm('tradeHistory(유저 활동로그) 전체 데이터를 삭제하시겠습니까?')) return;
+        await set(ref(db, 'tradeHistory'), null);
+        try {
+            await set(ref(db, `adminActivityLogs/userActivityPurge/${Date.now()}`), {
+                type: 'userActivityPurge',
+                adminEmail: auth.currentUser?.email || ADMIN_EMAIL,
+                createdAt: Date.now(),
+            });
+        } catch (_) { /* noop */ }
+    }
+
     function scheduleDailyAuto() {
         clearTimeout(dailyAutoTimer);
         const hour = clampDailyAutoHourMin(document.getElementById('auto-daily-hour').value, 0, 23);
@@ -6288,6 +6304,9 @@
                     } else if (it.type === 'candlePrune') {
                         if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 🗑 오래된 캔들 정리 실행</div>`;
                         await pruneAllCandles(true);
+                    } else if (it.type === 'userActivityPurge') {
+                        if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 🧾 유저 활동로그 데이터 삭제 실행</div>`;
+                        await purgeUserActivityLogs(true);
                     } else if (it.type === 'autoSplit') {
                         const splitThresholdManwon = clampDailyAutoSplitThresholdManwon(it.thresholdManwon);
                         const splitRatioN = clampDailyAutoSplitRatioN(it.ratioN);
