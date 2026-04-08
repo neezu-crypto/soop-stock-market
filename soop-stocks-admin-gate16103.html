@@ -956,7 +956,7 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box" style="border-color:#a855f7; color:#e9d5ff;">
-            메인 페이지의 <b>홍보·배너·중계·랭킹·정규장 이벤트</b> 등에 표시되는 별풍선 약정 수를 즉시 변경합니다.<br>
+            메인 페이지의 <b>홍보·배너·중계·랭킹·정규장·자산 지원(룰렛 안내)</b> 등에 표시되는 별풍선 약정 수를 즉시 변경합니다.<br>
             <span style="color:#94a3b8;">저장 시 <code>siteConfig/pricing</code>에 기록되며, 접속 중인 사용자 화면에 실시간 반영됩니다.</span>
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px;">
@@ -972,6 +972,8 @@
             <input type="number" id="pricing-relay-offpeak-h" min="1" max="999" value="10" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
             <label style="color:#94a3b8;">정규장 연장/시작 룰렛 (개/회)</label>
             <input type="number" id="pricing-extend-balloons" min="1" max="999" value="33" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">자산 지원 모달 · 라이브 룰렛 안내 (개)</label>
+            <input type="number" id="pricing-asset-support-roulette" min="1" max="999" value="22" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
         </div>
         <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn-success" onclick="savePaidPricingFromAdmin()">💾 저장</button>
@@ -3275,6 +3277,7 @@
             relayRegularPerHour: 15,
             relayOffPeakPerHour: 10,
             regularExtendBalloons: 33,
+            assetSupportRouletteBalloons: 22,
         };
         const o = raw && typeof raw === 'object' ? raw : {};
         const clamp = (v, fb) => {
@@ -3288,6 +3291,7 @@
             relayRegularPerHour: clamp(o.relayRegularPerHour, d.relayRegularPerHour),
             relayOffPeakPerHour: clamp(o.relayOffPeakPerHour, d.relayOffPeakPerHour),
             regularExtendBalloons: clamp(o.regularExtendBalloons, d.regularExtendBalloons),
+            assetSupportRouletteBalloons: clamp(o.assetSupportRouletteBalloons, d.assetSupportRouletteBalloons),
         };
     }
     function applyPaidPricingToAdminInputs(p) {
@@ -3301,6 +3305,7 @@
         set('pricing-relay-regular-h', p.relayRegularPerHour);
         set('pricing-relay-offpeak-h', p.relayOffPeakPerHour);
         set('pricing-extend-balloons', p.regularExtendBalloons);
+        set('pricing-asset-support-roulette', p.assetSupportRouletteBalloons);
     }
     function startPaidPricingListener() {
         if (paidPricingUnsub) return;
@@ -3320,6 +3325,7 @@
             relayRegularPerHour: document.getElementById('pricing-relay-regular-h')?.value,
             relayOffPeakPerHour: document.getElementById('pricing-relay-offpeak-h')?.value,
             regularExtendBalloons: document.getElementById('pricing-extend-balloons')?.value,
+            assetSupportRouletteBalloons: document.getElementById('pricing-asset-support-roulette')?.value,
         });
         try {
             await set(ref(db, 'siteConfig/pricing'), { ...p, updatedAt: Date.now() });
