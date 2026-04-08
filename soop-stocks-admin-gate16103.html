@@ -239,6 +239,40 @@
             border-color: #6366f1;
             box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
         }
+        .asset-grant-preset-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+            max-width: 220px;
+        }
+        .asset-grant-preset-btn {
+            flex: 1 1 calc(33.333% - 6px);
+            min-width: 56px;
+            min-height: 40px;
+            padding: 8px 6px;
+            border-radius: 8px;
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: #e2e8f0;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .asset-grant-preset-btn:active {
+            background: #334155;
+        }
+        @media (max-width: 640px) {
+            .asset-grant-preset-wrap {
+                max-width: none;
+            }
+            .asset-grant-preset-btn {
+                flex: 1 1 30%;
+                min-height: 44px;
+                font-size: 13px;
+            }
+        }
         .daily-routine-add-btn {
             width: auto !important;
             margin-top: 0 !important;
@@ -1642,6 +1676,8 @@
                 <option value="candlePrune">🗑 오래된 캔들 정리</option>
                 <option value="userActivityPurge">🧾 유저 활동로그 데이터 삭제</option>
                 <option value="rankingVolumeReset">📊 실시간 랭킹 거래량만 초기화</option>
+                <option value="clearAssetRequests">🗑 자산 지원 신청 리스트 전체 삭제</option>
+                <option value="clearAdRequests">🗑 홍보 신청 검수 리스트 전체 삭제</option>
                 <option value="autoSplit">✂️ 주가 자동 액면분할</option>
             </select>
             <button type="button" class="btn-primary daily-routine-add-btn" onclick="addDailyRoutineItem()">+ 항목 추가</button>
@@ -2020,9 +2056,14 @@
                     <td style="padding:8px; color:#cbd5e1;">${reqBal}</td>
                     <td style="padding:8px; color:#38bdf8; font-weight:700;">${liveCash}</td>
                     <td style="padding:8px; color:#94a3b8; max-width:140px;" title="${escapeHtml(reason)}">${reasonShort || '—'}</td>
-                    <td style="padding:8px;">
+                    <td style="padding:8px; vertical-align:top;">
                         <input type="number" id="grant-amt-${reqId}" min="1" step="1" placeholder="금액"
-                            style="width:100%; max-width:120px; padding:6px 8px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#f8fafc; font-size:12px;">
+                            style="width:100%; max-width:140px; padding:6px 8px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#f8fafc; font-size:12px; box-sizing:border-box;">
+                        <div class="asset-grant-preset-wrap" aria-label="지급액 빠른 입력">
+                            <button type="button" class="asset-grant-preset-btn" onclick="window.setAssetGrantPreset(${JSON.stringify(reqId)}, 500000)">50만</button>
+                            <button type="button" class="asset-grant-preset-btn" onclick="window.setAssetGrantPreset(${JSON.stringify(reqId)}, 1000000)">100만</button>
+                            <button type="button" class="asset-grant-preset-btn" onclick="window.setAssetGrantPreset(${JSON.stringify(reqId)}, 5000000)">500만</button>
+                        </div>
                     </td>
                     <td style="padding:8px; text-align:right;">
                         <button type="button" class="btn-grant-asset"
@@ -2048,6 +2089,14 @@
             setAdminInboxCount('asset', 0);
         }
     }
+
+    window.setAssetGrantPreset = function(reqId, amt) {
+        if (!isAdmin()) return;
+        const el = document.getElementById(`grant-amt-${reqId}`);
+        if (!el) return;
+        el.value = String(Math.floor(Number(amt)) || 0);
+        try { el.focus(); } catch (_) { /* noop */ }
+    };
 
     window.grantAssetRequest = async function(reqId, targetUid) {
         if (!isAdmin()) return;
@@ -5863,6 +5912,8 @@
         if (type === 'stockHolders') return { type: 'stockHolders' };
         if (type === 'userActivityPurge') return { type: 'userActivityPurge' };
         if (type === 'rankingVolumeReset') return { type: 'rankingVolumeReset' };
+        if (type === 'clearAssetRequests') return { type: 'clearAssetRequests' };
+        if (type === 'clearAdRequests') return { type: 'clearAdRequests' };
         return null;
     }
 
@@ -5883,7 +5934,7 @@
                 });
                 return;
             }
-            if (t === 'ranking' || t === 'candlePrune' || t === 'stockHolders' || t === 'userActivityPurge' || t === 'rankingVolumeReset') {
+            if (t === 'ranking' || t === 'candlePrune' || t === 'stockHolders' || t === 'userActivityPurge' || t === 'rankingVolumeReset' || t === 'clearAssetRequests' || t === 'clearAdRequests') {
                 out.push({ type: t });
             }
         });
@@ -5935,6 +5986,8 @@
             candlePrune: '🗑 오래된 캔들 정리',
             userActivityPurge: '🧾 유저 활동로그 데이터 삭제',
             rankingVolumeReset: '📊 실시간 랭킹 거래량만 초기화',
+            clearAssetRequests: '🗑 자산 지원 신청 리스트 전체 삭제',
+            clearAdRequests: '🗑 홍보 신청 검수 리스트 전체 삭제',
             autoSplit: '✂️ 주가 자동 액면분할',
         };
         listEl.innerHTML = rows.map((it, idx) => {
@@ -6417,6 +6470,42 @@
         } catch (_) { /* noop */ }
     }
 
+    /** assetRequests/ 하위 노드 전부 삭제 (일일 루틴·관리자 도구용) */
+    async function clearAllAssetRequestsList(silent = false) {
+        if (!isAdmin()) return 0;
+        if (!silent && !confirm('assetRequests/ 아래 모든 항목(대기·처리 완료 포함)을 삭제합니다. 되돌릴 수 없습니다. 계속하시겠습니까?')) return 0;
+        const snap = await get(ref(db, 'assetRequests'));
+        if (!snap.exists()) {
+            if (!silent) showAdminToast('삭제할 항목이 없습니다.');
+            return 0;
+        }
+        const keys = Object.keys(snap.val() || {});
+        if (keys.length === 0) return 0;
+        const updates = {};
+        keys.forEach((k) => { updates[`assetRequests/${k}`] = null; });
+        await update(ref(db), updates);
+        if (!silent) showAdminToast(`자산 지원 신청 ${keys.length}건 삭제됨`);
+        return keys.length;
+    }
+
+    /** adRequests/ 홍보 신청 목록 전체 삭제 */
+    async function clearAllAdRequestsList(silent = false) {
+        if (!isAdmin()) return 0;
+        if (!silent && !confirm('adRequests/ 홍보 신청 목록 전체를 삭제합니다. 되돌릴 수 없습니다. 계속하시겠습니까?')) return 0;
+        const snap = await get(ref(db, 'adRequests'));
+        if (!snap.exists()) {
+            if (!silent) showAdminToast('삭제할 항목이 없습니다.');
+            return 0;
+        }
+        const keys = Object.keys(snap.val() || {});
+        if (keys.length === 0) return 0;
+        const updates = {};
+        keys.forEach((k) => { updates[`adRequests/${k}`] = null; });
+        await update(ref(db), updates);
+        if (!silent) showAdminToast(`홍보 신청 ${keys.length}건 삭제됨`);
+        return keys.length;
+    }
+
     function scheduleDailyAuto() {
         clearTimeout(dailyAutoTimer);
         const hour = clampDailyAutoHourMin(document.getElementById('auto-daily-hour').value, 0, 23);
@@ -6472,6 +6561,14 @@
                             }
                         }
                         try { await loadStocksOnce(); } catch (_) { /* noop */ }
+                    } else if (it.type === 'clearAssetRequests') {
+                        if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 🗑 자산 지원 신청 리스트 전체 삭제 실행</div>`;
+                        const n = await clearAllAssetRequestsList(true);
+                        if (runLogEl) runLogEl.innerHTML += `<div style="color:#86efac;">   → 삭제 ${n}건</div>`;
+                    } else if (it.type === 'clearAdRequests') {
+                        if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 🗑 홍보 신청 검수 리스트 전체 삭제 실행</div>`;
+                        const n = await clearAllAdRequestsList(true);
+                        if (runLogEl) runLogEl.innerHTML += `<div style="color:#86efac;">   → 삭제 ${n}건</div>`;
                     } else if (it.type === 'autoSplit') {
                         const splitThresholdManwon = clampDailyAutoSplitThresholdManwon(it.thresholdManwon);
                         const splitRatioN = clampDailyAutoSplitRatioN(it.ratioN);
