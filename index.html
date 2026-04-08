@@ -642,10 +642,13 @@
                 box-sizing: border-box;
                 align-items: stretch;
             }
+            /* 우측 고정 홍보 배너(원형+라벨) 폭만큼 비워 검색·종목 카드가 가려지지 않게 */
             .wrapper {
                 max-width: none;
                 width: 100%;
                 min-width: 0;
+                box-sizing: border-box;
+                padding-right: 78px;
             }
             .logout-row {
                 padding-left: 46px !important;
