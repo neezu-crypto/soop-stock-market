@@ -136,6 +136,25 @@ function assertServerTradeCooldownAllowed(auth, siteConfig, preUser) {
   }
 }
 
+/**
+ * 관리자 제재(거래 제한) 강제 적용.
+ * users/{uid}/moderation/tradeBlockedUntil(ms) 또는 레거시 users/{uid}/tradeBlockedUntil(ms) 지원.
+ */
+function assertUserTradeRestrictionAllowed(auth, preUser) {
+  if (isAdminAuth(auth)) return;
+  const now = Date.now();
+  const moderationUntil = Number(preUser?.moderation?.tradeBlockedUntil || 0);
+  const legacyUntil = Number(preUser?.tradeBlockedUntil || 0);
+  const blockedUntil = Math.max(moderationUntil, legacyUntil);
+  if (!Number.isFinite(blockedUntil) || blockedUntil <= now) return;
+  const reason = String(preUser?.moderation?.tradeBlockedReason || preUser?.tradeBlockedReason || "").trim();
+  const rem = Math.max(1, Math.ceil((blockedUntil - now) / 1000));
+  const msg = reason
+    ? `거래 제한 상태입니다. (${rem}초 후 해제, 사유: ${reason})`
+    : `거래 제한 상태입니다. (${rem}초 후 해제)`;
+  throw new HttpsError("failed-precondition", msg);
+}
+
 function clampInt(n, min, max) {
   const v = Math.floor(Number(n));
   if (!Number.isFinite(v)) return null;
@@ -311,7 +330,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   }
 
   const STOCK_MAX_ORDER_WON = 100000000;
-  const COIN_MAX_ORDER_WON = 10000000000;
+  const COIN_MAX_ORDER_WON = 100000000000;
   const maxOrderWon = isCoin ? COIN_MAX_ORDER_WON : STOCK_MAX_ORDER_WON;
 
   const db = admin.database();
@@ -344,6 +363,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const fee = Number(sellConfig.fee ?? 0.003);
 
   const preUser = preUserSnap.exists() ? preUserSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
+  assertUserTradeRestrictionAllowed(auth, preUser);
   assertServerTradeCooldownAllowed(auth, siteConfig, preUser);
   /** RTDB 트랜잭션 콜백에서 cur가 null로만 오는 경우 대비 */
   const userSeedForTx = JSON.parse(JSON.stringify(preUser));
@@ -391,7 +411,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       if (estTotal > maxOrderWon) {
         throw new HttpsError(
           "failed-precondition",
-          isCoin ? "1회 최대 거래 금액(100억원)을 초과합니다." : "1회 최대 거래 금액(1억원)을 초과합니다."
+          isCoin ? "1회 최대 거래 금액(1000억원)을 초과합니다." : "1회 최대 거래 금액(1억원)을 초과합니다."
         );
       }
       if (preCash < estTotal) {
@@ -402,7 +422,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       if (estReceive > maxOrderWon) {
         throw new HttpsError(
           "failed-precondition",
-          isCoin ? "1회 최대 거래 금액(100억원)을 초과합니다." : "1회 최대 거래 금액(1억원)을 초과합니다."
+          isCoin ? "1회 최대 거래 금액(1000억원)을 초과합니다." : "1회 최대 거래 금액(1억원)을 초과합니다."
         );
       }
       if (preHaveQty < qty) {
@@ -707,6 +727,7 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   if (!stockSnap.exists()) throw new HttpsError("not-found", "Unknown symbol.");
 
   const preUserForCooldown = preUserSnapForCooldown.exists() ? preUserSnapForCooldown.val() : {};
+  assertUserTradeRestrictionAllowed(auth, preUserForCooldown);
   assertServerTradeCooldownAllowed(auth, siteConfig, preUserForCooldown);
 
   const bookSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
