@@ -1078,8 +1078,13 @@
             <div id="coins-top10-list" style="display:flex; flex-direction:column; gap:8px;"></div>
             <div style="border-top:1px solid #334155; padding-top:16px; margin-top:12px;">
             <div class="info-box" style="border-color:#a855f7; color:#e9d5ff;">
-                <b>🤖 코인 시세 자동 조정 (유동성 시뮬)</b> — <code>coins/</code> 시세 <b>상위 10개</b> 중 무작위 1종목을 고른 뒤, <b>연속 매수·매도</b>를 관리자 권한으로 실행해 체결 임팩트만 반영합니다. (유저 잔고·보유 없음 · <code>adminExecuteCoinTrade</code>)<br>
+                <b>🤖 코인 시세 자동 조정 (유동성 시뮬)</b> — <code>coins/</code> 시세 <b>상위 10개</b> 중 무작위 1종목을 고른 뒤, 모드에 따라 <b>매수·매도 랜덤</b> 또는 <b>연속 매도만</b>을 관리자 권한으로 실행해 체결 임팩트만 반영합니다. (유저 잔고·보유 없음 · <code>adminExecuteCoinTrade</code>)<br>
                 <span style="color:#94a3b8;">관리자 탭이 열려 있는 동안만 자동 반복이 동작합니다.</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-top:10px; font-size:13px; color:#e2e8f0;">
+                <span style="color:#94a3b8;">모드</span>
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="coin-liquidity-mode" value="mixed" checked> 매수·매도 랜덤</label>
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="coin-liquidity-mode" value="sellonly"> 연속 매도만</label>
             </div>
             <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px;">
                 <button type="button" class="btn-primary" style="background:#a855f7; color:white;" onclick="runCoinLiquidityBotOnce(false)">🎲 1회 실행</button>
@@ -3419,6 +3424,8 @@
     window.runCoinLiquidityBotOnce = async function (fromAuto = false) {
         if (!isAdmin()) return;
         const st = document.getElementById('coin-liquidity-bot-status');
+        const modeEl = document.querySelector('input[name="coin-liquidity-mode"]:checked');
+        const sellOnly = modeEl && modeEl.value === 'sellonly';
         try {
             const snap = await get(ref(db, 'coins/'));
             if (!snap.exists()) {
@@ -3437,12 +3444,13 @@
             }
             const pick = rows[Math.floor(Math.random() * rows.length)].id;
             const steps = 4 + Math.floor(Math.random() * 8);
+            const modeTag = sellOnly ? ' · 매도만' : '';
             if (st) {
-                st.textContent = `실행 중… ${pick} · ${steps}연속`;
+                st.textContent = `실행 중… ${pick} · ${steps}연속${modeTag}`;
                 st.style.color = '#fbbf24';
             }
             for (let i = 0; i < steps; i++) {
-                const side = Math.random() < 0.5 ? 'buy' : 'sell';
+                const side = sellOnly ? 'sell' : (Math.random() < 0.5 ? 'buy' : 'sell');
                 const qty = 1 + Math.floor(Math.random() * 20);
                 const r = await adminExecuteCoinTrade(pick, side, { qty, silent: true, skipRender: true });
                 if (!r?.ok) break;
@@ -3450,7 +3458,7 @@
             }
             const done = new Date().toLocaleTimeString('ko-KR');
             if (st) {
-                st.textContent = `✅ ${done} · ${pick} ${steps}틱 완료`;
+                st.textContent = `✅ ${done} · ${pick} ${steps}틱 완료${modeTag}`;
                 st.style.color = '#86efac';
             }
             try { renderAdminStockList({ resetScroll: false }); } catch (_) { /* noop */ }
