@@ -655,6 +655,8 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     throw new HttpsError("failed-precondition", "No holdings.");
   }
 
+  const userRef = db.ref(`users/${uid}`);
+
   const sellConfig = siteConfig.sellConfig || {};
   const marketParams = siteConfig.marketParams || {};
   const basePrice = Number(sellConfig.basePrice ?? 10000);
@@ -666,12 +668,18 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const coinMul = Number(marketParams.coinImpactMultiplier ?? 1.85);
   const extraLiquidationFee = 0.08;
 
+  const rawInstrumentVal = stockSnap.val();
   let tradePrice = 0;
   let nextPrice = 0;
   const stockRef = db.ref(`${stockPath}/${stockId}`);
   const stockTx = await stockRef.transaction((cur) => {
-    if (!cur) return cur;
-    const prevPrice = Math.max(1, Number(cur.price || 1));
+    let effectiveCur = cur;
+    if (effectiveCur == null && rawInstrumentVal != null) {
+      effectiveCur = rawInstrumentVal;
+    }
+    const row = normalizeStockRow(effectiveCur);
+    if (!row) return undefined;
+    const prevPrice = Math.max(1, Number(row.price || 0));
     let sellPressure = 1;
     if (market !== "coin") {
       sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
@@ -681,30 +689,52 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     if (market === "coin") impact *= Number.isFinite(coinMul) && coinMul > 0 ? coinMul : 1.85;
     nextPrice = Math.max(1, Math.round(prevPrice * (1 - impact)));
     tradePrice = Math.max(1, Math.round(nextPrice * (1 - spread)));
-    return {
-      ...cur,
+    const { history: _h, ...rest } = row;
+    const baseVol = Number(row.volume);
+    const baseBuy = Number(row.buyVol);
+    const baseSell = Number(row.sellVol);
+    const merged = {
+      ...rest,
       price: nextPrice,
-      volume: Number(cur.volume || 0) + qty,
-      buyVol: Number(cur.buyVol || 0),
-      sellVol: Number(cur.sellVol || 0) + qty,
-      change: prevPrice > 0 ? (((nextPrice - prevPrice) / prevPrice) * 100).toFixed(market === "coin" ? 4 : 2) : "0.00",
+      volume: (Number.isFinite(baseVol) ? baseVol : 0) + qty,
+      buyVol: Number.isFinite(baseBuy) ? baseBuy : 0,
+      sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + qty,
+      change:
+        prevPrice > 0
+          ? (((nextPrice - prevPrice) / prevPrice) * 100).toFixed(market === "coin" ? 4 : 2)
+          : market === "coin"
+            ? "0.0000"
+            : "0.00",
     };
+    return jsonSanitizeForRtdb(stripUndefinedShallow(merged));
   });
   if (!stockTx.committed || !tradePrice) {
     throw new HttpsError("aborted", "Price update contention.");
   }
 
   const receive = Math.round(tradePrice * qty * (1 - fee - extraLiquidationFee));
-  const userRef = db.ref(`users/${uid}`);
+  const preUserSnap = await userRef.get();
+  const userSeedForTx = preUserSnap.exists()
+    ? JSON.parse(JSON.stringify(preUserSnap.val()))
+    : { cash: 1000000, stocks: {}, coins: {} };
+  let userTxSeeded = false;
   const userTx = await userRef.transaction((cur) => {
-    const u = cur || { cash: 1000000, stocks: {}, coins: {} };
+    let effectiveCur = cur;
+    if (effectiveCur == null && preUserSnap.exists()) {
+      effectiveCur = userSeedForTx;
+      if (!userTxSeeded) {
+        userTxSeeded = true;
+        console.warn("[liquidateAll] userTx cur was null; seeding from pre-read snapshot", uid);
+      }
+    }
+    const u = effectiveCur != null ? effectiveCur : { cash: 1000000, stocks: {}, coins: {} };
     const cash = Number(u.cash ?? 1000000);
     const stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
     const coins = u.coins && typeof u.coins === "object" ? u.coins : {};
     const book = market === "coin" ? coins : stocks;
     const pos = book?.[stockId] || { qty: 0, avg: 0 };
     const haveQty = Math.floor(Number(pos.qty || 0));
-    if (haveQty < qty && !isAdminAuth(auth)) return;
+    if (haveQty < qty && !isAdminAuth(auth)) return undefined;
     const newQty = haveQty - qty;
     const nextBook = { ...book };
     if (newQty <= 0) nextBook[stockId] = null;
