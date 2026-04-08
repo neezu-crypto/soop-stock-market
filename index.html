@@ -41,6 +41,24 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 20px; border: 1px solid var(--primary);
         }
         .wallet-info span { color: var(--primary); font-weight: 800; }
+        .wallet-bar-main {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .wallet-bar-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+        }
+        .wallet-inline-sep {
+            width: 1px;
+            height: 16px;
+            background: var(--border);
+            flex-shrink: 0;
+        }
         .market-mode-btn {
             background: var(--card-bg); color: var(--muted); border: 1px solid var(--border);
             padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer;
@@ -664,8 +682,12 @@
                 margin-right: 0 !important;
                 box-sizing: border-box !important;
             }
+            /* 테두리 박스가 #stock-list 안의 카드와 같은 좌우 폭(좌 46px 들여쓰기 + 래퍼 우측 배너 여백과 동일) */
             #live-ranking-banner-wrap {
-                padding: 12px max(4px, env(safe-area-inset-right, 0px)) 12px 46px !important;
+                margin-left: 46px !important;
+                width: calc(100% - 46px) !important;
+                max-width: none !important;
+                padding: 12px 14px !important;
                 box-sizing: border-box !important;
             }
             .notice-bar {
@@ -680,10 +702,76 @@
                 box-sizing: border-box !important;
             }
             .wallet-bar {
+                flex-direction: column;
+                align-items: stretch;
+                flex-wrap: nowrap;
+                gap: 0;
+                padding: 14px 12px;
+                border-radius: 14px;
+            }
+            .wallet-bar-main {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 12px !important;
+            }
+            .wallet-inline-sep {
+                display: none;
+            }
+            .wallet-bar-main > .wallet-info:nth-child(1) {
+                width: 100%;
+                font-size: 12px;
+                color: var(--text-sub);
+                line-height: 1.4;
+            }
+            .wallet-bar-main > .wallet-info:nth-child(1) span#my-cash {
+                font-size: clamp(1.15rem, 4.2vw, 1.35rem);
+                font-weight: 800;
+                color: var(--primary);
+                letter-spacing: -0.03em;
+            }
+            .wallet-bar-main > .wallet-info:nth-child(3) {
+                font-size: 11px;
+                color: var(--muted);
+            }
+            .wallet-bar-main > .wallet-info:nth-child(3) span {
+                font-size: 12px;
+                font-weight: 800;
+                color: #f59e0b;
+            }
+            .wallet-bar-main #coin-market-wallet-ui {
+                width: 100%;
+                justify-content: flex-start;
+            }
+            .wallet-bar-main #btn-open-asset-request {
+                width: 100%;
+                margin-left: 0 !important;
+                padding: 10px 14px !important;
+                border-radius: 10px !important;
+                font-size: 13px !important;
+            }
+            .wallet-bar-main #asset-request-status {
+                font-size: 11px !important;
+                padding: 6px 10px;
+                border-radius: 8px;
+                background: rgba(99, 102, 241, 0.1);
+                border: 1px solid rgba(99, 102, 241, 0.22);
+            }
+            .wallet-bar-meta {
+                align-items: stretch !important;
+                gap: 8px !important;
+                margin-top: 12px;
+                padding-top: 12px;
+                border-top: 1px solid var(--border);
+            }
+            .wallet-bar-meta > div:first-child,
+            .wallet-bar-meta > div:nth-child(2) {
+                font-size: 11px;
+                color: var(--muted);
+            }
+            .wallet-bar-meta #auth-status-bar {
+                justify-content: flex-start;
                 flex-wrap: wrap;
-                gap: 10px;
-                row-gap: 12px;
-                padding: 10px 6px;
+                gap: 8px;
             }
             #auth-anon .wallet-google-login {
                 min-height: 44px;
@@ -692,10 +780,22 @@
                 border-radius: 10px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.25);
             }
-            /* 제목/부제는 예전처럼 전체 폭 — 검색창만 종목 카드와 같은 열(테두리 폭), 안쪽 패딩은 기본 14px */
+            /* 제목·부제·검색 모두 종목 카드와 같은 열 폭(좌 46px) */
             header {
                 padding-left: 0;
                 padding-right: 0;
+                box-sizing: border-box;
+            }
+            #main-market-title {
+                margin-left: 46px !important;
+                width: calc(100% - 46px) !important;
+                max-width: none !important;
+                box-sizing: border-box;
+            }
+            #main-market-subtitle {
+                margin: 5px 0 0 46px !important;
+                width: calc(100% - 46px) !important;
+                max-width: none !important;
                 box-sizing: border-box;
             }
             #search-input {
@@ -2235,12 +2335,12 @@
 
 <!-- ── 지갑 영역 ── -->
     <div class="wallet-bar">
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div class="wallet-bar-main">
             <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
-            <div style="width:1px; height:16px; background:var(--border);"></div>
+            <div class="wallet-inline-sep" aria-hidden="true"></div>
             <div class="wallet-info">1회 최대 거래: <span id="wallet-max-trade" style="color:#f59e0b;">1억원</span></div>
             <div id="coin-market-wallet-ui" style="display:none; align-items:center; flex-wrap:wrap; gap:6px;">
-                <div style="width:1px; height:16px; background:var(--border);"></div>
+                <div class="wallet-inline-sep" aria-hidden="true"></div>
                 <div class="wallet-market-toggle" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                     <button type="button" id="btn-market-stock" class="market-mode-btn active" onclick="setActiveMarket('stock')" title="주식 시장">📈 주식</button>
                     <button type="button" id="btn-market-coin" class="market-mode-btn" onclick="setActiveMarket('coin')" title="코인 시장">🪙 코인</button>
@@ -2252,7 +2352,7 @@
             </button>
             <span id="asset-request-status" style="display:none; font-size:11px; color:#a5b4fc; font-weight:700;"></span>
         </div>
-        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        <div class="wallet-bar-meta">
             <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
             <div style="font-size:12px;color:var(--text-sub);">
                 🟢 실시간 접속 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>
