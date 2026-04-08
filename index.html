@@ -1608,11 +1608,11 @@
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
-                    <div class="intro-update-text"><b>👑 자산·보유 랭킹 열람</b> — TOP100 + 차트에서 종목별 익명 보유 TOP3 · 별풍선 30개 · 승인 후 12시간</div>
+                    <div class="intro-update-text"><b>👑 자산·보유 랭킹 열람</b> — TOP100 + 차트에서 종목별 익명 보유 TOP3 · 별풍선 <span id="intro-asset-ranking-cost">30</span>개 · 승인 후 12시간</div>
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
-                    <div class="intro-update-text"><b>🎰 정규장 연장 이벤트</b> — 별풍선 33개 후원 시 25% 확률로 정규장 1시간 즉시 연장!</div>
+                    <div class="intro-update-text"><b>🎰 정규장 연장 이벤트</b> — 별풍선 <span id="intro-extend-balloons">33</span>개 후원 시 25% 확률로 정규장 1시간 즉시 연장!</div>
                 </div>
                 <div class="intro-update-item">
                     <span class="intro-update-badge new">NEW</span>
@@ -1698,7 +1698,7 @@
             <div class="subscribe-gate-icon">👑</div>
             <div id="ranking-gate-copy-default">
                 <div class="subscribe-gate-title">자산 랭킹 열람 신청</div>
-                <div class="subscribe-gate-desc">자산 랭킹 TOP100 · 차트에서 종목별 <b>익명</b> 보유 1~3위<br>별풍선 30개 · 동일 12시간 열람</div>
+                <div class="subscribe-gate-desc">자산 랭킹 TOP100 · 차트에서 종목별 <b>익명</b> 보유 1~3위<br>별풍선 <span id="p-asset-ranking">30</span>개 · 동일 12시간 열람</div>
             </div>
             <div id="ranking-gate-copy-expired" style="display:none;">
                 <div class="subscribe-gate-title">열람 기간이 만료되었습니다</div>
@@ -1773,7 +1773,7 @@
         <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:14px; margin-bottom:16px;">
             <div style="font-size:13px; color:var(--text-main); font-weight:800; margin-bottom:8px;">💡 이벤트 안내</div>
             <div style="font-size:13px; color:var(--text-soft); line-height:1.8;" id="extend-modal-desc">
-                개발자 스트리밍 방송에서 <b style="color:#f59e0b;">별풍선 33개</b>로 후원하면<br>
+                개발자 스트리밍 방송에서 <b style="color:#f59e0b;">별풍선 <span id="p-extend-balloons">33</span>개</b>로 후원하면<br>
                 룰렛을 통해 <b style="color:#f59e0b;">25% 확률</b>로<br>
                 <b style="color:#22c55e;">정규장 1시간 즉시 연장</b>이 가능합니다!
             </div>
@@ -1824,7 +1824,7 @@
         </div>
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 포트폴리오 패널 중계방 탭</li>
-            <li>⏱ <b>단위:</b> 비정규장 시간당 10개 / 정규장 시간당 15개</li>
+            <li>⏱ <b>단위:</b> 비정규장 시간당 <span id="p-relay-off">10</span>개 / 정규장 시간당 <span id="p-relay-reg">15</span>개</li>
             <li>✅ <b>노출:</b> 관리자 수락 시점부터 신청 시간만큼</li>
             <li>📺 <b>슬롯:</b> 최대 3개 (마감 시 신청 불가)</li>
         </ul>
@@ -1860,7 +1860,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 거래소 우측 상단 배너</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
-            <li>💰 <b>비용:</b> 1일 당 별풍선 20개</li>
+            <li>💰 <b>비용:</b> 1일 당 별풍선 <span id="p-broadcast-day">20</span>개</li>
         </ul>
 
         <!-- 신청 폼 -->
@@ -2008,6 +2008,9 @@
         <p style="font-size:13px; color:var(--text-sub); margin:0 0 12px 0; line-height:1.5;">
             관리자 검토 후 잔고에 지원금이 지급될 수 있습니다. 중복 신청은 제한됩니다.
         </p>
+        <div style="font-size:12px; color:var(--text-sub); line-height:1.55; margin:0 0 14px 0; padding:10px 12px; border-radius:10px; border:1px dashed rgba(245,158,11,0.4); background:rgba(245,158,11,0.07);">
+            <b style="color:#f59e0b;">🎰 라이브 룰렛</b> — 실시간 라이브에서 룰렛을 돌리면 <b>꽝 없이</b> 자산을 획득할 수 있습니다. (별풍선 약정 참고: <span id="p-asset-support-roulette">22</span>개)
+        </div>
         <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">Your Nickname <span style="color:#f87171;">*</span></label>
         <input type="text" id="asset-request-nickname" maxlength="80" placeholder="Enter your nickname" autocomplete="off"
             oninput="window.syncAssetRequestSubmitState && window.syncAssetRequestSubmitState()"
@@ -2019,6 +2022,9 @@
             <button type="button" onclick="window.closeAssetRequestModal()" style="flex:1; min-width:88px; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button type="button" id="asset-request-submit" disabled onclick="window.submitAssetRequest()"
                 style="flex:1; min-width:88px; background:var(--primary); color:var(--on-primary); border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px; opacity:0.45;">제출</button>
+            <button type="button" class="btn-asset-event"
+                onclick="window.open('https://play.sooplive.com/skftodwocks2','_blank','noopener,noreferrer')"
+                title="실시간 방송에서 룰렛 참여">🎰 룰렛</button>
             <button type="button" class="btn-asset-event"
                 onclick="window.open('https://www.sooplive.com/station/skftodwocks2/post/190426505','_blank','noopener,noreferrer')"
                 title="SOOP 스테이션 이벤트 공지">🎉 이벤트</button>
@@ -2043,7 +2049,7 @@
             <li>📊 <b>노출:</b> 차트창을 여는 모든 유저에게 단독 노출</li>
             <li>🔗 <b>기능:</b> 클릭 시 원하는 링크로 즉시 이동</li>
             <li>🖼 <b>형식:</b> 이미지 · GIF 모두 지원</li>
-            <li>💰 <b>비용:</b> 1일 당 별풍선 80개</li>
+            <li>💰 <b>비용:</b> 1일 당 별풍선 <span id="p-chart-day">80</span>개</li>
         </ul>
 
         <!-- 신청 폼 -->
@@ -2319,6 +2325,78 @@ const firebaseConfig = {
 const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const fns  = getFunctions(app, "us-central1");
+
+/** 관리자 `siteConfig/pricing` — 메인 화면 유료 단가 실시간 반영 */
+const PAID_PRICING_DEFAULTS = Object.freeze({
+    assetRankingBalloons: 30,
+    broadcastBannerPerDay: 20,
+    chartBannerPerDay: 80,
+    relayRegularPerHour: 15,
+    relayOffPeakPerHour: 10,
+    regularExtendBalloons: 33,
+    /** 자산 지원 모달 · 라이브 룰렛 안내용 별풍선 약정 (표시 전용) */
+    assetSupportRouletteBalloons: 22,
+});
+let livePaidPricing = { ...PAID_PRICING_DEFAULTS };
+
+function mergePaidPricingClient(raw) {
+    const d = PAID_PRICING_DEFAULTS;
+    const o = raw && typeof raw === 'object' ? raw : {};
+    const clamp = (v, fb) => {
+        const n = Math.floor(Number(v));
+        return Number.isFinite(n) && n > 0 ? Math.min(999, n) : fb;
+    };
+    return {
+        assetRankingBalloons: clamp(o.assetRankingBalloons, d.assetRankingBalloons),
+        broadcastBannerPerDay: clamp(o.broadcastBannerPerDay, d.broadcastBannerPerDay),
+        chartBannerPerDay: clamp(o.chartBannerPerDay, d.chartBannerPerDay),
+        relayRegularPerHour: clamp(o.relayRegularPerHour, d.relayRegularPerHour),
+        relayOffPeakPerHour: clamp(o.relayOffPeakPerHour, d.relayOffPeakPerHour),
+        regularExtendBalloons: clamp(o.regularExtendBalloons, d.regularExtendBalloons),
+        assetSupportRouletteBalloons: clamp(o.assetSupportRouletteBalloons, d.assetSupportRouletteBalloons),
+    };
+}
+
+function applyPaidPricingToUserUi() {
+    const p = livePaidPricing;
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(val);
+    };
+    setText('p-asset-ranking', p.assetRankingBalloons);
+    setText('p-broadcast-day', p.broadcastBannerPerDay);
+    setText('p-chart-day', p.chartBannerPerDay);
+    setText('p-relay-off', p.relayOffPeakPerHour);
+    setText('p-relay-reg', p.relayRegularPerHour);
+    setText('p-extend-balloons', p.regularExtendBalloons);
+    setText('intro-asset-ranking-cost', p.assetRankingBalloons);
+    setText('intro-extend-balloons', p.regularExtendBalloons);
+    setText('p-asset-support-roulette', p.assetSupportRouletteBalloons);
+    try { window.updateRelayCost?.(); } catch (_) { /* noop */ }
+    try { window.updatePromoCost?.(); } catch (_) { /* noop */ }
+    const chartDays = parseInt(document.getElementById('chart-ad-days')?.value || '', 10);
+    const chartCostEl = document.getElementById('chart-ad-cost');
+    if (chartCostEl && chartDays > 0) {
+        const t = chartDays * p.chartBannerPerDay;
+        chartCostEl.textContent = `총 별풍선 ${t.toLocaleString()}개`;
+        chartCostEl.style.color = 'var(--primary)';
+    }
+    try {
+        const em = document.getElementById('extend-modal');
+        if (em?.classList.contains('active')) {
+            const isExtend = (document.getElementById('extend-modal-title')?.textContent || '').includes('연장');
+            window.openExtendModal?.(isExtend);
+        }
+    } catch (_) { /* noop */ }
+    try { updateExtendRequestBar(); } catch (_) { /* noop */ }
+}
+
+try {
+    onValue(ref(db, 'siteConfig/pricing'), (snap) => {
+        livePaidPricing = mergePaidPricingClient(snap.val());
+        applyPaidPricingToUserUi();
+    });
+} catch (_) { /* noop */ }
 
 /** Firebase 서버와의 시각 차이(ms). Date.now()+값 ≈ 서버 시각 — 정규/비정규장·쿨다운이 로컬 시계 조작에 흔들리지 않게 함 */
 let serverTimeOffsetMs = 0;
@@ -2644,7 +2722,6 @@ let rankingAccessLegacyCache = null;
 let rankingAccessExpiryTimer = null;
 let rankingAccessRemainingInterval = null;
 const RANKING_ACCESS_DURATION_MS = 12 * 60 * 60 * 1000;
-const ASSET_RANKING_ACCESS_BALLOON_COST = 30;
 
 // ── 보유 주식 구독 상태 ──────────────────────────────────────
 let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
@@ -2903,10 +2980,12 @@ window.closeRelayModal = function() {
 
 // 신청 시점부터 N시간 중 정규장 구간 계산
 function calcRelayCost(hours) {
+    const offRate = livePaidPricing.relayOffPeakPerHour;
+    const regRate = livePaidPricing.relayRegularPerHour;
     const mh = siteConfig?.marketHours;
     if (!mh || !mh.enabled || !mh.regularOpen || !mh.regularClose) {
         // 정규장 미설정 → 전체 비정규장 단가
-        return { regular: 0, offPeak: hours, total: hours * 10 };
+        return { regular: 0, offPeak: hours, total: hours * offRate };
     }
     const [roh, rom] = mh.regularOpen.split(':').map(Number);
     const [rch, rcm] = mh.regularClose.split(':').map(Number);
@@ -2926,7 +3005,7 @@ function calcRelayCost(hours) {
 
     const regularHours = regularMins / 60;
     const offPeakHours = hours - regularHours;
-    const total = Math.round(regularHours * 15 + offPeakHours * 10);
+    const total = Math.round(regularHours * regRate + offPeakHours * offRate);
     return { regular: regularHours, offPeak: offPeakHours, total };
 }
 
@@ -2937,9 +3016,11 @@ window.updateRelayCost = function() {
     if (!hours || hours <= 0) { costEl.textContent = ''; return; }
 
     const { regular, offPeak, total } = calcRelayCost(hours);
+    const prOff = livePaidPricing.relayOffPeakPerHour;
+    const prReg = livePaidPricing.relayRegularPerHour;
     let detail = '';
     if (regular > 0 && offPeak > 0) {
-        detail = ` (정규장 ${regular.toFixed(1)}h×15 + 비정규장 ${offPeak.toFixed(1)}h×10)`;
+        detail = ` (정규장 ${regular.toFixed(1)}h×${prReg} + 비정규장 ${offPeak.toFixed(1)}h×${prOff})`;
     } else if (regular > 0) {
         detail = ` (전구간 정규장)`;
     }
@@ -6483,6 +6564,7 @@ function updateExtendRequestBar() {
     const regularClosing = isRegular && remainMins > 0 && remainMins <= 10;
     const marketClosing  = !isRegular && closeRemainMins <= 10;
 
+    const eb = livePaidPricing.regularExtendBalloons;
     if (isRegular) {
         const closingStyle = regularClosing
             ? 'background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.4);'
@@ -6492,7 +6574,7 @@ function updateExtendRequestBar() {
             : `⚡ <b style="color:#f59e0b;">정규장 진행 중</b> · ${remainText}`;
         const closingDesc = regularClosing
             ? '지금 연장하지 않으면 곧 비정규장으로 전환됩니다!'
-            : '별풍선 33개 후원으로 연장 도전!';
+            : `별풍선 ${eb}개 후원으로 연장 도전!`;
         bar.style.display = 'flex';
         bar.innerHTML = `
             <div class="extend-request-bar" style="${closingStyle}">
@@ -6511,7 +6593,7 @@ function updateExtendRequestBar() {
             : `📉 <b style="color:var(--primary);">비정규장</b> 진행 중`;
         const closingDesc = marketClosing
             ? '곧 거래가 종료됩니다. 마지막 거래 기회입니다!'
-            : '별풍선 33개 후원으로 정규장을 열어보세요!';
+            : `별풍선 ${eb}개 후원으로 정규장을 열어보세요!`;
         bar.style.display = 'flex';
         bar.innerHTML = `
             <div class="extend-request-bar off-peak" style="${closingStyle}">
@@ -6527,12 +6609,13 @@ function updateExtendRequestBar() {
 window.openExtendModal = function(isRegular) {
     const titleEl = document.getElementById('extend-modal-title');
     const descEl  = document.getElementById('extend-modal-desc');
+    const eb = livePaidPricing.regularExtendBalloons;
     if (isRegular) {
         titleEl.textContent = '🎰 정규장 연장 요청';
-        descEl.innerHTML = `개발자 스트리밍 방송에서 <b style="color:#f59e0b;">별풍선 33개</b>로 후원하면<br>룰렛을 통해 <b style="color:#f59e0b;">25% 확률</b>로<br><b style="color:#22c55e;">정규장 1시간 즉시 연장</b>이 가능합니다!`;
+        descEl.innerHTML = `개발자 스트리밍 방송에서 <b style="color:#f59e0b;">별풍선 ${eb}개</b>로 후원하면<br>룰렛을 통해 <b style="color:#f59e0b;">25% 확률</b>로<br><b style="color:#22c55e;">정규장 1시간 즉시 연장</b>이 가능합니다!`;
     } else {
         titleEl.textContent = '🎰 정규장 시작 요청';
-        descEl.innerHTML = `개발자 스트리밍 방송에서 <b style="color:var(--primary);">별풍선 33개</b>로 후원하면<br>룰렛을 통해 <b style="color:var(--primary);">25% 확률</b>로<br><b style="color:#22c55e;">정규장 1시간 즉시 시작</b>이 가능합니다!`;
+        descEl.innerHTML = `개발자 스트리밍 방송에서 <b style="color:var(--primary);">별풍선 ${eb}개</b>로 후원하면<br>룰렛을 통해 <b style="color:var(--primary);">25% 확률</b>로<br><b style="color:#22c55e;">정규장 1시간 즉시 시작</b>이 가능합니다!`;
     }
     document.getElementById('extend-modal').classList.add('active');
 };
@@ -6905,14 +6988,15 @@ window.submitAssetRankingAccessRequest = async function() {
     statusEl.style.color = 'var(--text-sub)';
     statusEl.textContent = '신청 중...';
     try {
+        const rankCost = livePaidPricing.assetRankingBalloons;
         await set(ref(db, `assetRankingRequests/${userUID}`), {
             nickname, soopId, uid: userUID,
             status: 'pending',
             createdAt: Date.now(),
-            cost: ASSET_RANKING_ACCESS_BALLOON_COST
+            cost: rankCost
         });
         statusEl.style.color = '#22c55e';
-        statusEl.textContent = `✅ 신청 완료! 별풍선 ${ASSET_RANKING_ACCESS_BALLOON_COST}개 후원 페이지를 엽니다. 검수 후 랭킹이 활성화됩니다.`;
+        statusEl.textContent = `✅ 신청 완료! 별풍선 ${rankCost}개 후원 페이지를 엽니다. 검수 후 랭킹이 활성화됩니다.`;
         openStarBalloonGiftForRanking();
         setTimeout(() => checkRankingAccessOnce(), 1500);
     } catch(e) {
@@ -7016,7 +7100,8 @@ document.addEventListener('input', (e) => {
         const days   = parseInt(e.target.value);
         const costEl = document.getElementById('chart-ad-cost');
         if (!costEl) return;
-        costEl.textContent = days > 0 ? `총 별풍선 ${(days * 80).toLocaleString()}개` : '';
+        const per = livePaidPricing.chartBannerPerDay;
+        costEl.textContent = days > 0 ? `총 별풍선 ${(days * per).toLocaleString()}개` : '';
         costEl.style.color = 'var(--primary)';
     }
 });
@@ -7046,12 +7131,14 @@ window.submitChartAdRequest = async function() {
     msgEl.style.color = 'var(--text-sub)';
     msgEl.textContent = '신청 중...';
     try {
+        const perDay = livePaidPricing.chartBannerPerDay;
+        const chartTotal = days * perDay;
         await set(ref(db, `chartAdRequests/chart_${uid}_${Date.now()}`), {
             nickname, imgUrl, link: linkUrl, days, uid,
-            status: 'pending', createdAt: Date.now(), cost: days * 80
+            status: 'pending', createdAt: Date.now(), cost: chartTotal
         });
         msgEl.style.color = '#22c55e';
-        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 80개 = ${days * 80}개)`;
+        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 ${perDay}개 = ${chartTotal}개)`;
         document.getElementById('chart-ad-form').style.opacity      = '0.5';
         document.getElementById('chart-ad-form').style.pointerEvents = 'none';
         // 후원 창 자동 오픈 (모바일/PC 분기)
@@ -7098,7 +7185,8 @@ window.updatePromoCost = function() {
     const days   = parseInt(document.getElementById('promo-days').value);
     const costEl = document.getElementById('promo-cost');
     if (!costEl) return;
-    costEl.textContent = days > 0 ? `총 별풍선 ${(days * 20).toLocaleString()}개 (${(days * 20 * 110).toLocaleString()}원)` : '';
+    const per = livePaidPricing.broadcastBannerPerDay;
+    costEl.textContent = days > 0 ? `총 별풍선 ${(days * per).toLocaleString()}개 (${(days * per * 110).toLocaleString()}원)` : '';
 };
 
 window.submitPromoRequest = async function() {
@@ -7124,6 +7212,8 @@ window.submitPromoRequest = async function() {
     try {
         const reqId  = `${soopId}_${Date.now()}`;
         const imgUrl = getSoopImgUrl(soopId);
+        const perDay = livePaidPricing.broadcastBannerPerDay;
+        const promoTotal = days * perDay;
         await set(ref(db, `adRequests/${reqId}`), {
             nickname,
             soopId,
@@ -7133,10 +7223,10 @@ window.submitPromoRequest = async function() {
             uid,
             status:    'pending',  // pending / approved / rejected
             createdAt: Date.now(),
-            cost:      days * 20   // 별풍선
+            cost:      promoTotal
         });
         msgEl.style.color = '#22c55e';
-        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 20개 = ${days * 20}개)`;
+        msgEl.textContent = `✅ 신청 완료! 검수 후 등록됩니다. (${days}일 × 별풍선 ${perDay}개 = ${promoTotal}개)`;
         document.getElementById('promo-form').style.opacity = '0.5';
         document.getElementById('promo-form').style.pointerEvents = 'none';
         // 후원 창 자동 오픈 (모바일/PC 분기)
