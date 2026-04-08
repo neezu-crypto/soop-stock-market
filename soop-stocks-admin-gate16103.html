@@ -943,24 +943,6 @@
             <span class="dot" style="background:#334155;"></span>
             <span style="color:#64748b;">상태 불러오는 중...</span>
         </div>
-        <div class="info-box" style="margin-top:14px; color:#93c5fd;">
-            <b>1단계 서버 주식 매매</b> — 켜면 메인 앱에서 <b>주식</b>만 Cloud Function <code>trade</code>로 처리합니다. 코인·전량매도 로직은 그대로입니다.<br>
-            <span style="color:#38bdf8;">Firebase: <code>siteConfig/useServerTrade</code> (boolean) · 기본값 꺼짐 · 규칙 변경 없음</span>
-        </div>
-        <div class="toggle-wrap" style="margin-top:10px;">
-            <div>
-                <div class="toggle-label">서버 주식 매매 (베타)</div>
-                <div class="toggle-sub">OFF 권장 · 검증 후 단계적으로 켜기</div>
-            </div>
-            <label class="toggle-switch">
-                <input type="checkbox" id="use-server-trade-toggle" onchange="toggleUseServerTrade(this.checked)">
-                <span class="toggle-slider" style="--checked-color:#38bdf8;"></span>
-            </label>
-        </div>
-        <div class="maintenance-status" id="use-server-trade-status" style="margin-top:8px;">
-            <span class="dot" style="background:#334155;"></span>
-            <span style="color:#64748b;">상태 불러오는 중...</span>
-        </div>
         </div>
         </div>
     </div>
@@ -2817,45 +2799,6 @@
         }
     };
 
-    async function loadUseServerTradeStatus() {
-        const toggle = document.getElementById('use-server-trade-toggle');
-        const statusEl = document.getElementById('use-server-trade-status');
-        try {
-            const snap = await get(ref(db, 'siteConfig/useServerTrade'));
-            const isOn = snap.exists() ? snap.val() === true : false;
-            if (toggle) toggle.checked = isOn;
-            if (statusEl) {
-                statusEl.innerHTML = isOn
-                    ? `<span class="dot" style="background:#38bdf8;"></span><span style="color:#38bdf8;">서버 주식 매매 ON — 주식 거래가 Cloud Function으로 처리됩니다.</span>`
-                    : `<span class="dot" style="background:#64748b;"></span><span style="color:#94a3b8;">서버 주식 매매 OFF — 주식은 기존 클라이언트(RTDB) 경로</span>`;
-            }
-        } catch (e) {
-            if (statusEl) {
-                statusEl.innerHTML = `<span class="dot" style="background:#ef4444;"></span><span style="color:#ef4444;">불러오기 실패</span>`;
-            }
-        }
-    }
-
-    window.toggleUseServerTrade = async function(isOn) {
-        if (!isAdmin()) return;
-        const toggle = document.getElementById('use-server-trade-toggle');
-        const msg = isOn
-            ? '서버 주식 매매(베타)를 켜시겠습니까?\n\n주식 일반 매매만 Cloud Function trade로 처리됩니다. 코인은 변경되지 않습니다.'
-            : '서버 주식 매매를 끄시겠습니까?\n\n주식이 기존 클라이언트 RTDB 거래로 돌아갑니다.';
-        if (!confirm(msg)) {
-            if (toggle) toggle.checked = !isOn;
-            return;
-        }
-        try {
-            await set(ref(db, 'siteConfig/useServerTrade'), isOn);
-            await loadUseServerTradeStatus();
-            alert(isOn ? '서버 주식 매매가 켜졌습니다.' : '서버 주식 매매가 꺼졌습니다.');
-        } catch (e) {
-            alert('변경 실패: ' + (e?.message || e));
-            if (toggle) toggle.checked = !isOn;
-        }
-    };
-
     let pendingLogoutUiTimeout = null;
     const LOGOUT_UI_DEBOUNCE_MS = 900;
 
@@ -2880,7 +2823,6 @@
             await loadCoinsTop10Once();
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
-            await loadUseServerTradeStatus();
             await loadMarketHours();
             startRealtimeRequestListeners();
             startDailyAutoSettingsListener();
