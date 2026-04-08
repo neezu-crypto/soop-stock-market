@@ -1076,6 +1076,24 @@
                 <b>가격 기준 TOP10</b>을 내림차순/오름차순으로 확인하고, 각 코인 가격을 직접 수정할 수 있습니다.
             </div>
             <div id="coins-top10-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+            <div style="border-top:1px solid #334155; padding-top:16px; margin-top:12px;">
+            <div class="info-box" style="border-color:#a855f7; color:#e9d5ff;">
+                <b>🤖 코인 시세 자동 조정 (유동성 시뮬)</b> — <code>coins/</code> 시세 <b>상위 10개</b> 중 무작위 1종목을 고른 뒤, <b>연속 매수·매도</b>를 관리자 권한으로 실행해 체결 임팩트만 반영합니다. (유저 잔고·보유 없음 · <code>adminExecuteCoinTrade</code>)<br>
+                <span style="color:#94a3b8;">관리자 탭이 열려 있는 동안만 자동 반복이 동작합니다.</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px;">
+                <button type="button" class="btn-primary" style="background:#a855f7; color:white;" onclick="runCoinLiquidityBotOnce(false)">🎲 1회 실행</button>
+                <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:#f8fafc; cursor:pointer;">
+                    <input type="checkbox" id="coin-liquidity-bot-toggle" onchange="toggleCoinLiquidityBot(this.checked)">
+                    자동 반복
+                </label>
+                <span style="font-size:12px; color:#94a3b8;">간격</span>
+                <input type="number" id="coin-liquidity-bot-interval" value="120" min="30" max="7200" step="10"
+                    style="width:72px; background:#0f172a; border:1px solid #334155; color:#e9d5ff; padding:6px 8px; border-radius:8px; font-size:13px; text-align:center;">
+                <span style="font-size:12px; color:#94a3b8;">초</span>
+            </div>
+            <div id="coin-liquidity-bot-status" style="font-size:12px; color:#94a3b8; margin-top:8px;">대기</div>
+            </div>
         </div>
         </div>
     </div>
@@ -1323,22 +1341,6 @@
             <button type="button" class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="syncCoinsFromStocks()">코인 시장 종목 생성 (미존재만)</button>
         </div>
         <div id="sync-coins-status" style="font-size:13px; color:#94a3b8; margin-top:8px;"></div>
-        <div class="info-box" style="margin-top:16px; border-color:#a855f7; color:#e9d5ff;">
-            <b>🤖 코인 시세 자동 조정 (유동성 시뮬)</b> — <code>coins/</code> 시세 <b>상위 10개</b> 중 무작위 1종목을 고른 뒤, <b>연속 매수·매도</b>를 관리자 권한으로 실행해 체결 임팩트만 반영합니다. (유저 잔고·보유 없음 · <code>adminExecuteCoinTrade</code>)<br>
-            <span style="color:#94a3b8;">관리자 탭이 열려 있는 동안만 자동 반복이 동작합니다.</span>
-        </div>
-        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px;">
-            <button type="button" class="btn-primary" style="background:#a855f7; color:white;" onclick="runCoinLiquidityBotOnce(false)">🎲 1회 실행</button>
-            <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:#f8fafc; cursor:pointer;">
-                <input type="checkbox" id="coin-liquidity-bot-toggle" onchange="toggleCoinLiquidityBot(this.checked)">
-                자동 반복
-            </label>
-            <span style="font-size:12px; color:#94a3b8;">간격</span>
-            <input type="number" id="coin-liquidity-bot-interval" value="120" min="30" max="7200" step="10"
-                style="width:72px; background:#0f172a; border:1px solid #334155; color:#e9d5ff; padding:6px 8px; border-radius:8px; font-size:13px; text-align:center;">
-            <span style="font-size:12px; color:#94a3b8;">초</span>
-        </div>
-        <div id="coin-liquidity-bot-status" style="font-size:12px; color:#94a3b8; margin-top:8px;">대기</div>
         </div>
         </div>
     </div>
