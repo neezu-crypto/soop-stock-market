@@ -1050,10 +1050,13 @@
                         onclick="marketHoursRegularStartNow()">⚡ 즉시시작</button>
                     <button type="button" class="btn-primary" style="background:#334155; color:#e2e8f0; font-size:13px; padding:8px 14px; border:1px solid #475569; border-radius:8px; font-weight:800; cursor:pointer;"
                         onclick="marketHoursExtendRegular1h()">+1시간 연장</button>
+                    <button type="button" class="btn-primary" style="background:#f59e0b; color:#0f172a; font-size:13px; padding:8px 14px; border:none; border-radius:8px; font-weight:800; cursor:pointer;"
+                        onclick="marketHoursRegularInstant1hOnly()">⏱ 즉시 1시간만</button>
                 </div>
                 <div style="font-size:11px; color:#64748b; margin-top:8px; line-height:1.45;">
                     <b>즉시시작</b> — 정규장 시작을 지금(KST)으로 맞추고, 기존 정규장 길이만큼 종료 시각을 함께 이동합니다.<br>
-                    <b>+1시간 연장</b> — 정규장 종료 시각만 60분 늘립니다. 자정을 넘어 익일 새벽 시각으로 설정될 수 있습니다.
+                    <b>+1시간 연장</b> — 정규장 종료 시각만 60분 늘립니다. 자정을 넘어 익일 새벽 시각으로 설정될 수 있습니다.<br>
+                    <b>즉시 1시간만</b> — <b>정규장만</b> 지금(KST) ~ 60분 후로 고정합니다. <b>전체 오픈 시간</b> 입력은 그대로 두며, 필요하면 별도로 조정하세요.
                 </div>
             </div>
 
@@ -4818,6 +4821,30 @@
         const msg =
             `정규장 종료: ${rc} → ${newRc}${overnightO || overnightN ? ' (자정·익일 구간 포함 가능)' : ''}\n\nFirebase에 저장하시겠습니까?`;
         if (!confirm(msg)) return;
+        document.getElementById('regular-close').value = newRc;
+        try {
+            await persistMarketHoursFromInputs();
+            alert('✅ 시장 운영 시간이 저장되었습니다!');
+        } catch (e) {
+            alert('저장 실패: ' + e.message);
+        }
+    };
+
+    /** 정규장만 지금(KST)부터 정확히 1시간. 전체 오픈(open/close)은 입력·DB 모두 유지 */
+    window.marketHoursRegularInstant1hOnly = async function() {
+        if (!isAdmin()) return;
+        const nowM = kstNowMinutes();
+        const newRo = formatMinutesToTime(nowM);
+        const newRc = formatMinutesToTime(nowM + 60);
+        if (newRo === newRc)
+            return alert('정규장 시작·종료 시각이 같아 저장할 수 없습니다.');
+        const overnight = newRo > newRc;
+        const msg =
+            `정규장만 변경: ${newRo} ~ ${newRc}${overnight ? ' (익일)' : ''} (정확히 1시간)\n` +
+            `전체 오픈 시간은 현재 입력값 그대로 저장됩니다.\n\n` +
+            `Firebase에 저장하시겠습니까?`;
+        if (!confirm(msg)) return;
+        document.getElementById('regular-open').value = newRo;
         document.getElementById('regular-close').value = newRc;
         try {
             await persistMarketHoursFromInputs();
