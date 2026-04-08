@@ -626,7 +626,7 @@
             -ms-overflow-style: none;
         }
         .banner-container::-webkit-scrollbar { display: none; }
-        @media (max-width: 1400px) { 
+        @media (max-width: 1400px) and (min-width: 641px) { 
             .banner-container { 
                 right: 20px; 
                 max-height: calc(100vh - 150px);
@@ -660,7 +660,7 @@
             }
             .banner-container {
                 top: 85px;
-                right: 12px;
+                right: 0;
                 left: auto;
                 bottom: auto;
                 flex-direction: column;
@@ -668,7 +668,7 @@
                 justify-content: flex-start;
                 align-items: center;
                 gap: 15px;
-                padding: 10px;
+                padding: 10px 0 10px 8px;
                 min-height: 0;
                 max-height: calc(100vh - 100px);
                 overflow-x: hidden;
@@ -737,7 +737,6 @@
         .promo-benefit-box { background: rgba(56,189,248,0.1); padding: 15px; border-radius: 12px; border: 1px dashed var(--primary); margin-bottom: 20px; }
         .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }
         .btn-confirm-contact { width: 100%; background: var(--primary); color: var(--bg-color); border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 15px; }
-        @media (max-width: 1400px) { .banner-container { right: 20px; } }
         @keyframes loading-blink { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
         .banner-circle span[id^="loader-"] { animation: loading-blink 1.5s infinite; }
         .img-loaded { display: block !important; opacity: 1 !important; }
