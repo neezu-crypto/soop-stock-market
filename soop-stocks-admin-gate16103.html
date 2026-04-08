@@ -3443,10 +3443,12 @@
                 return;
             }
             const pick = rows[Math.floor(Math.random() * rows.length)].id;
+            const pickMeta = data[pick] || {};
+            const pickLabel = String(pickMeta.name || allStocksData[pick]?.name || pick).trim() || pick;
             const steps = 4 + Math.floor(Math.random() * 8);
             const modeTag = sellOnly ? ' · 매도만' : '';
             if (st) {
-                st.textContent = `실행 중… ${pick} · ${steps}연속${modeTag}`;
+                st.textContent = `실행 중… ${pickLabel} · ${steps}연속${modeTag}`;
                 st.style.color = '#fbbf24';
             }
             for (let i = 0; i < steps; i++) {
@@ -3458,7 +3460,7 @@
             }
             const done = new Date().toLocaleTimeString('ko-KR');
             if (st) {
-                st.textContent = `✅ ${done} · ${pick} ${steps}틱 완료${modeTag}`;
+                st.textContent = `✅ ${done} · ${pickLabel} ${steps}틱 완료${modeTag}`;
                 st.style.color = '#86efac';
             }
             try { renderAdminStockList({ resetScroll: false }); } catch (_) { /* noop */ }
