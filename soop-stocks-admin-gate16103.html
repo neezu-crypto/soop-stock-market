@@ -947,6 +947,40 @@
         </div>
     </div>
 
+    <!-- 💰 유료 단가 (별풍선) -->
+    <div class="container" style="display:block; border-color:#a855f7;">
+        <div class="accordion-header">
+            <h1>💰 유료 단가 (별풍선)</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box" style="border-color:#a855f7; color:#e9d5ff;">
+            메인 페이지의 <b>홍보·배너·중계·랭킹·정규장 이벤트</b> 등에 표시되는 별풍선 약정 수를 즉시 변경합니다.<br>
+            <span style="color:#94a3b8;">저장 시 <code>siteConfig/pricing</code>에 기록되며, 접속 중인 사용자 화면에 실시간 반영됩니다.</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px;">
+            <label style="color:#94a3b8;">자산 랭킹 열람 약정 (개)</label>
+            <input type="number" id="pricing-asset-ranking" min="1" max="999" value="30" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">방송국 배너 (개/일)</label>
+            <input type="number" id="pricing-broadcast-per-day" min="1" max="999" value="20" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">차트 하단 배너 (개/일)</label>
+            <input type="number" id="pricing-chart-per-day" min="1" max="999" value="80" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">중계방 · 정규장 (개/시간)</label>
+            <input type="number" id="pricing-relay-regular-h" min="1" max="999" value="15" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">중계방 · 비정규장 (개/시간)</label>
+            <input type="number" id="pricing-relay-offpeak-h" min="1" max="999" value="10" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">정규장 연장/시작 룰렛 (개/회)</label>
+            <input type="number" id="pricing-extend-balloons" min="1" max="999" value="33" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+        </div>
+        <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn-success" onclick="savePaidPricingFromAdmin()">💾 저장</button>
+            <span id="pricing-admin-status" style="font-size:12px; color:#94a3b8; align-self:center;">—</span>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 🕐 시장 운영 시간 관리 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
         <div class="accordion-header">
@@ -1602,6 +1636,7 @@
                 <option value="stockHolders">📈 종목별 익명 보유 TOP3 갱신</option>
                 <option value="candlePrune">🗑 오래된 캔들 정리</option>
                 <option value="userActivityPurge">🧾 유저 활동로그 데이터 삭제</option>
+                <option value="rankingVolumeReset">📊 실시간 랭킹 거래량만 초기화</option>
                 <option value="autoSplit">✂️ 주가 자동 액면분할</option>
             </select>
             <button type="button" class="btn-primary daily-routine-add-btn" onclick="addDailyRoutineItem()">+ 항목 추가</button>
@@ -2861,6 +2896,7 @@
             await loadMarketHours();
             startRealtimeRequestListeners();
             startDailyAutoSettingsListener();
+            startPaidPricingListener();
             try {
                 await loadSellConfig();
                 await loadMarketParams();
@@ -2875,6 +2911,7 @@
                 try { stopCoinImpactAutoIntervalOnly(); } catch (_) { /* noop */ }
                 try { stopStockHolderAutoIntervalOnly(); } catch (_) { /* noop */ }
                 stopDailyAutoSettingsListener();
+                stopPaidPricingListener();
                 stopRealtimeRequestListeners();
                 hideAdminRequestInbox();
                 alert("관리자 권한이 없습니다.");
@@ -2886,6 +2923,7 @@
                     try { stopCoinImpactAutoIntervalOnly(); } catch (_) { /* noop */ }
                     try { stopStockHolderAutoIntervalOnly(); } catch (_) { /* noop */ }
                     stopDailyAutoSettingsListener();
+                    stopPaidPricingListener();
                     stopRealtimeRequestListeners();
                     hideAdminRequestInbox();
                     document.getElementById('login-section').style.display = 'flex';
@@ -3215,6 +3253,78 @@
             await buildFastTradeUsersTop10({ autoSanction: false });
         } catch (e) {
             showAdminToast('해제 실패: ' + (e?.message || e), 'error');
+        }
+    };
+
+    // ── 유료 단가 (siteConfig/pricing) ───────────────────────
+    let paidPricingUnsub = null;
+    function stopPaidPricingListener() {
+        if (paidPricingUnsub) {
+            try { paidPricingUnsub(); } catch (_) { /* noop */ }
+            paidPricingUnsub = null;
+        }
+    }
+    function mergePaidPricingAdmin(raw) {
+        const d = {
+            assetRankingBalloons: 30,
+            broadcastBannerPerDay: 20,
+            chartBannerPerDay: 80,
+            relayRegularPerHour: 15,
+            relayOffPeakPerHour: 10,
+            regularExtendBalloons: 33,
+        };
+        const o = raw && typeof raw === 'object' ? raw : {};
+        const clamp = (v, fb) => {
+            const n = Math.floor(Number(v));
+            return Number.isFinite(n) && n > 0 ? Math.min(999, n) : fb;
+        };
+        return {
+            assetRankingBalloons: clamp(o.assetRankingBalloons, d.assetRankingBalloons),
+            broadcastBannerPerDay: clamp(o.broadcastBannerPerDay, d.broadcastBannerPerDay),
+            chartBannerPerDay: clamp(o.chartBannerPerDay, d.chartBannerPerDay),
+            relayRegularPerHour: clamp(o.relayRegularPerHour, d.relayRegularPerHour),
+            relayOffPeakPerHour: clamp(o.relayOffPeakPerHour, d.relayOffPeakPerHour),
+            regularExtendBalloons: clamp(o.regularExtendBalloons, d.regularExtendBalloons),
+        };
+    }
+    function applyPaidPricingToAdminInputs(p) {
+        const set = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.value = String(val);
+        };
+        set('pricing-asset-ranking', p.assetRankingBalloons);
+        set('pricing-broadcast-per-day', p.broadcastBannerPerDay);
+        set('pricing-chart-per-day', p.chartBannerPerDay);
+        set('pricing-relay-regular-h', p.relayRegularPerHour);
+        set('pricing-relay-offpeak-h', p.relayOffPeakPerHour);
+        set('pricing-extend-balloons', p.regularExtendBalloons);
+    }
+    function startPaidPricingListener() {
+        if (paidPricingUnsub) return;
+        paidPricingUnsub = onValue(ref(db, 'siteConfig/pricing'), (snap) => {
+            applyPaidPricingToAdminInputs(mergePaidPricingAdmin(snap.val()));
+            const st = document.getElementById('pricing-admin-status');
+            if (st) st.textContent = 'RTDB 동기화됨';
+        });
+    }
+    window.savePaidPricingFromAdmin = async function() {
+        if (!isAdmin()) return;
+        const st = document.getElementById('pricing-admin-status');
+        const p = mergePaidPricingAdmin({
+            assetRankingBalloons: document.getElementById('pricing-asset-ranking')?.value,
+            broadcastBannerPerDay: document.getElementById('pricing-broadcast-per-day')?.value,
+            chartBannerPerDay: document.getElementById('pricing-chart-per-day')?.value,
+            relayRegularPerHour: document.getElementById('pricing-relay-regular-h')?.value,
+            relayOffPeakPerHour: document.getElementById('pricing-relay-offpeak-h')?.value,
+            regularExtendBalloons: document.getElementById('pricing-extend-balloons')?.value,
+        });
+        try {
+            await set(ref(db, 'siteConfig/pricing'), { ...p, updatedAt: Date.now() });
+            showAdminToast('유료 단가 저장 완료');
+            if (st) st.textContent = '저장됨';
+        } catch (e) {
+            if (st) st.textContent = '저장 실패';
+            showAdminToast('저장 실패: ' + (e?.message || e), 'error');
         }
     };
 
@@ -4379,6 +4489,40 @@
     };
 
     /** 실시간 랭킹용: stocks/·coins/ 의 volume·buyVol·sellVol 만 0 (주가 유지) */
+    async function executeResetAllVolumesForRanking() {
+        const [sSnap, cSnap] = await Promise.all([
+            get(ref(db, 'stocks/')),
+            get(ref(db, 'coins/'))
+        ]);
+        const sData = sSnap.exists() ? sSnap.val() : null;
+        const cData = cSnap.exists() ? cSnap.val() : null;
+        const sUpdates = {};
+        const cUpdates = {};
+        if (sData) {
+            Object.keys(sData).forEach((id) => {
+                sUpdates[`${id}/volume`] = 0;
+                sUpdates[`${id}/buyVol`] = 0;
+                sUpdates[`${id}/sellVol`] = 0;
+            });
+        }
+        if (cData) {
+            Object.keys(cData).forEach((id) => {
+                cUpdates[`${id}/volume`] = 0;
+                cUpdates[`${id}/buyVol`] = 0;
+                cUpdates[`${id}/sellVol`] = 0;
+            });
+        }
+        if (Object.keys(sUpdates).length === 0 && Object.keys(cUpdates).length === 0) {
+            return { ok: false, reason: 'empty', ns: 0, nc: 0 };
+        }
+        if (Object.keys(sUpdates).length) await update(ref(db, 'stocks/'), sUpdates);
+        if (Object.keys(cUpdates).length) await update(ref(db, 'coins/'), cUpdates);
+        try { await invalidateStaticCache(); } catch (_) { /* noop */ }
+        const ns = sData ? Object.keys(sData).length : 0;
+        const nc = cData ? Object.keys(cData).length : 0;
+        return { ok: true, ns, nc };
+    }
+
     window.resetAllVolumesForRanking = async function() {
         if (!isAdmin()) return;
         if (!confirm(
@@ -4386,37 +4530,12 @@
             '주가·등락률은 바뀌지 않습니다.\n되돌릴 수 없습니다. 계속하시겠습니까?'
         )) return;
         try {
-            const [sSnap, cSnap] = await Promise.all([
-                get(ref(db, 'stocks/')),
-                get(ref(db, 'coins/'))
-            ]);
-            const sData = sSnap.exists() ? sSnap.val() : null;
-            const cData = cSnap.exists() ? cSnap.val() : null;
-            const sUpdates = {};
-            const cUpdates = {};
-            if (sData) {
-                Object.keys(sData).forEach((id) => {
-                    sUpdates[`${id}/volume`] = 0;
-                    sUpdates[`${id}/buyVol`] = 0;
-                    sUpdates[`${id}/sellVol`] = 0;
-                });
+            const r = await executeResetAllVolumesForRanking();
+            if (!r.ok && r.reason === 'empty') {
+                alert('초기화할 종목이 없습니다.');
+                return;
             }
-            if (cData) {
-                Object.keys(cData).forEach((id) => {
-                    cUpdates[`${id}/volume`] = 0;
-                    cUpdates[`${id}/buyVol`] = 0;
-                    cUpdates[`${id}/sellVol`] = 0;
-                });
-            }
-            if (Object.keys(sUpdates).length === 0 && Object.keys(cUpdates).length === 0) {
-                return alert('초기화할 종목이 없습니다.');
-            }
-            if (Object.keys(sUpdates).length) await update(ref(db, 'stocks/'), sUpdates);
-            if (Object.keys(cUpdates).length) await update(ref(db, 'coins/'), cUpdates);
-            try { await invalidateStaticCache(); } catch (_) { /* noop */ }
-            const ns = sData ? Object.keys(sData).length : 0;
-            const nc = cData ? Object.keys(cData).length : 0;
-            alert(`✅ 거래량 필드를 초기화했습니다.\n주식 ${ns}종목 · 코인 ${nc}종목`);
+            alert(`✅ 거래량 필드를 초기화했습니다.\n주식 ${r.ns}종목 · 코인 ${r.nc}종목`);
             await loadStocksOnce();
         } catch (e) {
             alert('초기화 실패: ' + e.message);
@@ -5710,6 +5829,7 @@
         if (type === 'candlePrune') return { type: 'candlePrune' };
         if (type === 'stockHolders') return { type: 'stockHolders' };
         if (type === 'userActivityPurge') return { type: 'userActivityPurge' };
+        if (type === 'rankingVolumeReset') return { type: 'rankingVolumeReset' };
         return null;
     }
 
@@ -5730,7 +5850,7 @@
                 });
                 return;
             }
-            if (t === 'ranking' || t === 'candlePrune' || t === 'stockHolders' || t === 'userActivityPurge') {
+            if (t === 'ranking' || t === 'candlePrune' || t === 'stockHolders' || t === 'userActivityPurge' || t === 'rankingVolumeReset') {
                 out.push({ type: t });
             }
         });
@@ -5781,6 +5901,7 @@
             stockHolders: '📈 종목별 익명 보유 TOP3 갱신',
             candlePrune: '🗑 오래된 캔들 정리',
             userActivityPurge: '🧾 유저 활동로그 데이터 삭제',
+            rankingVolumeReset: '📊 실시간 랭킹 거래량만 초기화',
             autoSplit: '✂️ 주가 자동 액면분할',
         };
         listEl.innerHTML = rows.map((it, idx) => {
@@ -6307,6 +6428,17 @@
                     } else if (it.type === 'userActivityPurge') {
                         if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 🧾 유저 활동로그 데이터 삭제 실행</div>`;
                         await purgeUserActivityLogs(true);
+                    } else if (it.type === 'rankingVolumeReset') {
+                        if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 📊 실시간 랭킹 거래량만 초기화 실행</div>`;
+                        const vr = await executeResetAllVolumesForRanking();
+                        if (runLogEl) {
+                            if (!vr.ok && vr.reason === 'empty') {
+                                runLogEl.innerHTML += `<div style="color:#64748b;">   → 초기화할 종목 없음</div>`;
+                            } else {
+                                runLogEl.innerHTML += `<div style="color:#86efac;">   → 주식 ${vr.ns}종목 · 코인 ${vr.nc}종목</div>`;
+                            }
+                        }
+                        try { await loadStocksOnce(); } catch (_) { /* noop */ }
                     } else if (it.type === 'autoSplit') {
                         const splitThresholdManwon = clampDailyAutoSplitThresholdManwon(it.thresholdManwon);
                         const splitRatioN = clampDailyAutoSplitRatioN(it.ratioN);
