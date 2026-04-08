@@ -5428,6 +5428,20 @@ function isTradeButtonDisabled(stockId) {
     return false;
 }
 
+/** 전량매도(MAX) — 자동매수/자동매도 중에는 사용 불가(일반 매매 버튼과 달리 탭으로 종료 불가) */
+function isMaxSellButtonDisabled(stockId) {
+    if (!stockId) return true;
+    if (autoTradeState[stockId]) return true;
+    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    if (isAdmin) {
+        if (isLiquidatingAll) return true;
+        return false;
+    }
+    if (isGlobalTradeCooldownActive()) return true;
+    if (isTrading === stockId) return true;
+    return false;
+}
+
 /** 카드 템플릿용 — 자동매매 중인 매수/매도 버튼은 쿨다운·체결 중에도 눌러 종료할 수 있게 비활성화하지 않음 */
 function shouldDisableTradeButtonForCardTemplate(stockId, side) {
     const ast = autoTradeState[stockId];
@@ -5533,6 +5547,15 @@ function applyTradeCooldownStateToCard(card, stockId) {
         card.querySelector('.btn-trade-sell'),
         stockId
     );
+    const maxBtn = card.querySelector('.btn-trade-maxsell');
+    if (maxBtn) {
+        const maxDis = isMaxSellButtonDisabled(stockId);
+        maxBtn.disabled = maxDis;
+        maxBtn.style.opacity = maxDis ? '0.55' : '';
+        maxBtn.title = autoTradeState[stockId]
+            ? '자동매매 중에는 MAX를 사용할 수 없습니다.'
+            : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료 적용';
+    }
 }
 
 function refreshChartModalTradeButtons() {
@@ -5541,6 +5564,15 @@ function refreshChartModalTradeButtons() {
     const wrap = document.querySelector('.chart-modal-trade');
     if (!wrap) return;
     applyTradeCooldownStateToButtons(wrap.querySelector('.modal-buy'), wrap.querySelector('.modal-sell'), id, { context: 'modal' });
+    const maxBtn = wrap.querySelector('.modal-maxsell');
+    if (maxBtn) {
+        const maxDis = isMaxSellButtonDisabled(id);
+        maxBtn.disabled = maxDis;
+        maxBtn.style.opacity = maxDis ? '0.55' : '';
+        maxBtn.title = autoTradeState[id]
+            ? '자동매매 중에는 MAX를 사용할 수 없습니다.'
+            : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료 적용';
+    }
 }
 
 function refreshTradeCooldownButtons() {
@@ -5603,6 +5635,8 @@ async function sellAllHoldingsByFunction(stockId, market) {
     try {
         const liquidateAll = httpsCallable(fns, 'liquidateAll');
         await liquidateAll({ stockId, market: isCoin ? 'coin' : 'stock' });
+        sellSound.currentTime = 0;
+        sellSound.play().catch(() => {});
         // MAX 전량매도도 일반 거래와 동일하게 쿨다운 기준 시각을 갱신
         const tradeTsCommitted = serverNowMs();
         lastTradeTime = tradeTsCommitted;
@@ -7405,7 +7439,7 @@ function updateCardContent(card, s, userStock) {
                     <button class="btn-trade-maxsell" data-trade-type="sell" type="button"
                         title="전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료 적용"
                         onclick="event.stopPropagation(); handleMaxSellButtonClick(event,'${s.id}')"
-                        ${shouldDisableTradeButtonForCardTemplate(s.id, 'sell') ? 'disabled' : ''}>MAX</button>
+                        ${isMaxSellButtonDisabled(s.id) ? 'disabled' : ''}>MAX</button>
                 </div>
             </div>
         `;

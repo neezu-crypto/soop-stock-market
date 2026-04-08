@@ -81,6 +81,61 @@ function isWithinHours({ open, close }, date) {
   return nowMins >= openMins || nowMins < closeMins; // overnight
 }
 
+/** index.html `isMarketOpen` / `isRegularMarket` 과 동일 (KST) */
+function isMarketOpenServer(mh, dateKst) {
+  if (!mh || !mh.enabled) return true;
+  const open = mh.open || "00:00";
+  const close = mh.close || "23:59";
+  return isWithinHours({ open, close }, dateKst);
+}
+
+function isRegularMarketServer(mh, dateKst) {
+  if (!mh || !mh.enabled) return true;
+  if (!mh.regularOpen || !mh.regularClose) return true;
+  const [roh, rom] = String(mh.regularOpen)
+    .split(":")
+    .map((x) => Number(x));
+  const [rch, rcm] = String(mh.regularClose)
+    .split(":")
+    .map((x) => Number(x));
+  if (!Number.isFinite(roh) || !Number.isFinite(rom) || !Number.isFinite(rch) || !Number.isFinite(rcm)) {
+    return true;
+  }
+  const rOpenMins = roh * 60 + rom;
+  const rCloseMins = rch * 60 + rcm;
+  const nowMins = dateKst.getHours() * 60 + dateKst.getMinutes();
+  if (rOpenMins < rCloseMins) return nowMins >= rOpenMins && nowMins < rCloseMins;
+  return nowMins >= rOpenMins || nowMins < rCloseMins;
+}
+
+/** 정규장 1초 / 비정규장(장 운영 중) 30초 — 메인 앱 getTradeCooldownMs 와 동일 */
+function getTradeCooldownMsFromConfig(mh, dateKst) {
+  if (!mh || !mh.enabled) return 1000;
+  if (!isMarketOpenServer(mh, dateKst)) return 0;
+  if (isRegularMarketServer(mh, dateKst)) return 1000;
+  return 30000;
+}
+
+/**
+ * 클라이언트 조작 불가 — users/{uid}/lastTradeTime(서버 기록) 기준.
+ * Admin 은 쿨다운 면제.
+ */
+function assertServerTradeCooldownAllowed(auth, siteConfig, preUser) {
+  if (isAdminAuth(auth)) return;
+  const mh = siteConfig.marketHours || {};
+  const now = Date.now();
+  const dateKst = nowKstDate();
+  const cooldownMs = getTradeCooldownMsFromConfig(mh, dateKst);
+  if (cooldownMs <= 0) return;
+  const lt = Number(preUser && preUser.lastTradeTime);
+  if (!Number.isFinite(lt) || lt <= 0) return;
+  const elapsed = now - lt;
+  if (elapsed < cooldownMs) {
+    const rem = Math.max(1, Math.ceil((cooldownMs - elapsed) / 1000));
+    throw new HttpsError("failed-precondition", `거래 쿨다운: ${rem}초 후 다시 시도하세요.`);
+  }
+}
+
 function clampInt(n, min, max) {
   const v = Math.floor(Number(n));
   if (!Number.isFinite(v)) return null;
@@ -289,6 +344,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const fee = Number(sellConfig.fee ?? 0.003);
 
   const preUser = preUserSnap.exists() ? preUserSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
+  assertServerTradeCooldownAllowed(auth, siteConfig, preUser);
   /** RTDB 트랜잭션 콜백에서 cur가 null로만 오는 경우 대비 */
   const userSeedForTx = JSON.parse(JSON.stringify(preUser));
   const preCash = Number(preUser.cash ?? 1000000);
@@ -630,9 +686,10 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const userBookPath = market === "coin" ? "coins" : "stocks";
   const candleRoot = market === "coin" ? "coinCandles" : "candlesticks";
 
-  const [cfgSnap, stockSnap] = await Promise.all([
+  const [cfgSnap, stockSnap, preUserSnapForCooldown] = await Promise.all([
     db.ref("siteConfig").get(),
     db.ref(`${stockPath}/${stockId}`).get(),
+    db.ref(`users/${uid}`).get(),
   ]);
   const siteConfig = cfgSnap.exists() ? cfgSnap.val() : {};
   if (siteConfig.maintenance === true && !isAdminAuth(auth)) {
@@ -648,6 +705,9 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     }
   }
   if (!stockSnap.exists()) throw new HttpsError("not-found", "Unknown symbol.");
+
+  const preUserForCooldown = preUserSnapForCooldown.exists() ? preUserSnapForCooldown.val() : {};
+  assertServerTradeCooldownAllowed(auth, siteConfig, preUserForCooldown);
 
   const bookSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
   const qty = Math.floor(Number(bookSnap.val()?.qty || 0));
