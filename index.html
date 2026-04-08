@@ -3109,10 +3109,11 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
             const wasNotFrozen = !prev[stockId] || prev[stockId] <= now;
             if (wasNotFrozen && !isSoopAdminEmail()) {
                 const stockName = stockNameForId(stockId);
-                alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
-
-                // 즐겨찾기/보유 종목이면 브라우저 알림 발송
+                // 즐겨찾기·보유한 종목에만 알림(전역 frozenStocks 구독이라 무관 유저까지 팝업 가지 않게)
                 const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
+                if (isMyStock) {
+                    alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
+                }
                 if (isMyStock && notifPermission && Notification.permission === 'granted') {
                     const remaining = Math.ceil((frozenUntil - now) / 1000);
                     new Notification(`⚡ ${stockName} 서킷브레이커 발동!`, {
@@ -6749,27 +6750,29 @@ window.openAssetHistory = function() {
     const maxVal = validValues.length > 0 ? Math.max(...validValues) : 1;
     const minVal = validValues.length > 0 ? Math.min(...validValues) : 0;
 
-    // 오늘 vs 7일 전 비교
-    const todayVal  = history[days[6]] || null;
-    const week1Val  = validValues.length >= 2 ? validValues[0] : null;
+    // 오늘 vs 구간 첫날(차트 맨 왼쪽) 비교 — 일별과 동일하게 values[]는 항상 숫자|null (history 행이 객체여도 파싱됨)
+    const todayNum = values[6];
+    const week1Val = values[0];
     const summaryEl = document.getElementById('asset-summary-rows');
-    const diff      = todayVal && week1Val ? todayVal - week1Val : null;
-    const diffRate  = diff && week1Val ? ((diff / week1Val) * 100).toFixed(1) : null;
-    const diffColor = !diff ? 'var(--muted)' : diff > 0 ? 'var(--up-color)' : 'var(--down-color)';
-    const diffSign  = !diff ? '' : diff > 0 ? '+' : '';
+    const diff = todayNum != null && week1Val != null ? todayNum - week1Val : null;
+    const diffRate =
+        diff != null && week1Val !== 0 && Number.isFinite(week1Val) ? ((diff / week1Val) * 100).toFixed(1) : null;
+    const diffColor =
+        diff == null ? 'var(--muted)' : diff > 0 ? 'var(--up-color)' : diff < 0 ? 'var(--down-color)' : 'var(--muted)';
+    const diffSign = diff == null ? '' : diff > 0 ? '+' : '';
 
     summaryEl.innerHTML = `
         <div class="asset-summary-row">
             <div class="asset-summary-label">현재 총 자산</div>
-            <div class="asset-summary-value" style="color:var(--text-main);">${todayVal ? todayVal.toLocaleString() + '원' : '-'}</div>
+            <div class="asset-summary-value" style="color:var(--text-main);">${todayNum != null ? todayNum.toLocaleString() + '원' : '-'}</div>
         </div>
         <div class="asset-summary-row">
             <div class="asset-summary-label">7일 전 대비</div>
-            <div class="asset-summary-value" style="color:${diffColor};">${diff ? diffSign + diff.toLocaleString() + '원' : '-'}</div>
+            <div class="asset-summary-value" style="color:${diffColor};">${diff != null ? diffSign + diff.toLocaleString() + '원' : '-'}</div>
         </div>
         <div class="asset-summary-row">
             <div class="asset-summary-label">7일 수익률</div>
-            <div class="asset-summary-value" style="color:${diffColor};">${diffRate ? diffSign + diffRate + '%' : '-'}</div>
+            <div class="asset-summary-value" style="color:${diffColor};">${diffRate != null ? diffSign + diffRate + '%' : '-'}</div>
         </div>`;
 
     // 일별 바 차트
