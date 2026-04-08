@@ -525,6 +525,7 @@
                     "info  price"
                     "chart chart"
                     "trade trade";
+                padding: 16px 12px;
             }
             .stock-card .price-group { text-align: right; align-items:flex-end; }
             .stock-card .chart-wrap  { display: flex; justify-content: center; }
@@ -632,8 +633,16 @@
                 max-height: calc(100vh - 150px);
             } 
         }
-        /* 좁은 화면: 지갑 바보다 홍보 배너가 위(z-index) · 좌측 고정 탭 여백 */
+        /* 좁은 화면: 지갑 바보다 홍보 배너가 위(z-index) · 좌측 고정 탭 여백 · 본문 폭 가득(미세 여백) */
         @media (max-width: 640px) {
+            body {
+                padding: 10px max(8px, env(safe-area-inset-left, 0px)) 12px max(8px, env(safe-area-inset-right, 0px));
+                box-sizing: border-box;
+            }
+            .wrapper {
+                max-width: none;
+                width: 100%;
+            }
             .wallet-bar {
                 flex-wrap: wrap;
                 gap: 10px;
@@ -647,7 +656,7 @@
                 border-radius: 10px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.25);
             }
-            /* 좌측 고정 탭(#portfolio-tab · #relay-tab)과 본문 겹침 완화 */
+            /* 좌측 고정 탭(#portfolio-tab · #relay-tab)과 본문 겹침 완화 — 우측만 얇게 */
             header,
             #market-mode-banner,
             #extend-request-bar,
@@ -656,6 +665,7 @@
             #stock-empty,
             #stock-list {
                 padding-left: 46px;
+                padding-right: 4px;
                 box-sizing: border-box;
             }
             .banner-container {
