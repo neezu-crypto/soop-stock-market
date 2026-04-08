@@ -1050,6 +1050,8 @@ function loadOpenRulesString() {
  * open 규칙을 복제한 뒤, `.write`가 false가 아닌 곳은 전부 관리자만 쓰기로 바꿉니다.
  * - siteStats/connectionCount 등 `.write: false`는 유지
  * - presence/{uid}/{sessionId} 본인 하트비트는 유지 (연결 수·UI용)
+ * - tradeHistory / adminActivityLogs 는 open에서 `.write: false`(클라이언트 전부 금지)인 경우가 많은데,
+ *   장 마감(closed) 중에도 관리자 화면에서 일일 루틴(활동로그 삭제 등)이 동작하도록 예외적으로 관리자 쓰기 허용
  */
 function buildClosedRulesObjectFromOpen(openRulesParsed) {
   const adminWrite =
@@ -1060,7 +1062,16 @@ function buildClosedRulesObjectFromOpen(openRulesParsed) {
     if (!n || typeof n !== "object") return;
     for (const k of Object.keys(n)) {
       if (k === ".write") {
-        if (n[k] === false) continue;
+        if (n[k] === false) {
+          if (
+            pathParts.length === 1 &&
+            (pathParts[0] === "tradeHistory" ||
+              pathParts[0] === "adminActivityLogs")
+          ) {
+            n[k] = adminWrite;
+          }
+          continue;
+        }
         if (
           pathParts[0] === "presence" &&
           pathParts.length === 3 &&
