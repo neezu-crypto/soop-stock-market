@@ -676,10 +676,6 @@
                 padding-right: max(4px, env(safe-area-inset-right, 0px)) !important;
                 box-sizing: border-box !important;
             }
-            .stock-card {
-                padding: 16px 4px;
-                box-sizing: border-box;
-            }
             .wallet-bar {
                 flex-wrap: wrap;
                 gap: 10px;
@@ -693,8 +689,22 @@
                 border-radius: 10px;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.25);
             }
-            /* 좌측 고정 탭(#portfolio-tab · #relay-tab)과 본문 겹침 — 본문 우측은 화면까지(바깥 여백은 body만) */
-            header,
+            /* 제목/부제는 예전처럼 전체 폭 — 검색창만 종목 카드와 같은 열(테두리 폭), 안쪽 패딩은 기본 14px */
+            header {
+                padding-left: 0;
+                padding-right: 0;
+                box-sizing: border-box;
+            }
+            #search-input {
+                display: block;
+                margin-left: 46px;
+                margin-right: 0;
+                width: calc(100% - 46px);
+                max-width: none;
+                padding: 14px;
+                box-sizing: border-box;
+            }
+            /* 좌측 고정 탭과 본문 겹침 — 본문 우측은 화면까지(바깥 여백은 body만) */
             #extend-request-bar,
             #stock-list {
                 padding-left: 46px;
