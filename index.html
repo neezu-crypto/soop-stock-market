@@ -618,7 +618,7 @@
             display: flex; 
             flex-direction: column; 
             gap: 20px; 
-            z-index: 1000; 
+            z-index: 2100; 
             max-height: calc(100vh - 120px);
             overflow-y: auto;
             padding: 10px;
@@ -632,10 +632,9 @@
                 max-height: calc(100vh - 150px);
             } 
         }
-        /* 좁은 화면: 지갑/구글 로그인을 배너보다 위 + 좌측 고정 탭 여백 + 홍보 배너 하단 독(가로 스크롤) */
+        /* 좁은 화면: 지갑 바보다 홍보 배너가 위(z-index) · 좌측 고정 탭 여백 */
         @media (max-width: 640px) {
             .wallet-bar {
-                z-index: 2200;
                 flex-wrap: wrap;
                 gap: 10px;
                 row-gap: 12px;
@@ -659,63 +658,35 @@
                 padding-left: 46px;
                 box-sizing: border-box;
             }
-            /* 홍보 배너: 한 줄 가로 스크롤 · 세로로 늘어나 검색/리스트를 덮지 않음 */
             .banner-container {
-                top: auto;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                flex-direction: row;
+                top: 85px;
+                right: 12px;
+                left: auto;
+                bottom: auto;
+                flex-direction: column;
                 flex-wrap: nowrap;
                 justify-content: flex-start;
                 align-items: center;
-                gap: 12px;
-                padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-                min-height: 78px;
-                max-height: 100px;
-                overflow-x: auto;
-                overflow-y: hidden;
-                -webkit-overflow-scrolling: touch;
-                overscroll-behavior-x: contain;
-                touch-action: pan-x;
-                scrollbar-width: none;
-                z-index: 1300;
-                max-width: 100vw;
+                gap: 15px;
+                padding: 10px;
+                min-height: 0;
+                max-height: calc(100vh - 100px);
+                overflow-x: hidden;
+                overflow-y: auto;
+                touch-action: auto;
+                z-index: 2100;
+                max-width: none;
                 box-sizing: border-box;
-                background: rgba(15, 23, 42, 0.97);
-                border-top: 1px solid rgba(51, 65, 85, 0.95);
-                box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.4);
-                backdrop-filter: blur(10px);
-                -webkit-backdrop-filter: blur(10px);
-            }
-            .banner-container::-webkit-scrollbar {
-                display: none;
-            }
-            .banner-item {
-                flex: 0 0 auto;
+                background: transparent;
+                border: none;
+                box-shadow: none;
             }
             .banner-circle {
-                width: 48px;
-                height: 48px;
+                width: 55px;
+                height: 55px;
             }
             .banner-name {
-                font-size: 10px;
-                margin-top: 4px;
-                line-height: 1.2;
-                text-align: center;
-                max-width: 68px;
-                max-height: 2.6em;
-                overflow: hidden;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                text-shadow: none;
-            }
-            .banner-item:hover {
-                transform: none;
-            }
-            .wrapper {
-                padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+                font-size: 11px;
             }
         }
         .banner-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; cursor: pointer; transition: transform 0.2s; position: relative; }
