@@ -2236,7 +2236,7 @@
 ══════════════════════════════════════════ -->
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp, push, query, orderByChild, equalTo }
+import { getDatabase, ref, onValue, get, set, remove, onDisconnect, serverTimestamp, push, query, orderByChild, equalTo }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
@@ -3078,11 +3078,6 @@ onValue(ref(db, 'siteConfig/marketHours'), (snap) => {
     applyMarketState();
 });
 
-// 주식 매매를 Cloud Function으로 처리할지 여부 (1단계 롤아웃 — 기본 OFF)
-onValue(ref(db, 'siteConfig/useServerTrade'), (snap) => {
-    siteConfig.useServerTrade = snap.val() === true;
-});
-
 // 중계방: 승인(approved) 건만 쿼리 구독 — pending/rejected 히스토리 대량 다운로드 방지 (rules에 .indexOn status 필요)
 let relayRequestsQueryUnsub = null;
 function subscribeRelayApprovedRequestsOnly() {
@@ -3380,10 +3375,6 @@ window.setActiveMarket = function (mode) {
         else refreshMainStockListView();
     } catch (_) { /* noop */ }
 };
-
-function candleBufferKey(stockId, market) {
-    return (market === 'coin' ? 'c:' : 's:') + stockId;
-}
 
 /**
  * stocks/ 전체 목록: 관리자만 onValue(전체 트리). 일반 유저는 stocks/{id}만 구독 → 다운로드 대폭 절감.
@@ -4368,7 +4359,7 @@ window.logout = async function() {
 
 /**
  * 서킷브레이커 감지 — 발동 시 로컬 동결만 적용(관리자만 siteConfig/frozenStocks에 기록 가능)
- * · 주식 + useServerTrade 일 때 변동성 임계는 Cloud Function trade 에서 frozenStocks 기록(전 유저 동일)
+ * · 주식 매매는 Cloud Function trade 에서 변동성 CB 후 frozenStocks 기록(전 유저 동일)
  */
 async function checkCircuitBreaker(stockId, candles, market = 'stock') {
     if (market === 'coin') return;
@@ -4433,46 +4424,6 @@ async function checkCircuitBreaker(stockId, candles, market = 'stock') {
 // 분봉 차트 로직
 // ══════════════════════════════════════════════════════════════
 
-/**
- * 현재 분(분 단위 UNIX timestamp, 초 단위)을 반환
- */
-function currentMinuteTs() {
-    return Math.floor(Date.now() / 60000) * 60;
-}
-
-// ── 분봉 로컬 버퍼 ───────────────────────────────────────────
-// 같은 분(minute) 내 거래를 메모리에서 합산 후 Firebase에 1회만 write
-// { stockId: { ts, o, h, l, c, v, timer } }
-const candleBuffer = {};
-
-/**
- * 거래 발생 시 분봉 버퍼에 누적 → 1초 디바운스 후 Firebase write
- * 같은 분 내 10번 거래해도 Firebase write는 1회
- * @param {{ market?: 'stock'|'coin' }} [opts]
- */
-async function updateCandlestick(stockId, tradePrice, qty, opts = {}) {
-    const market = opts.market === 'coin' ? 'coin' : 'stock';
-    const bkey = candleBufferKey(stockId, market);
-    const ts  = currentMinuteTs();
-    const buf = candleBuffer[bkey];
-
-    if (buf && buf.ts === ts) {
-        buf.h  = Math.max(buf.h, tradePrice);
-        buf.l  = Math.min(buf.l, tradePrice);
-        buf.c  = tradePrice;
-        buf.v += qty;
-    } else {
-        if (buf?.timer) clearTimeout(buf.timer);
-        candleBuffer[bkey] = { ts, o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, market };
-    }
-
-    if (candleBuffer[bkey].timer) clearTimeout(candleBuffer[bkey].timer);
-    candleBuffer[bkey].timer = setTimeout(() => flushCandlestick(stockId, { market }), 1000);
-}
-
-/**
- * 버퍼 내용을 Firebase에 실제로 write
- */
 // ══════════════════════════════════════════════════════════════
 // localStorage 캔들 캐시 (6시간 TTL)
 // ══════════════════════════════════════════════════════════════
@@ -4518,40 +4469,6 @@ function loadCandlesFromLocal(stockId, market = 'stock') {
         }
         return { data: Array.isArray(data) ? data : [], savedAt: ts };
     } catch(e) { return { data: [], savedAt: 0 }; }
-}
-
-async function flushCandlestick(stockId, opts = {}) {
-    const market = opts.market === 'coin' ? 'coin' : 'stock';
-    const bkey = candleBufferKey(stockId, market);
-    const buf = candleBuffer[bkey];
-    if (!buf) return;
-
-    saveCandleToLocal(stockId, { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts }, market);
-
-    const basePath = market === 'coin' ? 'coinCandles' : 'candlesticks';
-    const candleRef = ref(db, `${basePath}/${stockId}/${buf.ts}`);
-    try {
-        await runTransaction(candleRef, (current) => {
-            if (!current) {
-                return { o: buf.o, h: buf.h, l: buf.l, c: buf.c, v: buf.v, t: buf.ts };
-            }
-            return {
-                ...current,
-                h: Math.max(current.h, buf.h),
-                l: Math.min(current.l, buf.l),
-                c: buf.c,
-                v: current.v + buf.v,
-                t: buf.ts
-            };
-        });
-        buf.v = 0;
-    } catch (e) {
-        console.warn('[candle] flush 실패 (무시):', e.message);
-    }
-
-    if (market !== 'coin') {
-        checkCircuitBreaker(stockId, loadCandlesFromLocal(stockId, market).data, market);
-    }
 }
 
 // pruneOldCandles — 관리자 페이지에서만 실행 (클라이언트 제거)
@@ -5866,11 +5783,9 @@ if (!tradeUid) {
 
 const userRef = ref(db, `users/${tradeUid}`);
 
-// ── 1단계: 주식만 서버 Callable `trade` (siteConfig/useServerTrade === true) · 코인·플래그 OFF → 아래 클라 RTDB 경로
-if (!isCoin && siteConfig.useServerTrade === true) {
     try {
         const tradeFn = httpsCallable(fns, 'trade');
-        await tradeFn({ stockId: id, side: type, qty });
+        await tradeFn({ stockId: id, side: type, qty, market: isCoin ? 'coin' : 'stock' });
         const tradeTsCommitted = serverNowMs();
         lastTradeTime = tradeTsCommitted;
         if (userUID) {
@@ -5890,19 +5805,33 @@ if (!isCoin && siteConfig.useServerTrade === true) {
             myData.stocks = v.stocks || {};
             myData.coins = v.coins || {};
         }
-        const stSnap = await get(ref(db, `stocks/${id}`));
-        if (stSnap.exists()) {
-            const data = { ...stSnap.val(), id };
-            const idx = allStocks.findIndex((s) => s?.id === id);
-            if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...data };
-            else allStocks.push(data);
-            if (favorites[id]) favorites[id] = data;
-            if (ownedStocks[id]) ownedStocks[id] = data;
-            if (searchResults[id]) searchResults[id] = data;
+        if (isCoin) {
+            const cSnap = await get(ref(db, `coins/${id}`));
+            if (cSnap.exists()) {
+                const data = { ...cSnap.val(), id };
+                const idx = allCoins.findIndex((s) => s?.id === id);
+                if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...data };
+                else allCoins.push(data);
+                if (favoriteCoins[id]) favoriteCoins[id] = data;
+                if (ownedCoins[id]) ownedCoins[id] = data;
+                if (searchResults[id]) searchResults[id] = data;
+            }
+        } else {
+            const stSnap = await get(ref(db, `stocks/${id}`));
+            if (stSnap.exists()) {
+                const data = { ...stSnap.val(), id };
+                const idx = allStocks.findIndex((s) => s?.id === id);
+                if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...data };
+                else allStocks.push(data);
+                if (favorites[id]) favorites[id] = data;
+                if (ownedStocks[id]) ownedStocks[id] = data;
+                if (searchResults[id]) searchResults[id] = data;
+            }
         }
         const sound = type === 'buy' ? buySound : sellSound;
         sound.currentTime = 0;
         sound.play().catch(() => {});
+        try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
     } catch (e) {
         const code = e?.code || '';
         const raw = String(e?.message || '')
@@ -5910,362 +5839,30 @@ if (!isCoin && siteConfig.useServerTrade === true) {
             .replace(/\s*\(functions\/[^)]+\)\.?\s*$/i, '')
             .trim();
         console.error('[trade][server]', code, e?.message, e);
-        if (autoTrade) stopAutoTrade(id);
-        if (code === 'functions/unauthenticated') {
-            if (!autoTrade) tradeNotify('로그인이 필요합니다.');
-        } else if (code === 'functions/failed-precondition') {
-            if (!autoTrade) tradeNotify(raw || '거래할 수 없습니다.');
-        } else if (code === 'functions/not-found') {
-            if (!autoTrade) tradeNotify(raw || '종목을 찾을 수 없습니다.');
-        } else if (code === 'functions/invalid-argument') {
-            if (!autoTrade) tradeNotify(raw || '잘못된 요청입니다.');
-        } else {
-            if (!autoTrade) tradeNotify('거래 중 오류가 발생했습니다.');
-        }
-        return;
-    }
-    return;
-}
-
-const stockRef = ref(db, isCoin ? `coins/${id}` : `stocks/${id}`);
-
-// 현재 주가 정보 가져오기
-// 새로 상장된 종목은 UI/캐시에 아직 price가 없을 수 있으므로, 클릭 시점에 DB로 보정한다.
-let currentStockData = isCoin
-    ? (favoriteCoins[id] || ownedCoins[id] || searchResults[id])
-    : (favorites[id] || ownedStocks[id] || searchResults[id]);
-let currentPrice = Number(currentStockData?.price);
-if (!Number.isFinite(currentPrice) || currentPrice <= 0) currentPrice = isCoin ? 100000000 : 10000;
-
-try {
-    const snap = await get(stockRef);
-    if (snap.exists()) {
-        const data = snap.val() || {};
-        currentStockData = { ...data, id };
-        const p = Number(data?.price);
-        if (Number.isFinite(p) && p > 0) currentPrice = p;
-
-        if (isCoin) {
-            const idx = allCoins.findIndex((s) => s?.id === id);
-            if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...currentStockData };
-            else allCoins.push(currentStockData);
-            if (favoriteCoins[id]) favoriteCoins[id] = currentStockData;
-            if (ownedCoins[id]) ownedCoins[id] = currentStockData;
-        } else {
-            const idx = allStocks.findIndex((s) => s?.id === id);
-            if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...currentStockData };
-            else allStocks.push(currentStockData);
-            if (favorites[id]) favorites[id] = currentStockData;
-            if (ownedStocks[id]) ownedStocks[id] = currentStockData;
-        }
-        if (searchResults[id]) searchResults[id] = currentStockData;
-    }
-} catch (e) {
-    console.warn(`[Trade] hydrate failed for ${id}:`, e?.message || e);
-}
-
-// 20번마다 한 번씩 서버에서 설정값 로드
-if (!sellConfigCache || sellConfigFetchCount % 20 === 0) {
-    const cfgSnap = await get(ref(db, 'siteConfig/sellConfig'));
-    sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
-}
-sellConfigFetchCount++;
-
-if (!marketParamsCache || marketParamsFetchCount % 20 === 0) {
-    const mpSnap = await get(ref(db, 'siteConfig/marketParams'));
-    marketParamsCache = mpSnap.exists() ? mpSnap.val() : {};
-}
-marketParamsFetchCount++;
-
-const userPreSnap = await get(userRef);
-const preUser     = userPreSnap.exists() ? userPreSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
-const preCash     = preUser.cash ?? 1000000;
-
-const safeNum = (v, def) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : def;
-};
-
-const basePrice  = Math.max(1, safeNum(sellConfigCache.basePrice  ?? 10000, 10000));
-const scalePrice = Math.max(1, safeNum(sellConfigCache.scalePrice ?? 90000, 90000));
-const impactCoef = safeNum(sellConfigCache.impact     ?? 0.0005, 0.0005);
-const spread     = safeNum(sellConfigCache.spread     ?? 0.001, 0.001);
-const fee        = safeNum(sellConfigCache.fee        ?? 0.003, 0.003);
-
-// 매도 시 주가 비례 하락 가중치
-let sellPressure = 1;
-if (type === 'sell' && !isCoin) {
-    sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
-}
-
-// 최종 영향력 계산 — 매수/매도 기본 변동폭은 동일, 매도만 sellPressure 적용
-const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice ?? 100000, 100000));
-// Price-Inverse Impact Scaling:
-// Effective Impact = Base Impact * min(1, ReferencePrice / CurrentPrice)
-// => high-priced stocks become "heavier" (smaller price moves per trade).
-const dampingFactor = isCoin ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
-const effectiveImpactCoef = impactCoef * dampingFactor;
-
-let impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
-if (isCoin) {
-    const m = liveCoinImpactMultiplier;
-    impact *= Number.isFinite(m) && m > 0 ? m : DEFAULT_COIN_MARKET_IMPACT_MULTIPLIER;
-}
-
-// Temporary: Admin-only debug to verify impact damping is applied.
-try {
-    const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-    if (isAdminUser) {
-        console.log(
-            "[Trade Debug] Base Impact:",
-            impactCoef,
-            "Damping:",
-            dampingFactor,
-            "Final Impact:",
-            impact
-        );
-    }
-} catch (_) { /* noop */ }
-
-    let finalTradePrice = 0;
-
-    let stockRollbackVal = null;
-    try {
-        const rbSnap = await get(stockRef);
-        if (rbSnap.exists()) stockRollbackVal = JSON.parse(JSON.stringify(rbSnap.val()));
-    } catch (_) { /* noop */ }
-
-    try {
-        const stockTxAbort = { reason: null };
-
-        const stockTxResult = await runTransaction(stockRef, (currentStock) => {
-            if (currentStock == null) {
-                stockTxAbort.reason = 'Stock ID not found in DB';
-                return currentStock;
-            }
-
-            const row = typeof currentStock === 'object' ? currentStock : {};
-            stockTxAbort.reason = null;
-            let newPrice;
-            let rawNewPrice;
-            let prevPrice = Number(row?.price);
-            if (!Number.isFinite(prevPrice) || prevPrice <= 0) {
-                prevPrice = Math.max(1, Number(currentPrice) || (isCoin ? 100000000 : 10000));
-            }
-
-            const preBook = isCoin ? (preUser.coins || {}) : (preUser.stocks || {});
-
-            if (type === 'buy') {
-                rawNewPrice     = prevPrice * (1 + impact);
-                newPrice        = Math.round(rawNewPrice);
-                finalTradePrice = Math.round(newPrice * (1 + spread));
-                const totalBuyPrice = finalTradePrice * qty;
-
-                if (preCash < totalBuyPrice) {
-                    stockTxAbort.reason = "잔액부족";
-                    return;
-                }
-
-                const userStock  = preBook[id] || { qty: 0, avg: 0 };
-                const uqPre = Math.floor(Math.max(0, Number(userStock.qty) || 0));
-                if (uqPre === 0) {
-                    const ownedCount = Object.values(preBook).filter((s) => Math.floor(Math.max(0, Number(s?.qty) || 0)) > 0).length;
-                    if (ownedCount >= MAX_OWNED_STOCK_SYMBOLS) {
-                        stockTxAbort.reason = "종목한도";
-                        return;
-                    }
-                }
-            } else {
-                const userStock = preBook[id] || { qty: 0, avg: 0 };
-                const uqSell = Math.floor(Math.max(0, Number(userStock.qty) || 0));
-
-                if (uqSell < qty) {
-                    stockTxAbort.reason = "보유부족";
-                    return;
-                }
-
-                rawNewPrice     = prevPrice * (1 - impact);
-                newPrice        = Math.round(rawNewPrice);
-                finalTradePrice = Math.round(newPrice * (1 - spread));
-            }
-
-            const addBuy  = type === 'buy' ? qty : 0;
-            const addSell = type === 'sell' ? qty : 0;
-            /* 코인·고가 종목: 정수 원 반올림 후 가격이 같아도 실제 체결 방향은 반영 (등락률이 0으로만 고정되는 현상 방지) */
-            const changeVal = prevPrice > 0 ? (((rawNewPrice - prevPrice) / prevPrice) * 100) : 0;
-            const baseVol = Number(row.volume);
-            const baseBuy = Number(row.buyVol);
-            const baseSell = Number(row.sellVol);
-            const nextStock = {
-                ...row,
-                price:   newPrice,
-                volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
-                buyVol:  (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
-                sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
-                change:  isCoin ? changeVal.toFixed(4) : changeVal.toFixed(2)
-            };
-            const sanitized = {};
-            Object.keys(nextStock).forEach((k) => {
-                const v = nextStock[k];
-                if (v !== undefined) sanitized[k] = v;
-            });
-            return sanitized;
-        });
-
-        console.log('[Trade] stockTx result', id, {
-            committed: stockTxResult.committed,
-            snapshotExists: stockTxResult.snapshot?.exists?.() === true
-        });
-        if (!stockTxResult.committed) {
-            console.warn('[Trade] stockTx not committed (server rejected or aborted)', id, stockTxResult);
-            const reason = stockTxAbort.reason || 'Unknown stockTx failure';
-            console.warn(`Trade failed for ${id}: Reason - ${reason}`);
-            if (stockTxAbort.reason === "잔액부족") throw new Error("잔액부족");
-            if (stockTxAbort.reason === "보유부족") throw new Error("보유부족");
-            if (stockTxAbort.reason === "종목한도") throw new Error("종목한도");
-            throw new Error("트랜잭션중단");
-        }
-
-        const tradeTsCommitted = serverNowMs();
-        const userTxResult = await runTransaction(userRef, (current) => {
-            const c = current || { cash: 1000000, stocks: {}, coins: {} };
-            const cash = clampUserCash(c.cash ?? 1000000);
-            const baseStocks = normalizeUserStocksForRules(c.stocks);
-            const baseCoins = normalizeUserCoinsForRules(c.coins);
-            const baseBook = isCoin ? baseCoins : baseStocks;
-            const rawPos = baseBook[id];
-            const usQty = Math.floor(Math.max(0, Number(rawPos?.qty) || 0));
-            const usAvg = Math.round(Math.max(0, Math.min(USER_STOCK_AVG_MAX, Number(rawPos?.avg) || 0)));
-            const us = { qty: usQty, avg: usAvg };
-            const tradeTs = tradeTsCommitted;
-            let nextUser;
-            if (type === 'buy') {
-                const totalBuyPrice = finalTradePrice * qty;
-                if (cash < totalBuyPrice) return;
-                const totalCost = (us.qty * us.avg) + totalBuyPrice;
-                const newQty = us.qty + qty;
-                if (newQty > USER_STOCK_QTY_CAP) return;
-                const nextAvg = Math.round(totalCost / newQty);
-                if (!Number.isFinite(nextAvg)) return;
-                const avgClamped = Math.max(0, Math.min(USER_STOCK_AVG_MAX, nextAvg));
-                if (isCoin) {
-                    nextUser = {
-                        ...c,
-                        cash: clampUserCash(cash - totalBuyPrice),
-                        stocks: baseStocks,
-                        coins: { ...baseCoins, [id]: { qty: newQty, avg: avgClamped } },
-                        lastTradeTime: tradeTs
-                    };
-                } else {
-                    nextUser = {
-                        ...c,
-                        cash: clampUserCash(cash - totalBuyPrice),
-                        stocks: { ...baseStocks, [id]: { qty: newQty, avg: avgClamped } },
-                        coins: baseCoins,
-                        lastTradeTime: tradeTs
-                    };
-                }
-            } else {
-                if (us.qty < qty) return;
-                const totalSellAmount = Math.round(finalTradePrice * qty * (1 - fee));
-                const newQty = Math.max(0, Math.floor(us.qty - qty));
-                const nextBook = { ...baseBook };
-                if (newQty === 0) {
-                    delete nextBook[id];
-                } else {
-                    nextBook[id] = { qty: newQty, avg: us.avg };
-                }
-                if (isCoin) {
-                    nextUser = {
-                        ...c,
-                        cash: clampUserCash(cash + totalSellAmount),
-                        stocks: baseStocks,
-                        coins: nextBook,
-                        lastTradeTime: tradeTs
-                    };
-                } else {
-                    nextUser = {
-                        ...c,
-                        cash: clampUserCash(cash + totalSellAmount),
-                        stocks: nextBook,
-                        coins: baseCoins,
-                        lastTradeTime: tradeTs
-                    };
-                }
-            }
-            const userSanitized = {};
-            Object.keys(nextUser).forEach((k) => {
-                const v = nextUser[k];
-                if (v !== undefined) userSanitized[k] = v;
-            });
-            return userSanitized;
-        });
-
-        console.log('[Trade] userTx result', id, {
-            committed: userTxResult.committed,
-            snapshotExists: userTxResult.snapshot?.exists?.() === true
-        });
-        if (!userTxResult.committed) {
-            console.warn('[Trade] userTx not committed', id, userTxResult);
-            if (stockRollbackVal != null) {
-                try {
-                    await runTransaction(stockRef, () => {
-                        const back = JSON.parse(JSON.stringify(stockRollbackVal));
-                        return back;
-                    });
-                    console.warn('[Trade] best-effort stock rollback applied after userTx failure');
-                } catch (rbErr) {
-                    console.error('[Trade] stock rollback failed (data may be inconsistent):', rbErr?.message || rbErr);
-                }
-            }
-            console.warn(`Trade failed for ${id}: Reason - userTx not committed`);
-            throw new Error("유저동기화실패");
-        }
-
-        const nv = userTxResult.snapshot.val();
-        myData.cash = nv.cash ?? 1000000;
-        myData.stocks = nv.stocks || {};
-        myData.coins = nv.coins || {};
-
-        if (finalTradePrice > 0) {
-            updateCandlestick(id, finalTradePrice, qty, { market: isCoin ? 'coin' : 'stock' }).catch((e) => {
-                console.warn('[candle] 분봉 업데이트 실패 (무시):', e.message);
-            });
-        }
-
-        const sound = type === 'buy' ? buySound : sellSound;
-        sound.currentTime = 0;
-        sound.play().catch(() => {});
-
-        lastTradeTime = tradeTsCommitted;
-        if (userUID) {
-            const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-            if (isAdminUser) {
-                clearOffPeakTradeTimeStorageForUid(userUID);
-            } else if (isMarketOpen() && !isRegularMarket()) {
-                persistOffPeakTradeTime(tradeTsCommitted);
-            } else {
-                clearOffPeakTradeTimeStorageForUid(userUID);
-            }
-        }
-        try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
-
-    } catch (error) {
         if (autoTrade) {
-            if (error.message === "트랜잭션중단") {
-                console.warn('[trade][auto] 트랜잭션 중단 → 자동매매 종료');
-            } else {
-                console.warn('[trade][auto] stopped:', error.message);
-            }
             stopAutoTrade(id);
             return;
         }
-        if (error.message === "잔액부족") alert("잔액이 부족합니다!");
-        else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
-        else if (error.message === "종목한도") alert(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
-        else if (error.message === "트랜잭션중단") { /* 정상 중단 — 알림 없음 */ }
-        else if (error.message === "유저동기화실패") alert("잔고 동기화에 실패했습니다. 새로고침 후 다시 시도해주세요.");
-        else alert("거래 중 오류가 발생했습니다.");
+        if (code === 'functions/unauthenticated') {
+            tradeNotify('로그인이 필요합니다.');
+        } else if (code === 'functions/failed-precondition') {
+            if (raw.includes('잔액')) tradeNotify('잔액이 부족합니다!');
+            else if (raw.includes('보유 수량')) tradeNotify(isCoin ? '보유 코인이 부족합니다!' : '보유 주식이 부족합니다!');
+            else if (raw.includes('종목한도')) {
+                tradeNotify(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
+            } else if (raw.includes('User validation failed')) {
+                tradeNotify('잔고 동기화에 실패했습니다. 새로고침 후 다시 시도해주세요.');
+            } else {
+                tradeNotify(raw || '거래할 수 없습니다.');
+            }
+        } else if (code === 'functions/not-found') {
+            tradeNotify(raw || '종목을 찾을 수 없습니다.');
+        } else if (code === 'functions/invalid-argument') {
+            tradeNotify(raw || '잘못된 요청입니다.');
+        } else {
+            tradeNotify('거래 중 오류가 발생했습니다.');
+        }
+        return;
     }
     } catch (outerErr) {
         console.warn('[Trade] unexpected', outerErr?.message || outerErr);
