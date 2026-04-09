@@ -8575,13 +8575,22 @@ async function loadStockNameCache() {
 // 검색 비동기 작업 취소용 — 새 검색·주식/코인 탭 전환 시 이전 fetch/UI 갱신 무시
 let searchRequestGen = 0;
 
+function normalizeSearchKeyword(v) {
+    return String(v || '')
+        .normalize('NFKC')
+        .toLowerCase()
+        .replace(/\s+/g, '')
+        .trim();
+}
+
 // 검색어 입력 처리 — 이름 캐시 기반 검색 후 가격 조회
 async function handleSearch(query) {
     const listDiv  = document.getElementById('stock-list');
     const emptyDiv = document.getElementById('stock-empty');
     if (!listDiv) return;
 
-    const q = query.trim();
+    const qRaw = String(query || '').trim();
+    const q = normalizeSearchKeyword(qRaw);
 
     // 검색어 없으면 즐겨찾기 목록으로 복귀
     if (!q) {
@@ -8605,7 +8614,8 @@ async function handleSearch(query) {
         searchResults = {};
         const coinMode = isCoinMarket();
         Object.entries(stockNameCache).forEach(([id, name]) => {
-            if (name.includes(q)) {
+            const nameNorm = normalizeSearchKeyword(name);
+            if (nameNorm.includes(q)) {
                 const cached = coinMode
                     ? (favoriteCoins[id] || ownedCoins[id])
                     : (favorites[id] || ownedStocks[id]);
@@ -8631,7 +8641,7 @@ async function handleSearch(query) {
                     if (myGen !== searchRequestGen) return;
                     if (!snap.exists()) return;
                     const data = snap.val();
-                    if (document.getElementById('search-input')?.value?.trim() !== q) return;
+                    if (normalizeSearchKeyword(document.getElementById('search-input')?.value) !== q) return;
                     const resolved = { ...data, id };
                     searchResults[id] = resolved;
                     if (coinMode) {
