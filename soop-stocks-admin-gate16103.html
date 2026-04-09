@@ -273,6 +273,62 @@
                 font-size: 13px;
             }
         }
+        .daily-routine-preset-panel {
+            background: #0b1220;
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+        }
+        .daily-routine-preset-panel .preset-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #c7d2fe;
+            margin-bottom: 10px;
+        }
+        .daily-routine-preset-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .daily-routine-preset-toolbar:last-child { margin-bottom: 0; }
+        .daily-routine-preset-toolbar input[type="text"] {
+            flex: 1 1 160px;
+            min-width: 0;
+            background: #111827;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            outline: none;
+        }
+        .daily-routine-preset-toolbar select {
+            flex: 1 1 200px;
+            min-width: 0;
+            background: #111827;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            outline: none;
+        }
+        .daily-routine-preset-toolbar .btn-preset {
+            padding: 8px 12px !important;
+            font-size: 12px !important;
+            margin-top: 0 !important;
+            width: auto !important;
+            white-space: nowrap;
+        }
+        .daily-routine-preset-hint {
+            font-size: 11px;
+            color: #64748b;
+            line-height: 1.45;
+            margin-top: 8px;
+        }
         .daily-routine-add-btn {
             width: auto !important;
             margin-top: 0 !important;
@@ -1668,6 +1724,25 @@
                 style="width:64px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:14px; text-align:center; outline:none;"
                 oninput="updateDailyAutoNext()" onblur="flushDailyAutoPersist()">
             <span style="color:#64748b;">분</span>
+        </div>
+        <div class="daily-routine-preset-panel">
+            <div class="preset-title">📂 루틴 프리셋</div>
+            <div class="daily-routine-preset-toolbar">
+                <input type="text" id="daily-routine-preset-name" maxlength="80" placeholder="프리셋 이름 (예: 평일 기본)" autocomplete="off">
+                <button type="button" class="btn-success btn-preset" onclick="saveDailyRoutinePreset()">현재 루틴 저장</button>
+            </div>
+            <div class="daily-routine-preset-toolbar">
+                <select id="daily-routine-preset-select">
+                    <option value="">— 저장된 프리셋 선택 —</option>
+                </select>
+                <button type="button" class="btn-primary btn-preset" onclick="loadSelectedDailyRoutinePreset()">불러오기</button>
+                <button type="button" class="btn-danger btn-preset" onclick="deleteSelectedDailyRoutinePreset()">삭제</button>
+                <button type="button" class="btn-preset" style="background:#334155;color:#e2e8f0;" onclick="newDailyRoutineList()">새 목록</button>
+            </div>
+            <div class="daily-routine-preset-hint">
+                현재 편집 중인 루틴은 아래 목록에 반영되며, 자동 실행 시각·ON 여부와 함께 Firebase <code style="font-size:10px;">siteConfig/dailyAuto</code>에 저장됩니다.<br>
+                프리셋만 별도로 <code style="font-size:10px;">siteConfig/dailyAutoPresets</code>에 보관되며, 불러오면 아래 목록이 교체되고 곧바로 dailyAuto에도 반영됩니다.
+            </div>
         </div>
         <div class="daily-routine-add-row">
             <select id="daily-routine-item-type" class="daily-routine-add-select">
@@ -5860,6 +5935,9 @@
     let dailyAutoPersistTimer = null;
     let dailyAutoApplyingFromServer = false;
     let dailyAutoSettingsUnsub = null;
+    let dailyAutoPresetsUnsub = null;
+    /** save 직후 드롭다운에서 방금 저장한 프리셋을 선택 유지 */
+    let dailyRoutinePresetSelectPending = null;
     let dailyAutoSavedIndicatorTimer = null;
 
     const DAILY_AUTO_DEFAULTS = {
@@ -5896,6 +5974,128 @@
             el.classList.remove('visible');
             dailyAutoSavedIndicatorTimer = null;
         }, 2000);
+    }
+
+    function renderDailyRoutinePresetDropdown(presetsVal) {
+        const sel = document.getElementById('daily-routine-preset-select');
+        if (!sel) return;
+        const prev = sel.value;
+        const entries =
+            presetsVal && typeof presetsVal === 'object'
+                ? Object.entries(presetsVal).map(([id, v]) => ({
+                      id,
+                      name: String(v?.name || '').trim() || '이름 없음',
+                      n: Array.isArray(v?.routines) ? v.routines.length : 0,
+                  }))
+                : [];
+        entries.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+        const opts = ['<option value="">— 저장된 프리셋 선택 —</option>'].concat(
+            entries.map(
+                (e) =>
+                    `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)} (${e.n}항목)</option>`
+            )
+        );
+        sel.innerHTML = opts.join('');
+        const pending = dailyRoutinePresetSelectPending;
+        if (pending && entries.some((x) => x.id === pending)) {
+            sel.value = pending;
+            dailyRoutinePresetSelectPending = null;
+        } else if (prev && entries.some((x) => x.id === prev)) {
+            sel.value = prev;
+        }
+    }
+
+    window.saveDailyRoutinePreset = async function () {
+        if (!isAdmin()) return;
+        const nameEl = document.getElementById('daily-routine-preset-name');
+        const name = String(nameEl?.value || '').trim();
+        if (!name) {
+            alert('프리셋 이름을 입력하세요.');
+            return;
+        }
+        const routines = getDailyRoutineItemsFromUI().map(normalizeDailyRoutineItem).filter(Boolean);
+        try {
+            const newRef = push(ref(db, 'siteConfig/dailyAutoPresets'));
+            const id = newRef.key;
+            await set(newRef, {
+                name,
+                routines,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+            dailyRoutinePresetSelectPending = id;
+            if (nameEl) nameEl.value = '';
+            showAdminToast(`프리셋 "${name}" 저장됨 (${routines.length}항목)`);
+        } catch (e) {
+            alert('프리셋 저장 실패: ' + (e?.message || e));
+        }
+    };
+
+    window.loadSelectedDailyRoutinePreset = async function () {
+        if (!isAdmin()) return;
+        const sel = document.getElementById('daily-routine-preset-select');
+        const id = String(sel?.value || '').trim();
+        if (!id) {
+            alert('불러올 프리셋을 선택하세요.');
+            return;
+        }
+        try {
+            const snap = await get(ref(db, `siteConfig/dailyAutoPresets/${id}`));
+            if (!snap.exists()) {
+                alert('프리셋 데이터가 없습니다.');
+                return;
+            }
+            const v = snap.val() || {};
+            const routines = Array.isArray(v.routines)
+                ? v.routines.map(normalizeDailyRoutineItem).filter(Boolean)
+                : [];
+            renderDailyRoutineList(routines);
+            await persistDailyAutoSettings();
+            showAdminToast(`프리셋 "${String(v.name || '').trim() || id}" 불러옴 (${routines.length}항목)`);
+        } catch (e) {
+            alert('불러오기 실패: ' + (e?.message || e));
+        }
+    };
+
+    window.deleteSelectedDailyRoutinePreset = async function () {
+        if (!isAdmin()) return;
+        const sel = document.getElementById('daily-routine-preset-select');
+        const id = String(sel?.value || '').trim();
+        if (!id) {
+            alert('삭제할 프리셋을 선택하세요.');
+            return;
+        }
+        if (!confirm('선택한 프리셋을 삭제할까요? (실행 중인 dailyAuto 설정은 바뀌지 않습니다)')) return;
+        try {
+            await remove(ref(db, `siteConfig/dailyAutoPresets/${id}`));
+            showAdminToast('프리셋 삭제됨');
+            if (sel) sel.value = '';
+        } catch (e) {
+            alert('삭제 실패: ' + (e?.message || e));
+        }
+    };
+
+    window.newDailyRoutineList = function () {
+        if (!isAdmin()) return;
+        const items = getDailyRoutineItemsFromUI();
+        if (items.length && !confirm('현재 목록을 비우고 새로 편집합니다. 계속할까요?')) return;
+        renderDailyRoutineList([]);
+        persistDailyAutoSettings();
+        showAdminToast('새 목록으로 시작 (항목을 추가하세요)');
+    };
+
+    function startDailyRoutinePresetsListener() {
+        if (dailyAutoPresetsUnsub) return;
+        dailyAutoPresetsUnsub = onValue(ref(db, 'siteConfig/dailyAutoPresets'), (snap) => {
+            renderDailyRoutinePresetDropdown(snap.exists() ? snap.val() : null);
+        });
+    }
+
+    function stopDailyRoutinePresetsListener() {
+        if (dailyAutoPresetsUnsub) {
+            dailyAutoPresetsUnsub();
+            dailyAutoPresetsUnsub = null;
+        }
     }
 
     function normalizeDailyRoutineItem(raw) {
@@ -6119,9 +6319,11 @@
             const val = snap.exists() ? snap.val() : {};
             applyDailyAutoFromRemote(val);
         });
+        startDailyRoutinePresetsListener();
     }
 
     function stopDailyAutoSettingsListener() {
+        stopDailyRoutinePresetsListener();
         if (dailyAutoSettingsUnsub) {
             dailyAutoSettingsUnsub();
             dailyAutoSettingsUnsub = null;
