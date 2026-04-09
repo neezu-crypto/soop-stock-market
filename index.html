@@ -4615,6 +4615,9 @@ onAuthStateChanged(auth, async (user) => {
             } catch (err) {
                 logAuthTrailError('loadStockNameCache in onAuthStateChanged', err);
             }
+            try {
+                await refreshBannersAfterAuthIfEmpty();
+            } catch (_) { /* noop */ }
 
             try {
                 await setupPresenceSession(user);
@@ -8234,6 +8237,17 @@ async function loadBannersFromFirebase(remoteVer) {
         try { renderBanners(); } catch (_) { /* noop */ }
     }
 })();
+
+// 초기 부트 시점 권한/네트워크 타이밍으로 배너가 비어 끝난 경우 보정 로드
+async function refreshBannersAfterAuthIfEmpty() {
+    const hasBanner = Object.values(allBanners).some((b) => b && b.bannerImg);
+    if (hasBanner) return;
+    try {
+        const verSnap = await get(ref(db, 'siteConfig/bannerCacheVersion'));
+        const remoteVer = verSnap.exists() ? verSnap.val() : 0;
+        await loadBannersFromFirebase(remoteVer);
+    } catch (_) { /* noop */ }
+}
 
 // ══════════════════════════════════════════════════════════
 // 즐겨찾기 시스템 (온디맨드 방식)
