@@ -2134,7 +2134,7 @@
             } catch (_) { /* noop */ }
             const reqBal = (req.currentBalance != null) ? Math.floor(Number(req.currentBalance) || 0).toLocaleString() : '—';
             const reason = (req.requestReason || '').trim();
-            const reasonShort = reason.length > 80 ? `${escapeHtml(reason.slice(0, 80))}…` : escapeHtml(reason);
+            const reasonFull = escapeHtml(reason || '—');
             const hi = highlightIds && highlightIds.has(reqId);
             return `
                 <tr style="border-top:1px solid #334155;${hi ? 'background:rgba(56,189,248,0.08);' : ''}">
@@ -2143,21 +2143,29 @@
                     <td style="padding:8px; color:#f8fafc; font-weight:700;">${escapeHtml(req.nickname || '')}</td>
                     <td style="padding:8px; color:#cbd5e1;">${reqBal}</td>
                     <td style="padding:8px; color:#38bdf8; font-weight:700;">${liveCash}</td>
-                    <td style="padding:8px; color:#94a3b8; max-width:140px;" title="${escapeHtml(reason)}">${reasonShort || '—'}</td>
+                    <td style="padding:8px; min-width:220px;">
+                        <div style="border:1px solid #334155; background:#0f172a; border-radius:8px; padding:8px 10px;">
+                            <div style="font-size:10px; color:#64748b; margin-bottom:6px;">신청 사유</div>
+                            <div style="font-size:12px; color:#cbd5e1; white-space:pre-wrap; line-height:1.55; max-height:120px; overflow-y:auto;">${reasonFull}</div>
+                        </div>
+                    </td>
                     <td style="padding:8px; vertical-align:top;">
-                        <input type="number" id="grant-amt-${reqId}" min="1" step="1" placeholder="금액"
-                            style="width:100%; max-width:140px; padding:6px 8px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#f8fafc; font-size:12px; box-sizing:border-box;">
-                        <div class="asset-grant-preset-wrap" aria-label="지급액 빠른 입력">
-                            <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="500000">50만</button>
-                            <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="1000000">100만</button>
-                            <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="5000000">500만</button>
+                        <div style="border:1px solid #334155; background:#0f172a; border-radius:8px; padding:8px 10px;">
+                            <div style="font-size:10px; color:#64748b; margin-bottom:6px;">지급 금액 입력</div>
+                            <input type="number" id="grant-amt-${reqId}" min="1" step="1" placeholder="금액"
+                                style="width:100%; min-width:140px; padding:8px 10px; border-radius:6px; border:1px solid #475569; background:#111827; color:#f8fafc; font-size:12px; box-sizing:border-box;">
+                            <div class="asset-grant-preset-wrap" aria-label="지급액 빠른 입력" style="margin-top:8px;">
+                                <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="500000">50만</button>
+                                <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="1000000">100만</button>
+                                <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="5000000">500만</button>
+                            </div>
                         </div>
                     </td>
                     <td style="padding:8px; text-align:right;">
                         <button type="button" class="btn-grant-asset"
                             data-req-id="${escapeHtml(reqId)}"
                             data-target-uid="${escapeHtml(req.uid)}"
-                            style="background:#22c55e; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:800; font-size:12px; white-space:nowrap;">Grant</button>
+                            style="background:#22c55e; color:white; border:none; padding:10px 12px; border-radius:8px; cursor:pointer; font-weight:800; font-size:12px; white-space:nowrap; min-width:88px;">Grant</button>
                     </td>
                 </tr>`;
         }));
