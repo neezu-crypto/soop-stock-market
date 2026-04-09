@@ -6230,20 +6230,47 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
 
     const maxOrderWon = isCoin ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
     const maxLabel    = isCoin ? '1000억원' : '1억원';
+    const precheckFee = Number(siteConfig?.sellConfig?.fee ?? 0.003);
+    const estimateTradePriceForPrecheck = (currentPrice, side, q, coinQ) => {
+        const sc = siteConfig?.sellConfig || {};
+        const mp = siteConfig?.marketParams || {};
+        const basePrice = Math.max(1, Number(sc.basePrice ?? 10000));
+        const scalePrice = Math.max(1, Number(sc.scalePrice ?? 90000));
+        const impactCoef = Number(sc.impact ?? 0.0005);
+        const spread = Number(sc.spread ?? 0.001);
+        const impactRefPriceWon = Math.max(1, Number(mp.impactRefPrice ?? 100000));
+        const stockSellImpactMultiplier = Math.max(1, Number(mp.stockSellImpactMultiplier ?? 1.2));
+        const coinSellImpactMultiplier = Math.max(1, Number(mp.coinSellImpactMultiplier ?? 1.2));
+        const coinMul = Number(mp.coinImpactMultiplier ?? 1.85);
+        const dampingFactor = coinQ ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
+        let sellPressure = 1;
+        if (side === 'sell' && !coinQ) {
+            sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
+        }
+        let impact = impactCoef * dampingFactor * Math.log2(1 + q) * sellPressure;
+        if (coinQ) impact *= Number.isFinite(coinMul) && coinMul > 0 ? coinMul : 1.85;
+        if (side === 'sell') impact *= coinQ ? coinSellImpactMultiplier : stockSellImpactMultiplier;
+        if (!Number.isFinite(impact) || impact < 0) impact = 0;
+        const rawNewPrice = side === 'buy' ? currentPrice * (1 + impact) : currentPrice * (1 - impact);
+        const newPrice = Math.max(1, Math.round(rawNewPrice));
+        return side === 'buy'
+            ? Math.max(1, Math.round(newPrice * (1 + spread)))
+            : Math.max(1, Math.round(newPrice * (1 - spread)));
+    };
     const stockForCheck = isCoin
         ? (favoriteCoins[id] || ownedCoins[id] || searchResults[id] || allCoins.find((s) => s.id === id))
         : stockRowForId(id);
     if (stockForCheck) {
         if (type === 'sell') {
-            const estSellPrice = Math.round(stockForCheck.price * (1 - 0.0005));
-            const estReceive   = Math.round(estSellPrice * qty * (1 - 0.003));
+            const estSellPrice = estimateTradePriceForPrecheck(Math.max(1, Number(stockForCheck.price) || 1), 'sell', qty, isCoin);
+            const estReceive   = Math.round(estSellPrice * qty * (1 - precheckFee));
             if (estReceive > maxOrderWon) {
                 tradeNotify(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 수령액: ${estReceive.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
                 abortAutoIf();
                 return;
             }
         } else {
-            const estBuyPrice  = Math.round(stockForCheck.price * (1 + 0.0005));
+            const estBuyPrice  = estimateTradePriceForPrecheck(Math.max(1, Number(stockForCheck.price) || 1), 'buy', qty, isCoin);
             const estTotal     = estBuyPrice * qty;
             if (estTotal > maxOrderWon) {
                 tradeNotify(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 구매액: ${estTotal.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);

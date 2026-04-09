@@ -219,6 +219,8 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
   const impactCoef = finiteOr(sellConfig.impact, 0.0005);
   const spread = finiteOr(sellConfig.spread, 0.001);
   const impactRefPriceWon = Math.max(1, finiteOr(marketParams?.impactRefPrice, 100000));
+  const stockSellImpactMultiplier = Math.max(1, finiteOr(marketParams?.stockSellImpactMultiplier, 1.2));
+  const coinSellImpactMultiplier = Math.max(1, finiteOr(marketParams?.coinSellImpactMultiplier, 1.2));
   const dampingFactor = isCoin ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
   const effectiveImpactCoef = impactCoef * dampingFactor;
   let sellPressure = 1;
@@ -229,6 +231,9 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
   if (isCoin) {
     const coinMul = finiteOr(marketParams?.coinImpactMultiplier, 1.85);
     impact *= coinMul > 0 ? coinMul : 1.85;
+  }
+  if (side === "sell") {
+    impact *= isCoin ? coinSellImpactMultiplier : stockSellImpactMultiplier;
   }
   if (!Number.isFinite(impact) || impact < 0) impact = 0;
   let rawNewPrice;
@@ -747,6 +752,8 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const fee = Number(sellConfig.fee ?? 0.003);
   const impactRefPriceWon = Math.max(1, Number(marketParams.impactRefPrice ?? 100000));
   const coinMul = Number(marketParams.coinImpactMultiplier ?? 1.85);
+  const stockSellImpactMultiplier = Math.max(1, Number(marketParams.stockSellImpactMultiplier ?? 1.2));
+  const coinSellImpactMultiplier = Math.max(1, Number(marketParams.coinSellImpactMultiplier ?? 1.2));
   const extraLiquidationFee = 0.08;
 
   const rawInstrumentVal = stockSnap.val();
@@ -768,6 +775,7 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     const dampingFactor = market === "coin" ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
     let impact = impactCoef * dampingFactor * Math.log2(1 + qty) * sellPressure;
     if (market === "coin") impact *= Number.isFinite(coinMul) && coinMul > 0 ? coinMul : 1.85;
+    impact *= market === "coin" ? coinSellImpactMultiplier : stockSellImpactMultiplier;
     nextPrice = Math.max(1, Math.round(prevPrice * (1 - impact)));
     tradePrice = Math.max(1, Math.round(nextPrice * (1 - spread)));
     const { history: _h, ...rest } = row;
