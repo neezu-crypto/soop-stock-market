@@ -7977,6 +7977,7 @@ function stopAllStocksSubscriptions() {
 let isUserActive      = true;
 let activityTimer     = null;
 let favPollTimers     = {}; // 레거시 비정규장 종목별 폴링 타이머 — 정리용으로만 유지
+const POWER_SAVE_IDLE_MS = 60000; // 비활동 60초 후 절전 모드
 
 function hasActiveAutoTrade() {
     try { return !!autoTradeState && Object.keys(autoTradeState).length > 0; } catch (_) { return false; }
@@ -8004,16 +8005,16 @@ function onUserActive() {
     const tick = () => {
         // 자동매수/매도 중에는 활동으로 간주 — 절전 모드 진입 금지
         if (hasActiveAutoTrade()) {
-            activityTimer = setTimeout(tick, 10000);
+            activityTimer = setTimeout(tick, POWER_SAVE_IDLE_MS);
             return;
         }
         isUserActive = false;
-        pauseAllSubscriptions(); // 10초 비활동 → 중단
+        pauseAllSubscriptions(); // 60초 비활동 → 중단
     };
-    activityTimer = setTimeout(tick, 10000);
+    activityTimer = setTimeout(tick, POWER_SAVE_IDLE_MS);
 }
 
-// 비활동 10초 후 주가·분봉 구독 전부 일시 중단
+// 비활동 60초 후 주가·분봉 구독 전부 일시 중단
 function pauseAllSubscriptions() {
     // 실시간 구독 해제 (알림 설정 종목 예외)
     Object.keys(favoriteUnsubs).forEach(id => {
