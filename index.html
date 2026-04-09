@@ -1001,6 +1001,29 @@
         .subscribe-gate-icon { font-size: 28px; }
         .subscribe-gate-title { font-size: 14px; font-weight: 800; color: var(--text-main); text-align: center; line-height: 1.5; }
         .subscribe-gate-desc { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.6; }
+        .ranking-gate-cost-banner {
+            width: 100%;
+            max-width: 340px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            background: linear-gradient(165deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.5));
+            text-align: center;
+            box-sizing: border-box;
+        }
+        .ranking-gate-cost-main {
+            font-size: 13px;
+            color: var(--text-main);
+            font-weight: 700;
+            line-height: 1.55;
+            margin-bottom: 8px;
+        }
+        .ranking-gate-cost-main strong { color: #fbbf24; font-weight: 800; }
+        .ranking-gate-cost-sub {
+            font-size: 11px;
+            color: var(--text-sub);
+            line-height: 1.5;
+        }
         .subscribe-gate-form { width: 100%; display: flex; flex-direction: column; gap: 8px; }
         .subscribe-gate-form input { width: 100%; background: var(--bg-color); border: 1px solid var(--border); color: var(--text-main); padding: 9px 12px; border-radius: 8px; font-size: 13px; outline: none; box-sizing: border-box; }
         .subscribe-gate-form input:focus { border-color: #f59e0b; }
@@ -1903,15 +1926,25 @@
             <div class="subscribe-gate-icon">👑</div>
             <div id="ranking-gate-copy-default">
                 <div class="subscribe-gate-title">자산 랭킹 열람 신청</div>
-                <div class="subscribe-gate-desc">자산 랭킹 TOP100 · 차트에서 종목별 <b>익명</b> 보유 1~3위<br>별풍선 <span id="p-asset-ranking">30</span>개 · 동일 12시간 열람</div>
+                <div class="ranking-gate-cost-banner">
+                    <div class="ranking-gate-cost-main">
+                        자산 랭킹 <strong>열람권</strong>은 SOOP 방송에서 개발자에게<br>
+                        <strong>별풍선 <span id="p-asset-ranking">30</span>개</strong>를 후원한 뒤, 검수가 승인되면 부여됩니다.
+                    </div>
+                    <div class="ranking-gate-cost-sub">
+                        승인 시점부터 <b>12시간</b> 동안 · 전체 <b>TOP100</b> 순위 · 차트에서 종목별 <b>익명</b> 보유 1~3위(수량) 스냅샷
+                    </div>
+                </div>
             </div>
             <div id="ranking-gate-copy-expired" style="display:none;">
                 <div class="subscribe-gate-title">열람 기간이 만료되었습니다</div>
-                <div class="subscribe-gate-desc">승인 후 <b>12시간</b> 동안만 자산 랭킹을 열람할 수 있습니다.<br>별풍선 후원·재신청을 진행해 주세요.</div>
+                <div class="subscribe-gate-desc">승인 후 <b>12시간</b>이 지나 열람이 종료되었습니다.<br>
+                다시 열람하려면 <b>별풍선 <span id="p-asset-ranking-expired">30</span>개</b> 후원 및 검수 신청이 필요합니다.</div>
             </div>
             <div id="ranking-gate-copy-rejected" style="display:none;">
                 <div class="subscribe-gate-title">신청이 거절되었습니다</div>
-                <div class="subscribe-gate-desc">안내에 따라 수정 후 다시 신청해 주세요.</div>
+                <div class="subscribe-gate-desc">안내에 따라 수정한 뒤 재신청해 주세요.<br>
+                열람권은 <b>별풍선 <span id="p-asset-ranking-rejected">30</span>개</b> 후원 후 검수 승인 시에만 제공됩니다.</div>
             </div>
             <div class="subscribe-gate-form">
                 <input type="text" id="sub-nickname" placeholder="닉네임 (방송에서 사용하는 이름)">
@@ -1922,7 +1955,7 @@
                     <label for="sub-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 랭킹 열람 검수 목적으로 수집됩니다. 종목별 보유 순위는 익명 스냅샷만 제공됩니다.</label>
                 </div>
                 <div class="subscribe-gate-btns">
-                    <button type="button" class="btn-subscribe-soop" onclick="openStarBalloonGiftForRanking()">🎈 별풍선 보내기</button>
+                    <button type="button" id="btn-ranking-starballoon" class="btn-subscribe-soop" onclick="openStarBalloonGiftForRanking()">🎈 별풍선 보내기</button>
                     <button type="button" class="btn-subscribe-apply" onclick="submitAssetRankingAccessRequest()">검수 신청하기</button>
                 </div>
             </div>
@@ -2569,6 +2602,8 @@ function applyPaidPricingToUserUi() {
         if (el) el.textContent = String(val);
     };
     setText('p-asset-ranking', p.assetRankingBalloons);
+    setText('p-asset-ranking-expired', p.assetRankingBalloons);
+    setText('p-asset-ranking-rejected', p.assetRankingBalloons);
     setText('p-broadcast-day', p.broadcastBannerPerDay);
     setText('p-chart-day', p.chartBannerPerDay);
     setText('p-relay-off', p.relayOffPeakPerHour);
@@ -2576,6 +2611,18 @@ function applyPaidPricingToUserUi() {
     setText('p-extend-balloons', p.regularExtendBalloons);
     setText('intro-asset-ranking-cost', p.assetRankingBalloons);
     setText('intro-extend-balloons', p.regularExtendBalloons);
+    try {
+        const rankBalloonBtn = document.getElementById('btn-ranking-starballoon');
+        if (rankBalloonBtn) {
+            rankBalloonBtn.title =
+                `자산 랭킹 열람권 신청을 위한 별풍선 후원 (설정: ${p.assetRankingBalloons}개) — 방송 화면에서 동일 개수 이상 후원해 주세요.`;
+        }
+        const rankTab = document.getElementById('tab-btn-ranking');
+        if (rankTab) {
+            rankTab.title =
+                `자산 랭킹 · 열람권: 별풍선 ${p.assetRankingBalloons}개 후원 후 검수 승인 시 (승인 후 12시간 열람)`;
+        }
+    } catch (_) { /* noop */ }
     setText('p-asset-support-roulette', p.assetSupportRouletteBalloons);
     try { window.updateRelayCost?.(); } catch (_) { /* noop */ }
     try { window.updatePromoCost?.(); } catch (_) { /* noop */ }
