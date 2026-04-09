@@ -882,6 +882,24 @@
             background: var(--card-bg); width: 90%; max-width: 400px;
             border-radius: 24px; border: 1px solid var(--primary);
             padding: 30px; box-shadow: 0 0 40px rgba(56,189,248,0.3); text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        /* 모바일: 키보드·짧은 뷰포트에서 입력이 화면 밖으로 잘리지 않게 + iOS 줌/포커스 완화 */
+        @media (max-width: 1300px) {
+            .promo-modal-overlay .promo-modal-content {
+                max-height: min(90vh, 100dvh - 24px);
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+        @media (max-width: 800px) {
+            .promo-modal-overlay input[type="text"],
+            .promo-modal-overlay input[type="number"],
+            .promo-modal-overlay input[type="search"],
+            .promo-modal-overlay textarea {
+                font-size: 16px !important;
+            }
         }
         .promo-modal-content button:hover { filter: brightness(1.1); transform: translateY(-1px); transition: all 0.2s; }
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
@@ -2240,7 +2258,7 @@
      차트 하단 배너 광고 문의 모달
 ══════════════════════════════════════════ -->
 <!-- 자산 지원 신청 -->
-<div id="asset-request-modal" class="promo-modal-overlay" style="z-index:4100;">
+<div id="asset-request-modal" class="promo-modal-overlay">
     <div class="promo-modal-content" style="max-width:420px;">
         <div class="promo-modal-header"><h2>💰 자산 지원 신청</h2></div>
         <p style="font-size:13px; color:var(--text-sub); margin:0 0 12px 0; line-height:1.5;">
@@ -2774,6 +2792,7 @@ function syncAssetRequestSubmitState() {
 window.syncAssetRequestSubmitState = syncAssetRequestSubmitState;
 
 window.openAssetRequestModal = function() {
+    prepareMobileModalLayer();
     document.getElementById('asset-request-modal')?.classList.add('active');
     const nickEl = document.getElementById('asset-request-nickname');
     const reasonEl = document.getElementById('asset-request-reason');
@@ -3204,11 +3223,19 @@ window.toggleRelay = function() {
     }
 };
 
-window.openRelayApplyModal = function() {
-    // 모바일에서 포트폴리오/중계 패널 딤이 모달 위를 덮는 이슈 방지
+/** 모바일 슬라이드 패널·딤·탭 위치가 입력 터치를 가로채지 않도록 정리 (프로모/신청 모달 공통) */
+function prepareMobileModalLayer() {
     document.getElementById('portfolio-dim')?.classList.remove('active');
     document.getElementById('my-stocks-container')?.classList.remove('mobile-open');
     document.getElementById('relay-container')?.classList.remove('mobile-open');
+    const portTab = document.getElementById('portfolio-tab');
+    const relayTab = document.getElementById('relay-tab');
+    if (portTab) portTab.style.left = '0';
+    if (relayTab) relayTab.style.left = '0';
+}
+
+window.openRelayApplyModal = function() {
+    prepareMobileModalLayer();
 
     document.getElementById('relay-nickname').value = '';
     document.getElementById('relay-soop-id').value  = '';
@@ -6859,6 +6886,7 @@ function updateExtendRequestBar() {
 }
 
 window.openExtendModal = function(isRegular) {
+    prepareMobileModalLayer();
     const titleEl = document.getElementById('extend-modal-title');
     const descEl  = document.getElementById('extend-modal-desc');
     const eb = livePaidPricing.regularExtendBalloons;
@@ -7171,6 +7199,7 @@ window.closePrivacyForever = function() {
 
 // ── 상장 신청 ──────────────────────────────────────────────
 window.openListingRequestModal = function(prefillName = '') {
+    prepareMobileModalLayer();
     document.getElementById('listing-streamer-name').value = prefillName;
     document.getElementById('listing-soop-id').value       = '';
     document.getElementById('listing-reason').value        = '';
@@ -7298,6 +7327,7 @@ window.closePortfolio = function() {
 
 // ── 모달 ─────────────────────────────────────────────────────
 window.openPromoModal = () => {
+    prepareMobileModalLayer();
     document.getElementById('promo-nickname').value = '';
     document.getElementById('promo-soop-id').value  = '';
     document.getElementById('promo-days').value     = '';
@@ -7309,6 +7339,7 @@ window.openPromoModal = () => {
 };
 window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
 window.openChartAdModal = () => {
+    prepareMobileModalLayer();
     ['chart-ad-nickname','chart-ad-img','chart-ad-link','chart-ad-days'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
     });
