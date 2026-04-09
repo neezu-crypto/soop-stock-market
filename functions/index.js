@@ -1014,6 +1014,35 @@ exports.adminStockSplit = onCall(
   }
 );
 
+/** 관리자 전용: tradeHistory(유저 활동로그) 전체 삭제 */
+exports.adminPurgeUserActivityLogs = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "256MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    const snap = await db.ref("tradeHistory").get();
+    const beforeCount = snap.exists() && typeof snap.val() === "object"
+      ? Object.keys(snap.val() || {}).length
+      : 0;
+    await db.ref("tradeHistory").set(null);
+    const ts = Date.now();
+    try {
+      await db.ref(`adminActivityLogs/userActivityPurge/${ts}`).set({
+        type: "userActivityPurge",
+        adminEmail: String(request.auth?.token?.email || ADMIN_EMAIL),
+        createdAt: ts,
+        via: "adminPurgeUserActivityLogs",
+        beforeCount,
+      });
+    } catch (e) {
+      console.warn("[adminPurgeUserActivityLogs] adminActivityLogs:", e?.message || e);
+    }
+    return { ok: true, purged: beforeCount, at: ts };
+  }
+);
+
 /**
  * presence/{uid}/{sessionId} 변경 시 전체 presence를 읽어 TTL 기준 활성 세션 수를 집계하고
  * siteStats/connectionCount 에 스칼라로 기록 — 클라이언트는 이 노드만 구독해 다운로드 절감.

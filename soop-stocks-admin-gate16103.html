@@ -1928,6 +1928,7 @@
     /** Gen2 callable 기본 리전(us-central1). Functions를 다른 리전에 배포했다면 getFunctions(app, 'asia-northeast3') 등으로 맞출 것 */
     const functions = getFunctions(app);
     const adminStockSplitFn = httpsCallable(functions, 'adminStockSplit');
+    const adminPurgeUserActivityLogsFn = httpsCallable(functions, 'adminPurgeUserActivityLogs');
 
     /**
      * Callable 미배포·리전 불일치·일시 다운 시 브라우저 RTDB 경로로 폴백.
@@ -2135,9 +2136,9 @@
                         <input type="number" id="grant-amt-${reqId}" min="1" step="1" placeholder="금액"
                             style="width:100%; max-width:140px; padding:6px 8px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#f8fafc; font-size:12px; box-sizing:border-box;">
                         <div class="asset-grant-preset-wrap" aria-label="지급액 빠른 입력">
-                            <button type="button" class="asset-grant-preset-btn" onclick="window.setAssetGrantPreset(${JSON.stringify(reqId)}, 500000)">50만</button>
-                            <button type="button" class="asset-grant-preset-btn" onclick="window.setAssetGrantPreset(${JSON.stringify(reqId)}, 1000000)">100만</button>
-                            <button type="button" class="asset-grant-preset-btn" onclick="window.setAssetGrantPreset(${JSON.stringify(reqId)}, 5000000)">500만</button>
+                            <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="500000">50만</button>
+                            <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="1000000">100만</button>
+                            <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="5000000">500만</button>
                         </div>
                     </td>
                     <td style="padding:8px; text-align:right;">
@@ -2154,6 +2155,13 @@
                 const rid = btn.getAttribute('data-req-id');
                 const uid = btn.getAttribute('data-target-uid');
                 window.grantAssetRequest(rid, uid);
+            });
+        });
+        tbody.querySelectorAll('.asset-grant-preset-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const rid = btn.getAttribute('data-req-id') || '';
+                const amt = Math.floor(Number(btn.getAttribute('data-amount')));
+                window.setAssetGrantPreset(rid, amt);
             });
         });
         console.log('[assetRequests][Stage4] table HTML updated, row count:', pending.length);
@@ -6662,12 +6670,30 @@
     async function purgeUserActivityLogs(silent = false) {
         if (!isAdmin()) return;
         if (!silent && !confirm('tradeHistory(유저 활동로그) 전체 데이터를 삭제하시겠습니까?')) return;
+        try {
+            const { data } = await adminPurgeUserActivityLogsFn({});
+            if (!silent) {
+                const n = Number(data?.purged) || 0;
+                showAdminToast(`유저 활동로그 ${n.toLocaleString()}건 삭제됨`);
+            }
+            return;
+        } catch (callableErr) {
+            // 함수 미배포/일시 장애 시에만 기존 RTDB 직접 삭제로 폴백
+            const code = String(callableErr?.code || '');
+            const msg = String(callableErr?.message || '').toLowerCase();
+            const canFallback =
+                code === 'functions/not-found' ||
+                code === 'functions/unavailable' ||
+                ((code === 'functions/internal' || code === 'internal') && (msg === 'internal' || !msg.trim()));
+            if (!canFallback) throw callableErr;
+        }
         await set(ref(db, 'tradeHistory'), null);
         try {
             await set(ref(db, `adminActivityLogs/userActivityPurge/${Date.now()}`), {
                 type: 'userActivityPurge',
                 adminEmail: auth.currentUser?.email || ADMIN_EMAIL,
                 createdAt: Date.now(),
+                via: 'clientFallback',
             });
         } catch (_) { /* noop */ }
     }
