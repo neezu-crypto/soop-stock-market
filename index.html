@@ -2694,6 +2694,7 @@ try {
 } catch (e) {
     auth = getAuth(app);
 }
+let authInitErrorNotifiedAt = 0;
 
 function isSoopAdminEmail() {
     try {
@@ -4671,9 +4672,9 @@ onAuthStateChanged(auth, async (user) => {
                     rankBtn.style.cursor = 'not-allowed';
                 }
             } catch (_) { /* noop */ }
-            stopRankingAccessWatch();
+            try { stopRankingAccessWatch(); } catch (_) { /* noop */ }
             lastTradeTime = 0;
-            await teardownPresenceSession();
+            try { await teardownPresenceSession(); } catch (_) { /* noop */ }
             try {
                 applyCoinMarketFeatureVisibility();
             } catch (_) { /* noop */ }
@@ -4687,7 +4688,25 @@ onAuthStateChanged(auth, async (user) => {
     } catch (fatal) {
         logAuthTrailError('onAuthStateChanged outer', fatal);
         console.error('[Auth] onAuthStateChanged', fatal);
-        alert('인증 초기화 중 오류가 발생했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+        // iOS/Safari 계열은 브라우저별 앱이 달라도 같은 WebKit/저장소 정책을 공유해 동시 재현될 수 있음
+        const code = String(fatal?.code || '').toLowerCase();
+        const msg = String(fatal?.message || '').toLowerCase();
+        const looksLikeStorageIssue =
+            code.includes('storage') ||
+            code.includes('cookie') ||
+            code.includes('persistence') ||
+            msg.includes('storage') ||
+            msg.includes('cookie') ||
+            msg.includes('persistence');
+        const now = Date.now();
+        if (now - authInitErrorNotifiedAt > 5000) {
+            authInitErrorNotifiedAt = now;
+            if (looksLikeStorageIssue) {
+                alert('인증 저장소 초기화에 실패했습니다. iOS 설정에서 Safari의 쿠키 차단/웹사이트 데이터 제한을 해제한 뒤 다시 시도해 주세요.');
+            } else {
+                alert('인증 초기화 중 오류가 발생했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+            }
+        }
     }
 });
 
