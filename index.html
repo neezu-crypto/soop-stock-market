@@ -2858,13 +2858,9 @@ window.submitAssetRequest = async function() {
 // ── siteConfig 상태 변수 ─────────────────────────────────────
 let siteConfig      = {};
 let siteConfigReady = false; // siteConfig 초기 get(또는 타임아웃) 후 true — 그 전에는 시장 오픈으로 간주하지 않음
-/** 클라이언트 전용 서킷 동결(관리자만 siteConfig/frozenStocks에 기록 가능) */
-let localCircuitFreeze = {};
 function getEffectiveFrozenUntil(stockId) {
     if (isSoopAdminEmail()) return 0;
-    const a = siteConfig?.frozenStocks?.[stockId] || 0;
-    const b = localCircuitFreeze[stockId] || 0;
-    return Math.max(a, b);
+    return siteConfig?.frozenStocks?.[stockId] || 0;
 }
 
 /** 종목 카드에 서킷 동결 배지·스타일 반영 (renderFavoriteList / 검색 / processStocksSnap 공통) */
@@ -3029,8 +3025,6 @@ function stockNameForId(id) {
 }
 
 // ── 서킷브레이커(CB) 및 거래량 상태 ──────────────────────────
-// 종목별 서킷브레이커 상태 관리 (동결 시간, 마지막 발동 시각, 예약 타이머)
-const circuitBreakerState = {}; 
 
 // 종목별 최근 거래량 추적 (서버 연동 전 개인 브라우저 체킹용)
 const stockTradeTracker = {};
@@ -3474,7 +3468,8 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
                 // 즐겨찾기·보유한 종목에만 알림(전역 frozenStocks 구독이라 무관 유저까지 팝업 가지 않게)
                 const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
                 if (isMyStock) {
-                    alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 1분간 거래가 동결됩니다.`);
+                    const remaining = Math.ceil((frozenUntil - now) / 1000);
+                    alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 ${remaining}초간 거래가 동결됩니다.`);
                 }
                 if (isMyStock && notifPermission && Notification.permission === 'granted') {
                     const remaining = Math.ceil((frozenUntil - now) / 1000);
@@ -4752,66 +4747,12 @@ window.logout = async function() {
 };
 
 /**
- * 서킷브레이커 감지 — 발동 시 로컬 동결만 적용(관리자만 siteConfig/frozenStocks에 기록 가능)
- * · 주식 매매는 Cloud Function trade 에서 변동성 CB 후 frozenStocks 기록(전 유저 동일)
+ * 서킷브레이커 감지 (클라이언트 로컬 발동 비활성화)
+ * · 전 유저 동일성을 위해 서버(Cloud Function trade)가 기록하는
+ *   siteConfig/frozenStocks 만을 단일 기준으로 사용한다.
  */
 async function checkCircuitBreaker(stockId, candles, market = 'stock') {
-    if (market === 'coin') return;
-    if (isSoopAdminEmail()) return;
-    if (!candles || candles.length < 2) return;
-
-    const now   = Date.now();
-    const state = circuitBreakerState[stockId] || { lastTriggered: 0, pendingTimer: null };
-    circuitBreakerState[stockId] = state;
-
-    // 이미 동결 중이거나 최근 10분 내 발동 이력 있으면 패스
-    const frozen = getEffectiveFrozenUntil(stockId);
-    if ((frozen && frozen > now) || (now - state.lastTriggered) < 600000) return;
-
-    // 최근 10분간 캔들 필터링
-    const tenMinsAgo    = Math.floor(now / 1000) - 600;
-    const recentCandles = candles.filter(c => c.t >= tenMinsAgo);
-    if (recentCandles.length < 2) return;
-
-    // 변동폭 계산
-    const high      = Math.max(...recentCandles.map(c => c.h));
-    const low       = Math.min(...recentCandles.map(c => c.l));
-    const variation = ((high - low) / low) * 100;
-
-    if (variation >= 30) {
-        if (state.pendingTimer) return; // 이미 예약됨
-
-        state.pendingTimer = setTimeout(() => {
-            state.lastTriggered = Date.now();
-            state.pendingTimer  = null;
-
-            const frozenUntil = Date.now() + 180000; // 3분 동결
-            localCircuitFreeze[stockId] = frozenUntil;
-            try { stopAutoTrade(stockId); } catch (_) { /* noop */ }
-            const stockName = stockNameForId(stockId);
-            alert(`⚠️ [서킷브레이커] "${stockName}" 종목이 3분간 거래 동결됩니다.`);
-
-            if (favoriteUnsubs[stockId]) { favoriteUnsubs[stockId](); delete favoriteUnsubs[stockId]; }
-            if (ownedUnsubs[stockId])    { ownedUnsubs[stockId]();    delete ownedUnsubs[stockId]; }
-            if (favPollTimers[stockId])  { clearInterval(favPollTimers[stockId]); delete favPollTimers[stockId]; }
-
-            setTimeout(() => {
-                delete localCircuitFreeze[stockId];
-                if (favorites[stockId])   subscribeToFavorite(stockId);
-                if (ownedStocks[stockId]) subscribeToOwned(stockId);
-                updateUI(true);
-                refreshMainStockListView();
-                refreshCircuitFreezeOnAllListCards();
-            }, frozenUntil - Date.now());
-
-            updateUI(true);
-            refreshMainStockListView();
-            refreshCircuitFreezeOnAllListCards();
-            ensureCircuitFreezeCountdownTimer();
-        }, 0);
-
-        console.log(`[CB] ${stockId} 서킷브레이커 즉시 발동`);
-    }
+    return;
 }
 
 // ══════════════════════════════════════════════════════════════
