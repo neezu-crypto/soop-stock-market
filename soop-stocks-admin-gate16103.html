@@ -620,6 +620,9 @@
 </div>
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
+    <div id="admin-connection-count" style="margin-top:-10px; margin-bottom:14px; font-size:12px; color:#94a3b8;">
+        실시간 접속자: <b id="admin-connection-count-value" style="color:#38bdf8;">-</b>명
+    </div>
 
     <div id="admin-request-inbox" class="admin-inbox" aria-label="검수 대기 신청 요약">
         <div class="admin-inbox-title"><span>📥</span> 검수 대기 · 바로가기</div>
@@ -1937,6 +1940,7 @@
     const functions = getFunctions(app);
     const adminStockSplitFn = httpsCallable(functions, 'adminStockSplit');
     const adminPurgeUserActivityLogsFn = httpsCallable(functions, 'adminPurgeUserActivityLogs');
+    const adminGrantAssetRequestFn = httpsCallable(functions, 'adminGrantAssetRequest');
 
     /**
      * Callable 미배포·리전 불일치·일시 다운 시 브라우저 RTDB 경로로 폴백.
@@ -2199,35 +2203,30 @@
         }
         if (!confirm(`다음 유저에게 ${amt.toLocaleString()}원을 지급할까요?\n\nUID: ${targetUid}`)) return;
         try {
-            const reqSnap = await get(ref(db, `assetRequests/${reqId}`));
-            if (!reqSnap.exists() || reqSnap.val().status !== 'pending') {
-                alert('이미 처리되었거나 없는 요청입니다.');
-                return;
-            }
-            await runTransaction(ref(db, `users/${targetUid}`), (cur) => {
-                const c = cur || { cash: 1000000, stocks: {} };
-                const cash = Math.floor(Number(c.cash) || 1000000);
-                return { ...c, cash: cash + amt };
-            });
-            const logRef = push(ref(db, 'adminLogs/grants'));
-            await update(ref(db), {
-                [`assetRequests/${reqId}/status`]: 'completed',
-                [`assetRequests/${reqId}/completedAt`]: Date.now(),
-                [`assetRequests/${reqId}/grantedAmount`]: amt,
-                [`adminLogs/grants/${logRef.key}`]: {
-                    adminEmail: auth.currentUser?.email || '',
-                    targetUid,
-                    amount: amt,
-                    requestId: reqId,
-                    timestamp: serverTimestamp()
-                }
-            });
+            await adminGrantAssetRequestFn({ reqId, targetUid, amount: amt });
             showAdminToast(`✅ ${amt.toLocaleString()}원 지급 완료`);
         } catch (e) {
             console.warn('[grantAssetRequest]', e);
             alert('지급 실패: ' + (e?.message || e));
         }
     };
+
+    let connectionCountUnsub = null;
+    function startConnectionCountListener() {
+        if (connectionCountUnsub) return;
+        const valEl = document.getElementById('admin-connection-count-value');
+        connectionCountUnsub = onValue(ref(db, 'siteStats/connectionCount'), (snap) => {
+            const n = Number(snap.exists() ? snap.val() : 0);
+            if (valEl) valEl.textContent = Number.isFinite(n) ? String(Math.max(0, Math.floor(n))) : '0';
+        }, () => {
+            if (valEl) valEl.textContent = '-';
+        });
+    }
+    function stopConnectionCountListener() {
+        if (!connectionCountUnsub) return;
+        connectionCountUnsub();
+        connectionCountUnsub = null;
+    }
 
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
     const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, asset: null };
@@ -3040,6 +3039,7 @@
             await loadMaintenanceStatus();
             await loadMarketHours();
             startRealtimeRequestListeners();
+            startConnectionCountListener();
             startDailyAutoSettingsListener();
             startPaidPricingListener();
             try {
@@ -3058,6 +3058,7 @@
                 stopDailyAutoSettingsListener();
                 stopPaidPricingListener();
                 stopRealtimeRequestListeners();
+                stopConnectionCountListener();
                 hideAdminRequestInbox();
                 alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -3070,6 +3071,7 @@
                     stopDailyAutoSettingsListener();
                     stopPaidPricingListener();
                     stopRealtimeRequestListeners();
+                    stopConnectionCountListener();
                     hideAdminRequestInbox();
                     document.getElementById('login-section').style.display = 'flex';
                     document.getElementById('admin-section').style.display = 'none';

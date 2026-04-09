@@ -1043,6 +1043,70 @@ exports.adminPurgeUserActivityLogs = onCall(
   }
 );
 
+/** 관리자 전용: 자산 지원 신청 Grant (대액 지급 포함) */
+exports.adminGrantAssetRequest = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const reqId = String(request.data?.reqId || "").trim();
+    const targetUid = String(request.data?.targetUid || "").trim();
+    const amtRaw = Number(request.data?.amount);
+    const amount = Math.floor(amtRaw);
+    if (!reqId) throw new HttpsError("invalid-argument", "reqId required.");
+    if (!targetUid) throw new HttpsError("invalid-argument", "targetUid required.");
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new HttpsError("invalid-argument", "amount must be a positive integer.");
+    }
+    // JS 안전 정수 범위 내에서만 처리
+    if (!Number.isSafeInteger(amount) || amount > 9_000_000_000_000_000) {
+      throw new HttpsError("invalid-argument", "amount is out of safe range.");
+    }
+
+    const db = admin.database();
+    const reqRef = db.ref(`assetRequests/${reqId}`);
+    const reqSnap = await reqRef.get();
+    if (!reqSnap.exists()) {
+      throw new HttpsError("not-found", "request not found.");
+    }
+    const reqVal = reqSnap.val() || {};
+    if (String(reqVal.status || "").trim() !== "pending") {
+      throw new HttpsError("failed-precondition", "already processed.");
+    }
+    const reqUid = String(reqVal.uid || "");
+    if (reqUid && reqUid !== targetUid) {
+      throw new HttpsError("failed-precondition", "target uid mismatch.");
+    }
+
+    const userRef = db.ref(`users/${targetUid}`);
+    await userRef.transaction((cur) => {
+      const base = cur && typeof cur === "object" ? cur : { cash: 1000000, stocks: {}, coins: {} };
+      const cash = Math.floor(Number(base.cash) || 1000000);
+      return { ...base, cash: cash + amount };
+    });
+
+    const logRef = db.ref("adminLogs/grants").push();
+    const now = Date.now();
+    await db.ref().update({
+      [`assetRequests/${reqId}/status`]: "completed",
+      [`assetRequests/${reqId}/completedAt`]: now,
+      [`assetRequests/${reqId}/grantedAmount`]: amount,
+      [`assetRequests/${reqId}/grantedBy`]: String(request.auth?.token?.email || ADMIN_EMAIL),
+      [`adminLogs/grants/${logRef.key}`]: {
+        adminEmail: String(request.auth?.token?.email || ADMIN_EMAIL),
+        targetUid,
+        amount,
+        requestId: reqId,
+        via: "adminGrantAssetRequest",
+        timestamp: admin.database.ServerValue.TIMESTAMP,
+      },
+    });
+
+    return { ok: true, reqId, targetUid, amount };
+  }
+);
+
 /**
  * presence/{uid}/{sessionId} 변경 시 전체 presence를 읽어 TTL 기준 활성 세션 수를 집계하고
  * siteStats/connectionCount 에 스칼라로 기록 — 클라이언트는 이 노드만 구독해 다운로드 절감.
