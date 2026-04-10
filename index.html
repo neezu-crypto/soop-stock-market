@@ -8747,33 +8747,61 @@ function renderSearchResults() {
 
     if (items.length === 0) {
         const q2 = document.getElementById('search-input')?.value?.trim() || '';
-        listDiv.innerHTML = `
-            <div class="listing-request-box">
-                <div style="font-size:36px;">🔍</div>
-                <div class="listing-request-title">"${q2}"에 대한 검색 결과가 없습니다.</div>
-                <div class="listing-request-desc">아직 상장되지 않은 스트리머입니다.<br>상장 신청을 하면 검토 후 등록됩니다.</div>
-                <button class="btn-listing-request" onclick="openListingRequestModal('${q2.replace(/'/g, "\'")}')">📋 상장 신청하기</button>
-            </div>`;
+        if (isCoinMarket()) {
+            listDiv.innerHTML = `
+                <div class="listing-request-box">
+                    <div style="font-size:36px;">🔍</div>
+                    <div class="listing-request-title">"${q2}"에 대한 검색 결과가 없습니다.</div>
+                    <div class="listing-request-desc">코인 시장에서는 상장 신청을 할 수 없습니다.</div>
+                </div>`;
+        } else {
+            listDiv.innerHTML = `
+                <div class="listing-request-box">
+                    <div style="font-size:36px;">🔍</div>
+                    <div class="listing-request-title">"${q2}"에 대한 검색 결과가 없습니다.</div>
+                    <div class="listing-request-desc">아직 상장되지 않은 스트리머입니다.<br>상장 신청을 하면 검토 후 등록됩니다.</div>
+                    <button class="btn-listing-request" onclick="openListingRequestModal('${q2.replace(/'/g, "\'")}')">📋 상장 신청하기</button>
+                </div>`;
+        }
         if (emptyDiv) emptyDiv.style.display = 'none';
         return;
     }
     if (emptyDiv) emptyDiv.style.display = 'none';
 
-    listDiv.innerHTML = '';
-    stockElements     = {};
+    // listDiv를 비우지 않고 카드를 재사용/재정렬 (코인 검색에서 "잠깐 보였다가 사라짐" 방지)
+    const fragment = document.createDocumentFragment();
     items.forEach((raw) => {
-        const s      = enrichCoinListRow(raw);
-        const card   = createStockCard(s);
-        const favBtn = document.createElement('button');
-        const isFav  = isCoinMarket() ? !!favoriteCoins[s.id] : !!favorites[s.id];
-        favBtn.className   = 'btn-favorite';
+        const s = enrichCoinListRow(raw);
+        let card = stockElements[s.id];
+        if (!card) {
+            card = createStockCard(s);
+            stockElements[s.id] = card;
+        } else {
+            const pos = isCoinMarket()
+                ? ((myData?.coins || {})[s.id] || { qty: 0, avg: 0 })
+                : ((myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
+            updateCardContent(card, s, pos);
+        }
+        let favBtn = card.querySelector('.btn-favorite');
+        if (!favBtn) {
+            favBtn = document.createElement('button');
+            favBtn.className = 'btn-favorite';
+            favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(s.id); };
+            card.querySelector('.price-group')?.appendChild(favBtn);
+        }
+        const isFav = isCoinMarket() ? !!favoriteCoins[s.id] : !!favorites[s.id];
         favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
         favBtn.textContent = isFav ? '⭐' : '☆';
-        favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(s.id); };
-        card.querySelector('.price-group')?.appendChild(favBtn);
-        listDiv.appendChild(card);
-        stockElements[s.id] = card;
+
+        fragment.appendChild(card);
     });
+    Object.keys(stockElements).forEach((id) => {
+        if (!items.find((row) => row.id === id)) {
+            stockElements[id]?.remove();
+            delete stockElements[id];
+        }
+    });
+    listDiv.appendChild(fragment);
     refreshCircuitFreezeOnAllListCards();
     ensureCircuitFreezeCountdownTimer();
 }
