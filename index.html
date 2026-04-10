@@ -8470,6 +8470,15 @@ function enrichCoinListRow(s) {
     };
 }
 
+/** stock-list 내 상태 메시지(검색중/안내 박스)만 제거하고 카드 DOM은 유지 */
+function clearStockListStatusNodes(listDiv) {
+    if (!listDiv) return;
+    Array.from(listDiv.children).forEach((el) => {
+        if (!(el instanceof HTMLElement)) return;
+        if (!el.classList.contains('stock-card')) el.remove();
+    });
+}
+
 // ── 즐겨찾기 목록 렌더링 ────────────────────────────────
 function renderFavoriteCoinList() {
     const listDiv  = document.getElementById('stock-list');
@@ -8496,6 +8505,7 @@ function renderFavoriteCoinList() {
     const searchVal = document.getElementById('search-input')?.value || '';
     if (searchVal.trim()) return;
 
+    clearStockListStatusNodes(listDiv);
     const fragment = document.createDocumentFragment();
     items
         .map((row) => enrichCoinListRow(row))
@@ -8578,6 +8588,7 @@ function renderFavoriteList() {
     const searchVal = document.getElementById('search-input')?.value || '';
     if (searchVal.trim()) return;
 
+    clearStockListStatusNodes(listDiv);
     // listDiv를 비우지 않고 카드를 재사용/재정렬
     const fragment = document.createDocumentFragment();
     items.sort((a, b) => (b.price || 0) - (a.price || 0)).forEach(s => {
@@ -8845,6 +8856,7 @@ function renderSearchResults() {
     if (emptyDiv) emptyDiv.style.display = 'none';
 
     // listDiv를 비우지 않고 카드를 재사용/재정렬 (코인 검색에서 "잠깐 보였다가 사라짐" 방지)
+    clearStockListStatusNodes(listDiv);
     const fragment = document.createDocumentFragment();
     items.forEach((raw) => {
         const s = enrichCoinListRow(raw);
