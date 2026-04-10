@@ -766,7 +766,7 @@
             <!-- impact / spread / fee -->
             <div style="background:#0f172a; border-radius:10px; padding:14px; border:1px solid #334155;">
                 <div style="font-size:13px; color:#f59e0b; font-weight:800; margin-bottom:10px;">⚙️ 거래 영향력 파라미터</div>
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                     <div>
                         <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">impact 계수</div>
                         <input type="number" id="sell-impact" value="0.0005" min="0.0001" max="0.01" step="0.0001"
@@ -784,6 +784,12 @@
                         <input type="number" id="sell-fee" value="0.003" min="0" max="0.1" step="0.001"
                             style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
                         <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.003</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">코인 spread</div>
+                        <input type="number" id="sell-coin-spread" value="0.001" min="0" max="0.1" step="0.001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">미설정 시 spread와 동일</div>
                     </div>
                 </div>
                 <div style="margin-top:12px; background:#1e293b; border-radius:8px; padding:10px 12px; border:1px solid #334155;">
@@ -5289,6 +5295,7 @@
             if (d.impact     !== undefined) document.getElementById('sell-impact').value      = d.impact;
             if (d.spread     !== undefined) document.getElementById('sell-spread').value      = d.spread;
             if (d.fee        !== undefined) document.getElementById('sell-fee').value         = d.fee;
+            if (d.coinSpread !== undefined) document.getElementById('sell-coin-spread').value = d.coinSpread;
 
             chip.className = 'status-chip active';
             chip.textContent = '커스텀 적용 중';
@@ -5544,6 +5551,7 @@
         const impact     = Number(document.getElementById('sell-impact').value);
         const spread     = Number(document.getElementById('sell-spread').value);
         const fee        = Number(document.getElementById('sell-fee').value);
+        const coinSpread = Number(document.getElementById('sell-coin-spread').value);
 
         if (!basePrice || !scalePrice || scalePrice <= 0) {
             alert('기준 주가와 가중치 구간은 0보다 커야 합니다.'); return;
@@ -5553,7 +5561,7 @@
             const current = snap.exists() ? snap.val() : {};
             await set(ref(db, 'siteConfig/sellConfig'), {
                 ...current,
-                basePrice, scalePrice, impact, spread, fee,
+                basePrice, scalePrice, impact, spread, fee, coinSpread,
                 updatedAt: Date.now()
             });
             document.getElementById('sell-config-chip').className = 'status-chip active';

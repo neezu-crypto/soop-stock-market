@@ -6335,7 +6335,9 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         const basePrice = Math.max(1, Number(sc.basePrice ?? 10000));
         const scalePrice = Math.max(1, Number(sc.scalePrice ?? 90000));
         const impactCoef = Number(sc.impact ?? 0.0005);
-        const spread = Number(sc.spread ?? 0.001);
+        const stockSpread = Number(sc.spread ?? 0.001);
+        const coinSpread = Number(sc.coinSpread ?? stockSpread);
+        const spread = coinQ ? coinSpread : stockSpread;
         const impactRefPriceWon = Math.max(1, Number(mp.impactRefPrice ?? 100000));
         const stockSellImpactMultiplier = Math.max(1, Number(mp.stockSellImpactMultiplier ?? 1.2));
         const coinSellImpactMultiplier = Math.max(1, Number(mp.coinSellImpactMultiplier ?? 1.2));

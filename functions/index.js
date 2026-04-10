@@ -217,7 +217,9 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
   const basePrice = Math.max(1, finiteOr(sellConfig.basePrice, 10000));
   const scalePrice = Math.max(1, finiteOr(sellConfig.scalePrice, 90000));
   const impactCoef = finiteOr(sellConfig.impact, 0.0005);
-  const spread = finiteOr(sellConfig.spread, 0.001);
+  const stockSpread = finiteOr(sellConfig.spread, 0.001);
+  const coinSpread = finiteOr(sellConfig.coinSpread, stockSpread);
+  const spread = isCoin ? coinSpread : stockSpread;
   const impactRefPriceWon = Math.max(1, finiteOr(marketParams?.impactRefPrice, 100000));
   const stockSellImpactMultiplier = Math.max(1, finiteOr(marketParams?.stockSellImpactMultiplier, 1.2));
   const coinSellImpactMultiplier = Math.max(1, finiteOr(marketParams?.coinSellImpactMultiplier, 1.2));
@@ -748,7 +750,9 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const basePrice = Number(sellConfig.basePrice ?? 10000);
   const scalePrice = Number(sellConfig.scalePrice ?? 90000);
   const impactCoef = Number(sellConfig.impact ?? 0.0005);
-  const spread = Number(sellConfig.spread ?? 0.001);
+  const stockSpread = Number(sellConfig.spread ?? 0.001);
+  const coinSpread = Number(sellConfig.coinSpread ?? stockSpread);
+  const spread = market === "coin" ? coinSpread : stockSpread;
   const fee = Number(sellConfig.fee ?? 0.003);
   const impactRefPriceWon = Math.max(1, Number(marketParams.impactRefPrice ?? 100000));
   const coinMul = Number(marketParams.coinImpactMultiplier ?? 1.85);
