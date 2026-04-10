@@ -8482,6 +8482,21 @@ function clearStockListStatusNodes(listDiv) {
     });
 }
 
+/** 렌더 직전 현재 화면의 수량 입력값을 메모리에 백업 (정렬/재생성 시 초기화 방지) */
+function snapshotVisibleTradeQtyInputs() {
+    const listDiv = document.getElementById('stock-list');
+    if (!listDiv) return;
+    const market = isCoinMarket() ? 'coin' : 'stock';
+    listDiv.querySelectorAll('.trade-qty-input[id^="qty-"]').forEach((el) => {
+        const input = /** @type {HTMLInputElement} */ (el);
+        const stockId = inferStockIdFromQtyInput(input);
+        if (!stockId) return;
+        const v = Math.floor(Number(input.value));
+        if (!Number.isFinite(v) || v < 1) return;
+        rememberTradeQty(stockId, v, market);
+    });
+}
+
 // ── 즐겨찾기 목록 렌더링 ────────────────────────────────
 function renderFavoriteCoinList() {
     const listDiv  = document.getElementById('stock-list');
@@ -8508,6 +8523,7 @@ function renderFavoriteCoinList() {
     const searchVal = document.getElementById('search-input')?.value || '';
     if (searchVal.trim()) return;
 
+    snapshotVisibleTradeQtyInputs();
     clearStockListStatusNodes(listDiv);
     const fragment = document.createDocumentFragment();
     items
@@ -8591,6 +8607,7 @@ function renderFavoriteList() {
     const searchVal = document.getElementById('search-input')?.value || '';
     if (searchVal.trim()) return;
 
+    snapshotVisibleTradeQtyInputs();
     clearStockListStatusNodes(listDiv);
     // listDiv를 비우지 않고 카드를 재사용/재정렬
     const fragment = document.createDocumentFragment();
@@ -8859,6 +8876,7 @@ function renderSearchResults() {
     if (emptyDiv) emptyDiv.style.display = 'none';
 
     // listDiv를 비우지 않고 카드를 재사용/재정렬 (코인 검색에서 "잠깐 보였다가 사라짐" 방지)
+    snapshotVisibleTradeQtyInputs();
     clearStockListStatusNodes(listDiv);
     const fragment = document.createDocumentFragment();
     items.forEach((raw) => {
