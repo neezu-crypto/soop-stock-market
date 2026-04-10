@@ -2988,6 +2988,9 @@ let coinImpactMultiplierUnsub = null;
 /** 주식 순위 캐시 — allStocks 메모리로 계산 (추가 DB 조회 없음) */
 let stockRankById = {};
 let stockRankDirty = true;
+/** 코인 순위 캐시 — allCoins 메모리로 계산 (추가 DB 조회 없음) */
+let coinRankById = {};
+let coinRankDirty = true;
 
 // ── 즐겨찾기 상태 ────────────────────────────────────────────
 let favorites        = {};    // { stockId: { id, name, price, ... } }
@@ -3051,9 +3054,15 @@ function upsertAllStocksCacheRow(row) {
     stockRankDirty = true;
 }
 
-function rebuildStockRankCacheIfNeeded() {
-    if (!stockRankDirty) return;
-    const sorted = allStocks
+function rebuildRankCacheIfNeeded(market) {
+    const coin = market === 'coin';
+    if (coin) {
+        if (!coinRankDirty) return;
+    } else if (!stockRankDirty) {
+        return;
+    }
+    const source = coin ? allCoins : allStocks;
+    const sorted = source
         .filter((s) => s?.id && Number.isFinite(Number(s.price)) && Number(s.price) > 0)
         .slice()
         .sort((a, b) => {
@@ -3064,14 +3073,20 @@ function rebuildStockRankCacheIfNeeded() {
         });
     const next = {};
     sorted.forEach((s, idx) => { next[s.id] = idx + 1; });
-    stockRankById = next;
-    stockRankDirty = false;
+    if (coin) {
+        coinRankById = next;
+        coinRankDirty = false;
+    } else {
+        stockRankById = next;
+        stockRankDirty = false;
+    }
 }
 
-function getStockRankText(stockId) {
+function getMarketRankText(stockId, market) {
     if (!stockId) return '-';
-    rebuildStockRankCacheIfNeeded();
-    const n = Number(stockRankById[stockId]);
+    const coin = market === 'coin';
+    rebuildRankCacheIfNeeded(coin ? 'coin' : 'stock');
+    const n = Number((coin ? coinRankById : stockRankById)[stockId]);
     return Number.isFinite(n) && n > 0 ? `${n.toLocaleString()}위` : '-';
 }
 
@@ -3936,6 +3951,7 @@ function seedAllCoinsFromPerCoinCaches() {
     });
     const merged = Object.values(byId);
     allCoins = merged;
+    coinRankDirty = true;
     if (merged.length === 0) return;
     queueMicrotask(() => {
         try {
@@ -3961,6 +3977,7 @@ function processCoinsSnap(snap) {
 
     if (allCoins.length === 0) {
         allCoins = newCoins;
+        coinRankDirty = true;
         refreshMainStockListView();
         tryCloseIntro();
         queueMicrotask(() => {
@@ -3995,6 +4012,7 @@ function processCoinsSnap(snap) {
             }
         });
         allCoins = newCoins;
+        coinRankDirty = true;
         if (resyncListFromBulk) {
             queueMicrotask(() => {
                 try { refreshMainStockListView(); } catch (_) { /* noop */ }
@@ -4614,6 +4632,7 @@ onAuthStateChanged(auth, async (user) => {
                 searchResults = {};
                 allStocks = [];
                 allCoins = [];
+                coinRankDirty = true;
                 stockElements = {};
                 myData = { cash: 1000000, stocks: {}, coins: {} };
                 lastTradeTime = 0;
@@ -5005,13 +5024,8 @@ function updateChartModalHeader(s) {
     changeEl.className   = `stock-title-change ${isUp ? 'up' : 'down'}`;
     const rankEl = document.getElementById('cm-rank');
     if (rankEl) {
-        if (chartModalMarket === 'stock') {
-            rankEl.style.display = '';
-            rankEl.textContent = `순위 ${getStockRankText(s.id)}`;
-        } else {
-            rankEl.style.display = 'none';
-            rankEl.textContent = '순위 -';
-        }
+        rankEl.style.display = '';
+        rankEl.textContent = `순위 ${getMarketRankText(s.id, chartModalMarket)}`;
     }
 }
 
@@ -6085,6 +6099,7 @@ async function sellAllHoldingsByFunction(stockId, market) {
                     const idx = allCoins.findIndex((s) => s?.id === stockId);
                     if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...data };
                     else allCoins.push(data);
+                    coinRankDirty = true;
                     if (favoriteCoins[stockId]) favoriteCoins[stockId] = data;
                     if (ownedCoins[stockId]) ownedCoins[stockId] = data;
                     if (searchResults[stockId]) searchResults[stockId] = data;
@@ -6412,6 +6427,7 @@ const userRef = ref(db, `users/${tradeUid}`);
                 const idx = allCoins.findIndex((s) => s?.id === id);
                 if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...data };
                 else allCoins.push(data);
+                coinRankDirty = true;
                 if (favoriteCoins[id]) favoriteCoins[id] = data;
                 if (ownedCoins[id]) ownedCoins[id] = data;
                 if (searchResults[id]) searchResults[id] = data;
@@ -7872,7 +7888,7 @@ function updateCardContent(card, s, userStock) {
             ? String(rememberedQty)
             : (document.getElementById(`qty-${s.id}`)?.value || '1');
         const maxHint = isCoinMarket() ? '최대 100코인' : '최대 100주';
-        const rankText = (!coin && userStock.qty > 0) ? ` · 순위 ${getStockRankText(s.id)}` : '';
+        const rankText = ` · 순위 ${getMarketRankText(s.id, coin ? 'coin' : 'stock')}`;
         card.innerHTML = `
             <div class="info-group">
                 <div class="stock-name">${escapeHtml(name)}</div>
@@ -7922,7 +7938,7 @@ function updateCardContent(card, s, userStock) {
 
     const myQtyEl = card.querySelector('.my-qty');
     if (myQtyEl) {
-        const rankText = (!coin && userStock.qty > 0) ? ` · 순위 ${getStockRankText(s.id)}` : '';
+        const rankText = ` · 순위 ${getMarketRankText(s.id, coin ? 'coin' : 'stock')}`;
         myQtyEl.innerHTML = `보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>${rankText}`;
     }
 
@@ -8707,6 +8723,12 @@ async function handleSearch(query) {
         return;
     }
 
+    if (!isTradingUiUnlocked()) {
+        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">⏳ 시장 데이터 준비 중입니다.</div>`;
+        if (emptyDiv) emptyDiv.style.display = 'none';
+        return;
+    }
+
     const myGen = ++searchRequestGen;
     listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">🔍 검색 중...</div>`;
     if (emptyDiv) emptyDiv.style.display = 'none';
@@ -8754,6 +8776,7 @@ async function handleSearch(query) {
                         const idx = allCoins.findIndex((s) => s?.id === id);
                         if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...resolved };
                         else allCoins.push(resolved);
+                        coinRankDirty = true;
                     } else {
                         const idx = allStocks.findIndex((s) => s?.id === id);
                         if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...resolved };
@@ -8789,7 +8812,11 @@ function renderSearchResults() {
     const emptyDiv = document.getElementById('stock-empty');
     const q        = document.getElementById('search-input')?.value?.trim() || '';
     if (!q || !listDiv) return;
-    if (!isTradingUiUnlocked()) return;
+    if (!isTradingUiUnlocked()) {
+        listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">⏳ 시장 데이터 준비 중입니다.</div>`;
+        if (emptyDiv) emptyDiv.style.display = 'none';
+        return;
+    }
 
     const items = Object.values(searchResults)
         .sort((a, b) => (b.price || 0) - (a.price || 0));
