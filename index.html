@@ -1192,6 +1192,10 @@
         }
         .chart-modal-title .stock-title-change.up   { background: rgba(239,68,68,0.15); color: var(--up-color); }
         .chart-modal-title .stock-title-change.down { background: rgba(59,130,246,0.15); color: var(--down-color); }
+        .chart-modal-title .stock-title-rank {
+            font-size: 12px; font-weight: 700; color: var(--text-sub);
+            padding: 2px 8px; border: 1px solid var(--chart-line); border-radius: 999px;
+        }
 
         .chart-modal-close {
             width: 36px; height: 36px; border-radius: 50%;
@@ -2172,6 +2176,7 @@
                 <span class="stock-title-name" id="cm-name">-</span>
                 <span class="stock-title-price up"  id="cm-price">-</span>
                 <span class="stock-title-change up" id="cm-change">-</span>
+                <span class="stock-title-rank" id="cm-rank" style="display:none;">순위 -</span>
             </div>
             <button class="chart-modal-close" id="chart-modal-close-btn">✕</button>
         </div>
@@ -2980,6 +2985,9 @@ let marketParamsCache = null;
 let marketParamsFetchCount = 0;
 /** RTDB `siteConfig/marketParams/coinImpactMultiplier` 실시간 반영 — 없으면 기본값 */
 let coinImpactMultiplierUnsub = null;
+/** 주식 순위 캐시 — allStocks 메모리로 계산 (추가 DB 조회 없음) */
+let stockRankById = {};
+let stockRankDirty = true;
 
 // ── 즐겨찾기 상태 ────────────────────────────────────────────
 let favorites        = {};    // { stockId: { id, name, price, ... } }
@@ -3040,6 +3048,31 @@ function upsertAllStocksCacheRow(row) {
     const i = allStocks.findIndex((x) => x.id === row.id);
     if (i >= 0) allStocks[i] = { ...allStocks[i], ...row };
     else allStocks.push({ ...row });
+    stockRankDirty = true;
+}
+
+function rebuildStockRankCacheIfNeeded() {
+    if (!stockRankDirty) return;
+    const sorted = allStocks
+        .filter((s) => s?.id && Number.isFinite(Number(s.price)) && Number(s.price) > 0)
+        .slice()
+        .sort((a, b) => {
+            const ap = Number(a?.price) || 0;
+            const bp = Number(b?.price) || 0;
+            if (bp !== ap) return bp - ap;
+            return String(a.id).localeCompare(String(b.id));
+        });
+    const next = {};
+    sorted.forEach((s, idx) => { next[s.id] = idx + 1; });
+    stockRankById = next;
+    stockRankDirty = false;
+}
+
+function getStockRankText(stockId) {
+    if (!stockId) return '-';
+    rebuildStockRankCacheIfNeeded();
+    const n = Number(stockRankById[stockId]);
+    return Number.isFinite(n) && n > 0 ? `${n.toLocaleString()}위` : '-';
 }
 
 function stockRowForId(id) {
@@ -4970,6 +5003,16 @@ function updateChartModalHeader(s) {
     const changeEl = document.getElementById('cm-change');
     changeEl.textContent = formatMarketChangePctDisplay(ch, coin);
     changeEl.className   = `stock-title-change ${isUp ? 'up' : 'down'}`;
+    const rankEl = document.getElementById('cm-rank');
+    if (rankEl) {
+        if (chartModalMarket === 'stock') {
+            rankEl.style.display = '';
+            rankEl.textContent = `순위 ${getStockRankText(s.id)}`;
+        } else {
+            rankEl.style.display = 'none';
+            rankEl.textContent = '순위 -';
+        }
+    }
 }
 
 /** 차트 모달용 — 랭킹 탭을 열지 않았어도 권한 판별 */
@@ -7829,10 +7872,11 @@ function updateCardContent(card, s, userStock) {
             ? String(rememberedQty)
             : (document.getElementById(`qty-${s.id}`)?.value || '1');
         const maxHint = isCoinMarket() ? '최대 100코인' : '최대 100주';
+        const rankText = (!coin && userStock.qty > 0) ? ` · 순위 ${getStockRankText(s.id)}` : '';
         card.innerHTML = `
             <div class="info-group">
                 <div class="stock-name">${escapeHtml(name)}</div>
-                <div class="my-qty">보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
+                <div class="my-qty">보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>${rankText}</div>
             </div>
             <div class="price-group">
                 <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
@@ -7877,7 +7921,10 @@ function updateCardContent(card, s, userStock) {
     }
 
     const myQtyEl = card.querySelector('.my-qty');
-    if (myQtyEl) myQtyEl.innerHTML = `보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>`;
+    if (myQtyEl) {
+        const rankText = (!coin && userStock.qty > 0) ? ` · 순위 ${getStockRankText(s.id)}` : '';
+        myQtyEl.innerHTML = `보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>${rankText}`;
+    }
 
     const hintEl = card.querySelector('.trade-qty-hint');
     if (hintEl) hintEl.textContent = isCoinMarket() ? '최대 100코인' : '최대 100주';
@@ -7917,6 +7964,7 @@ function processStocksSnap(snap) {
     if (allStocks.length === 0) {
         console.log('[Init] Stocks: first snapshot, count=', newStocks.length);
         allStocks = newStocks;
+        stockRankDirty = true;
         refreshMainStockListView(); // 즐겨찾기+보유(또는 검색)만 — 관리자도 Top100 미표시
         tryCloseIntro(); // stocks 로드 완료 → 오픈 시간이면 인트로 닫기
         if (typeof renderBanners === 'function') {
@@ -7943,6 +7991,7 @@ function processStocksSnap(snap) {
             }
         });
         allStocks = newStocks;
+        stockRankDirty = true;
     }
     updateUI(false);
 }
