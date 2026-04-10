@@ -7840,7 +7840,7 @@ function renderStocks(filter = "") {
         renderSearchResults();
         return;
     }
-    renderFavoriteList();
+    refreshMainStockListView();
 }
 
 // 종목 데이터로 주식 카드 DOM 엘리먼트 생성
@@ -8386,7 +8386,7 @@ function subscribeToFavorite(stockId) {
     }
     favorites[stockId] = data;
     upsertAllStocksCacheRow(data);
-    renderFavoriteList();
+    refreshMainStockListView();
 });
     } catch (err) {
         logAuthTrailError('subscribeToFavorite onValue', err);
@@ -8968,7 +8968,7 @@ function subscribeToOwned(stockId) {
         ownedStocks[stockId] = data;
         if (favorites[stockId]) favorites[stockId] = data;
         upsertAllStocksCacheRow(data);
-        renderFavoriteList();
+        refreshMainStockListView();
         renderMyPortfolio();
     });
     } catch (err) {
@@ -9051,7 +9051,7 @@ function subscribeToFavoriteCoin(stockId) {
                 data.link          = allBanners[stockId].link;
             }
             favoriteCoins[stockId] = data;
-            if (isCoinMarket()) renderFavoriteCoinList();
+            if (isCoinMarket()) refreshMainStockListView();
         }, (err) => console.warn('[coin fav] onValue', err?.message || err));
     } catch (err) {
         logAuthTrailError('subscribeToFavoriteCoin', err);
@@ -9087,7 +9087,7 @@ function subscribeToOwnedCoin(stockId) {
             }
             ownedCoins[stockId] = data;
             if (favoriteCoins[stockId]) favoriteCoins[stockId] = data;
-            if (isCoinMarket()) renderFavoriteCoinList();
+            if (isCoinMarket()) refreshMainStockListView();
             renderMyCoinPortfolio();
         }, (err) => console.warn('[owned coin]', err?.message || err));
     } catch (err) {
