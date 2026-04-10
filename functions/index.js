@@ -1022,19 +1022,57 @@ exports.adminStockSplit = onCall(
   }
 );
 
+/**
+ * tradeHistory 하위를 한 번에 set(null) 하면 RTDB WRITE_TOO_BIG 에 걸릴 수 있어
+ * 키 단위로 나눠 multi-path update 로 삭제한다.
+ */
+async function purgeTradeHistoryBatched(db, initialBatchSize = 60) {
+  let batchSize = Math.max(5, Math.floor(Number(initialBatchSize) || 60));
+  let purged = 0;
+  for (;;) {
+    const snap = await db.ref("tradeHistory").orderByKey().limitToFirst(batchSize).get();
+    if (!snap.exists()) break;
+    const val = snap.val();
+    const keys = val && typeof val === "object" ? Object.keys(val) : [];
+    if (keys.length === 0) break;
+    const updates = {};
+    for (const k of keys) {
+      updates[`tradeHistory/${k}`] = null;
+    }
+    try {
+      await db.ref().update(updates);
+    } catch (e) {
+      const msg = String(e?.message || e || "");
+      if (msg.includes("WRITE_TOO_BIG") && batchSize > 5) {
+        batchSize = Math.max(5, Math.floor(batchSize / 2));
+        continue;
+      }
+      if (msg.includes("WRITE_TOO_BIG") && keys.length > 1) {
+        batchSize = 1;
+        continue;
+      }
+      if (msg.includes("WRITE_TOO_BIG") && keys.length === 1) {
+        await db.ref(`tradeHistory/${keys[0]}`).remove();
+        purged += 1;
+        continue;
+      }
+      throw e;
+    }
+    purged += keys.length;
+    if (keys.length < batchSize) break;
+  }
+  return purged;
+}
+
 /** 관리자 전용: tradeHistory(유저 활동로그) 전체 삭제 */
 exports.adminPurgeUserActivityLogs = onCall(
-  { cors: true, timeoutSeconds: 120, memory: "256MiB" },
+  { cors: true, timeoutSeconds: 300, memory: "512MiB" },
   async (request) => {
     if (!isAdminAuth(request.auth)) {
       throw new HttpsError("permission-denied", "Admin only.");
     }
     const db = admin.database();
-    const snap = await db.ref("tradeHistory").get();
-    const beforeCount = snap.exists() && typeof snap.val() === "object"
-      ? Object.keys(snap.val() || {}).length
-      : 0;
-    await db.ref("tradeHistory").set(null);
+    const purged = await purgeTradeHistoryBatched(db);
     const ts = Date.now();
     try {
       await db.ref(`adminActivityLogs/userActivityPurge/${ts}`).set({
@@ -1042,12 +1080,12 @@ exports.adminPurgeUserActivityLogs = onCall(
         adminEmail: String(request.auth?.token?.email || ADMIN_EMAIL),
         createdAt: ts,
         via: "adminPurgeUserActivityLogs",
-        beforeCount,
+        purged,
       });
     } catch (e) {
       console.warn("[adminPurgeUserActivityLogs] adminActivityLogs:", e?.message || e);
     }
-    return { ok: true, purged: beforeCount, at: ts };
+    return { ok: true, purged, at: ts };
   }
 );
 
