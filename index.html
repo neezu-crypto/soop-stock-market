@@ -2964,6 +2964,8 @@ let stockElements    = {};
 let lastTradeTime    = 0; // 비정규장: localStorage `lastOffPeakTradeTime_${uid}`와 동기화
 /** 종목별 자동매매 — { side: 'buy'|'sell', source: 'card'|'modal' } */
 let autoTradeState = {};
+/** 카드 재생성(검색/탭 전환) 시 수량이 1로 초기화되지 않도록 종목별 마지막 입력 수량 보존 */
+const tradeQtyMemory = {};
 /** 직전 applyMarketState에서의 정규장 여부 — 비정규장→정규장 전환 시 비정규 쿨다운 해제 */
 let lastApplyRegular = null;
 let marketCheckTimer = null;
@@ -2995,6 +2997,33 @@ const RANKING_ACCESS_DURATION_MS = 12 * 60 * 60 * 1000;
 // ── 보유 주식 구독 상태 ──────────────────────────────────────
 let ownedStocks      = {};    // { stockId: stockData } 보유 주식 실시간 데이터
 let ownedUnsubs      = {};    // { stockId: unsubscribe함수 }
+
+function getTradeQtyMemoryKey(stockId, market) {
+    const id = String(stockId || '').trim();
+    const m = market === 'coin' ? 'coin' : 'stock';
+    return id ? `${m}:${id}` : '';
+}
+
+function rememberTradeQty(stockId, qty, market) {
+    const key = getTradeQtyMemoryKey(stockId, market);
+    if (!key) return;
+    const v = Math.floor(Number(qty));
+    if (!Number.isFinite(v) || v < 1) return;
+    tradeQtyMemory[key] = Math.min(100, v);
+}
+
+function getRememberedTradeQty(stockId, market) {
+    const key = getTradeQtyMemoryKey(stockId, market);
+    if (!key) return null;
+    const v = Math.floor(Number(tradeQtyMemory[key]));
+    return Number.isFinite(v) && v >= 1 ? Math.min(100, v) : null;
+}
+
+function inferStockIdFromQtyInput(el) {
+    const raw = String(el?.id || '');
+    if (!raw.startsWith('qty-')) return '';
+    return raw.slice(4);
+}
 
 /** 관리자만 stocks/ 전체 onValue — 일반 유저는 즐겨찾기·보유 per-path만으로 RTDB 다운로드 대폭 절감 */
 function shouldUseFullStocksTreeListener() {
@@ -5313,6 +5342,7 @@ window.tradeFromModal = function(type) {
     if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
     const qty = calcMaxQty(chartModalStockId, type, parseInt(input.value) || 1);
     if (qty !== parseInt(input.value)) input.value = qty; // 자동 보정 시 입력값 갱신
+    rememberTradeQty(chartModalStockId, qty, chartModalMarket);
     window.trade(chartModalStockId, type, qty, { market: chartModalMarket });
 };
 
@@ -5322,6 +5352,7 @@ window.tradeWithInput = function(id, type) {
     if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
     const qty = calcMaxQty(id, type, parseInt(input.value) || 1);
     if (qty !== parseInt(input.value)) input.value = qty; // 자동 보정 시 입력값 갱신
+    rememberTradeQty(id, qty, isCoinMarket() ? 'coin' : 'stock');
     window.trade(id, type, qty);
 };
 
@@ -5409,6 +5440,8 @@ async function runAutoTradeLoop(id) {
             stopAutoTrade(id);
             return;
         }
+        const loopMarket = source === 'modal' ? chartModalMarket : (isCoinMarket() ? 'coin' : 'stock');
+        rememberTradeQty(id, qty, loopMarket);
         const opts = { ...(source === 'modal' ? { market: chartModalMarket } : {}), autoTrade: true };
         await window.trade(id, side, qty, opts);
         if (!autoTradeState[id] || autoTradeState[id].side !== side) return;
@@ -5622,6 +5655,10 @@ window.clampQty = function(el) {
     if (isNaN(v)) { el.value = ''; return; }
     if (v > 100) el.value = 100;
     if (v < 0)   el.value = '';
+    const stockId = inferStockIdFromQtyInput(el);
+    if (stockId && el.value !== '') {
+        rememberTradeQty(stockId, el.value, isCoinMarket() ? 'coin' : 'stock');
+    }
 };
 
 // ── 수량 자동 조정 (blur 시 잔고/보유량 기준으로 스마트 클램프) ─
@@ -5657,6 +5694,9 @@ window.smartClampQty = function(el, stockId, type) {
         el.value = Math.max(1, maxSell);
     } else {
         el.value = v;
+    }
+    if (el.value !== '') {
+        rememberTradeQty(stockId, el.value, isCoinMarket() ? 'coin' : 'stock');
     }
 };
 
@@ -7783,7 +7823,11 @@ function updateCardContent(card, s, userStock) {
     // 최초 생성 시 HTML 구조 초기화
     if (!card.querySelector('.info-group')) {
         const name = s.name || stockNameCache[s.id] || s.id;
-        const prevQty = document.getElementById(`qty-${s.id}`)?.value || '1';
+        const market = isCoinMarket() ? 'coin' : 'stock';
+        const rememberedQty = getRememberedTradeQty(s.id, market);
+        const prevQty = rememberedQty != null
+            ? String(rememberedQty)
+            : (document.getElementById(`qty-${s.id}`)?.value || '1');
         const maxHint = isCoinMarket() ? '최대 100코인' : '최대 100주';
         card.innerHTML = `
             <div class="info-group">
