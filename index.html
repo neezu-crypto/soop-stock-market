@@ -503,10 +503,11 @@
             color: var(--text-main); font-size: 13px; font-weight: 700;
             padding: 6px 8px; border-radius: 6px; outline: none;
             text-align: center;
+            appearance: textfield;
             -moz-appearance: textfield;
         }
         .trade-qty-input::-webkit-outer-spin-button,
-        .trade-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+        .trade-qty-input::-webkit-inner-spin-button { appearance: none; -webkit-appearance: none; }
         .trade-qty-input:focus { border-color: var(--primary); }
         .trade-qty-hint {
             font-size: 10px; color: var(--hint); white-space: nowrap;
@@ -2235,7 +2236,7 @@
                     style="width:80px; background:var(--bg-color); border:1px solid var(--border);
                            color:var(--text-main); font-size:14px; font-weight:700;
                            padding:10px; border-radius:8px; outline:none;
-                           text-align:center; -moz-appearance:textfield;">
+                           text-align:center; appearance:textfield; -moz-appearance:textfield;">
                 <span style="font-size:11px; color:var(--hint); white-space:nowrap;">최대 100주</span>
             </div>
             <button class="modal-buy"  data-trade-type="buy" type="button" title="탭: 1회 매수 · 3초 이상 누르면 자동매수(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'buy')" >매수</button>
