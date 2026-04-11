@@ -629,6 +629,75 @@
     text-overflow: ellipsis;
 }
 
+        /* ── 공지 아래 거래량 TOP5 (marketRank, 세션 1회 get) ── */
+        .volume-top5-wrap {
+            width: 100%;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            box-sizing: border-box;
+        }
+        .volume-top5-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 20px;
+        }
+        @media (max-width: 720px) {
+            .volume-top5-grid { grid-template-columns: 1fr; }
+        }
+        .volume-top5-head {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+        .volume-top5-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            font-size: 12px;
+            color: var(--text-sub);
+        }
+        .volume-top5-list li {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .volume-top5-list li:last-child { border-bottom: none; }
+        .volume-top5-rank {
+            flex: 0 0 18px;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+        .volume-top5-name {
+            flex: 1;
+            min-width: 0;
+            color: var(--text-main);
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .volume-top5-vol {
+            flex: 0 0 auto;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-sub);
+            font-size: 11px;
+        }
+        .volume-top5-meta {
+            margin-top: 10px;
+            font-size: 10px;
+            color: var(--text-sub);
+            text-align: right;
+            opacity: 0.85;
+        }
+
         /* ── 배너 ── */
         .banner-container { 
             position: fixed; 
@@ -693,6 +762,13 @@
             }
             .notice-bar {
                 padding: 12px max(4px, env(safe-area-inset-right, 0px)) 12px 46px !important;
+                box-sizing: border-box !important;
+            }
+            .volume-top5-wrap {
+                padding: 12px max(4px, env(safe-area-inset-right, 0px)) 12px 46px !important;
+                margin-left: 46px !important;
+                width: calc(100% - 46px) !important;
+                max-width: none !important;
                 box-sizing: border-box !important;
             }
             #stock-empty {
@@ -2477,7 +2553,20 @@
         <span class="notice-text"></span>
     </div>
 </div>
-	
+<div id="volume-top5-wrap" class="volume-top5-wrap" style="display:none;" aria-label="거래량 상위 종목">
+    <div class="volume-top5-grid">
+        <div>
+            <div class="volume-top5-head">주식 거래량 TOP5</div>
+            <ul class="volume-top5-list" id="volume-top5-stocks"></ul>
+        </div>
+        <div>
+            <div class="volume-top5-head">코인 거래량 TOP5</div>
+            <ul class="volume-top5-list" id="volume-top5-coins"></ul>
+        </div>
+    </div>
+    <div class="volume-top5-meta" id="volume-top5-meta"></div>
+</div>
+
     <!-- 빈 화면 안내 (즐겨찾기 없을 때) -->
     <div id="stock-empty">
         <div class="empty-icon">🔍</div>
@@ -3095,46 +3184,125 @@ function getMarketRankText(stockId, market) {
     return Number.isFinite(n) && n > 0 ? `${n.toLocaleString()}위` : '-';
 }
 
-/** 세션당 1회 — Functions 가 기록한 주가순 순위(랭킹 페이지와 동일 기준) */
+function normalizeVolumeTop5Rows(raw) {
+    if (!raw) return [];
+    const arr = Array.isArray(raw)
+        ? raw
+        : Object.keys(raw)
+            .sort((a, b) => Number(a) - Number(b))
+            .map((k) => raw[k]);
+    const out = [];
+    for (const x of arr) {
+        if (!x || typeof x !== 'object') continue;
+        const id = String(x.id || '').trim();
+        if (!id) continue;
+        const vol = Number(x.volume);
+        if (!Number.isFinite(vol) || vol <= 0) continue;
+        out.push({
+            id,
+            name: String(x.name || id).trim() || id,
+            volume: Math.floor(vol),
+        });
+        if (out.length >= 5) break;
+    }
+    return out;
+}
+
+function applyMarketVolumeTop5Ui(stockRows, coinRows, updatedAtMs) {
+    const wrap = document.getElementById('volume-top5-wrap');
+    const ulS = document.getElementById('volume-top5-stocks');
+    const ulC = document.getElementById('volume-top5-coins');
+    const meta = document.getElementById('volume-top5-meta');
+    if (!wrap || !ulS || !ulC) return;
+    const fillUl = (ul, rows) => {
+        ul.textContent = '';
+        if (!rows.length) {
+            const li = document.createElement('li');
+            li.style.border = 'none';
+            li.style.color = 'var(--text-sub)';
+            li.style.fontWeight = '500';
+            li.textContent = '데이터 없음';
+            ul.appendChild(li);
+            return;
+        }
+        rows.forEach((r, i) => {
+            const li = document.createElement('li');
+            const spR = document.createElement('span');
+            spR.className = 'volume-top5-rank';
+            spR.textContent = String(i + 1);
+            const spN = document.createElement('span');
+            spN.className = 'volume-top5-name';
+            spN.title = r.name;
+            spN.textContent = r.name;
+            const spV = document.createElement('span');
+            spV.className = 'volume-top5-vol';
+            spV.textContent = r.volume.toLocaleString();
+            li.appendChild(spR);
+            li.appendChild(spN);
+            li.appendChild(spV);
+            ul.appendChild(li);
+        });
+    };
+    fillUl(ulS, stockRows);
+    fillUl(ulC, coinRows);
+    if (meta) {
+        if (Number.isFinite(updatedAtMs) && updatedAtMs > 0) {
+            meta.textContent = `집계 시각: ${new Date(updatedAtMs).toLocaleString('ko-KR')} (약 15분 단위)`;
+            meta.style.display = '';
+        } else {
+            meta.textContent = '';
+            meta.style.display = 'none';
+        }
+    }
+    const hasAny = stockRows.length > 0 || coinRows.length > 0;
+    wrap.style.display = hasAny ? 'block' : 'none';
+}
+
+/** 세션당 1회 — marketRank 전체 get(순위 + 거래량 TOP5, 왕복 1회) */
 async function fetchServerMarketRanksOnce() {
     if (!db || !auth.currentUser) return;
     try {
-        const [sSnap, cSnap] = await Promise.all([
-            get(ref(db, 'marketRank/stocks/byPrice')),
-            get(ref(db, 'marketRank/coins/byPrice')),
-        ]);
+        const snap = await get(ref(db, 'marketRank'));
         stockRankFromServer = false;
         coinRankFromServer = false;
-        if (sSnap.exists()) {
-            const raw = sSnap.val();
-            if (raw && typeof raw === 'object') {
-                const next = {};
-                for (const [k, r] of Object.entries(raw)) {
-                    const n = Number(r);
-                    if (Number.isFinite(n) && n >= 1) next[k] = Math.floor(n);
+        let volStock = [];
+        let volCoin = [];
+        let updatedAtMs = 0;
+        if (snap.exists()) {
+            const v = snap.val();
+            if (v && typeof v === 'object') {
+                updatedAtMs = Number(v?.meta?.updatedAt) || 0;
+                const sRaw = v?.stocks?.byPrice;
+                if (sRaw && typeof sRaw === 'object') {
+                    const next = {};
+                    for (const [k, r] of Object.entries(sRaw)) {
+                        const n = Number(r);
+                        if (Number.isFinite(n) && n >= 1) next[k] = Math.floor(n);
+                    }
+                    if (Object.keys(next).length > 0) {
+                        stockRankById = next;
+                        stockRankDirty = false;
+                        stockRankFromServer = true;
+                    }
                 }
-                if (Object.keys(next).length > 0) {
-                    stockRankById = next;
-                    stockRankDirty = false;
-                    stockRankFromServer = true;
+                const cRaw = v?.coins?.byPrice;
+                if (cRaw && typeof cRaw === 'object') {
+                    const next = {};
+                    for (const [k, r] of Object.entries(cRaw)) {
+                        const n = Number(r);
+                        if (Number.isFinite(n) && n >= 1) next[k] = Math.floor(n);
+                    }
+                    if (Object.keys(next).length > 0) {
+                        coinRankById = next;
+                        coinRankDirty = false;
+                        coinRankFromServer = true;
+                    }
                 }
+                volStock = normalizeVolumeTop5Rows(v?.stocks?.byVolumeTop5);
+                volCoin = normalizeVolumeTop5Rows(v?.coins?.byVolumeTop5);
             }
         }
-        if (cSnap.exists()) {
-            const raw = cSnap.val();
-            if (raw && typeof raw === 'object') {
-                const next = {};
-                for (const [k, r] of Object.entries(raw)) {
-                    const n = Number(r);
-                    if (Number.isFinite(n) && n >= 1) next[k] = Math.floor(n);
-                }
-                if (Object.keys(next).length > 0) {
-                    coinRankById = next;
-                    coinRankDirty = false;
-                    coinRankFromServer = true;
-                }
-            }
-        }
+        applyMarketVolumeTop5Ui(volStock, volCoin, updatedAtMs);
         queueMicrotask(() => {
             try {
                 refreshMainStockListView();
@@ -3142,8 +3310,8 @@ async function fetchServerMarketRanksOnce() {
             try {
                 const modal = document.getElementById('chart-modal');
                 if (modal?.classList.contains('active') && typeof updateChartModalHeader === 'function') {
-                const id = chartModalStockId;
-                const m = chartModalMarket === 'coin' ? 'coin' : 'stock';
+                    const id = chartModalStockId;
+                    const m = chartModalMarket === 'coin' ? 'coin' : 'stock';
                     const row = m === 'coin'
                         ? (favoriteCoins[id] || ownedCoins[id] || allCoins.find((c) => c.id === id))
                         : stockRowForId(id);
@@ -4704,6 +4872,7 @@ onAuthStateChanged(auth, async (user) => {
                 coinRankDirty = true;
                 stockRankFromServer = false;
                 coinRankFromServer = false;
+                try { applyMarketVolumeTop5Ui([], [], 0); } catch (_) { /* noop */ }
                 stockElements = {};
                 myData = { cash: 1000000, stocks: {}, coins: {} };
                 lastTradeTime = 0;
@@ -4824,6 +4993,7 @@ onAuthStateChanged(auth, async (user) => {
             coinRankDirty = true;
             stockRankFromServer = false;
             coinRankFromServer = false;
+            try { applyMarketVolumeTop5Ui([], [], 0); } catch (_) { /* noop */ }
             try {
                 const rankBtn = document.getElementById('tab-btn-ranking');
                 if (rankBtn) {

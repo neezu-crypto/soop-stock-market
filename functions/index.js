@@ -143,6 +143,33 @@ function buildPriceRankByIdFromMarketSnapshot(val) {
   return rankById;
 }
 
+/** 거래량 내림차순 상위 5종목 — 동량 시 id 문자열 순 */
+function buildVolumeTop5FromMarketSnapshot(val) {
+  if (!val || typeof val !== "object") return [];
+  const rows = Object.entries(val).map(([id, raw]) => {
+    if (!raw || typeof raw !== "object") return { id, volume: 0, name: "" };
+    return { id, ...raw };
+  });
+  const filtered = rows.filter((s) => {
+    const vol = Number(s.volume);
+    const label = String(s.name || "").trim() || s.id;
+    return Boolean(label) && Number.isFinite(vol) && vol > 0;
+  });
+  filtered.sort((a, b) => {
+    const av = Number(a.volume) || 0;
+    const bv = Number(b.volume) || 0;
+    if (bv !== av) return bv - av;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  return filtered.slice(0, 5).map((s) =>
+    stripUndefinedShallow({
+      id: s.id,
+      name: String(s.name || "").trim() || s.id,
+      volume: Math.floor(Number(s.volume)) || 0,
+    })
+  );
+}
+
 /**
  * 클라이언트 조작 불가 — users/{uid}/lastTradeTime(서버 기록) 기준.
  * Admin 은 쿨다운 면제.
@@ -1362,15 +1389,19 @@ exports.refreshMarketPriceRanks = onSchedule(
       const coinsVal = coinsSnap.exists() ? coinsSnap.val() : {};
       const stockRank = buildPriceRankByIdFromMarketSnapshot(stocksVal);
       const coinRank = buildPriceRankByIdFromMarketSnapshot(coinsVal);
+      const stockVolTop5 = buildVolumeTop5FromMarketSnapshot(stocksVal);
+      const coinVolTop5 = buildVolumeTop5FromMarketSnapshot(coinsVal);
       const updatedAt = Date.now();
       await db.ref().update({
         "marketRank/stocks/byPrice": stockRank,
         "marketRank/coins/byPrice": coinRank,
+        "marketRank/stocks/byVolumeTop5": stockVolTop5,
+        "marketRank/coins/byVolumeTop5": coinVolTop5,
         "marketRank/meta/updatedAt": updatedAt,
         "marketRank/meta/sortKey": `byPrice_v${MARKET_RANK_SORT_VERSION}`,
       });
       console.log(
-        `[refreshMarketPriceRanks] ok stocks=${Object.keys(stockRank).length} coins=${Object.keys(coinRank).length}`
+        `[refreshMarketPriceRanks] ok stocks=${Object.keys(stockRank).length} coins=${Object.keys(coinRank).length} volTop5 stock=${stockVolTop5.length} coin=${coinVolTop5.length}`
       );
     } catch (e) {
       console.error("[refreshMarketPriceRanks]", e?.message || e);
