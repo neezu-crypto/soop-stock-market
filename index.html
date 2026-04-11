@@ -3049,6 +3049,18 @@ function logAuthTrailError(label, err) {
     console.error('[Critical Error]', label, err);
     if (err && typeof err === 'object') console.dir(err);
 }
+/** iOS 일부 WebView·구형 Safari 등 Notification 미노출 — 직접 참조 시 ReferenceError 로 이후 스크립트 중단 */
+function browserNotificationsSupported() {
+    return typeof globalThis !== 'undefined' && typeof globalThis.Notification !== 'undefined';
+}
+function browserNotificationsGranted() {
+    return browserNotificationsSupported() && Notification.permission === 'granted';
+}
+/**
+ * onAuthStateChanged 가 등록 직후 동기 실행될 때 applyStocksMode 가 먼저 돌 수 있음.
+ * let isUserActive 가 파일 하단에만 있으면 TDZ → "Cannot access 'isUserActive' before initialization"
+ */
+let isUserActive = true;
 /** presence/{uid}/{sessionId} — 세션당 1노드, 하트비트 + onDisconnect.remove로 고스트 최소화 */
 let presenceSessionRef   = null;
 let presenceHeartbeat    = null;
@@ -3800,7 +3812,7 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
                     const remaining = Math.ceil((frozenUntil - now) / 1000);
                     alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 ${remaining}초간 거래가 동결됩니다.`);
                 }
-                if (isMyStock && notifPermission && Notification.permission === 'granted') {
+                if (isMyStock && notifPermission && browserNotificationsGranted()) {
                     const remaining = Math.ceil((frozenUntil - now) / 1000);
                     new Notification(`⚡ ${stockName} 서킷브레이커 발동!`, {
                         body: `거래가 ${remaining}초간 동결됩니다. 해제 시 알림을 드립니다.`,
@@ -3822,7 +3834,7 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
                     if (ownedStocks[stockId]) subscribeToOwned(stockId);
 
                     // 해제 알림 — 즐겨찾기/보유 종목만
-                    if (isMyStock && notifPermission && Notification.permission === 'granted') {
+                    if (isMyStock && notifPermission && browserNotificationsGranted()) {
                         new Notification(`✅ ${stockName} 거래 재개!`, {
                             body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
                             icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
@@ -3839,7 +3851,7 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
             if (isSoopAdminEmail()) return;
             const stockName = stockNameForId(stockId);
             const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
-            if (isMyStock && notifPermission && Notification.permission === 'granted') {
+            if (isMyStock && notifPermission && browserNotificationsGranted()) {
                 new Notification(`✅ ${stockName} 거래 재개!`, {
                     body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
                     icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
@@ -7317,7 +7329,9 @@ window.openAlertModal = async function(stockId, stockName) {
     document.getElementById('alert-modal-title').textContent = `⏰ ${stockName} 알림 설정`;
 
     // 알림 권한 요청
-    if (Notification.permission === 'default') {
+    if (!browserNotificationsSupported()) {
+        notifPermission = false;
+    } else if (Notification.permission === 'default') {
         const perm = await Notification.requestPermission();
         notifPermission = perm === 'granted';
     } else {
@@ -7395,7 +7409,7 @@ function checkPriceAlert(stockId, stockName, prevPrice, newPrice, sourceMarket) 
     } else {
         return;
     }
-    if (!notifPermission || Notification.permission !== 'granted') return;
+    if (!notifPermission || !browserNotificationsGranted()) return;
     if (!prevPrice || prevPrice === newPrice) return;
 
     const changeRate = ((newPrice - prevPrice) / prevPrice) * 100;
@@ -7415,7 +7429,7 @@ function checkPriceAlert(stockId, stockName, prevPrice, newPrice, sourceMarket) 
 
 // 초기 로드
 loadAlertSettings();
-if (Notification.permission === 'granted') notifPermission = true;
+if (browserNotificationsGranted()) notifPermission = true;
 
 // ── 자산 히스토리 ──────────────────────────────────────────
 const ASSET_HISTORY_KEY = 'soop_asset_history';
@@ -8336,7 +8350,7 @@ function stopAllStocksSubscriptions() {
 }
 
 // ── 활동 감지 + 정규장/비정규장 구독 모드 ───────────────────
-let isUserActive      = true;
+// isUserActive 는 상단 상태 블록(onAuthStateChanged 보다 위)에 선언 — 동기 콜백 TDZ 방지
 let activityTimer     = null;
 let favPollTimers     = {}; // 레거시 비정규장 종목별 폴링 타이머 — 정리용으로만 유지
 const POWER_SAVE_IDLE_MS = 300000; // 비활동 300초 후 절전 모드
