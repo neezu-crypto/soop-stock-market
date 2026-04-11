@@ -116,6 +116,33 @@ function getTradeCooldownMsFromConfig(mh, dateKst) {
   return 30000;
 }
 
+/** soop-stocks-ranking-live.html sortByPriceDesc 와 동일 필터·정렬 + 동가 시 id 안정 정렬 */
+const MARKET_RANK_SORT_VERSION = 1;
+
+function buildPriceRankByIdFromMarketSnapshot(val) {
+  if (!val || typeof val !== "object") return {};
+  const rows = Object.entries(val).map(([id, raw]) => {
+    if (!raw || typeof raw !== "object") return { id, price: NaN, name: "" };
+    return { id, ...raw };
+  });
+  const filtered = rows.filter((s) => {
+    const p = Number(s.price);
+    const label = String(s.name || "").trim() || s.id;
+    return Boolean(label) && Number.isFinite(p) && p > 0;
+  });
+  filtered.sort((a, b) => {
+    const ap = Number(a.price) || 0;
+    const bp = Number(b.price) || 0;
+    if (bp !== ap) return bp - ap;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  const rankById = {};
+  filtered.forEach((s, i) => {
+    rankById[s.id] = i + 1;
+  });
+  return rankById;
+}
+
 /**
  * 클라이언트 조작 불가 — users/{uid}/lastTradeTime(서버 기록) 기준.
  * Admin 은 쿨다운 면제.
@@ -1301,6 +1328,53 @@ exports.onMarketHoursWriteSyncDatabaseRules = onValueWritten(
       await syncDatabaseRulesFromMarketHours();
     } catch (e) {
       console.error("[onMarketHoursWriteSyncDatabaseRules]", e?.message || e);
+    }
+  }
+);
+
+/**
+ * 주가/코인 시가총액 랭킹과 동일 기준(byPrice) 순위를 marketRank 에 기록.
+ * 비용 절감: 15분마다만 실행, KST 기준 장 마감 시 stocks/coins 전체 읽기 생략.
+ */
+exports.refreshMarketPriceRanks = onSchedule(
+  {
+    schedule: "every 15 minutes",
+    region: "asia-northeast3",
+    timeoutSeconds: 300,
+    memory: "512MiB",
+  },
+  async () => {
+    const db = admin.database();
+    try {
+      const mhSnap = await db.ref("siteConfig/marketHours").get();
+      const mh = mhSnap.exists() ? mhSnap.val() : null;
+      const kst = nowKstDate();
+      if (mh && mh.enabled && !isMarketOpenServer(mh, kst)) {
+        console.log("[refreshMarketPriceRanks] skip: market closed (KST)");
+        return;
+      }
+
+      const [stocksSnap, coinsSnap] = await Promise.all([
+        db.ref("stocks").get(),
+        db.ref("coins").get(),
+      ]);
+      const stocksVal = stocksSnap.exists() ? stocksSnap.val() : {};
+      const coinsVal = coinsSnap.exists() ? coinsSnap.val() : {};
+      const stockRank = buildPriceRankByIdFromMarketSnapshot(stocksVal);
+      const coinRank = buildPriceRankByIdFromMarketSnapshot(coinsVal);
+      const updatedAt = Date.now();
+      await db.ref().update({
+        "marketRank/stocks/byPrice": stockRank,
+        "marketRank/coins/byPrice": coinRank,
+        "marketRank/meta/updatedAt": updatedAt,
+        "marketRank/meta/sortKey": `byPrice_v${MARKET_RANK_SORT_VERSION}`,
+      });
+      console.log(
+        `[refreshMarketPriceRanks] ok stocks=${Object.keys(stockRank).length} coins=${Object.keys(coinRank).length}`
+      );
+    } catch (e) {
+      console.error("[refreshMarketPriceRanks]", e?.message || e);
+      throw e;
     }
   }
 );

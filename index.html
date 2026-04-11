@@ -2986,12 +2986,14 @@ let marketParamsCache = null;
 let marketParamsFetchCount = 0;
 /** RTDB `siteConfig/marketParams/coinImpactMultiplier` 실시간 반영 — 없으면 기본값 */
 let coinImpactMultiplierUnsub = null;
-/** 주식 순위 캐시 — allStocks 메모리로 계산 (추가 DB 조회 없음) */
+/** 주식 순위 캐시 — 서버 marketRank/stocks/byPrice 우선, 없으면 allStocks 로 클라이언트 계산 */
 let stockRankById = {};
 let stockRankDirty = true;
-/** 코인 순위 캐시 — allCoins 메모리로 계산 (추가 DB 조회 없음) */
+let stockRankFromServer = false;
+/** 코인 순위 캐시 — 서버 marketRank/coins/byPrice 우선, 없으면 allCoins 로 클라이언트 계산 */
 let coinRankById = {};
 let coinRankDirty = true;
+let coinRankFromServer = false;
 
 // ── 즐겨찾기 상태 ────────────────────────────────────────────
 let favorites        = {};    // { stockId: { id, name, price, ... } }
@@ -3058,9 +3060,11 @@ function upsertAllStocksCacheRow(row) {
 function rebuildRankCacheIfNeeded(market) {
     const coin = market === 'coin';
     if (coin) {
+        if (coinRankFromServer) return;
         if (!coinRankDirty) return;
-    } else if (!stockRankDirty) {
-        return;
+    } else {
+        if (stockRankFromServer) return;
+        if (!stockRankDirty) return;
     }
     const source = coin ? allCoins : allStocks;
     const sorted = source
@@ -3089,6 +3093,67 @@ function getMarketRankText(stockId, market) {
     rebuildRankCacheIfNeeded(coin ? 'coin' : 'stock');
     const n = Number((coin ? coinRankById : stockRankById)[stockId]);
     return Number.isFinite(n) && n > 0 ? `${n.toLocaleString()}위` : '-';
+}
+
+/** 세션당 1회 — Functions 가 기록한 주가순 순위(랭킹 페이지와 동일 기준) */
+async function fetchServerMarketRanksOnce() {
+    if (!db || !auth.currentUser) return;
+    try {
+        const [sSnap, cSnap] = await Promise.all([
+            get(ref(db, 'marketRank/stocks/byPrice')),
+            get(ref(db, 'marketRank/coins/byPrice')),
+        ]);
+        stockRankFromServer = false;
+        coinRankFromServer = false;
+        if (sSnap.exists()) {
+            const raw = sSnap.val();
+            if (raw && typeof raw === 'object') {
+                const next = {};
+                for (const [k, r] of Object.entries(raw)) {
+                    const n = Number(r);
+                    if (Number.isFinite(n) && n >= 1) next[k] = Math.floor(n);
+                }
+                if (Object.keys(next).length > 0) {
+                    stockRankById = next;
+                    stockRankDirty = false;
+                    stockRankFromServer = true;
+                }
+            }
+        }
+        if (cSnap.exists()) {
+            const raw = cSnap.val();
+            if (raw && typeof raw === 'object') {
+                const next = {};
+                for (const [k, r] of Object.entries(raw)) {
+                    const n = Number(r);
+                    if (Number.isFinite(n) && n >= 1) next[k] = Math.floor(n);
+                }
+                if (Object.keys(next).length > 0) {
+                    coinRankById = next;
+                    coinRankDirty = false;
+                    coinRankFromServer = true;
+                }
+            }
+        }
+        queueMicrotask(() => {
+            try {
+                refreshMainStockListView();
+            } catch (_) { /* noop */ }
+            try {
+                const modal = document.getElementById('chart-modal');
+                if (modal?.classList.contains('active') && typeof updateChartModalHeader === 'function') {
+                const id = chartModalStockId;
+                const m = chartModalMarket === 'coin' ? 'coin' : 'stock';
+                    const row = m === 'coin'
+                        ? (favoriteCoins[id] || ownedCoins[id] || allCoins.find((c) => c.id === id))
+                        : stockRowForId(id);
+                    if (row) updateChartModalHeader(row);
+                }
+            } catch (_) { /* noop */ }
+        });
+    } catch (e) {
+        console.warn('[marketRank] fetchServerMarketRanksOnce', e?.message || e);
+    }
 }
 
 function stockRowForId(id) {
@@ -4633,7 +4698,12 @@ onAuthStateChanged(auth, async (user) => {
                 searchResults = {};
                 allStocks = [];
                 allCoins = [];
+                stockRankById = {};
+                coinRankById = {};
+                stockRankDirty = true;
                 coinRankDirty = true;
+                stockRankFromServer = false;
+                coinRankFromServer = false;
                 stockElements = {};
                 myData = { cash: 1000000, stocks: {}, coins: {} };
                 lastTradeTime = 0;
@@ -4693,6 +4763,9 @@ onAuthStateChanged(auth, async (user) => {
                 logAuthTrailError('loadStockNameCache in onAuthStateChanged', err);
             }
             try {
+                await fetchServerMarketRanksOnce();
+            } catch (_) { /* noop */ }
+            try {
                 await refreshBannersAfterAuthIfEmpty();
             } catch (_) { /* noop */ }
 
@@ -4745,6 +4818,12 @@ onAuthStateChanged(auth, async (user) => {
             mainStocksSyncMode = null;
             userUID = null;
             myData = null;
+            stockRankById = {};
+            coinRankById = {};
+            stockRankDirty = true;
+            coinRankDirty = true;
+            stockRankFromServer = false;
+            coinRankFromServer = false;
             try {
                 const rankBtn = document.getElementById('tab-btn-ranking');
                 if (rankBtn) {
