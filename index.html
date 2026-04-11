@@ -67,9 +67,16 @@
         .market-mode-btn:hover { color: var(--text-main); border-color: var(--primary); }
         .market-mode-btn.active { color: #f59e0b; border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.08); }
         header { padding: 10px 0; border-bottom: 1px solid var(--card-bg); margin-bottom: 10px; }
+        /* 거래량 TOP5 아래 · 종목 카드 영역 위 */
+        .main-search-wrap {
+            width: 100%;
+            margin-bottom: 14px;
+            box-sizing: border-box;
+        }
+        .main-search-wrap #search-input { margin-top: 0; }
         #search-input {
             width: 100%; padding: 14px; border-radius: 12px; background: var(--card-bg);
-            border: 1px solid var(--border); color: white; margin-top: 10px; box-sizing: border-box;
+            border: 1px solid var(--border); color: white; box-sizing: border-box;
         }
         #stock-list { display: grid; gap: 12px; }
         .stock-card {
@@ -875,11 +882,17 @@
                 max-width: none !important;
                 box-sizing: border-box;
             }
-            #search-input {
+            .main-search-wrap {
+                margin-left: 46px !important;
+                width: calc(100% - 46px) !important;
+                max-width: none !important;
+                box-sizing: border-box !important;
+            }
+            .main-search-wrap #search-input {
                 display: block;
-                margin-left: 46px;
+                margin-left: 0;
                 margin-right: 0;
-                width: calc(100% - 46px);
+                width: 100%;
                 max-width: none;
                 padding: 14px;
                 box-sizing: border-box;
@@ -2523,14 +2536,6 @@
     <!-- 정규장 연장 요청 바 -->
     <div id="extend-request-bar" style="display:none;"></div>
 
-    <header>
-        <h1 id="main-market-title" style="font-size:20px;margin:0;">📈 스트리머 주식시장</h1>
-        <p id="main-market-subtitle" style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
-            관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.
-        </p>
-        <input type="text" id="search-input" placeholder="스트리머 검색...">
-    </header>
-
     <!-- 실시간 주가·코인 랭킹 라이브 바로가기 (주식·코인 탭 공통) -->
     <div id="live-ranking-banner-wrap" class="live-ranking-banner" style="display:none;">
         <div class="live-ranking-banner__inner">
@@ -2566,6 +2571,17 @@
     </div>
     <div class="volume-top5-meta" id="volume-top5-meta"></div>
 </div>
+
+    <header>
+        <h1 id="main-market-title" style="font-size:20px;margin:0;">📈 스트리머 주식시장</h1>
+        <p id="main-market-subtitle" style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
+            관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.
+        </p>
+    </header>
+
+    <div class="main-search-wrap">
+        <input type="text" id="search-input" placeholder="스트리머 검색..." autocomplete="off">
+    </div>
 
     <!-- 빈 화면 안내 (즐겨찾기 없을 때) -->
     <div id="stock-empty">
