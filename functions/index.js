@@ -1360,6 +1360,70 @@ exports.onMarketHoursWriteSyncDatabaseRules = onValueWritten(
 );
 
 /**
+ * marketRank 갱신 — 스케줄은 장 중에만, 관리자 수동은 장 마감 여부 무시.
+ * @returns {Promise<{skipped?:boolean,reason?:string,updatedAt?:number,stockRankCount?:number,coinRankCount?:number,stockVolTop5?:number,coinVolTop5?:number}>}
+ */
+async function runMarketRankAggregation(db, { skipIfMarketClosed }) {
+  const mhSnap = await db.ref("siteConfig/marketHours").get();
+  const mh = mhSnap.exists() ? mhSnap.val() : null;
+  const kst = nowKstDate();
+  if (skipIfMarketClosed && mh && mh.enabled && !isMarketOpenServer(mh, kst)) {
+    console.log("[runMarketRankAggregation] skip: market closed (KST)");
+    return { skipped: true, reason: "market_closed" };
+  }
+
+  const [stocksSnap, coinsSnap] = await Promise.all([
+    db.ref("stocks").get(),
+    db.ref("coins").get(),
+  ]);
+  const stocksVal = stocksSnap.exists() ? stocksSnap.val() : {};
+  const coinsVal = coinsSnap.exists() ? coinsSnap.val() : {};
+  const stockRank = buildPriceRankByIdFromMarketSnapshot(stocksVal);
+  const coinRank = buildPriceRankByIdFromMarketSnapshot(coinsVal);
+  const stockVolTop5 = buildVolumeTop5FromMarketSnapshot(stocksVal);
+  const coinVolTop5 = buildVolumeTop5FromMarketSnapshot(coinsVal);
+  const updatedAt = Date.now();
+  await db.ref().update({
+    "marketRank/stocks/byPrice": stockRank,
+    "marketRank/coins/byPrice": coinRank,
+    "marketRank/stocks/byVolumeTop5": stockVolTop5,
+    "marketRank/coins/byVolumeTop5": coinVolTop5,
+    "marketRank/meta/updatedAt": updatedAt,
+    "marketRank/meta/sortKey": `byPrice_v${MARKET_RANK_SORT_VERSION}`,
+  });
+  const out = {
+    skipped: false,
+    updatedAt,
+    stockRankCount: Object.keys(stockRank).length,
+    coinRankCount: Object.keys(coinRank).length,
+    stockVolTop5: stockVolTop5.length,
+    coinVolTop5: coinVolTop5.length,
+  };
+  console.log(
+    `[runMarketRankAggregation] ok stocks=${out.stockRankCount} coins=${out.coinRankCount} volTop5 stock=${out.stockVolTop5} coin=${out.coinVolTop5}`
+  );
+  return out;
+}
+
+/** 관리자만 — marketRank 즉시 재집계 (장 마감 중에도 실행 가능) */
+exports.adminRefreshMarketRanks = onCall(
+  {
+    cors: true,
+    timeoutSeconds: 300,
+    memory: "512MiB",
+    region: "asia-northeast3",
+  },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    const r = await runMarketRankAggregation(db, { skipIfMarketClosed: false });
+    return { ok: true, ...r };
+  }
+);
+
+/**
  * 주가/코인 시가총액 랭킹과 동일 기준(byPrice) 순위를 marketRank 에 기록.
  * 비용 절감: 15분마다만 실행, KST 기준 장 마감 시 stocks/coins 전체 읽기 생략.
  */
@@ -1373,36 +1437,8 @@ exports.refreshMarketPriceRanks = onSchedule(
   async () => {
     const db = admin.database();
     try {
-      const mhSnap = await db.ref("siteConfig/marketHours").get();
-      const mh = mhSnap.exists() ? mhSnap.val() : null;
-      const kst = nowKstDate();
-      if (mh && mh.enabled && !isMarketOpenServer(mh, kst)) {
-        console.log("[refreshMarketPriceRanks] skip: market closed (KST)");
-        return;
-      }
-
-      const [stocksSnap, coinsSnap] = await Promise.all([
-        db.ref("stocks").get(),
-        db.ref("coins").get(),
-      ]);
-      const stocksVal = stocksSnap.exists() ? stocksSnap.val() : {};
-      const coinsVal = coinsSnap.exists() ? coinsSnap.val() : {};
-      const stockRank = buildPriceRankByIdFromMarketSnapshot(stocksVal);
-      const coinRank = buildPriceRankByIdFromMarketSnapshot(coinsVal);
-      const stockVolTop5 = buildVolumeTop5FromMarketSnapshot(stocksVal);
-      const coinVolTop5 = buildVolumeTop5FromMarketSnapshot(coinsVal);
-      const updatedAt = Date.now();
-      await db.ref().update({
-        "marketRank/stocks/byPrice": stockRank,
-        "marketRank/coins/byPrice": coinRank,
-        "marketRank/stocks/byVolumeTop5": stockVolTop5,
-        "marketRank/coins/byVolumeTop5": coinVolTop5,
-        "marketRank/meta/updatedAt": updatedAt,
-        "marketRank/meta/sortKey": `byPrice_v${MARKET_RANK_SORT_VERSION}`,
-      });
-      console.log(
-        `[refreshMarketPriceRanks] ok stocks=${Object.keys(stockRank).length} coins=${Object.keys(coinRank).length} volTop5 stock=${stockVolTop5.length} coin=${coinVolTop5.length}`
-      );
+      const r = await runMarketRankAggregation(db, { skipIfMarketClosed: true });
+      if (r.skipped) return;
     } catch (e) {
       console.error("[refreshMarketPriceRanks]", e?.message || e);
       throw e;

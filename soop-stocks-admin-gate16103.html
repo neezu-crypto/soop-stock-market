@@ -663,6 +663,27 @@
         </button>
     </div>
 
+    <!-- marketRank 수동 집계 -->
+    <div class="container" style="display:block; border-color:#a855f7; margin-bottom:20px;">
+        <div class="accordion-header">
+            <h1>📈 시장 순위·거래량 TOP 집계</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            메인 페이지의 <b>주가순 순위</b>·<b>거래량 TOP5</b>에 쓰이는 <code style="font-size:11px;">marketRank</code>를 즉시 다시 계산합니다.<br>
+            자동 갱신은 장 중 약 15분마다(스케줄)이며, 여기서는 <b>관리자가 수동으로</b> 실행합니다. <b>장 마감 중에도</b> 실행 가능합니다.
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:12px;">
+            <button type="button" class="btn-primary" style="margin-top:0; width:auto; padding:12px 20px; font-size:14px; font-weight:800;"
+                onclick="window.runAdminMarketRankRefresh?.()">⚡ 지금 집계 실행</button>
+            <span id="market-rank-refresh-status" style="font-size:13px; color:#94a3b8;"></span>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 📢 공지 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
         <div class="accordion-header">
@@ -1944,9 +1965,12 @@
     const db  = getDatabase(app);
     /** Gen2 callable 기본 리전(us-central1). Functions를 다른 리전에 배포했다면 getFunctions(app, 'asia-northeast3') 등으로 맞출 것 */
     const functions = getFunctions(app);
+    /** refreshMarketPriceRanks / adminRefreshMarketRanks 배포 리전과 동일 */
+    const functionsAsiaN3 = getFunctions(app, 'asia-northeast3');
     const adminStockSplitFn = httpsCallable(functions, 'adminStockSplit');
     const adminPurgeUserActivityLogsFn = httpsCallable(functions, 'adminPurgeUserActivityLogs');
     const adminGrantAssetRequestFn = httpsCallable(functions, 'adminGrantAssetRequest');
+    const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
 
     /**
      * Callable 미배포·리전 불일치·일시 다운 시 브라우저 RTDB 경로로 폴백.
@@ -2025,6 +2049,36 @@
             setTimeout(() => el.remove(), 400);
         }, isError ? 4200 : 2400);
     }
+
+    /** marketRank 즉시 재집계 — Cloud Function adminRefreshMarketRanks */
+    window.runAdminMarketRankRefresh = async function runAdminMarketRankRefresh() {
+        if (!isAdmin()) return;
+        const statusEl = document.getElementById('market-rank-refresh-status');
+        if (statusEl) statusEl.textContent = '집계 중…';
+        try {
+            const res = await adminRefreshMarketRanksFn({});
+            const d = res?.data;
+            if (!d?.ok) {
+                if (statusEl) statusEl.textContent = '응답 오류';
+                return;
+            }
+            if (d.skipped) {
+                if (statusEl) statusEl.textContent = '건너뜀: ' + (d.reason || '-');
+                return;
+            }
+            const when = d.updatedAt ? new Date(d.updatedAt).toLocaleString('ko-KR') : '';
+            if (statusEl) {
+                statusEl.textContent =
+                    `완료 — 주식 ${d.stockRankCount ?? 0}종 · 코인 ${d.coinRankCount ?? 0}종 · 거래량TOP5 주 ${d.stockVolTop5 ?? 0}/코 ${d.coinVolTop5 ?? 0} · ${when}`;
+            }
+            showAdminToast('marketRank 집계가 반영되었습니다.', 'ok');
+        } catch (e) {
+            console.error(e);
+            const msg = e?.message || e?.code || String(e);
+            if (statusEl) statusEl.textContent = '실패: ' + msg;
+            showAdminToast('집계 실패: ' + msg, 'error');
+        }
+    };
 
     function isPendingStatus(v) {
         return v && String(v.status || '').trim().toLowerCase() === 'pending';
