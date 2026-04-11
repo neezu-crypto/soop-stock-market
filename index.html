@@ -8962,10 +8962,12 @@ let stockNameCache = {}; // { id: name }
 
 // 종목 이름 목록을 localStorage 캐시 또는 Firebase에서 로드
 async function loadStockNameCache() {
-    // 1. 로컬 캐시 확인
+    // 1. 로컬 캐시 확인 (빈 객체 {} 는 truthy → 이 분기만 타고 return 하면 검색이 영구히 실패할 수 있음, 특히 모바일 저장소 이슈)
     const cached = loadStaticCache();
-    if (cached?.stockNames) {
-        stockNameCache = cached.stockNames;
+    const cachedNames = cached?.stockNames;
+    const hasUsableNameCache = cachedNames && typeof cachedNames === 'object' && Object.keys(cachedNames).length > 0;
+    if (hasUsableNameCache) {
+        stockNameCache = cachedNames;
         // Firebase 버전과 비교 — 상장/삭제 있으면 캐시 무효화 후 재로드
         try {
             const verSnap = await get(ref(db, 'siteConfig/stockCacheVersion'));
@@ -9008,11 +9010,20 @@ async function loadStockNameCache() {
 let searchRequestGen = 0;
 
 function normalizeSearchKeyword(v) {
-    return String(v || '')
-        .normalize('NFKC')
-        .toLowerCase()
-        .replace(/\s+/g, '')
-        .trim();
+    try {
+        return String(v || '')
+            .normalize('NFKC')
+            .toLowerCase()
+            .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
+            .replace(/\s+/g, '')
+            .trim();
+    } catch (_) {
+        return String(v || '')
+            .toLowerCase()
+            .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
+            .replace(/\s+/g, '')
+            .trim();
+    }
 }
 
 // 검색어 입력 처리 — 이름 캐시 기반 검색 후 가격 조회
@@ -9400,9 +9411,14 @@ function syncOwnedCoinSubscriptions() {
 }
 
 // ── 검색창 이벤트 ────────────────────────────────────────
-document.getElementById('search-input')?.addEventListener('input', (e) => {
-    handleSearch(e.target.value);
-});
+(function bindSearchInput() {
+    const el = document.getElementById('search-input');
+    if (!el) return;
+    const run = () => handleSearch(el.value);
+    el.addEventListener('input', run);
+    // iOS 한글 IME: 조합 종료 시 value 확정 — 일부 환경에서 input만으로는 타이밍이 어긋날 수 있음
+    el.addEventListener('compositionend', run);
+})();
 
 // ── ESC 키로 모달·모바일 사이드 패널 닫기 ───────────────────
 document.addEventListener('keydown', (e) => {
