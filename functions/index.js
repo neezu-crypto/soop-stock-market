@@ -56,9 +56,32 @@ function chunkObject(obj, maxKeys) {
   return out;
 }
 
+/**
+ * KST 시·분 (Cloud Functions VM 타임존과 무관).
+ * 기존 `new Date(toLocaleString(...))` 는 파싱이 로컬에 의존해 장중 판정·스케줄 스킵이 틀어질 수 있음.
+ */
+function getKstHourMinute() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+  const minute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+  return {
+    h: Number.isFinite(hour) ? hour : 0,
+    m: Number.isFinite(minute) ? minute : 0,
+  };
+}
+
+/** getHours/getMinutes 만 쓰는 기존 코드와 호환 (실제 Date 아님) */
 function nowKstDate() {
-  // KST time-based market-hours logic (Asia/Seoul)
-  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  const { h, m } = getKstHourMinute();
+  return {
+    getHours: () => h,
+    getMinutes: () => m,
+  };
 }
 
 function parseHm(str, fallback) {

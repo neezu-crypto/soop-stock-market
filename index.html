@@ -3083,6 +3083,8 @@ let stockRankFromServer = false;
 let coinRankById = {};
 let coinRankDirty = true;
 let coinRankFromServer = false;
+/** applyMarketState: 직전 시장 오픈 여부 — 마감→오픈 시 marketRank 재get */
+let prevMarketOpenSnapshot = null;
 
 // ── 즐겨찾기 상태 ────────────────────────────────────────────
 let favorites        = {};    // { stockId: { id, name, price, ... } }
@@ -4440,6 +4442,16 @@ function applyMarketState() {
         }
     }
 
+    // 장이 막 열린 경우(또는 첫 로드 시 오픈) 서버 marketRank 재조회 — 탭을 켜 둔 채 오픈한 유저 대비
+    if (!isAdminUser && siteConfigReady && mh && mh.enabled && marketOpen && prevMarketOpenSnapshot !== true && auth.currentUser?.uid) {
+        queueMicrotask(() => {
+            fetchServerMarketRanksOnce().catch(() => {});
+        });
+    }
+    if (!isAdminUser && siteConfigReady && typeof marketOpen === 'boolean') {
+        prevMarketOpenSnapshot = marketOpen;
+    }
+
     if (marketCheckTimer) clearTimeout(marketCheckTimer);
     marketCheckTimer = setTimeout(applyMarketState, 60000);
     } finally {
@@ -4872,6 +4884,7 @@ onAuthStateChanged(auth, async (user) => {
                 coinRankDirty = true;
                 stockRankFromServer = false;
                 coinRankFromServer = false;
+                prevMarketOpenSnapshot = null;
                 try { applyMarketVolumeTop5Ui([], [], 0); } catch (_) { /* noop */ }
                 stockElements = {};
                 myData = { cash: 1000000, stocks: {}, coins: {} };
@@ -4993,6 +5006,7 @@ onAuthStateChanged(auth, async (user) => {
             coinRankDirty = true;
             stockRankFromServer = false;
             coinRankFromServer = false;
+            prevMarketOpenSnapshot = null;
             try { applyMarketVolumeTop5Ui([], [], 0); } catch (_) { /* noop */ }
             try {
                 const rankBtn = document.getElementById('tab-btn-ranking');
