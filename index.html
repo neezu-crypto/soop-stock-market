@@ -9410,11 +9410,29 @@ function syncOwnedCoinSubscriptions() {
     });
 }
 
-// ── 검색창 이벤트 ────────────────────────────────────────
+// ── 검색창 이벤트 (모바일: input·compositionend 가 자주 올라와 전체 검색·네트워크가 중복 실행되면 체감 지연 — 짧은 디바운스) ──
+let searchInputDebounceTimer = null;
+const SEARCH_INPUT_DEBOUNCE_MS = 140;
+function scheduleSearchFromInput(rawValue) {
+    if (searchInputDebounceTimer) {
+        clearTimeout(searchInputDebounceTimer);
+        searchInputDebounceTimer = null;
+    }
+    const v = String(rawValue ?? '');
+    if (!v.trim()) {
+        handleSearch('');
+        return;
+    }
+    searchInputDebounceTimer = setTimeout(() => {
+        searchInputDebounceTimer = null;
+        handleSearch(v);
+    }, SEARCH_INPUT_DEBOUNCE_MS);
+}
+
 (function bindSearchInput() {
     const el = document.getElementById('search-input');
     if (!el) return;
-    const run = () => handleSearch(el.value);
+    const run = () => scheduleSearchFromInput(el.value);
     el.addEventListener('input', run);
     // iOS 한글 IME: 조합 종료 시 value 확정 — 일부 환경에서 input만으로는 타이밍이 어긋날 수 있음
     el.addEventListener('compositionend', run);
