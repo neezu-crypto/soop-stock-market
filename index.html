@@ -1811,6 +1811,15 @@
             font-size: 16px; font-weight: 800; color: var(--text-main);
             margin: 0 0 10px; text-align: center; line-height: 1.35;
         }
+        .google-webview-auth-box .gw-auto-msg {
+            margin: 0 0 12px;
+            padding: 10px 12px;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            color: var(--text-main);
+        }
         .google-webview-auth-box .gw-desc {
             font-size: 12px; color: var(--text-sub); line-height: 1.75;
             margin-bottom: 14px;
@@ -1936,6 +1945,7 @@
 <div id="google-webview-auth-overlay" onclick="if(event.target===this)window.closeGoogleWebviewAuthHelp?.()">
     <div class="google-webview-auth-box" onclick="event.stopPropagation()">
         <h3>앱 안 브라우저에서는 Google 로그인이 차단될 수 있어요</h3>
+        <p id="google-webview-auth-auto-msg" class="gw-auto-msg" hidden></p>
         <p class="gw-desc">
             Google 정책(<b>403 disallowed_useragent</b>)으로, SOOP·카카오 등 <b>앱 속 웹화면</b>에서는 로그인 요청이 거절되는 경우가 많습니다.
             <strong style="color:var(--text-main);">시스템 Safari 또는 Chrome</strong>에서 아래 주소를 여시면 정상 로그인됩니다.
@@ -2876,6 +2886,38 @@ try {
     auth = getAuth(app);
 }
 
+/** UA 부분문자열 — 인앱·소셜 브라우저 등 (Google OAuth WebView 제한과 겹침) */
+const GOOGLE_IN_APP_UA_HINTS = [
+    'instagram', 'fbav', 'fban', 'fb_iab', 'line/', 'kakaotalk',
+    'micromessenger', 'snapchat/', 'twitter', 'linkedinapp',
+    'discord', 'naver', 'fban/', 'musical_ly', 'pinterest', 'tiktok',
+    'soop', 'sooplive', 'afreeca', 'afreecatv', 'playsoop', 'soop.co.kr',
+];
+
+/**
+ * Google OAuth 가 같은 WebView 안에서만 열려 403 이 나는 환경.
+ * 이 경우 signInWithRedirect 를 쓰지 않고 시스템 브라우저 열기를 시도한다.
+ * (일반 모바일 Safari 등 “진짜 브라우저”는 false — 리다이렉트 유지)
+ */
+function needsExternalBrowserForGoogleOAuth() {
+    try {
+        if (typeof sessionStorage !== 'undefined') {
+            try {
+                if (sessionStorage.getItem('soop_force_google_redirect') === '1') return true;
+            } catch (_) { /* noop */ }
+        }
+    } catch (_) { /* noop */ }
+    const ua = navigator.userAgent || '';
+    const ual = ua.toLowerCase();
+    if (/\bwv\b/.test(ua) && /android/i.test(ua)) return true;
+    if (/; wv\)/i.test(ua)) return true;
+    for (const h of GOOGLE_IN_APP_UA_HINTS) {
+        if (ual.includes(h)) return true;
+    }
+    if ((/iphone|ipad|ipod/i.test(ua)) && !/safari/i.test(ua) && /mobile/i.test(ua)) return true;
+    return false;
+}
+
 /**
  * Google 정책: 인앱 WebView·앱 내장 브라우저에서 OAuth 팝업 시 403 disallowed_useragent.
  * 전체 창 리다이렉트(signInWithRedirect)로 우회한다.
@@ -2892,13 +2934,7 @@ function shouldPreferGoogleSignInRedirect() {
         const ual = ua.toLowerCase();
         if (/\bwv\b/.test(ua) && /android/i.test(ua)) return true;
         if (/; wv\)/i.test(ua)) return true;
-        const inAppHints = [
-            'instagram', 'fbav', 'fban', 'fb_iab', 'line/', 'kakaotalk',
-            'micromessenger', 'snapchat/', 'twitter', 'linkedinapp',
-            'discord', 'naver', 'fban/', 'musical_ly', 'pinterest', 'tiktok',
-            'soop', 'sooplive', 'afreeca', 'afreecatv', 'playsoop', 'soop.co.kr'
-        ];
-        for (const h of inAppHints) {
+        for (const h of GOOGLE_IN_APP_UA_HINTS) {
             if (ual.includes(h)) return true;
         }
         // iOS: Safari 문자열 없는 WKWebView (구버전·일부 인앱)
@@ -2959,7 +2995,9 @@ getRedirectResult(auth)
         try { sessionStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY); } catch (_) { /* noop */ }
         const msg = String(err?.message || '');
         if (/disallowed_useragent|disallowed.useragent/i.test(msg)) {
-            try { window.openGoogleWebviewAuthHelp?.(); } catch (_) {
+            try {
+                showInAppGoogleLoginExternalBrowserHelp();
+            } catch (_) {
                 alert('SOOP·카카오 등 앱 안에서는 Google 로그인이 막힐 수 있습니다.\nSafari 또는 Chrome에서 같은 주소로 접속해 주세요.');
             }
         } else if (err?.code && err.code !== 'auth/popup-closed-by-user') {
@@ -4931,8 +4969,105 @@ function syncGoogleWebviewAuthUrlEl() {
     const el = document.getElementById('google-webview-auth-url');
     if (el) el.textContent = location.href;
 }
+
+/**
+ * 시스템 브라우저·새 창으로 현재 URL 열기 (인앱 WebView 한계로 100% 보장은 불가).
+ * @returns {'window'|'navigated'|'attempted'|'failed'}
+ */
+function attemptOpenExternalBrowserForCurrentUrl() {
+    const u = location.href;
+    const ua = navigator.userAgent || '';
+
+    try {
+        const w = window.open(u, '_system');
+        if (w) return 'window';
+    } catch (_) { /* noop */ }
+
+    try {
+        const w2 = window.open(u, '_blank', 'noopener,noreferrer');
+        if (w2 && !w2.closed) return 'window';
+    } catch (_) { /* noop */ }
+
+    if (/android/i.test(ua)) {
+        try {
+            const parsed = new URL(u);
+            const path = parsed.pathname + parsed.search + parsed.hash;
+            const fallback = encodeURIComponent(u);
+            const intent =
+                `intent://${parsed.host}${path}#Intent;scheme=https;package=com.android.chrome;` +
+                `action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;` +
+                `S.browser_fallback_url=${fallback};end`;
+            const a = document.createElement('a');
+            a.href = intent;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            return 'attempted';
+        } catch (_) { /* noop */ }
+        try {
+            window.location.href = 'googlechrome://navigate?url=' + encodeURIComponent(u);
+            return 'navigated';
+        } catch (_) { /* noop */ }
+        try {
+            const parsed = new URL(u);
+            const path = parsed.pathname + parsed.search + parsed.hash;
+            const fallback = encodeURIComponent(u);
+            window.location.href =
+                `intent://${parsed.host}${path}#Intent;scheme=https;package=com.android.chrome;` +
+                `action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;` +
+                `S.browser_fallback_url=${fallback};end`;
+            return 'navigated';
+        } catch (_) { /* noop */ }
+    }
+
+    if (/iphone|ipad|ipod/i.test(ua)) {
+        try {
+            const chromeUrl = u.replace(/^https?:\/\//i, '');
+            window.location.href = 'googlechrome://' + chromeUrl;
+            return 'navigated';
+        } catch (_) { /* noop */ }
+    }
+
+    return 'failed';
+}
+
+function openGoogleWebviewAuthHelpAfterExternalAttempt(result) {
+    const autoEl = document.getElementById('google-webview-auth-auto-msg');
+    if (!autoEl) return;
+    if (result === 'window') {
+        autoEl.hidden = false;
+        autoEl.textContent =
+            '새 창·탭이 열렸다면 그쪽에서 「Google 로그인」을 눌러 주세요. 이 안내는 닫으셔도 됩니다.';
+    } else if (result === 'attempted') {
+        autoEl.hidden = false;
+        autoEl.textContent =
+            'Chrome 등 외부 브라우저로 열기를 시도했습니다. 반응이 없으면 아래 「주소 복사」를 이용해 주세요.';
+    } else {
+        autoEl.hidden = true;
+        autoEl.textContent = '';
+    }
+}
+
+/** 인앱에서 구글 로그인 불가 시: 외부 브라우저 열기 시도 후 안내 오버레이 (페이지 이탈 시 오버레이 생략) */
+function showInAppGoogleLoginExternalBrowserHelp() {
+    const r = attemptOpenExternalBrowserForCurrentUrl();
+    if (r === 'navigated') return;
+    syncGoogleWebviewAuthUrlEl();
+    openGoogleWebviewAuthHelpAfterExternalAttempt(
+        r === 'window' ? 'window' : r === 'attempted' ? 'attempted' : 'failed'
+    );
+    document.getElementById('google-webview-auth-overlay')?.classList.add('active');
+}
+
 window.openGoogleWebviewAuthHelp = function() {
     syncGoogleWebviewAuthUrlEl();
+    const autoEl = document.getElementById('google-webview-auth-auto-msg');
+    if (autoEl) {
+        autoEl.hidden = true;
+        autoEl.textContent = '';
+    }
     document.getElementById('google-webview-auth-overlay')?.classList.add('active');
 };
 window.closeGoogleWebviewAuthHelp = function() {
@@ -4961,9 +5096,13 @@ window.copyGoogleLoginSiteUrl = async function() {
     }
 };
 window.tryOpenSiteInExternalBrowserTab = function() {
-    const u = location.href;
-    const w = window.open(u, '_blank', 'noopener,noreferrer');
-    if (!w || w.closed || typeof w.closed === 'undefined') {
+    const r = attemptOpenExternalBrowserForCurrentUrl();
+    if (r === 'window' || r === 'attempted') {
+        openGoogleWebviewAuthHelpAfterExternalAttempt(r);
+    } else {
+        openGoogleWebviewAuthHelpAfterExternalAttempt('failed');
+    }
+    if (r === 'failed') {
         alert('새 창이 막혔거나 같은 앱 안에서만 열렸을 수 있습니다.\n「이 페이지 주소 복사」로 Safari·Chrome에 붙여넣기 해 주세요.');
     }
 };
@@ -5001,7 +5140,11 @@ function alertGoogleSignInError(err) {
         '📱 기기에서 Safari 또는 Chrome을 연 뒤, 같은 주소로 접속해 구글 로그인을 해 주세요.\n\n';
     const popupHint = '팝업이 차단되었거나 시크릿 모드에서 제한될 수 있습니다.\n브라우저에서 팝업을 허용하거나, 일반 창에서 다시 시도해 주세요.\n\n(Please allow popups or try a non-incognito window for a stable experience.)';
     if (/disallowed_useragent|disallowed.useragent|403/i.test(msg)) {
-        try { window.openGoogleWebviewAuthHelp?.(); } catch (_) { alert(inAppHint + '(Google 오류: 보안 브라우저 정책)'); }
+        try {
+            showInAppGoogleLoginExternalBrowserHelp();
+        } catch (_) {
+            alert(inAppHint + '(Google 오류: 보안 브라우저 정책)');
+        }
         return;
     }
     if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
@@ -5023,6 +5166,10 @@ window.loginWithGoogle = async function() {
         await signInWithRedirect(auth, provider);
     };
     try {
+        if (needsExternalBrowserForGoogleOAuth()) {
+            showInAppGoogleLoginExternalBrowserHelp();
+            return;
+        }
         if (shouldPreferGoogleSignInRedirect()) {
             await startRedirect('normal');
             return;
@@ -5038,6 +5185,10 @@ window.loginWithGoogle = async function() {
             err?.code === 'auth/internal-error' ||
             /disallowed_useragent|disallowed.useragent|403|embedded/i.test(msg);
         if (tryRedirect) {
+            if (needsExternalBrowserForGoogleOAuth()) {
+                showInAppGoogleLoginExternalBrowserHelp();
+                return;
+            }
             try {
                 await startRedirect('normal');
                 return;
@@ -9755,6 +9906,10 @@ document.addEventListener('keydown', (e) => {
                 signInAnonymously(auth).catch((e) => console.warn('[Auth] signInAnonymously', e));
             }
         };
+        if (needsExternalBrowserForGoogleOAuth()) {
+            showInAppGoogleLoginExternalBrowserHelp();
+            return;
+        }
         if (shouldPreferGoogleSignInRedirect()) {
             try {
                 sessionStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, 'admin_hotkey');
@@ -9771,6 +9926,10 @@ document.addEventListener('keydown', (e) => {
                     err?.code === 'auth/internal-error' ||
                     /disallowed_useragent|disallowed.useragent|403|embedded/i.test(msg)
                 ) {
+                    if (needsExternalBrowserForGoogleOAuth()) {
+                        showInAppGoogleLoginExternalBrowserHelp();
+                        return;
+                    }
                     try {
                         sessionStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, 'admin_hotkey');
                     } catch (_) { /* noop */ }
