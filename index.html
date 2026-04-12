@@ -3973,6 +3973,11 @@ onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
 onValue(ref(db, 'siteConfig/marketHours'), (snap) => {
     siteConfig.marketHours = snap.exists() ? snap.val() : null;
     applyMarketState();
+    try {
+        updateExtendRequestBar();
+    } catch (e) {
+        console.warn('[Init] updateExtendRequestBar after marketHours', e);
+    }
 });
 
 // 중계방: 승인(approved) 건만 쿼리 구독 — pending/rejected 히스토리 대량 다운로드 방지 (rules에 .indexOn status 필요)
