@@ -3238,8 +3238,9 @@ let myData           = null;
 let userUID          = null;
 /** 직전 로그인 UID — 계정 전환 시 구독·캐시 초기화용 */
 let previousAuthUid  = null;
-/** users/{uid} onValue 구독 — 계정 전환 시 반드시 해제(미해제 시 ref/_key 관련 오류·고아 리스너) */
-let userDataUnsub    = null;
+/** users/{uid} 하위 분할 onValue 일괄 해제용 — cash / stocks / coins / lastTradeTime */
+let userDataUnsub    = null; // () => void
+let userDataUiRaf    = 0;
 /** `reading '_key'` 등 로그인·RTDB 경로 추적 — 원인 파악 후 false 권장 */
 const DEBUG_AUTH_TRAIL = true;
 function logAuthTrail(...args) {
@@ -3249,6 +3250,157 @@ function logAuthTrailError(label, err) {
     console.error('[Critical Error]', label, err);
     if (err && typeof err === 'object') console.dir(err);
 }
+
+function scheduleUserDataUiRefresh() {
+    if (userDataUiRaf) return;
+    userDataUiRaf = requestAnimationFrame(() => {
+        userDataUiRaf = 0;
+        try {
+            updateUI(true);
+        } catch (e) {
+            console.warn('[Auth] updateUI after user shard', e);
+        }
+        try {
+            syncOwnedSubscriptions();
+        } catch (e) {
+            console.warn('[Auth] syncOwnedSubscriptions', e);
+        }
+        try {
+            syncOwnedCoinSubscriptions();
+        } catch (e) {
+            console.warn('[Auth] syncOwnedCoinSubscriptions', e);
+        }
+    });
+}
+
+function teardownUserDataListeners() {
+    if (typeof userDataUnsub === 'function') {
+        try {
+            userDataUnsub();
+        } catch (unsubErr) {
+            console.warn('[Auth] teardownUserDataListeners', unsubErr);
+        }
+    }
+    userDataUnsub = null;
+}
+
+/** RTDB users/{uid} 전체 노드 대신 cash·stocks·coins·lastTradeTime 별 구독 — 갱신 단가 절감 */
+function attachUserDataShardListeners(uid) {
+    teardownUserDataListeners();
+    if (!uid || !db) return;
+
+    const unsubs = [];
+    const base = `users/${uid}`;
+    const pushUnsub = (u) => {
+        if (typeof u === 'function') unsubs.push(u);
+    };
+
+    logAuthTrail('[DB] attachUserDataShardListeners', base, '→ cash, stocks, coins, lastTradeTime');
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/cash`),
+                (snap) => {
+                    try {
+                        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
+                        if (snap.exists()) {
+                            const n = Number(snap.val());
+                            myData.cash = Number.isFinite(n) && n >= 0 ? n : 1000000;
+                        } else {
+                            myData.cash = 1000000;
+                        }
+                        scheduleUserDataUiRefresh();
+                    } catch (e) {
+                        console.warn('[Auth] users/.../cash', e);
+                    }
+                },
+                (err) => console.error('[Auth] users/.../cash onValue', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners cash', e);
+    }
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/stocks`),
+                (snap) => {
+                    try {
+                        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
+                        const v = snap.exists() ? snap.val() : null;
+                        myData.stocks =
+                            v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+                        scheduleUserDataUiRefresh();
+                    } catch (e) {
+                        console.warn('[Auth] users/.../stocks', e);
+                    }
+                },
+                (err) => console.error('[Auth] users/.../stocks onValue', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners stocks', e);
+    }
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/coins`),
+                (snap) => {
+                    try {
+                        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
+                        const v = snap.exists() ? snap.val() : null;
+                        myData.coins =
+                            v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+                        scheduleUserDataUiRefresh();
+                    } catch (e) {
+                        console.warn('[Auth] users/.../coins', e);
+                    }
+                },
+                (err) => console.error('[Auth] users/.../coins onValue', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners coins', e);
+    }
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/lastTradeTime`),
+                (snap) => {
+                    try {
+                        if (snap.exists()) {
+                            const v = Number(snap.val());
+                            if (Number.isFinite(v) && v > 0) {
+                                lastTradeTime = Math.max(lastTradeTime || 0, v);
+                            }
+                        }
+                        try {
+                            refreshTradeCooldownButtons();
+                        } catch (_) { /* noop */ }
+                    } catch (e) {
+                        console.warn('[Auth] users/.../lastTradeTime', e);
+                    }
+                },
+                (err) => console.error('[Auth] users/.../lastTradeTime onValue', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners lastTradeTime', e);
+    }
+
+    userDataUnsub = () => {
+        unsubs.forEach((fn) => {
+            try {
+                fn();
+            } catch (_) { /* noop */ }
+        });
+    };
+}
+
 /** iOS 일부 WebView·구형 Safari 등 Notification 미노출 — 직접 참조 시 ReferenceError 로 이후 스크립트 중단 */
 function browserNotificationsSupported() {
     return typeof globalThis !== 'undefined' && typeof globalThis.Notification !== 'undefined';
@@ -5303,10 +5455,7 @@ onAuthStateChanged(auth, async (user) => {
                 return;
             }
             const uidChanged = previousAuthUid !== null && previousAuthUid !== user.uid;
-            if (userDataUnsub) {
-                try { userDataUnsub(); } catch (unsubErr) { console.warn('[Auth] userDataUnsub', unsubErr); }
-                userDataUnsub = null;
-            }
+            teardownUserDataListeners();
             if (uidChanged) {
                 logAuthTrail('[Auth] UID switch — tear down stock subs & UI caches:', previousAuthUid, '→', user.uid);
                 try { stopAllStocksSubscriptions(); } catch (_) { /* noop */ }
@@ -5345,15 +5494,6 @@ onAuthStateChanged(auth, async (user) => {
             } catch (_) { /* noop */ }
             try { startAssetRequestStatusWatch(user.uid); } catch (_) { /* noop */ }
             try { hydrateLastTradeTimeFromOffPeakStorage(); } catch (_) { /* noop */ }
-            const userPath = `users/${userUID}`;
-            logAuthTrail('[DB] Attempting ref + onValue path:', userPath, 'userUID type:', typeof userUID, 'db:', !!db);
-            let userRef;
-            try {
-                userRef = ref(db, userPath);
-            } catch (err) {
-                logAuthTrailError('Caught in Login Flow (users/ ref)', err);
-                return;
-            }
             if (!myData) myData = { cash: 1000000, stocks: {}, coins: {} };
 
             updateAuthStatusUI(user);
@@ -5404,41 +5544,15 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             try {
-                logAuthTrail('[DB] Registering onValue for path:', userPath);
-                userDataUnsub = onValue(userRef, (snapshot) => {
-                try {
-                    if (snapshot.exists()) {
-                        const serverData = snapshot.val();
-                        myData = {
-                            ...serverData,
-                            cash:   serverData.cash   ?? 1000000,
-                            stocks: serverData.stocks || {},
-                            coins:  serverData.coins  || {}
-                        };
-                    } else {
-                        if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {}, coins: {} };
-                    }
-                    updateUI(true);
-                    syncOwnedSubscriptions();
-                    syncOwnedCoinSubscriptions();
-                } catch (cbErr) {
-                    console.error('[Auth] users/ snapshot handler', cbErr);
-                }
-            }, (rtErr) => {
-                console.error('[Auth] users/ onValue error', rtErr);
-                logAuthTrailError('users/ onValue cancel/error callback', rtErr);
-            });
+                attachUserDataShardListeners(userUID);
             } catch (err) {
-                logAuthTrailError('Caught in Login Flow (users/ onValue register)', err);
+                logAuthTrailError('Caught in Login Flow (attachUserDataShardListeners)', err);
             }
         } else {
             try { teardownCoinImpactMultiplierListener(); } catch (_) { /* noop */ }
             try { stopAssetRequestStatusWatch(); } catch (_) { /* noop */ }
             previousAuthUid = null;
-            if (userDataUnsub) {
-                try { userDataUnsub(); } catch (unsubErr) { console.warn('[Auth] userDataUnsub (sign-out)', unsubErr); }
-                userDataUnsub = null;
-            }
+            teardownUserDataListeners();
             try { stopAllStocksSubscriptions(); } catch (_) { /* noop */ }
             mainStocksSyncMode = null;
             userUID = null;
