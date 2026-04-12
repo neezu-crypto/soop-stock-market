@@ -9662,6 +9662,16 @@ async function loadStockNameCache() {
     const hasUsableNameCache =
         cachedNames && typeof cachedNames === 'object' && Object.keys(cachedNames).length > 0;
 
+    const takeNamesFromSnap = (snap) => {
+        if (!snap.exists()) return;
+        const v = snap.val();
+        if (!v || typeof v !== 'object') return;
+        Object.entries(v).forEach(([id, row]) => {
+            const n = row && typeof row === 'object' && typeof row.name === 'string' ? row.name : '';
+            if (n) stockNameCache[id] = n;
+        });
+    };
+
     try {
         const [stockVerSnap, coinVerSnap] = await Promise.all([
             get(ref(db, 'siteConfig/stockNameIndexVersion')),
@@ -9681,25 +9691,28 @@ async function loadStockNameCache() {
             return;
         }
 
-        const [stockIdxSnap, coinIdxSnap] = await Promise.all([
-            get(ref(db, 'stockSearchIndex/')),
-            get(ref(db, 'coinSearchIndex/'))
-        ]);
-
         stockNameCache = {};
-        const takeNames = (snap) => {
-            if (!snap.exists()) return;
-            const v = snap.val();
-            if (!v || typeof v !== 'object') return;
-            Object.entries(v).forEach(([id, row]) => {
-                const n = row && typeof row === 'object' && typeof row.name === 'string' ? row.name : '';
-                if (n) stockNameCache[id] = n;
-            });
-        };
-        takeNames(stockIdxSnap);
-        takeNames(coinIdxSnap);
+        let anyFromIndex = false;
+        try {
+            const [stockIdxSnap, coinIdxSnap] = await Promise.all([
+                get(ref(db, 'stockSearchIndex/')),
+                get(ref(db, 'coinSearchIndex/'))
+            ]);
+            takeNamesFromSnap(stockIdxSnap);
+            takeNamesFromSnap(coinIdxSnap);
+            anyFromIndex = Object.keys(stockNameCache).length > 0;
+        } catch (idxErr) {
+            // 규칙 미배포·오래된 프로덕션 rules 등으로 인덱스 경로만 막힌 경우 — stocks/·coins/ 로 폴백
+            const code = String(idxErr?.code || '');
+            const msg = String(idxErr?.message || idxErr || '');
+            const perm =
+                /permission/i.test(code) ||
+                msg.includes('Permission denied') ||
+                msg.includes('permission_denied');
+            if (!perm) console.warn('[Search] search index read failed', idxErr);
+        }
 
-        if (Object.keys(stockNameCache).length === 0) {
+        if (!anyFromIndex) {
             await loadLegacyFullNameCachesIntoMemory();
         }
 
@@ -9714,6 +9727,9 @@ async function loadStockNameCache() {
         });
     } catch (e) {
         console.warn('[Search] loadStockNameCache', e);
+        try {
+            await loadLegacyFullNameCachesIntoMemory();
+        } catch (_) { /* noop */ }
     }
 }
 
