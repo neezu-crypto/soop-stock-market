@@ -439,6 +439,74 @@ exports.fetchSearchQuotes = onCall(
   }
 );
 
+/** 검색용 stockSearchIndex·coinSearchIndex 재구축 — 클라이언트 RTDB 쓰기 규칙과 무관하게 Admin SDK로 처리 */
+exports.adminRebuildSearchIndexes = onCall(
+  { cors: true, timeoutSeconds: 300, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+
+    const db = admin.database();
+    const [sSnap, cSnap, stockIdxSnap, coinIdxSnap] = await Promise.all([
+      db.ref("stocks").once("value"),
+      db.ref("coins").once("value"),
+      db.ref("stockSearchIndex").once("value"),
+      db.ref("coinSearchIndex").once("value"),
+    ]);
+
+    const stocksData = sSnap.val() || {};
+    const coinsData = cSnap.val() || {};
+    const prevStockIdx = stockIdxSnap.val() || {};
+    const prevCoinIdx = coinIdxSnap.val() || {};
+
+    const updates = {};
+    const stockIds = new Set(Object.keys(stocksData));
+
+    Object.entries(stocksData).forEach(([id, row]) => {
+      const n = row && typeof row === "object" ? row.name : "";
+      if (typeof n === "string" && n.length > 0 && n.length <= 200) {
+        updates[`stockSearchIndex/${id}/name`] = n;
+      } else if (prevStockIdx[id]) {
+        updates[`stockSearchIndex/${id}`] = null;
+      }
+    });
+    Object.keys(prevStockIdx).forEach((id) => {
+      if (!stockIds.has(id)) updates[`stockSearchIndex/${id}`] = null;
+    });
+
+    const coinIds = new Set(Object.keys(coinsData));
+    Object.entries(coinsData).forEach(([id, row]) => {
+      const n = row && typeof row === "object" ? row.name : "";
+      if (typeof n === "string" && n.length > 0 && n.length <= 200) {
+        updates[`coinSearchIndex/${id}/name`] = n;
+      } else if (prevCoinIdx[id]) {
+        updates[`coinSearchIndex/${id}`] = null;
+      }
+    });
+    Object.keys(prevCoinIdx).forEach((id) => {
+      if (!coinIds.has(id)) updates[`coinSearchIndex/${id}`] = null;
+    });
+
+    const ts = Date.now();
+    updates["siteConfig/stockNameIndexVersion"] = ts;
+    updates["siteConfig/coinNameIndexVersion"] = ts;
+    updates["siteConfig/stockCacheVersion"] = ts;
+
+    const parts = chunkObject(updates, 400);
+    for (const part of parts) {
+      await db.ref().update(part);
+    }
+
+    return {
+      ok: true,
+      pathCount: Object.keys(updates).length,
+      stockCount: stockIds.size,
+      coinCount: coinIds.size,
+    };
+  }
+);
+
 exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");

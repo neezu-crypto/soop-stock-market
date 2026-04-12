@@ -1979,6 +1979,7 @@
     const adminPurgeUserActivityLogsFn = httpsCallable(functions, 'adminPurgeUserActivityLogs');
     const adminGrantAssetRequestFn = httpsCallable(functions, 'adminGrantAssetRequest');
     const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
+    const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
 
     /**
      * Callable 미배포·리전 불일치·일시 다운 시 브라우저 RTDB 경로로 폴백.
@@ -2975,48 +2976,22 @@
 
     window.rebuildSearchIndexes = async function() {
         if (!isAdmin()) return;
-        if (!confirm('stocks/·coins/ 전체를 읽어 stockSearchIndex·coinSearchIndex 를 다시 씁니다. 계속할까요?')) return;
+        if (!confirm('stocks/·coins/ 전체를 읽어 stockSearchIndex·coinSearchIndex 를 다시 씁니다.\n(Cloud Function Admin SDK — RTDB 클라이언트 쓰기 권한 불필요)\n계속할까요?')) return;
         try {
-            const [sSnap, cSnap, stockIdxSnap, coinIdxSnap] = await Promise.all([
-                get(ref(db, 'stocks/')),
-                get(ref(db, 'coins/')),
-                get(ref(db, 'stockSearchIndex/')),
-                get(ref(db, 'coinSearchIndex/'))
-            ]);
-            const updates = {};
-            const stockIds = new Set();
-            if (sSnap.exists()) {
-                Object.entries(sSnap.val()).forEach(([id, row]) => {
-                    stockIds.add(id);
-                    const n = row && typeof row === 'object' ? row.name : '';
-                    if (typeof n === 'string' && n) updates[`stockSearchIndex/${id}/name`] = n;
-                });
-            }
-            if (stockIdxSnap.exists()) {
-                Object.keys(stockIdxSnap.val()).forEach((id) => {
-                    if (!stockIds.has(id)) updates[`stockSearchIndex/${id}`] = null;
-                });
-            }
-            const coinIds = new Set();
-            if (cSnap.exists()) {
-                Object.entries(cSnap.val()).forEach(([id, row]) => {
-                    coinIds.add(id);
-                    const n = row && typeof row === 'object' ? row.name : '';
-                    if (typeof n === 'string' && n) updates[`coinSearchIndex/${id}/name`] = n;
-                });
-            }
-            if (coinIdxSnap.exists()) {
-                Object.keys(coinIdxSnap.val()).forEach((id) => {
-                    if (!coinIds.has(id)) updates[`coinSearchIndex/${id}`] = null;
-                });
-            }
-            if (Object.keys(updates).length > 0) {
-                await update(ref(db), updates);
-            }
-            await bumpSearchNameIndexVersions();
-            alert('✅ 검색용 이름 인덱스를 재구축했습니다.');
+            const { data } = await adminRebuildSearchIndexesFn({});
+            const pc = data?.pathCount != null ? data.pathCount : '?';
+            const sc = data?.stockCount != null ? data.stockCount : '?';
+            const cc = data?.coinCount != null ? data.coinCount : '?';
+            alert(`✅ 검색용 이름 인덱스를 재구축했습니다.\n갱신 경로: ${pc}개 · stocks ${sc}개 · coins ${cc}개`);
         } catch (e) {
-            alert('실패: ' + (e?.message || e));
+            const msg = e?.message || String(e);
+            const code = e?.code || '';
+            alert(
+                '실패: ' + msg +
+                    (code === 'functions/not-found'
+                        ? '\n\nadminRebuildSearchIndexes 함수를 배포했는지 확인하세요: firebase deploy --only functions'
+                        : '')
+            );
         }
     };
 
