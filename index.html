@@ -4972,7 +4972,8 @@ function syncGoogleWebviewAuthUrlEl() {
 
 /**
  * 시스템 브라우저·새 창으로 현재 URL 열기 (인앱 WebView 한계로 100% 보장은 불가).
- * @returns {'window'|'navigated'|'attempted'|'failed'}
+ * 메인 창 location 은 바꾸지 않음 (인앱에서 폴백으로 같은 URL 재로드 → 새로고침처럼 보이는 문제 방지).
+ * @returns {'window'|'attempted'|'failed'}
  */
 function attemptOpenExternalBrowserForCurrentUrl() {
     const u = location.href;
@@ -4992,11 +4993,12 @@ function attemptOpenExternalBrowserForCurrentUrl() {
         try {
             const parsed = new URL(u);
             const path = parsed.pathname + parsed.search + parsed.hash;
-            const fallback = encodeURIComponent(u);
+            // S.browser_fallback_url 에 현재 https URL 을 넣으면 Intent 실패 시
+            // 인앱 WebView 가 같은 탭에서 그 URL 을 다시 로드 → 모달 직후 전체 새로고침처럼 보임.
+            // 메인 문서에는 location.href 로 커스텀 스킴을 쓰지 않는다 (동일 증상 방지).
             const intent =
                 `intent://${parsed.host}${path}#Intent;scheme=https;package=com.android.chrome;` +
-                `action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;` +
-                `S.browser_fallback_url=${fallback};end`;
+                `action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`;
             const a = document.createElement('a');
             a.href = intent;
             a.target = '_blank';
@@ -5005,28 +5007,6 @@ function attemptOpenExternalBrowserForCurrentUrl() {
             a.click();
             document.body.removeChild(a);
             return 'attempted';
-        } catch (_) { /* noop */ }
-        try {
-            window.location.href = 'googlechrome://navigate?url=' + encodeURIComponent(u);
-            return 'navigated';
-        } catch (_) { /* noop */ }
-        try {
-            const parsed = new URL(u);
-            const path = parsed.pathname + parsed.search + parsed.hash;
-            const fallback = encodeURIComponent(u);
-            window.location.href =
-                `intent://${parsed.host}${path}#Intent;scheme=https;package=com.android.chrome;` +
-                `action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;` +
-                `S.browser_fallback_url=${fallback};end`;
-            return 'navigated';
-        } catch (_) { /* noop */ }
-    }
-
-    if (/iphone|ipad|ipod/i.test(ua)) {
-        try {
-            const chromeUrl = u.replace(/^https?:\/\//i, '');
-            window.location.href = 'googlechrome://' + chromeUrl;
-            return 'navigated';
         } catch (_) { /* noop */ }
     }
 
@@ -5053,7 +5033,6 @@ function openGoogleWebviewAuthHelpAfterExternalAttempt(result) {
 /** 인앱에서 구글 로그인 불가 시: 외부 브라우저 열기 시도 후 안내 오버레이 (페이지 이탈 시 오버레이 생략) */
 function showInAppGoogleLoginExternalBrowserHelp() {
     const r = attemptOpenExternalBrowserForCurrentUrl();
-    if (r === 'navigated') return;
     syncGoogleWebviewAuthUrlEl();
     openGoogleWebviewAuthHelpAfterExternalAttempt(
         r === 'window' ? 'window' : r === 'attempted' ? 'attempted' : 'failed'
