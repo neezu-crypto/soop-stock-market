@@ -4347,6 +4347,18 @@ function applyMarketState() {
         overlay.style.display = 'none';
         if (marketCheckTimer) clearTimeout(marketCheckTimer);
         marketCheckTimer = setTimeout(applyMarketState, 60000);
+        // 아래 일반 분기(4473~)는 return 으로 도달하지 못함 — 장 전환 시 marketRank·TOP5 재조회를 관리자도 동일 적용
+        const mhAd = siteConfig?.marketHours;
+        let marketOpenAd = null;
+        if (siteConfigReady && mhAd && mhAd.enabled) {
+            marketOpenAd = isMarketOpen();
+        }
+        if (siteConfigReady && mhAd && mhAd.enabled && marketOpenAd && prevMarketOpenSnapshot !== true && auth.currentUser?.uid) {
+            queueMicrotask(() => { fetchServerMarketRanksOnce().catch(() => {}); });
+        }
+        if (siteConfigReady && typeof marketOpenAd === 'boolean') {
+            prevMarketOpenSnapshot = marketOpenAd;
+        }
         return;
     }
 
@@ -4967,14 +4979,16 @@ onAuthStateChanged(auth, async (user) => {
             } catch (err) {
                 logAuthTrailError('initFavorites in onAuthStateChanged', err);
             }
+            // marketRank(순위·거래량 TOP5)는 단일 get — 이름 캐시(stocks/ 등)보다 먼저 받아야 TOP5가 비지 않음.
+            // 관리자·uid 전환 직후 loadStockNameCache 가 길면 fetch 가 뒤로 밀려 TOP5가 오래 비는 현상 방지.
+            try {
+                await fetchServerMarketRanksOnce();
+            } catch (_) { /* noop */ }
             try {
                 await loadStockNameCache();
             } catch (err) {
                 logAuthTrailError('loadStockNameCache in onAuthStateChanged', err);
             }
-            try {
-                await fetchServerMarketRanksOnce();
-            } catch (_) { /* noop */ }
             try {
                 await refreshBannersAfterAuthIfEmpty();
             } catch (_) { /* noop */ }
