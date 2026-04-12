@@ -394,6 +394,51 @@ async function maybeApplyStockVolatilityCircuitBreaker(db, stockId, auth) {
   }
 }
 
+/** 검색 카드 시세: 여러 종목을 한 번의 HTTPS 왕복으로, 클라이언트 RTDB N회 get 대체 */
+exports.fetchSearchQuotes = onCall(
+  { cors: true, timeoutSeconds: 30, memory: "256MiB" },
+  async (req) => {
+    if (!req.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Login required.");
+    }
+    const market = String(req.data?.market || "stock").trim().toLowerCase();
+    const isCoin = market === "coin";
+    const ids = Array.isArray(req.data?.ids)
+      ? req.data.ids.map((x) => String(x ?? "").trim()).filter(Boolean)
+      : [];
+    const unique = [...new Set(ids)].slice(0, 40);
+    if (unique.length === 0) return { quotes: {} };
+
+    const db = admin.database();
+    const base = isCoin ? "coins" : "stocks";
+    const quotes = {};
+
+    await Promise.all(
+      unique.map(async (id) => {
+        try {
+          const snap = await db.ref(`${base}/${id}`).get();
+          if (!snap.exists()) return;
+          const v = snap.val();
+          if (!v || typeof v !== "object") return;
+          quotes[id] = {
+            id,
+            name: v.name != null ? String(v.name) : "",
+            price: Number(v.price) || 0,
+            change: v.change,
+            volume: Number(v.volume) || 0,
+            buyVol: Number(v.buyVol) || 0,
+            sellVol: Number(v.sellVol) || 0,
+          };
+        } catch (_) {
+          /* noop */
+        }
+      })
+    );
+
+    return { quotes };
+  }
+);
+
 exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");

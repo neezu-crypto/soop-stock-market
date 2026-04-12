@@ -9633,54 +9633,261 @@ function createFavoriteCard(s) {
 // { id: name } 형태로 저장, 실시간 데이터(price 등) 제외
 let stockNameCache = {}; // { id: name }
 
-// 종목 이름 목록을 localStorage 캐시 또는 Firebase에서 로드
-async function loadStockNameCache() {
-    // 1. 로컬 캐시 확인 (빈 객체 {} 는 truthy → 이 분기만 타고 return 하면 검색이 영구히 실패할 수 있음, 특히 모바일 저장소 이슈)
-    const cached = loadStaticCache();
-    const cachedNames = cached?.stockNames;
-    const hasUsableNameCache = cachedNames && typeof cachedNames === 'object' && Object.keys(cachedNames).length > 0;
-    if (hasUsableNameCache) {
-        stockNameCache = cachedNames;
-        // Firebase 버전과 비교 — 상장/삭제 있으면 캐시 무효화 후 재로드
-        try {
-            const verSnap = await get(ref(db, 'siteConfig/stockCacheVersion'));
-            const remoteVer = verSnap.exists() ? verSnap.val() : 0;
-            const localVer  = cached.stockCacheVersion || 0;
-            if (remoteVer !== localVer) {
-                // 버전 다름 → Firebase에서 전체 재로드
-                const snap = await get(ref(db, 'stocks/'));
-                if (!snap.exists()) return;
-                stockNameCache = {};
-                Object.entries(snap.val()).forEach(([id, s]) => {
-                    if (s.name) stockNameCache[id] = s.name;
-                });
-                saveStaticCache({ ...cached, stockNames: stockNameCache, stockCacheVersion: remoteVer });
-            }
-        } catch(e) {}
-        return;
-    }
-    // 2. 캐시 없으면 Firebase에서 1회 로드
+// 종목 이름 목록을 localStorage 캐시 또는 Firebase에서 로드 (경량 stockSearchIndex·coinSearchIndex 우선)
+async function loadLegacyFullNameCachesIntoMemory() {
     try {
-        const [snap, verSnap] = await Promise.all([
+        const [snapSt, snapCo] = await Promise.all([
             get(ref(db, 'stocks/')),
-            get(ref(db, 'siteConfig/stockCacheVersion'))
+            get(ref(db, 'coins/'))
         ]);
-        if (!snap.exists()) return;
         stockNameCache = {};
-        Object.entries(snap.val()).forEach(([id, s]) => {
-            if (s.name) stockNameCache[id] = s.name;
-        });
+        if (snapSt.exists()) {
+            Object.entries(snapSt.val()).forEach(([id, s]) => {
+                if (s && s.name) stockNameCache[id] = s.name;
+            });
+        }
+        if (snapCo.exists()) {
+            Object.entries(snapCo.val()).forEach(([id, s]) => {
+                if (s && s.name) stockNameCache[id] = s.name;
+            });
+        }
+    } catch (e) {
+        console.warn('[Search] legacy name load', e);
+    }
+}
+
+async function loadStockNameCache() {
+    const cached = loadStaticCache();
+    const cachedNames = cached?.searchNames || cached?.stockNames;
+    const hasUsableNameCache =
+        cachedNames && typeof cachedNames === 'object' && Object.keys(cachedNames).length > 0;
+
+    try {
+        const [stockVerSnap, coinVerSnap] = await Promise.all([
+            get(ref(db, 'siteConfig/stockNameIndexVersion')),
+            get(ref(db, 'siteConfig/coinNameIndexVersion'))
+        ]);
+        const remoteStockVer = stockVerSnap.exists() ? stockVerSnap.val() : 0;
+        const remoteCoinVer = coinVerSnap.exists() ? coinVerSnap.val() : 0;
+        const localStockVer = cached?.stockNameIndexVersion;
+        const localCoinVer = cached?.coinNameIndexVersion;
+
+        if (
+            hasUsableNameCache &&
+            localStockVer === remoteStockVer &&
+            localCoinVer === remoteCoinVer
+        ) {
+            stockNameCache = { ...cachedNames };
+            return;
+        }
+
+        const [stockIdxSnap, coinIdxSnap] = await Promise.all([
+            get(ref(db, 'stockSearchIndex/')),
+            get(ref(db, 'coinSearchIndex/'))
+        ]);
+
+        stockNameCache = {};
+        const takeNames = (snap) => {
+            if (!snap.exists()) return;
+            const v = snap.val();
+            if (!v || typeof v !== 'object') return;
+            Object.entries(v).forEach(([id, row]) => {
+                const n = row && typeof row === 'object' && typeof row.name === 'string' ? row.name : '';
+                if (n) stockNameCache[id] = n;
+            });
+        };
+        takeNames(stockIdxSnap);
+        takeNames(coinIdxSnap);
+
+        if (Object.keys(stockNameCache).length === 0) {
+            await loadLegacyFullNameCachesIntoMemory();
+        }
+
         const existing = loadStaticCache() || {};
         saveStaticCache({
             ...existing,
+            searchNames: stockNameCache,
             stockNames: stockNameCache,
-            stockCacheVersion: verSnap.exists() ? verSnap.val() : 0
+            stockNameIndexVersion: remoteStockVer,
+            coinNameIndexVersion: remoteCoinVer,
+            stockCacheVersion: remoteStockVer
         });
-    } catch(e) {}
+    } catch (e) {
+        console.warn('[Search] loadStockNameCache', e);
+    }
 }
 
 // 검색 비동기 작업 취소용 — 새 검색·주식/코인 탭 전환 시 이전 fetch/UI 갱신 무시
 let searchRequestGen = 0;
+let searchQuoteObserver = null;
+let searchQuoteFlushTimer = 0;
+
+function disconnectSearchQuoteObserver() {
+    if (searchQuoteObserver) {
+        try { searchQuoteObserver.disconnect(); } catch (_) { /* noop */ }
+        searchQuoteObserver = null;
+    }
+    if (searchQuoteFlushTimer) {
+        clearTimeout(searchQuoteFlushTimer);
+        searchQuoteFlushTimer = 0;
+    }
+}
+
+function mergeSearchQuoteRow(id, resolved, coinMode) {
+    const row = enrichCoinListRow(resolved);
+    searchResults[id] = row;
+    const arr = coinMode ? allCoins : allStocks;
+    const idx = arr.findIndex((s) => s?.id === id);
+    if (idx >= 0) arr[idx] = { ...arr[idx], ...row };
+    else arr.push(row);
+    if (coinMode) coinRankDirty = true;
+    else stockRankDirty = true;
+    const card = stockElements[id];
+    if (card && myData) {
+        const pos = coinMode
+            ? ((myData?.coins || {})[id] || { qty: 0, avg: 0 })
+            : ((myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+        updateCardContent(card, row, pos);
+        if (!card.querySelector('.btn-favorite')) {
+            const favBtn = document.createElement('button');
+            const isFav = coinMode ? !!favoriteCoins[id] : !!favorites[id];
+            favBtn.className = 'btn-favorite';
+            favBtn.title = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+            favBtn.textContent = isFav ? '⭐' : '☆';
+            favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
+            card.querySelector('.price-group')?.appendChild(favBtn);
+        }
+    }
+}
+
+async function fetchSearchQuotesCallable(ids, coinMode) {
+    const call = httpsCallable(fns, 'fetchSearchQuotes');
+    const { data } = await call({ market: coinMode ? 'coin' : 'stock', ids });
+    return data && typeof data.quotes === 'object' ? data.quotes : null;
+}
+
+async function fetchSearchQuotesRtdbBatch(ids, coinMode, myGen, qNorm) {
+    const out = {};
+    const conc = 6;
+    let cursor = 0;
+    const worker = async () => {
+        for (;;) {
+            if (myGen !== searchRequestGen) return;
+            const i = cursor++;
+            if (i >= ids.length) return;
+            const id = ids[i];
+            try {
+                const path = coinMode ? `coins/${id}` : `stocks/${id}`;
+                const snap = await get(ref(db, path));
+                if (myGen !== searchRequestGen) return;
+                if (!snap.exists()) continue;
+                if (normalizeSearchKeyword(document.getElementById('search-input')?.value) !== qNorm) return;
+                out[id] = { ...snap.val(), id };
+            } catch (_) { /* noop */ }
+        }
+    };
+    const n = Math.min(conc, Math.max(1, ids.length));
+    await Promise.all(Array.from({ length: n }, () => worker()));
+    return out;
+}
+
+async function flushSearchQuoteBatch(ids, coinMode, myGen, qNorm) {
+    if (!ids.length || myGen !== searchRequestGen) return;
+    if (normalizeSearchKeyword(document.getElementById('search-input')?.value) !== qNorm) return;
+    let quotes = null;
+    try {
+        quotes = await fetchSearchQuotesCallable(ids, coinMode);
+    } catch (e) {
+        const code = String(e?.code || '');
+        if (!code.includes('not-found') && !code.includes('functions')) {
+            console.warn('[Search] fetchSearchQuotes', e);
+        }
+        quotes = null;
+    }
+    if (myGen !== searchRequestGen) return;
+    if (normalizeSearchKeyword(document.getElementById('search-input')?.value) !== qNorm) return;
+    let map = quotes;
+    if (!map || typeof map !== 'object') {
+        map = await fetchSearchQuotesRtdbBatch(ids, coinMode, myGen, qNorm);
+    } else {
+        const slim = {};
+        ids.forEach((id) => {
+            if (map[id]) slim[id] = { ...map[id], id };
+        });
+        map = slim;
+    }
+    if (myGen !== searchRequestGen) return;
+    if (normalizeSearchKeyword(document.getElementById('search-input')?.value) !== qNorm) return;
+    ids.forEach((id) => {
+        if (map[id]) mergeSearchQuoteRow(id, map[id], coinMode);
+    });
+    renderSearchResults();
+}
+
+function tryFillSearchQuotesFromMemory(ids, coinMode) {
+    const arr = coinMode ? allCoins : allStocks;
+    const still = [];
+    ids.forEach((id) => {
+        const mem = arr.find((s) => s?.id === id);
+        if (mem && Number(mem.price) > 0) mergeSearchQuoteRow(id, { ...mem, id }, coinMode);
+        else still.push(id);
+    });
+    return still;
+}
+
+function setupSearchQuoteLazyLoad(myGen, qNorm, coinMode, pendingIdSet) {
+    disconnectSearchQuoteObserver();
+    const listDiv = document.getElementById('stock-list');
+    if (!listDiv || !pendingIdSet.size) return;
+
+    const pending = new Set(pendingIdSet);
+    const flushed = new Set();
+    const flushQueue = new Set();
+
+    const runFlush = () => {
+        searchQuoteFlushTimer = 0;
+        const batch = Array.from(flushQueue).filter((id) => !flushed.has(id)).slice(0, 20);
+        batch.forEach((id) => {
+            flushQueue.delete(id);
+            flushed.add(id);
+        });
+        if (!batch.length) return;
+        flushSearchQuoteBatch(batch, coinMode, myGen, qNorm);
+    };
+
+    const scheduleFlush = () => {
+        if (searchQuoteFlushTimer) return;
+        searchQuoteFlushTimer = setTimeout(runFlush, 70);
+    };
+
+    searchQuoteObserver = new IntersectionObserver(
+        (entries) => {
+            for (const e of entries) {
+                if (!e.isIntersecting) continue;
+                const id = e.target.getAttribute('data-id');
+                if (!id || !pending.has(id) || flushed.has(id)) continue;
+                flushQueue.add(id);
+                scheduleFlush();
+            }
+        },
+        { root: null, rootMargin: '280px', threshold: 0.01 }
+    );
+
+    requestAnimationFrame(() => {
+        const ordered = [];
+        listDiv.querySelectorAll('.stock-card[data-id]').forEach((el) => {
+            const id = el.getAttribute('data-id');
+            if (!pending.has(id)) return;
+            ordered.push(id);
+            searchQuoteObserver.observe(el);
+        });
+        ordered
+            .filter((id) => !flushed.has(id))
+            .slice(0, 14)
+            .forEach((id) => flushQueue.add(id));
+        if (flushQueue.size) scheduleFlush();
+    });
+}
 
 function normalizeSearchKeyword(v) {
     try {
@@ -9711,6 +9918,7 @@ async function handleSearch(query) {
     // 검색어 없으면 즐겨찾기 목록으로 복귀
     if (!q) {
         searchRequestGen++;
+        disconnectSearchQuoteObserver();
         searchResults = {};
         if (searchUnsub) { searchUnsub(); searchUnsub = null; }
         renderFavoriteList();
@@ -9756,44 +9964,15 @@ async function handleSearch(query) {
                 : (!favorites[id] && !ownedStocks[id])
         );
         if (needsPrice.length > 0) {
-            needsPrice.forEach(async (id) => {
-                try {
-                    const path = coinMode ? `coins/${id}` : `stocks/${id}`;
-                    const snap = await get(ref(db, path));
-                    if (myGen !== searchRequestGen) return;
-                    if (!snap.exists()) return;
-                    const data = snap.val();
-                    if (normalizeSearchKeyword(document.getElementById('search-input')?.value) !== q) return;
-                    const resolved = { ...data, id };
-                    searchResults[id] = resolved;
-                    if (coinMode) {
-                        const idx = allCoins.findIndex((s) => s?.id === id);
-                        if (idx >= 0) allCoins[idx] = { ...allCoins[idx], ...resolved };
-                        else allCoins.push(resolved);
-                        coinRankDirty = true;
-                    } else {
-                        const idx = allStocks.findIndex((s) => s?.id === id);
-                        if (idx >= 0) allStocks[idx] = { ...allStocks[idx], ...resolved };
-                        else allStocks.push(resolved);
-                    }
-                    const card = stockElements[id];
-                    if (card && myData) {
-                        const pos = coinMode
-                            ? ((myData?.coins || {})[id] || { qty: 0, avg: 0 })
-                            : ((myData?.stocks || {})[id] || { qty: 0, avg: 0 });
-                        updateCardContent(card, searchResults[id], pos);
-                        if (!card.querySelector('.btn-favorite')) {
-                            const favBtn = document.createElement('button');
-                            const isFav = coinMode ? !!favoriteCoins[id] : !!favorites[id];
-                            favBtn.className   = 'btn-favorite';
-                            favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
-                            favBtn.textContent = isFav ? '⭐' : '☆';
-                            favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(id); };
-                            card.querySelector('.price-group')?.appendChild(favBtn);
-                        }
-                    }
-                } catch (e) { /* noop */ }
-            });
+            const stillNeed = tryFillSearchQuotesFromMemory(needsPrice, coinMode);
+            if (myGen !== searchRequestGen) return;
+            if (stillNeed.length) {
+                renderSearchResults();
+                if (myGen !== searchRequestGen) return;
+                setupSearchQuoteLazyLoad(myGen, q, coinMode, new Set(stillNeed));
+            } else {
+                renderSearchResults();
+            }
         }
     } catch(e) {
         listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--up-color);">검색 실패: ${escapeHtml(e.message)}</div>`;

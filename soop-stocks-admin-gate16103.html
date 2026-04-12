@@ -1513,6 +1513,13 @@
             <button type="button" class="btn-primary" style="background:#f59e0b; color:#0f172a;" onclick="syncCoinsFromStocks()">코인 시장 종목 생성 (미존재만)</button>
         </div>
         <div id="sync-coins-status" style="font-size:13px; color:#94a3b8; margin-top:8px;"></div>
+        <div class="info-box" style="margin-top:16px; border-color:#38bdf8; color:#bae6fd;">
+            <b>🔎 검색 이름 인덱스</b> — <code>stockSearchIndex/</code>·<code>coinSearchIndex/</code> (이름만)로 유저 앱 대역폭을 줄입니다.<br>
+            최초 배포 후 또는 인덱스가 비었을 때 한 번 실행하세요.
+        </div>
+        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+            <button type="button" class="btn-primary" style="background:#0ea5e9; color:#0f172a;" onclick="rebuildSearchIndexes()">검색 인덱스 재구축 (stocks·coins → 인덱스)</button>
+        </div>
         </div>
         </div>
     </div>
@@ -2798,6 +2805,16 @@
         }
     }
 
+    /** 메인 앱 검색용 경량 인덱스 버전 — 이름·종목 집합 변경 시만 올림 (가격 변동과 무관) */
+    async function bumpSearchNameIndexVersions() {
+        const ts = Date.now();
+        await update(ref(db), {
+            'siteConfig/stockNameIndexVersion': ts,
+            'siteConfig/coinNameIndexVersion': ts,
+            'siteConfig/stockCacheVersion': ts
+        });
+    }
+
     let allStocksData = {};
     let allCoinsData = {};
     let coinsTop10Sort = 'desc';
@@ -2936,10 +2953,70 @@
                 if (statusEl) statusEl.textContent = '새로 만들 코인 종목이 없습니다. (이미 coins/에 모두 있음)';
                 return;
             }
+            const indexUp = {};
+            Object.keys(updates).forEach((pathKey) => {
+                const m = /^coins\/(.+)$/.exec(pathKey);
+                if (!m) return;
+                const cid = m[1];
+                const row = updates[pathKey];
+                const nm = row && typeof row === 'object' ? row.name : '';
+                if (typeof nm === 'string' && nm) indexUp[`coinSearchIndex/${cid}/name`] = nm;
+            });
             await update(ref(db), updates);
+            if (Object.keys(indexUp).length > 0) {
+                await update(ref(db), indexUp);
+            }
+            await bumpSearchNameIndexVersions();
             if (statusEl) statusEl.textContent = `완료: ${created}개 코인 종목 생성 (시가 1억원)`;
         } catch (e) {
             if (statusEl) statusEl.textContent = '실패: ' + (e.message || e);
+        }
+    };
+
+    window.rebuildSearchIndexes = async function() {
+        if (!isAdmin()) return;
+        if (!confirm('stocks/·coins/ 전체를 읽어 stockSearchIndex·coinSearchIndex 를 다시 씁니다. 계속할까요?')) return;
+        try {
+            const [sSnap, cSnap, stockIdxSnap, coinIdxSnap] = await Promise.all([
+                get(ref(db, 'stocks/')),
+                get(ref(db, 'coins/')),
+                get(ref(db, 'stockSearchIndex/')),
+                get(ref(db, 'coinSearchIndex/'))
+            ]);
+            const updates = {};
+            const stockIds = new Set();
+            if (sSnap.exists()) {
+                Object.entries(sSnap.val()).forEach(([id, row]) => {
+                    stockIds.add(id);
+                    const n = row && typeof row === 'object' ? row.name : '';
+                    if (typeof n === 'string' && n) updates[`stockSearchIndex/${id}/name`] = n;
+                });
+            }
+            if (stockIdxSnap.exists()) {
+                Object.keys(stockIdxSnap.val()).forEach((id) => {
+                    if (!stockIds.has(id)) updates[`stockSearchIndex/${id}`] = null;
+                });
+            }
+            const coinIds = new Set();
+            if (cSnap.exists()) {
+                Object.entries(cSnap.val()).forEach(([id, row]) => {
+                    coinIds.add(id);
+                    const n = row && typeof row === 'object' ? row.name : '';
+                    if (typeof n === 'string' && n) updates[`coinSearchIndex/${id}/name`] = n;
+                });
+            }
+            if (coinIdxSnap.exists()) {
+                Object.keys(coinIdxSnap.val()).forEach((id) => {
+                    if (!coinIds.has(id)) updates[`coinSearchIndex/${id}`] = null;
+                });
+            }
+            if (Object.keys(updates).length > 0) {
+                await update(ref(db), updates);
+            }
+            await bumpSearchNameIndexVersions();
+            alert('✅ 검색용 이름 인덱스를 재구축했습니다.');
+        } catch (e) {
+            alert('실패: ' + (e?.message || e));
         }
     };
 
@@ -4413,12 +4490,21 @@
             if (confirm(`${duplicateFoundCount}개의 중복 종목을 삭제하시겠습니까?`)) {
                 await update(ref(db, 'stocks/'), deleteUpdates);
                 const coinDel = {};
+                const indexUp = {};
                 Object.keys(deleteUpdates).forEach((k) => {
-                    if (deleteUpdates[k] === null) coinDel[k] = null;
+                    if (deleteUpdates[k] === null) {
+                        coinDel[k] = null;
+                        indexUp[`stockSearchIndex/${k}`] = null;
+                        indexUp[`coinSearchIndex/${k}`] = null;
+                    }
                 });
                 if (Object.keys(coinDel).length > 0) {
                     await update(ref(db, 'coins/'), coinDel);
                 }
+                if (Object.keys(indexUp).length > 0) {
+                    await update(ref(db), indexUp);
+                }
+                await bumpSearchNameIndexVersions();
                 alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
             }
         } catch (e) { alert("오류 발생: " + e.message); }
@@ -4462,7 +4548,12 @@
             try {
                 // 각 종목을 "완성된 스키마"로 원자적으로 생성
                 await Promise.all(stocksToCreate.map(s => set(ref(db, 'stocks/' + s.id), s.completeObject)));
-                await set(ref(db, 'siteConfig/stockCacheVersion'), Date.now()); // 캐시 무효화
+                const idxUp = {};
+                stocksToCreate.forEach((s) => {
+                    idxUp[`stockSearchIndex/${s.id}/name`] = s.completeObject.name;
+                });
+                await update(ref(db), idxUp);
+                await bumpSearchNameIndexVersions();
                 alert("🎉 상장이 완료되었습니다!");
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
@@ -4488,13 +4579,21 @@
             if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
                 await update(ref(db, 'stocks/'), deleteUpdates);
                 const coinDel = {};
+                const indexUp = {};
                 Object.keys(deleteUpdates).forEach((k) => {
-                    if (deleteUpdates[k] === null) coinDel[k] = null;
+                    if (deleteUpdates[k] === null) {
+                        coinDel[k] = null;
+                        indexUp[`stockSearchIndex/${k}`] = null;
+                        indexUp[`coinSearchIndex/${k}`] = null;
+                    }
                 });
                 if (Object.keys(coinDel).length > 0) {
                     await update(ref(db, 'coins/'), coinDel);
                 }
-                await set(ref(db, 'siteConfig/stockCacheVersion'), Date.now()); // 캐시 무효화
+                if (Object.keys(indexUp).length > 0) {
+                    await update(ref(db), indexUp);
+                }
+                await bumpSearchNameIndexVersions();
                 alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
