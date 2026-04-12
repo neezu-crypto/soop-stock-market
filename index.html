@@ -2806,9 +2806,18 @@ try {
     auth = getAuth(app);
 }
 
-/** Google 정책: 인앱 WebView·임베디드 브라우저에서 OAuth 팝업 시 403 disallowed_useragent — 전체 창 리다이렉트로 우회 */
+/**
+ * Google 정책: 인앱 WebView·앱 내장 브라우저에서 OAuth 팝업 시 403 disallowed_useragent.
+ * 전체 창 리다이렉트(signInWithRedirect)로 우회한다.
+ * SOOP 등 앱 인앱은 UA가 ‘모바일 Safari’와 거의 같아서, iOS/Android 모바일은 외부 브라우저로 판명될 때만 팝업을 쓴다.
+ */
 function shouldPreferGoogleSignInRedirect() {
     try {
+        if (typeof sessionStorage !== 'undefined') {
+            try {
+                if (sessionStorage.getItem('soop_force_google_redirect') === '1') return true;
+            } catch (_) { /* noop */ }
+        }
         const ua = navigator.userAgent || '';
         const ual = ua.toLowerCase();
         if (/\bwv\b/.test(ua) && /android/i.test(ua)) return true;
@@ -2816,13 +2825,32 @@ function shouldPreferGoogleSignInRedirect() {
         const inAppHints = [
             'instagram', 'fbav', 'fban', 'fb_iab', 'line/', 'kakaotalk',
             'micromessenger', 'snapchat/', 'twitter', 'linkedinapp',
-            'discord', 'naver', 'fban/', 'musical_ly', 'pinterest', 'tiktok'
+            'discord', 'naver', 'fban/', 'musical_ly', 'pinterest', 'tiktok',
+            'soop', 'sooplive', 'afreeca', 'afreecatv', 'playsoop', 'soop.co.kr'
         ];
         for (const h of inAppHints) {
             if (ual.includes(h)) return true;
         }
-        // iOS: 모바일인데 Safari 문자열이 없으면 대개 인앱 WKWebView
+        // iOS: Safari 문자열 없는 WKWebView (구버전·일부 인앱)
         if ((/iphone|ipad|ipod/i.test(ua)) && !/safari/i.test(ua) && /mobile/i.test(ua)) return true;
+
+        const isMobileUa = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+        if (!isMobileUa) return false;
+
+        // Android: Chrome/Firefox/Samsung 등 ‘탭 브라우저’만 팝업 후보 — WebView 는 보통 ; wv) 또는 wv
+        if (/android/i.test(ua)) {
+            if (/; wv\)/i.test(ua)) return true;
+            if (/\bwv\b/.test(ua)) return true;
+            if (/samsungbrowser/i.test(ual)) return false;
+            if (/firefox/i.test(ual)) return false;
+            if (/chrome\/[\d.]+/i.test(ua) && !/ edg/i.test(ual)) return false;
+            return true;
+        }
+        // iOS: 크롬·파폭·엣지 앱은 팝업 시도, 그 외(Safari 포함 앱 인앱과 구분 불가)는 리다이렉트가 안전
+        if (/iphone|ipad|ipod/i.test(ua)) {
+            if (/crios|fxios|edgios|opios/i.test(ual)) return false;
+            return true;
+        }
     } catch (_) { /* noop */ }
     return false;
 }
@@ -2861,7 +2889,7 @@ getRedirectResult(auth)
         try { sessionStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY); } catch (_) { /* noop */ }
         const msg = String(err?.message || '');
         if (/disallowed_useragent|disallowed.useragent/i.test(msg)) {
-            alert('Google은 카카오톡·인스타·디스코드 등 앱 안 브라우저에서 로그인을 막을 수 있습니다.\n\n📱 Safari 또는 Chrome을 연 뒤 같은 주소로 접속해 구글 로그인을 해 주세요.');
+            alert('Google은 SOOP·카카오톡 등 앱 안 브라우저에서 로그인을 막는 경우가 있습니다.\n\n📱 Safari 또는 Chrome을 연 뒤 같은 주소로 접속해 구글 로그인을 해 주세요.');
         } else if (err?.code && err.code !== 'auth/popup-closed-by-user') {
             console.warn('[Auth] getRedirectResult', err);
         }
