@@ -1843,6 +1843,7 @@
                 <option value="candlePrune">🗑 오래된 캔들 정리</option>
                 <option value="userActivityPurge">🧾 유저 활동로그 데이터 삭제</option>
                 <option value="rankingVolumeReset">📊 실시간 랭킹 거래량만 초기화</option>
+                <option value="marketRankRefresh">📈 시장 순위·거래량 TOP 집계 (marketRank)</option>
                 <option value="clearAssetRequests">🗑 자산 지원 신청 리스트 전체 삭제</option>
                 <option value="clearAdRequests">🗑 홍보 신청 검수 리스트 전체 삭제</option>
                 <option value="autoSplit">✂️ 주가 자동 액면분할</option>
@@ -2108,14 +2109,22 @@
         }, isError ? 4200 : 2400);
     }
 
+    /** 일일 루틴용 — 동일 Callable, 토스트·confirm 없음 */
+    async function runMarketRankRefreshCallableSilent() {
+        try {
+            if (auth.currentUser) await auth.currentUser.getIdToken(true);
+        } catch (_) { /* noop */ }
+        const res = await adminRefreshMarketRanksFn({});
+        return res?.data;
+    }
+
     /** marketRank 즉시 재집계 — Cloud Function adminRefreshMarketRanks */
     window.runAdminMarketRankRefresh = async function runAdminMarketRankRefresh() {
         if (!isAdmin()) return;
         const statusEl = document.getElementById('market-rank-refresh-status');
         if (statusEl) statusEl.textContent = '집계 중…';
         try {
-            const res = await adminRefreshMarketRanksFn({});
-            const d = res?.data;
+            const d = await runMarketRankRefreshCallableSilent();
             if (!d?.ok) {
                 if (statusEl) statusEl.textContent = '응답 오류';
                 return;
@@ -6541,6 +6550,7 @@
             return { type: 'maintenanceMode', maintenanceOn: raw?.maintenanceOn === true };
         }
         if (type === 'circuitBreakerClear') return { type: 'circuitBreakerClear' };
+        if (type === 'marketRankRefresh') return { type: 'marketRankRefresh' };
         return null;
     }
 
@@ -6569,7 +6579,8 @@
                 t === 'rankingVolumeReset' ||
                 t === 'clearAssetRequests' ||
                 t === 'clearAdRequests' ||
-                t === 'circuitBreakerClear'
+                t === 'circuitBreakerClear' ||
+                t === 'marketRankRefresh'
             ) {
                 out.push({ type: t });
                 return;
@@ -6643,6 +6654,7 @@
             regularHoursSet: '⚡ 정규장 시간 변경',
             maintenanceMode: '🔧 점검 모드 (siteConfig/maintenance)',
             circuitBreakerClear: '⚡ 서킷브레이커 전체 해제',
+            marketRankRefresh: '📈 시장 순위·거래량 TOP (marketRank)',
         };
         listEl.innerHTML = rows.map((it, idx) => {
             const t = it.type;
@@ -6722,6 +6734,7 @@
         else if (type === 'regularHoursSet') items.push({ type: 'regularHoursSet', regularOpen: '20:00', regularClose: '00:00' });
         else if (type === 'maintenanceMode') items.push({ type: 'maintenanceMode', maintenanceOn: false });
         else if (type === 'circuitBreakerClear') items.push({ type: 'circuitBreakerClear' });
+        else if (type === 'marketRankRefresh') items.push({ type: 'marketRankRefresh' });
         else items.push({ type });
         renderDailyRoutineList(items);
         persistDailyAutoSettings();
@@ -7368,6 +7381,32 @@
                         const n = await clearAllCircuitFreezesSilent();
                         if (runLogEl) {
                             runLogEl.innerHTML += `<div style="color:#86efac;">   → 동결 종목 ${n}건 해제 (siteConfig/frozenStocks)</div>`;
+                        }
+                    } else if (it.type === 'marketRankRefresh') {
+                        if (runLogEl) {
+                            runLogEl.innerHTML += `<div>${i + 1}. 📈 시장 순위·거래량 TOP 집계 (adminRefreshMarketRanks)</div>`;
+                        }
+                        const d = await runMarketRankRefreshCallableSilent();
+                        const st = document.getElementById('market-rank-refresh-status');
+                        if (!d?.ok) {
+                            if (runLogEl) {
+                                runLogEl.innerHTML += `<div style="color:#ef4444;">   → 응답 오류</div>`;
+                            }
+                            if (st) st.textContent = '일일루틴: 응답 오류';
+                        } else if (d.skipped) {
+                            const rs = String(d.reason || '-');
+                            if (runLogEl) {
+                                runLogEl.innerHTML += `<div style="color:#64748b;">   → 건너뜀: ${escapeHtml(rs)}</div>`;
+                            }
+                            if (st) st.textContent = '일일루틴: 건너뜀 — ' + rs;
+                        } else {
+                            const when = d.updatedAt ? new Date(d.updatedAt).toLocaleString('ko-KR') : '';
+                            if (runLogEl) {
+                                runLogEl.innerHTML += `<div style="color:#86efac;">   → 주식 ${d.stockRankCount ?? 0}·코인 ${d.coinRankCount ?? 0}종 · volTOP5 ${d.stockVolTop5 ?? 0}/${d.coinVolTop5 ?? 0} · ${escapeHtml(when)}</div>`;
+                            }
+                            if (st) {
+                                st.textContent = `완료 — 주식 ${d.stockRankCount ?? 0}종 · 코인 ${d.coinRankCount ?? 0}종 · 거래량TOP5 주 ${d.stockVolTop5 ?? 0}/코 ${d.coinVolTop5 ?? 0} · ${when}`;
+                            }
                         }
                     } else if (runLogEl) {
                         runLogEl.innerHTML += `<div style="color:#ef4444;">${i + 1}. 알 수 없는 항목: ${escapeHtml(String(it.type || ''))}</div>`;
