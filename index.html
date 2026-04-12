@@ -2613,7 +2613,7 @@ import { getDatabase, ref, onValue, get, set, remove, onDisconnect, serverTimest
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
-import { getAuth, initializeAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, browserPopupRedirectResolver,
+import { getAuth, initializeAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, browserPopupRedirectResolver,
     indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } 
     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
@@ -2805,6 +2805,68 @@ try {
 } catch (e) {
     auth = getAuth(app);
 }
+
+/** Google 정책: 인앱 WebView·임베디드 브라우저에서 OAuth 팝업 시 403 disallowed_useragent — 전체 창 리다이렉트로 우회 */
+function shouldPreferGoogleSignInRedirect() {
+    try {
+        const ua = navigator.userAgent || '';
+        const ual = ua.toLowerCase();
+        if (/\bwv\b/.test(ua) && /android/i.test(ua)) return true;
+        if (/; wv\)/i.test(ua)) return true;
+        const inAppHints = [
+            'instagram', 'fbav', 'fban', 'fb_iab', 'line/', 'kakaotalk',
+            'micromessenger', 'snapchat/', 'twitter', 'linkedinapp',
+            'discord', 'naver', 'fban/', 'musical_ly', 'pinterest', 'tiktok'
+        ];
+        for (const h of inAppHints) {
+            if (ual.includes(h)) return true;
+        }
+        // iOS: 모바일인데 Safari 문자열이 없으면 대개 인앱 WKWebView
+        if ((/iphone|ipad|ipod/i.test(ua)) && !/safari/i.test(ua) && /mobile/i.test(ua)) return true;
+    } catch (_) { /* noop */ }
+    return false;
+}
+
+const GOOGLE_REDIRECT_INTENT_KEY = 'soop_google_redirect_intent';
+
+/** 리다이렉트 로그인 복귀 후 1회 처리(일반 로그인 / Ctrl+Enter 관리자 시도) */
+function consumeGoogleRedirectIntent() {
+    try {
+        const v = sessionStorage.getItem(GOOGLE_REDIRECT_INTENT_KEY);
+        sessionStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY);
+        return v === 'admin_hotkey' ? 'admin_hotkey' : (v === 'normal' ? 'normal' : '');
+    } catch (_) {
+        return '';
+    }
+}
+
+getRedirectResult(auth)
+    .then((result) => {
+        if (!result?.user) return;
+        const intent = consumeGoogleRedirectIntent();
+        document.getElementById('account-warn-overlay')?.classList.remove('active');
+        if (intent === 'admin_hotkey') {
+            if (result.user.email === 'skftodwocks2@gmail.com') {
+                try { applyMarketState(); } catch (_) { /* noop */ }
+                get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+            } else {
+                alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
+                signInAnonymously(auth).catch((e) => console.warn('[Auth] signInAnonymously', e));
+            }
+            return;
+        }
+        alert('✅ Google 로그인되었습니다.\n동일 계정으로 PC·모바일·태블릿에서 자산이 동기화됩니다.\n(게스트로 보시던 화면은 이 계정 데이터로 바뀝니다.)');
+    })
+    .catch((err) => {
+        try { sessionStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY); } catch (_) { /* noop */ }
+        const msg = String(err?.message || '');
+        if (/disallowed_useragent|disallowed.useragent/i.test(msg)) {
+            alert('Google은 카카오톡·인스타·디스코드 등 앱 안 브라우저에서 로그인을 막을 수 있습니다.\n\n📱 Safari 또는 Chrome을 연 뒤 같은 주소로 접속해 구글 로그인을 해 주세요.');
+        } else if (err?.code && err.code !== 'auth/popup-closed-by-user') {
+            console.warn('[Auth] getRedirectResult', err);
+        }
+    });
+
 let authInitErrorNotifiedAt = 0;
 let isLogoutInProgress = false;
 
@@ -4791,9 +4853,17 @@ function authPopupResolverArgs() {
 function alertGoogleSignInError(err) {
     if (!err) return;
     if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+    const msg = String(err.message || err.customData?.error_description || '');
+    const inAppHint =
+        '카카오톡·인스타·디스코드 등 앱 안 브라우저에서는 Google이 로그인을 막는 경우가 많습니다.\n' +
+        '📱 기기에서 Safari 또는 Chrome을 연 뒤, 같은 주소로 접속해 구글 로그인을 해 주세요.\n\n';
     const popupHint = '팝업이 차단되었거나 시크릿 모드에서 제한될 수 있습니다.\n브라우저에서 팝업을 허용하거나, 일반 창에서 다시 시도해 주세요.\n\n(Please allow popups or try a non-incognito window for a stable experience.)';
+    if (/disallowed_useragent|disallowed.useragent|403/i.test(msg)) {
+        alert(inAppHint + '(Google 오류: 보안 브라우저 정책)');
+        return;
+    }
     if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
-        alert(popupHint);
+        alert((err.code === 'auth/operation-not-supported-in-this-environment' ? inAppHint : '') + popupHint);
         return;
     }
     logAuthTrailError('loginWithGoogle signInWithPopup', err);
@@ -4804,12 +4874,36 @@ function alertGoogleSignInError(err) {
 window.loginWithGoogle = async function() {
     logAuthTrail('[Auth] loginWithGoogle start, currentUser:', auth.currentUser?.uid ?? '(none)');
     const provider = new GoogleAuthProvider();
+    const startRedirect = async (intent) => {
+        try {
+            sessionStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, intent);
+        } catch (_) { /* noop */ }
+        await signInWithRedirect(auth, provider);
+    };
     try {
+        if (shouldPreferGoogleSignInRedirect()) {
+            await startRedirect('normal');
+            return;
+        }
         await signInWithPopup(auth, provider, ...authPopupResolverArgs());
         document.getElementById('account-warn-overlay')?.classList.remove('active');
         alert('✅ Google 로그인되었습니다.\n동일 계정으로 PC·모바일·태블릿에서 자산이 동기화됩니다.\n(게스트로 보시던 화면은 이 계정 데이터로 바뀝니다.)');
         logAuthTrail('[Auth] loginWithGoogle signInWithPopup success');
     } catch (err) {
+        const msg = String(err?.message || err?.customData?.error_description || '');
+        const tryRedirect =
+            err?.code === 'auth/operation-not-supported-in-this-environment' ||
+            err?.code === 'auth/internal-error' ||
+            /disallowed_useragent|disallowed.useragent|403|embedded/i.test(msg);
+        if (tryRedirect) {
+            try {
+                await startRedirect('normal');
+                return;
+            } catch (e2) {
+                alertGoogleSignInError(e2);
+            }
+            return;
+        }
         alertGoogleSignInError(err);
     }
 };
@@ -9508,19 +9602,41 @@ document.addEventListener('keydown', (e) => {
             return;
         }
 
-        // 미로그인 또는 일반 유저 → 구글 로그인 팝업
+        // 미로그인 또는 일반 유저 → 구글 로그인 (인앱 WebView 는 리다이렉트)
         const provider = new GoogleAuthProvider();
+        const adminAfterGoogle = (result) => {
+            if (result.user.email === 'skftodwocks2@gmail.com') {
+                applyMarketState();
+                get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+            } else {
+                alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
+                signInAnonymously(auth).catch((e) => console.warn('[Auth] signInAnonymously', e));
+            }
+        };
+        if (shouldPreferGoogleSignInRedirect()) {
+            try {
+                sessionStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, 'admin_hotkey');
+            } catch (_) { /* noop */ }
+            signInWithRedirect(auth, provider).catch((err) => alertGoogleSignInError(err));
+            return;
+        }
         signInWithPopup(auth, provider, ...authPopupResolverArgs())
-            .then(result => {
-                if (result.user.email === 'skftodwocks2@gmail.com') {
-                    applyMarketState();
-                    get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
-                } else {
-                    alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
-                    signInAnonymously(auth).catch((e) => console.warn('[Auth] signInAnonymously', e));
+            .then((result) => adminAfterGoogle(result))
+            .catch((err) => {
+                const msg = String(err?.message || err?.customData?.error_description || '');
+                if (
+                    err?.code === 'auth/operation-not-supported-in-this-environment' ||
+                    err?.code === 'auth/internal-error' ||
+                    /disallowed_useragent|disallowed.useragent|403|embedded/i.test(msg)
+                ) {
+                    try {
+                        sessionStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, 'admin_hotkey');
+                    } catch (_) { /* noop */ }
+                    signInWithRedirect(auth, provider).catch((e2) => alertGoogleSignInError(e2));
+                    return;
                 }
-            })
-            .catch((err) => alertGoogleSignInError(err));
+                alertGoogleSignInError(err);
+            });
     }
 });
 
