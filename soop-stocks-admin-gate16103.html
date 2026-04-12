@@ -1723,7 +1723,7 @@
         <div class="accordion-body">
         <div class="accordion-sep">
         <div class="info-box">
-            전체 유저의 자산(현금+보유주식 평가금)을 계산해 상위 100위를 <b>assetRanking/</b> 경로에 저장합니다.<br>
+            전체 유저 자산을 <b>현금(<code>users/…/cash</code> 또는 <code>summary.cash</code>) + 주식 평가 + 코인 평가</b>로 합산해 상위 100위를 <b>assetRanking/</b>에 저장합니다. (메인 앱 코인 시장·유저 샤딩과 동일 스케일)<br>
             <span style="color:#f59e0b;">⚠️ 유저 수가 많을수록 시간이 걸립니다. 장 마감 후 실행을 권장합니다.</span>
         </div>
         <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#f8fafc; margin-bottom:10px; cursor:pointer;">
@@ -6334,6 +6334,8 @@
         hour: 0,
         minute: 0,
         routines: [],
+        autoSplitThreshold: 100,
+        autoSplitRatio: 10,
     };
 
     function clampDailyAutoHourMin(v, lo, hi) {
@@ -7348,21 +7350,42 @@
             }
             const users = usersSnap.val();
 
-            // 2. 전체 종목 현재가 읽기
-            logEl.innerHTML += '<div>종목 현재가 읽는 중...</div>';
-            const stocksSnap = await get(ref(db, 'stocks/'));
+            // 2. 주식·코인 시세 (자산 = 현금 + 주식평가 + 코인평가 — 메인 앱과 동일 스케일)
+            logEl.innerHTML += '<div>주식·코인 시세 읽는 중...</div>';
+            const [stocksSnap, coinsSnap] = await Promise.all([
+                get(ref(db, 'stocks/')),
+                get(ref(db, 'coins/')),
+            ]);
             const stocks = stocksSnap.exists() ? stocksSnap.val() : {};
+            const coins = coinsSnap.exists() ? coinsSnap.val() : {};
 
             // 3. 유저별 자산 계산
             logEl.innerHTML += '<div>자산 계산 중...</div>';
             const assetList = Object.entries(users).map(([uid, u]) => {
-                let total = Math.floor(Number(u.cash) || 0);
-                if (!Number.isFinite(total) || total < 0) total = 0;
+                let cashRaw = Number(u?.cash);
+                if (
+                    (!Number.isFinite(cashRaw) || cashRaw < 0) &&
+                    u?.summary &&
+                    typeof u.summary === 'object'
+                ) {
+                    cashRaw = Number(u.summary.cash);
+                }
+                let total = Math.floor(Number.isFinite(cashRaw) && cashRaw >= 0 ? cashRaw : 0);
                 if (u.stocks && typeof u.stocks === 'object') {
                     Object.entries(u.stocks).forEach(([stockId, s]) => {
                         const qty = Number(s?.qty);
                         if (!Number.isFinite(qty) || qty <= 0) return;
                         const price = Number(stocks[stockId]?.price);
+                        const p = Number.isFinite(price) && price >= 0 ? price : 0;
+                        const add = Math.floor(p * qty);
+                        if (Number.isFinite(add)) total += add;
+                    });
+                }
+                if (u.coins && typeof u.coins === 'object') {
+                    Object.entries(u.coins).forEach(([coinId, s]) => {
+                        const qty = Number(s?.qty);
+                        if (!Number.isFinite(qty) || qty <= 0) return;
+                        const price = Number(coins[coinId]?.price);
                         const p = Number.isFinite(price) && price >= 0 ? price : 0;
                         const add = Math.floor(p * qty);
                         if (Number.isFinite(add)) total += add;
