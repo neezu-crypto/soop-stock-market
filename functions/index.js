@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
@@ -1255,15 +1256,37 @@ exports.updateConnectionCount = onValueWritten(
 
 // ── RTDB 보안규칙: 장 운영 시간에 따라 open(기존 규칙) / closed(쓰기 전부 관리자만) 전환 ──
 const RULES_OPEN_PATH = path.join(__dirname, "rules/open.json");
+/** 장 마감 전용: open.json 은 건드리지 않고, closed 규칙에만 병합되는 덮어쓰기(예: marketRank 읽기) */
+const RULES_CLOSED_OVERRIDES_PATH = path.join(
+  __dirname,
+  "rules/closed-overrides.json"
+);
 
 let cachedOpenRulesStr = null;
-let cachedClosedRulesStr = null;
 
 function loadOpenRulesString() {
   if (!cachedOpenRulesStr) {
     cachedOpenRulesStr = fs.readFileSync(RULES_OPEN_PATH, "utf8");
   }
   return cachedOpenRulesStr;
+}
+
+/** Firebase RTDB rules 트리에 소스 브랜치를 병합(장 마감 closed-overrides 전용) */
+function deepMergeRuleTree(target, source) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return;
+  if (!target || typeof target !== "object") return;
+  for (const k of Object.keys(source)) {
+    const sv = source[k];
+    if (sv && typeof sv === "object" && !Array.isArray(sv)) {
+      if (!target[k] || typeof target[k] !== "object" || Array.isArray(target[k])) {
+        target[k] = JSON.parse(JSON.stringify(sv));
+      } else {
+        deepMergeRuleTree(target[k], sv);
+      }
+    } else {
+      target[k] = sv;
+    }
+  }
 }
 
 /**
@@ -1316,11 +1339,23 @@ function buildClosedRulesObjectFromOpen(openRulesParsed) {
 }
 
 function getClosedRulesString() {
-  if (!cachedClosedRulesStr) {
-    const open = JSON.parse(loadOpenRulesString());
-    cachedClosedRulesStr = JSON.stringify(buildClosedRulesObjectFromOpen(open));
+  const open = JSON.parse(loadOpenRulesString());
+  const closedObj = buildClosedRulesObjectFromOpen(open);
+  if (fs.existsSync(RULES_CLOSED_OVERRIDES_PATH)) {
+    try {
+      const raw = fs.readFileSync(RULES_CLOSED_OVERRIDES_PATH, "utf8");
+      const over = JSON.parse(raw);
+      if (over.rules && typeof over.rules === "object") {
+        deepMergeRuleTree(closedObj.rules, over.rules);
+      }
+    } catch (e) {
+      console.error(
+        "[getClosedRulesString] closed-overrides.json",
+        e?.message || e
+      );
+    }
   }
-  return cachedClosedRulesStr;
+  return JSON.stringify(closedObj);
 }
 
 /** siteConfig.marketHours 기준: 비활성화면 항상 open, 활성화면 KST open~close 안이면 open */
@@ -1338,19 +1373,27 @@ async function syncDatabaseRulesFromMarketHours() {
   const mh = mhSnap.exists() ? mhSnap.val() : null;
   const mode = computeMarketRulesModeFromMarketHours(mh);
 
+  const rulesStr =
+    mode === "closed" ? getClosedRulesString() : loadOpenRulesString().trim();
+  const rulesHash = crypto.createHash("sha256").update(rulesStr).digest("hex");
+
   const stateRef = db.ref("siteConfig/_functions/lastMarketRulesMode");
-  const stSnap = await stateRef.get();
-  const prev = stSnap.exists() ? String(stSnap.val()) : null;
-  if (prev === mode) {
+  const hashRef = db.ref("siteConfig/_functions/lastAppliedRulesHash");
+  const [stSnap, hSnap] = await Promise.all([stateRef.get(), hashRef.get()]);
+  const prevMode = stSnap.exists() ? String(stSnap.val()) : null;
+  const prevHash = hSnap.exists() ? String(hSnap.val()) : null;
+
+  // 모드가 같아도(예: 계속 closed) 규칙 JSON이 바뀌면 재적용 — 마감 중 closed-overrides.json 만 배포한 경우
+  if (prevMode === mode && prevHash === rulesHash) {
     return { skipped: true, mode };
   }
 
-  const rulesStr =
-    mode === "closed" ? getClosedRulesString() : loadOpenRulesString().trim();
-
   await admin.database().setRules(rulesStr);
   await stateRef.set(mode);
-  console.log(`[syncDatabaseRulesFromMarketHours] applied mode=${mode}`);
+  await hashRef.set(rulesHash);
+  console.log(
+    `[syncDatabaseRulesFromMarketHours] applied mode=${mode} hash=${rulesHash.slice(0, 12)}…`
+  );
   return { skipped: false, mode };
 }
 

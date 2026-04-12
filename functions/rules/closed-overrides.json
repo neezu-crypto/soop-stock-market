@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "marketRank": {
+      ".read": "auth != null && auth.uid != null",
+      ".write": false
+    }
+  }
+}
