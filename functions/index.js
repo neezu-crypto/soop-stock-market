@@ -194,8 +194,49 @@ function buildVolumeTop5FromMarketSnapshot(val) {
   );
 }
 
+/** 쿨다운: session/lastTradeTime 우선, 레거시 users/.../lastTradeTime 폴백 */
+function effectiveLastTradeTimeMs(preUser) {
+  if (!preUser || typeof preUser !== "object") return 0;
+  const s = preUser.session && typeof preUser.session === "object" ? preUser.session.lastTradeTime : undefined;
+  const legacy = preUser.lastTradeTime;
+  const a = Number(s);
+  const b = Number(legacy);
+  const ma = Number.isFinite(a) && a > 0 ? a : 0;
+  const mb = Number.isFinite(b) && b > 0 ? b : 0;
+  return Math.max(ma, mb);
+}
+
+function computeUserSummaryForRtdb(u) {
+  const cash = Math.floor(Number(u?.cash ?? 1000000));
+  const stocks = u?.stocks && typeof u.stocks === "object" ? u.stocks : {};
+  const coins = u?.coins && typeof u.coins === "object" ? u.coins : {};
+  const stockCount = Object.values(stocks).filter((row) => Math.floor(Number(row?.qty || 0)) > 0).length;
+  const coinCount = Object.values(coins).filter((row) => Math.floor(Number(row?.qty || 0)) > 0).length;
+  const c = Number.isFinite(cash) && cash >= 0 ? cash : 1000000;
+  return {
+    cash: c,
+    stockCount,
+    coinCount,
+    updatedAt: Date.now(),
+  };
+}
+
+/** 거래·강제 매도 후 session·summary·레거시 lastTradeTime 정리 */
+async function persistUserDerivedState(db, uid, userVal, opts) {
+  const touchCooldown = Boolean(opts?.touchLastTradeTime);
+  const summary = computeUserSummaryForRtdb(userVal);
+  const tasks = [db.ref(`users/${uid}/summary`).set(summary)];
+  if (touchCooldown) {
+    tasks.push(
+      db.ref(`users/${uid}/session/lastTradeTime`).set(admin.database.ServerValue.TIMESTAMP),
+      db.ref(`users/${uid}/lastTradeTime`).remove()
+    );
+  }
+  await Promise.all(tasks);
+}
+
 /**
- * 클라이언트 조작 불가 — users/{uid}/lastTradeTime(서버 기록) 기준.
+ * 클라이언트 조작 불가 — session/lastTradeTime(서버) · 레거시 lastTradeTime 폴백.
  * Admin 은 쿨다운 면제.
  */
 function assertServerTradeCooldownAllowed(auth, siteConfig, preUser) {
@@ -205,7 +246,7 @@ function assertServerTradeCooldownAllowed(auth, siteConfig, preUser) {
   const dateKst = nowKstDate();
   const cooldownMs = getTradeCooldownMsFromConfig(mh, dateKst);
   if (cooldownMs <= 0) return;
-  const lt = Number(preUser && preUser.lastTradeTime);
+  const lt = effectiveLastTradeTimeMs(preUser);
   if (!Number.isFinite(lt) || lt <= 0) return;
   const elapsed = now - lt;
   if (elapsed < cooldownMs) {
@@ -766,7 +807,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           cash: cash - total,
           stocks,
           coins: { ...coins, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
-          lastTradeTime: admin.database.ServerValue.TIMESTAMP
+          lastTradeTime: null
         };
       }
 
@@ -784,7 +825,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         cash: cash + receive,
         stocks,
         coins: nextCoins,
-        lastTradeTime: admin.database.ServerValue.TIMESTAMP
+        lastTradeTime: null
       };
     }
 
@@ -806,7 +847,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         cash: cash - total,
         stocks: { ...stocks, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
         coins,
-        lastTradeTime: admin.database.ServerValue.TIMESTAMP
+        lastTradeTime: null
       };
     }
 
@@ -824,7 +865,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       cash: cash + receive,
       stocks: nextStocks,
       coins,
-      lastTradeTime: admin.database.ServerValue.TIMESTAMP
+      lastTradeTime: null
     };
   });
 
@@ -837,6 +878,14 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       }
     }
     throw new HttpsError("failed-precondition", "User validation failed (cash/holdings/limits).");
+  }
+
+  if (userTx.snapshot.exists()) {
+    try {
+      await persistUserDerivedState(db, uid, userTx.snapshot.val(), { touchLastTradeTime: true });
+    } catch (e) {
+      console.error("[trade] persistUserDerivedState", uid, e?.message || e);
+    }
   }
 
   const ts = Math.floor(Date.now() / 60000) * 60;
@@ -1028,10 +1077,18 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
       cash: cash + receive,
       stocks: market === "coin" ? stocks : nextBook,
       coins: market === "coin" ? nextBook : coins,
-      lastTradeTime: admin.database.ServerValue.TIMESTAMP,
+      lastTradeTime: null,
     };
   });
   if (!userTx.committed) throw new HttpsError("aborted", "Holdings changed during liquidation.");
+
+  if (userTx.snapshot.exists()) {
+    try {
+      await persistUserDerivedState(db, uid, userTx.snapshot.val(), { touchLastTradeTime: true });
+    } catch (e) {
+      console.error("[liquidateAll] persistUserDerivedState", uid, e?.message || e);
+    }
+  }
 
   const ts = Math.floor(Date.now() / 60000) * 60;
   await db.ref(`${candleRoot}/${stockId}/${ts}`).transaction((cur) => {
@@ -1321,11 +1378,21 @@ exports.adminGrantAssetRequest = onCall(
     }
 
     const userRef = db.ref(`users/${targetUid}`);
-    await userRef.transaction((cur) => {
+    const grantTx = await userRef.transaction((cur) => {
       const base = cur && typeof cur === "object" ? cur : { cash: 1000000, stocks: {}, coins: {} };
       const cash = Math.floor(Number(base.cash) || 1000000);
       return { ...base, cash: cash + amount };
     });
+    if (!grantTx.committed) {
+      throw new HttpsError("aborted", "User cash update did not commit.");
+    }
+    if (grantTx.snapshot.exists()) {
+      try {
+        await persistUserDerivedState(db, targetUid, grantTx.snapshot.val(), { touchLastTradeTime: false });
+      } catch (e) {
+        console.warn("[adminGrantAssetRequest] persistUserDerivedState", targetUid, e?.message || e);
+      }
+    }
 
     const logRef = db.ref("adminLogs/grants").push();
     const now = Date.now();

@@ -3238,9 +3238,11 @@ let myData           = null;
 let userUID          = null;
 /** 직전 로그인 UID — 계정 전환 시 구독·캐시 초기화용 */
 let previousAuthUid  = null;
-/** users/{uid} 하위 분할 onValue 일괄 해제용 — cash / stocks / coins / lastTradeTime */
+/** users/{uid} 하위 분할 onValue 일괄 해제용 — summary / cash / 쿨다운 경로 + 보유 폴링 타이머 */
 let userDataUnsub    = null; // () => void
 let userDataUiRaf    = 0;
+let userHoldingsPollTimer = null;
+const USER_HOLDINGS_POLL_MS = 45000;
 /** `reading '_key'` 등 로그인·RTDB 경로 추적 — 원인 파악 후 false 권장 */
 const DEBUG_AUTH_TRAIL = true;
 function logAuthTrail(...args) {
@@ -3274,6 +3276,10 @@ function scheduleUserDataUiRefresh() {
 }
 
 function teardownUserDataListeners() {
+    if (userHoldingsPollTimer) {
+        clearInterval(userHoldingsPollTimer);
+        userHoldingsPollTimer = null;
+    }
     if (typeof userDataUnsub === 'function') {
         try {
             userDataUnsub();
@@ -3284,7 +3290,30 @@ function teardownUserDataListeners() {
     userDataUnsub = null;
 }
 
-/** RTDB users/{uid} 전체 노드 대신 cash·stocks·coins·lastTradeTime 별 구독 — 갱신 단가 절감 */
+/** stocks/coins 맵은 onValue 대신 주기적 get + 패널 열 때 갱신 (대역폭 절감) */
+async function fetchHoldingsSnapshotForUid(uid) {
+    if (!uid || !db) return;
+    if (userUID !== uid) return;
+    try {
+        const [stSnap, coSnap] = await Promise.all([
+            get(ref(db, `users/${uid}/stocks`)),
+            get(ref(db, `users/${uid}/coins`))
+        ]);
+        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
+        const sv = stSnap.exists() ? stSnap.val() : null;
+        myData.stocks = sv && typeof sv === 'object' && !Array.isArray(sv) ? sv : {};
+        const cv = coSnap.exists() ? coSnap.val() : null;
+        myData.coins = cv && typeof cv === 'object' && !Array.isArray(cv) ? cv : {};
+        scheduleUserDataUiRefresh();
+    } catch (e) {
+        console.warn('[Auth] fetchHoldingsSnapshotForUid', e);
+    }
+}
+
+/**
+ * RTDB users/{uid}: summary·cash(스칼라) + session/lastTradeTime·레거시 lastTradeTime 실시간,
+ * stocks/coins 는 폴링·거래 직후 get·포트폴리오 열 때 get 으로만 동기화 (대역폭 절감).
+ */
 function attachUserDataShardListeners(uid) {
     teardownUserDataListeners();
     if (!uid || !db) return;
@@ -3295,7 +3324,46 @@ function attachUserDataShardListeners(uid) {
         if (typeof u === 'function') unsubs.push(u);
     };
 
-    logAuthTrail('[DB] attachUserDataShardListeners', base, '→ cash, stocks, coins, lastTradeTime');
+    logAuthTrail('[DB] attachUserDataShardListeners', base, '→ summary, cash, session/lastTradeTime, holdings poll');
+
+    const applyCooldownTsFromSnap = (snap) => {
+        try {
+            if (snap.exists()) {
+                const v = Number(snap.val());
+                if (Number.isFinite(v) && v > 0) {
+                    lastTradeTime = Math.max(lastTradeTime || 0, v);
+                }
+            }
+            refreshTradeCooldownButtons();
+        } catch (e) {
+            console.warn('[Auth] cooldown ts', e);
+        }
+    };
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/summary`),
+                (snap) => {
+                    try {
+                        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
+                        if (snap.exists()) {
+                            const s = snap.val();
+                            if (s && typeof s === 'object' && typeof s.cash === 'number' && Number.isFinite(s.cash) && s.cash >= 0) {
+                                myData.cash = Math.floor(s.cash);
+                            }
+                        }
+                        scheduleUserDataUiRefresh();
+                    } catch (e) {
+                        console.warn('[Auth] users/.../summary', e);
+                    }
+                },
+                (err) => console.error('[Auth] users/.../summary onValue', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners summary', e);
+    }
 
     try {
         pushUnsub(
@@ -3325,72 +3393,31 @@ function attachUserDataShardListeners(uid) {
     try {
         pushUnsub(
             onValue(
-                ref(db, `${base}/stocks`),
-                (snap) => {
-                    try {
-                        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
-                        const v = snap.exists() ? snap.val() : null;
-                        myData.stocks =
-                            v && typeof v === 'object' && !Array.isArray(v) ? v : {};
-                        scheduleUserDataUiRefresh();
-                    } catch (e) {
-                        console.warn('[Auth] users/.../stocks', e);
-                    }
-                },
-                (err) => console.error('[Auth] users/.../stocks onValue', err)
+                ref(db, `${base}/session/lastTradeTime`),
+                (snap) => applyCooldownTsFromSnap(snap),
+                (err) => console.error('[Auth] users/.../session/lastTradeTime onValue', err)
             )
         );
     } catch (e) {
-        logAuthTrailError('attachUserDataShardListeners stocks', e);
-    }
-
-    try {
-        pushUnsub(
-            onValue(
-                ref(db, `${base}/coins`),
-                (snap) => {
-                    try {
-                        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
-                        const v = snap.exists() ? snap.val() : null;
-                        myData.coins =
-                            v && typeof v === 'object' && !Array.isArray(v) ? v : {};
-                        scheduleUserDataUiRefresh();
-                    } catch (e) {
-                        console.warn('[Auth] users/.../coins', e);
-                    }
-                },
-                (err) => console.error('[Auth] users/.../coins onValue', err)
-            )
-        );
-    } catch (e) {
-        logAuthTrailError('attachUserDataShardListeners coins', e);
+        logAuthTrailError('attachUserDataShardListeners session/lastTradeTime', e);
     }
 
     try {
         pushUnsub(
             onValue(
                 ref(db, `${base}/lastTradeTime`),
-                (snap) => {
-                    try {
-                        if (snap.exists()) {
-                            const v = Number(snap.val());
-                            if (Number.isFinite(v) && v > 0) {
-                                lastTradeTime = Math.max(lastTradeTime || 0, v);
-                            }
-                        }
-                        try {
-                            refreshTradeCooldownButtons();
-                        } catch (_) { /* noop */ }
-                    } catch (e) {
-                        console.warn('[Auth] users/.../lastTradeTime', e);
-                    }
-                },
+                (snap) => applyCooldownTsFromSnap(snap),
                 (err) => console.error('[Auth] users/.../lastTradeTime onValue', err)
             )
         );
     } catch (e) {
-        logAuthTrailError('attachUserDataShardListeners lastTradeTime', e);
+        logAuthTrailError('attachUserDataShardListeners lastTradeTime legacy', e);
     }
+
+    userHoldingsPollTimer = setInterval(() => {
+        fetchHoldingsSnapshotForUid(uid);
+    }, USER_HOLDINGS_POLL_MS);
+    fetchHoldingsSnapshotForUid(uid);
 
     userDataUnsub = () => {
         unsubs.forEach((fn) => {
@@ -3398,6 +3425,10 @@ function attachUserDataShardListeners(uid) {
                 fn();
             } catch (_) { /* noop */ }
         });
+        if (userHoldingsPollTimer) {
+            clearInterval(userHoldingsPollTimer);
+            userHoldingsPollTimer = null;
+        }
     };
 }
 
@@ -3875,6 +3906,7 @@ window.switchLeftRailPane = function(pane) {
         tRelay.classList.toggle('active', p === 'relay');
         tRelay.setAttribute('aria-selected', p === 'relay' ? 'true' : 'false');
     }
+    if (p === 'assets' && userUID) fetchHoldingsSnapshotForUid(userUID);
 };
 
 /** 모바일 중계방 슬라이드 패널만 닫기 (딤·탭 위치 동기화) */
@@ -7422,6 +7454,7 @@ window.switchPortfolioTab = function(tab) {
         stopRankingAccessWatch();
     }
     if (tab === 'stocks' || tab === 'coins') {
+        if (userUID) fetchHoldingsSnapshotForUid(userUID);
         try { updateUI(false); } catch (_) { /* noop */ }
     }
     try { updatePortfolioHoldingsBadge(); } catch (_) { /* noop */ }
@@ -8309,6 +8342,7 @@ window.togglePortfolio = function() {
         dim?.classList.add('active');
         if (tab) tab.style.left = '260px';
         if (relayTab) relayTab.style.left = '260px';
+        if (userUID) fetchHoldingsSnapshotForUid(userUID);
     }
 };
 
