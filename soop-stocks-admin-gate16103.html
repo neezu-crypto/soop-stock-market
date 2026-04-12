@@ -1848,6 +1848,7 @@
                 <option value="autoSplit">✂️ 주가 자동 액면분할</option>
                 <option value="regularHoursSet">⚡ 정규장 시간 변경</option>
                 <option value="maintenanceMode">🔧 점검 모드 (ON/OFF)</option>
+                <option value="circuitBreakerClear">⚡ 서킷브레이커 전체 해제</option>
             </select>
             <button type="button" class="btn-primary daily-routine-add-btn" onclick="addDailyRoutineItem()">+ 항목 추가</button>
         </div>
@@ -6539,6 +6540,7 @@
         if (type === 'maintenanceMode') {
             return { type: 'maintenanceMode', maintenanceOn: raw?.maintenanceOn === true };
         }
+        if (type === 'circuitBreakerClear') return { type: 'circuitBreakerClear' };
         return null;
     }
 
@@ -6559,7 +6561,16 @@
                 });
                 return;
             }
-            if (t === 'ranking' || t === 'candlePrune' || t === 'stockHolders' || t === 'userActivityPurge' || t === 'rankingVolumeReset' || t === 'clearAssetRequests' || t === 'clearAdRequests') {
+            if (
+                t === 'ranking' ||
+                t === 'candlePrune' ||
+                t === 'stockHolders' ||
+                t === 'userActivityPurge' ||
+                t === 'rankingVolumeReset' ||
+                t === 'clearAssetRequests' ||
+                t === 'clearAdRequests' ||
+                t === 'circuitBreakerClear'
+            ) {
                 out.push({ type: t });
                 return;
             }
@@ -6631,6 +6642,7 @@
             autoSplit: '✂️ 주가 자동 액면분할',
             regularHoursSet: '⚡ 정규장 시간 변경',
             maintenanceMode: '🔧 점검 모드 (siteConfig/maintenance)',
+            circuitBreakerClear: '⚡ 서킷브레이커 전체 해제',
         };
         listEl.innerHTML = rows.map((it, idx) => {
             const t = it.type;
@@ -6709,6 +6721,7 @@
         if (type === 'autoSplit') items.push({ type: 'autoSplit', thresholdManwon: 100, ratioN: 10 });
         else if (type === 'regularHoursSet') items.push({ type: 'regularHoursSet', regularOpen: '20:00', regularClose: '00:00' });
         else if (type === 'maintenanceMode') items.push({ type: 'maintenanceMode', maintenanceOn: false });
+        else if (type === 'circuitBreakerClear') items.push({ type: 'circuitBreakerClear' });
         else items.push({ type });
         renderDailyRoutineList(items);
         persistDailyAutoSettings();
@@ -7245,6 +7258,23 @@
         return keys.length;
     }
 
+    /** siteConfig/frozenStocks 종목별 동결 노드 전부 삭제 — 메인 앱 서킷 UI 즉시 해제 */
+    async function clearAllCircuitFreezesSilent() {
+        if (!isAdmin()) return 0;
+        const snap = await get(ref(db, 'siteConfig/frozenStocks'));
+        if (!snap.exists()) return 0;
+        const val = snap.val();
+        const keys =
+            val && typeof val === 'object' && !Array.isArray(val) ? Object.keys(val) : [];
+        if (keys.length === 0) return 0;
+        const updates = {};
+        keys.forEach((k) => {
+            updates[`siteConfig/frozenStocks/${k}`] = null;
+        });
+        await update(ref(db), updates);
+        return keys.length;
+    }
+
     function scheduleDailyAuto() {
         clearTimeout(dailyAutoTimer);
         const hour = clampDailyAutoHourMin(document.getElementById('auto-daily-hour').value, 0, 23);
@@ -7332,6 +7362,12 @@
                         await applyMaintenanceModeFromRoutine(on);
                         if (runLogEl) {
                             runLogEl.innerHTML += `<div style="color:#86efac;">   → siteConfig/maintenance = ${on}</div>`;
+                        }
+                    } else if (it.type === 'circuitBreakerClear') {
+                        if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. ⚡ 서킷브레이커 전체 해제 실행</div>`;
+                        const n = await clearAllCircuitFreezesSilent();
+                        if (runLogEl) {
+                            runLogEl.innerHTML += `<div style="color:#86efac;">   → 동결 종목 ${n}건 해제 (siteConfig/frozenStocks)</div>`;
                         }
                     } else if (runLogEl) {
                         runLogEl.innerHTML += `<div style="color:#ef4444;">${i + 1}. 알 수 없는 항목: ${escapeHtml(String(it.type || ''))}</div>`;
