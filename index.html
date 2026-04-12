@@ -4035,8 +4035,12 @@ onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
                 // 동결 해제 시점에 재구독 + 해제 알림
                 const remaining = frozenUntil - now;
                 setTimeout(() => {
-                    if (favorites[stockId])   subscribeToFavorite(stockId);
-                    if (ownedStocks[stockId]) subscribeToOwned(stockId);
+                    try {
+                        if (typeof updateSyncStrategy === 'function') updateSyncStrategy();
+                    } catch (_) {
+                        if (favorites[stockId]) subscribeToFavorite(stockId);
+                        if (ownedStocks[stockId]) subscribeToOwned(stockId);
+                    }
 
                     // 해제 알림 — 즐겨찾기/보유 종목만
                     if (isMyStock && notifPermission && browserNotificationsGranted()) {
@@ -7799,6 +7803,10 @@ window.saveAlertSetting = function() {
         btn.textContent = getAlertIcon(alertStockId);
     });
 
+    try {
+        if (typeof updateSyncStrategy === 'function') updateSyncStrategy();
+    } catch (_) { /* noop */ }
+
     closeAlertModal();
 };
 
@@ -7807,6 +7815,78 @@ function userHoldsStockForAlert(stockId) {
 }
 function userHoldsCoinForAlert(stockId) {
     return Math.floor(Math.max(0, Number(myData?.coins?.[stockId]?.qty) || 0)) > 0;
+}
+
+function idHasEnabledPriceAlert(id) {
+    try {
+        return !!(alertSettings[id] && alertSettings[id].enabled);
+    } catch (_) {
+        return false;
+    }
+}
+
+/** `stocks/{id}` 구독이 필요한 ID — 주식 탭: 즐겨찾기·보유 / 코인 탭: 알림+주식 보유만 */
+function buildStockPathTargetIds() {
+    const out = new Set();
+    const stockTab = !isCoinMarket();
+    const favOwn = new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)]);
+    if (stockTab) {
+        favOwn.forEach((id) => out.add(id));
+        return out;
+    }
+    try {
+        Object.keys(myData?.stocks || {}).forEach((sid) => {
+            if (!idHasEnabledPriceAlert(sid)) return;
+            if (!userHoldsStockForAlert(sid)) return;
+            out.add(sid);
+        });
+    } catch (_) { /* noop */ }
+    return out;
+}
+
+/** `coins/{id}` 구독이 필요한 ID — 코인 탭: 즐겨찾기·보유 / 주식 탭: 알림+코인 보유만 */
+function buildCoinPathTargetIds() {
+    const out = new Set();
+    if (!canUseCoinMarket()) return out;
+    const coinTab = isCoinMarket();
+    const favOwn = new Set([...Object.keys(favoriteCoins), ...Object.keys(ownedCoins)]);
+    if (coinTab) {
+        favOwn.forEach((id) => out.add(id));
+        return out;
+    }
+    try {
+        Object.keys(myData?.coins || {}).forEach((cid) => {
+            if (!idHasEnabledPriceAlert(cid)) return;
+            if (!userHoldsCoinForAlert(cid)) return;
+            out.add(cid);
+        });
+    } catch (_) { /* noop */ }
+    return out;
+}
+
+function detachFavoriteStockListener(stockId) {
+    if (favoriteUnsubs[stockId]) {
+        favoriteUnsubs[stockId]();
+        delete favoriteUnsubs[stockId];
+    }
+}
+function detachOwnedStockListener(stockId) {
+    if (ownedUnsubs[stockId]) {
+        ownedUnsubs[stockId]();
+        delete ownedUnsubs[stockId];
+    }
+}
+function detachFavoriteCoinListener(stockId) {
+    if (favoriteCoinUnsubs[stockId]) {
+        favoriteCoinUnsubs[stockId]();
+        delete favoriteCoinUnsubs[stockId];
+    }
+}
+function detachOwnedCoinListener(stockId) {
+    if (ownedCoinUnsubs[stockId]) {
+        ownedCoinUnsubs[stockId]();
+        delete ownedCoinUnsubs[stockId];
+    }
 }
 
 // 주가 변동 시 알림 체크 — sourceMarket: 'stock' | 'coin' (해당 시장 보유 시에만 알림, 둘 다 보유 시 설정 공유)
@@ -8872,28 +8952,76 @@ function applyStocksMode() {
         return;
     }
 
-    // 오픈 시간 → 즐겨찾기/보유 종목은 정규·비정규 모두 onValue (stocks/{id})
-    const allIds = [
-        ...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])
-    ];
-    const badIds = allIds.filter((id) => id == null || id === '' || String(id) === 'undefined');
-    if (badIds.length) console.warn('[sync-strategy] applyStocksMode suspicious stock ids:', badIds);
-    logAuthTrail('[sync-strategy] RequiredStockIDs (favorites ∪ owned):', allIds, 'count=', allIds.length, 'isRegularMarket=', isRegularMarket());
+    // 관리자: 탭과 무관하게 즐겨찾기·보유 전부 구독 (기존 동작)
+    if (isAdmin) {
+        const allIds = [...new Set([...Object.keys(favorites), ...Object.keys(ownedStocks)])];
+        const badIds = allIds.filter((id) => id == null || id === '' || String(id) === 'undefined');
+        if (badIds.length) console.warn('[sync-strategy] applyStocksMode suspicious stock ids:', badIds);
+        allIds.forEach((id) => {
+            if (favPollTimers[id]) { clearInterval(favPollTimers[id]); delete favPollTimers[id]; }
+            if (favorites[id]) subscribeToFavorite(id);
+            if (ownedStocks[id]) subscribeToOwned(id);
+        });
+        if (canUseCoinMarket()) {
+            const coinIds = [...new Set([...Object.keys(favoriteCoins), ...Object.keys(ownedCoins)])];
+            const badCoin = coinIds.filter((id) => id == null || id === '' || String(id) === 'undefined');
+            if (badCoin.length) console.warn('[sync-strategy] applyStocksMode suspicious coin ids:', badCoin);
+            coinIds.forEach((id) => {
+                if (favCoinPollTimers[id]) { clearInterval(favCoinPollTimers[id]); delete favCoinPollTimers[id]; }
+                if (favoriteCoins[id]) subscribeToFavoriteCoin(id);
+                if (ownedCoins[id]) subscribeToOwnedCoin(id);
+            });
+        }
+        logAuthTrail('[sync-strategy] applyStocksMode END (admin)');
+        return;
+    }
 
-    allIds.forEach(id => {
+    // 일반: 주식 탭 → 주식 즐겨찾기·보유만 / 코인 탭 → 코인 즐겨찾기·보유만
+    // 다른 탭일 때는 알림 ON + 해당 시장 보유 종목만 상대 경로 구독 유지
+    const stockTarget = buildStockPathTargetIds();
+    const coinTarget  = buildCoinPathTargetIds();
+
+    Object.keys(favoriteUnsubs).forEach((id) => {
+        if (!stockTarget.has(id)) detachFavoriteStockListener(id);
+    });
+    Object.keys(ownedUnsubs).forEach((id) => {
+        if (!stockTarget.has(id)) detachOwnedStockListener(id);
+    });
+    Object.keys(favoriteCoinUnsubs).forEach((id) => {
+        if (!coinTarget.has(id)) detachFavoriteCoinListener(id);
+    });
+    Object.keys(ownedCoinUnsubs).forEach((id) => {
+        if (!coinTarget.has(id)) detachOwnedCoinListener(id);
+    });
+
+    logAuthTrail(
+        '[sync-strategy] tab-aware stockTarget',
+        [...stockTarget],
+        'coinTarget',
+        [...coinTarget],
+        'isStockTab',
+        !isCoinMarket()
+    );
+
+    stockTarget.forEach((id) => {
+        if (id == null || id === '' || String(id) === 'undefined') return;
         if (favPollTimers[id]) { clearInterval(favPollTimers[id]); delete favPollTimers[id]; }
-        if (favorites[id])   subscribeToFavorite(id);
-        if (ownedStocks[id]) subscribeToOwned(id);
+        if (favorites[id]) subscribeToFavorite(id);
+        if (ownedStocks[id] || userHoldsStockForAlert(id)) {
+            if (!ownedStocks[id]) ownedStocks[id] = { id };
+            subscribeToOwned(id);
+        }
     });
 
     if (canUseCoinMarket()) {
-        const coinIds = [...new Set([...Object.keys(favoriteCoins), ...Object.keys(ownedCoins)])];
-        const badCoin = coinIds.filter((id) => id == null || id === '' || String(id) === 'undefined');
-        if (badCoin.length) console.warn('[sync-strategy] applyStocksMode suspicious coin ids:', badCoin);
-        coinIds.forEach((id) => {
+        coinTarget.forEach((id) => {
+            if (id == null || id === '' || String(id) === 'undefined') return;
             if (favCoinPollTimers[id]) { clearInterval(favCoinPollTimers[id]); delete favCoinPollTimers[id]; }
             if (favoriteCoins[id]) subscribeToFavoriteCoin(id);
-            if (ownedCoins[id]) subscribeToOwnedCoin(id);
+            if (ownedCoins[id] || userHoldsCoinForAlert(id)) {
+                if (!ownedCoins[id]) ownedCoins[id] = { id };
+                subscribeToOwnedCoin(id);
+            }
         });
     }
     logAuthTrail('[sync-strategy] applyStocksMode END');
@@ -9128,6 +9256,9 @@ window.toggleFavorite = function(stockId) {
         saveFavoritesToLocal();
         renderSearchResults();
     }
+    try {
+        if (isUserActive && typeof applyStocksMode === 'function') applyStocksMode();
+    } catch (_) { /* noop */ }
 };
 
 window.toggleFavoriteForActiveMarket = function (stockId) {
@@ -9155,6 +9286,9 @@ window.toggleFavoriteCoin = function (stockId) {
         saveFavoriteCoinsToLocal();
         renderSearchResults();
     }
+    try {
+        if (isUserActive && typeof applyStocksMode === 'function') applyStocksMode();
+    } catch (_) { /* noop */ }
 };
 
 /**
@@ -9645,6 +9779,9 @@ function initFavorites() {
         savedIds.forEach((id) => subscribeToFavorite(id));
     }
     initFavoriteCoins();
+    try {
+        if (isUserActive && typeof applyStocksMode === 'function') applyStocksMode();
+    } catch (_) { /* noop */ }
 }
 
 // ── 보유 주식 개별 구독 ──────────────────────────────────
@@ -9710,10 +9847,8 @@ function syncOwnedSubscriptions() {
         Object.keys(myData.stocks).filter(id => (myData.stocks[id]?.qty || 0) > 0)
     );
     console.log('[sync] 보유 종목:', [...currentOwned]);
-    // 신규 보유 → 즉시 구독 시작
-    currentOwned.forEach(id => {
+    currentOwned.forEach((id) => {
         if (!ownedStocks[id]) ownedStocks[id] = { id };
-        subscribeToOwned(id);
     });
     // 매도 완료 → 구독 해제 (즐겨찾기에 없는 경우만)
     Object.keys(ownedStocks).forEach(id => {
@@ -9725,6 +9860,9 @@ function syncOwnedSubscriptions() {
             delete ownedStocks[id];
         }
     });
+    try {
+        if (isUserActive && typeof applyStocksMode === 'function') applyStocksMode();
+    } catch (_) { /* noop */ }
 }
 
 function saveFavoriteCoinsToLocal() {
@@ -9818,7 +9956,6 @@ function syncOwnedCoinSubscriptions() {
     );
     currentOwned.forEach((id) => {
         if (!ownedCoins[id]) ownedCoins[id] = { id };
-        subscribeToOwnedCoin(id);
     });
     Object.keys(ownedCoins).forEach((id) => {
         if (!currentOwned.has(id) && !favoriteCoins[id]) {
@@ -9833,6 +9970,9 @@ function syncOwnedCoinSubscriptions() {
             delete ownedCoins[id];
         }
     });
+    try {
+        if (isUserActive && typeof applyStocksMode === 'function') applyStocksMode();
+    } catch (_) { /* noop */ }
 }
 
 // ── 검색창 이벤트 (모바일: input·compositionend 가 자주 올라와 전체 검색·네트워크가 중복 실행되면 체감 지연 — 짧은 디바운스) ──
