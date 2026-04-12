@@ -684,6 +684,53 @@
         </div>
     </div>
 
+    <!-- 서킷브레이커 동결 (주식) -->
+    <div class="container" style="display:block; border-color:#f59e0b; margin-bottom:20px;">
+        <div class="accordion-header">
+            <h1>🚫 서킷브레이커 동결 (주식)</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            메인 앱 거래 동결 상태는 <code style="font-size:11px;">siteConfig/frozenStocks/{종목ID}</code> 값(Unix ms, 해제 시각)만 봅니다.<br>
+            Functions가 변동성 서킷으로 기록하며, 여기서는 <b>실시간 목록·수동 해제·긴급 동결</b>을 할 수 있습니다. (코인 시장에는 적용되지 않습니다.)
+        </div>
+        <div class="data-status-bar" style="margin-bottom:12px;">
+            <span id="circuit-frozen-status" style="color:#fbbf24;font-weight:700;">—</span>
+        </div>
+        <div id="circuit-frozen-panel-inner">
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:14px; padding:12px; background:#0f172a; border-radius:10px; border:1px solid #334155;">
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:11px;color:#94a3b8;">종목 ID</label>
+                    <input type="text" id="circuit-manual-stock-id" placeholder="예: some_streamer_id" style="width:220px; padding:8px 10px; border-radius:6px; border:1px solid #475569; background:#111827; color:#f8fafc; font-size:13px;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:11px;color:#94a3b8;">동결(분) 1~180</label>
+                    <input type="number" id="circuit-manual-mins" min="1" max="180" value="5" style="width:100px; padding:8px 10px; border-radius:6px; border:1px solid #475569; background:#111827; color:#f8fafc; font-size:13px;">
+                </div>
+                <button type="button" class="btn-primary" style="margin-top:0; padding:10px 16px; font-size:13px; font-weight:800;" onclick="window.adminApplyManualCircuitFreeze?.()">⏱ 긴급 동결 적용</button>
+            </div>
+            <div id="circuit-frozen-table-wrap" style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                    <thead>
+                        <tr style="text-align:left; color:#94a3b8; font-size:11px;">
+                            <th style="padding:8px;">종목 ID</th>
+                            <th style="padding:8px;">이름</th>
+                            <th style="padding:8px;">해제 예정 · 남은 시간</th>
+                            <th style="padding:8px; text-align:right;">동작</th>
+                        </tr>
+                    </thead>
+                    <tbody id="circuit-frozen-tbody">
+                        <tr><td colspan="4" style="padding:14px;color:#64748b;text-align:center;">로그인 후 동기화됩니다.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 📢 공지 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
         <div class="accordion-header">
@@ -2305,6 +2352,152 @@
         connectionCountUnsub = null;
     }
 
+    let circuitFrozenUnsub = null;
+    let lastFrozenStocksMap = {};
+    let circuitFrozenTick = null;
+
+    function stopCircuitFrozenListener() {
+        if (circuitFrozenUnsub) {
+            try { circuitFrozenUnsub(); } catch (_) { /* noop */ }
+            circuitFrozenUnsub = null;
+        }
+        if (circuitFrozenTick) {
+            clearInterval(circuitFrozenTick);
+            circuitFrozenTick = null;
+        }
+        lastFrozenStocksMap = {};
+    }
+
+    function renderCircuitFrozenTableFromState() {
+        const tbody = document.getElementById('circuit-frozen-tbody');
+        const statusEl = document.getElementById('circuit-frozen-status');
+        if (!tbody) return;
+        const now = Date.now();
+        const entries = Object.entries(lastFrozenStocksMap)
+            .map(([id, raw]) => ({ id, until: Number(raw) }))
+            .filter((e) => Number.isFinite(e.until) && e.until > 0)
+            .sort((a, b) => a.until - b.until);
+
+        if (entries.length === 0) {
+            tbody.innerHTML =
+                '<tr><td colspan="4" style="padding:14px;color:#64748b;text-align:center;">동결된 주식 종목이 없습니다.</td></tr>';
+            if (statusEl) statusEl.textContent = '동결 0건';
+            return;
+        }
+
+        const activeCount = entries.filter((e) => e.until > now).length;
+        const dead = entries.length - activeCount;
+        if (statusEl) {
+            statusEl.textContent =
+                activeCount > 0
+                    ? `동결 중 ${activeCount}건` + (dead ? ` · 만료됨 ${dead}건(해제 권장)` : '')
+                    : `만료됨 ${entries.length}건 — 해제로 정리 가능`;
+        }
+
+        tbody.innerHTML = entries
+            .map(({ id, until }) => {
+                const expired = until <= now;
+                const remain = expired ? 0 : Math.ceil((until - now) / 1000);
+                const nm = allStocksData[id]?.name;
+                const nameCell = nm ? escapeHtml(String(nm)) : '<span style="color:#64748b">—</span>';
+                const untilStr = escapeHtml(new Date(until).toLocaleString('ko-KR'));
+                const remainStr = expired
+                    ? '<span style="color:#94a3b8">만료(정리 가능)</span>'
+                    : `<span style="color:#fbbf24;font-weight:800">${remain}초</span>`;
+                const enc = encodeURIComponent(id);
+                return `<tr style="border-top:1px solid #334155;">
+                    <td style="padding:8px;font-size:12px;word-break:break-all;"><code>${escapeHtml(id)}</code></td>
+                    <td style="padding:8px;font-size:12px;">${nameCell}</td>
+                    <td style="padding:8px;font-size:12px;color:#cbd5e1;">${untilStr}<br>${remainStr}</td>
+                    <td style="padding:8px;text-align:right;"><button type="button" class="btn-danger circuit-thaw-btn" style="padding:8px 12px;font-size:12px;font-weight:700;" data-stock-id="${enc}">해제</button></td>
+                </tr>`;
+            })
+            .join('');
+    }
+
+    function startCircuitFrozenListener() {
+        if (circuitFrozenUnsub) return;
+        circuitFrozenUnsub = onValue(
+            ref(db, 'siteConfig/frozenStocks'),
+            (snap) => {
+                const v = snap.exists() ? snap.val() : null;
+                lastFrozenStocksMap =
+                    v && typeof v === 'object' && !Array.isArray(v) ? { ...v } : {};
+                renderCircuitFrozenTableFromState();
+                if (circuitFrozenTick) {
+                    clearInterval(circuitFrozenTick);
+                    circuitFrozenTick = null;
+                }
+                const hasActive = Object.values(lastFrozenStocksMap).some((x) => Number(x) > Date.now());
+                if (hasActive) {
+                    circuitFrozenTick = setInterval(() => {
+                        renderCircuitFrozenTableFromState();
+                        if (!Object.values(lastFrozenStocksMap).some((x) => Number(x) > Date.now())) {
+                            clearInterval(circuitFrozenTick);
+                            circuitFrozenTick = null;
+                            renderCircuitFrozenTableFromState();
+                        }
+                    }, 1000);
+                }
+            },
+            (err) => console.error('[Admin] siteConfig/frozenStocks', err)
+        );
+    }
+
+    function initCircuitFrozenPanelDelegation() {
+        const inner = document.getElementById('circuit-frozen-panel-inner');
+        if (!inner || inner.dataset.delegationBound === '1') return;
+        inner.dataset.delegationBound = '1';
+        inner.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.circuit-thaw-btn');
+            if (!btn) return;
+            const enc = btn.getAttribute('data-stock-id');
+            if (enc == null || enc === '') return;
+            let sid = '';
+            try {
+                sid = decodeURIComponent(enc);
+            } catch (_) {
+                return;
+            }
+            if (!sid) return;
+            if (!isAdmin()) return;
+            if (!confirm(`「${sid}」서킷 동결을 해제할까요?\n(siteConfig/frozenStocks 노드 삭제)`)) return;
+            try {
+                await remove(ref(db, `siteConfig/frozenStocks/${sid}`));
+                showAdminToast(`동결 해제: ${sid}`, 'ok');
+            } catch (err) {
+                showAdminToast('해제 실패: ' + (err?.message || err), 'error');
+            }
+        });
+    }
+
+    window.adminApplyManualCircuitFreeze = async function () {
+        if (!isAdmin()) return;
+        const id = document.getElementById('circuit-manual-stock-id')?.value?.trim();
+        const mins = Math.floor(Number(document.getElementById('circuit-manual-mins')?.value));
+        if (!id) {
+            alert('종목 ID를 입력하세요.');
+            return;
+        }
+        if (!Number.isFinite(mins) || mins < 1 || mins > 180) {
+            alert('동결 시간은 1~180분 사이로 입력하세요.');
+            return;
+        }
+        const until = Date.now() + mins * 60 * 1000;
+        if (
+            !confirm(
+                `「${id}」을(를) 약 ${mins}분간 동결로 기록합니다.\n해제 시각: ${new Date(until).toLocaleString('ko-KR')}\n계속할까요?`
+            )
+        )
+            return;
+        try {
+            await set(ref(db, `siteConfig/frozenStocks/${id}`), until);
+            showAdminToast(`동결 적용: ${id}`, 'ok');
+        } catch (e) {
+            alert('적용 실패: ' + (e?.message || e));
+        }
+    };
+
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
     const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, asset: null };
     let prevListingKeys = null;
@@ -2833,6 +3026,7 @@
             clearTimeout(adminSearchDebounceTimer);
             adminSearchDebounceTimer = null;
             renderAdminStockList({ resetScroll: true });
+            try { renderCircuitFrozenTableFromState(); } catch (_) { /* noop */ }
         } catch (e) {
             if (statusEl) statusEl.innerText = '로드 실패';
         }
@@ -3161,6 +3355,8 @@
             await loadMarketHours();
             startRealtimeRequestListeners();
             startConnectionCountListener();
+            initCircuitFrozenPanelDelegation();
+            startCircuitFrozenListener();
             startDailyAutoSettingsListener();
             startPaidPricingListener();
             try {
@@ -3180,6 +3376,7 @@
                 stopPaidPricingListener();
                 stopRealtimeRequestListeners();
                 stopConnectionCountListener();
+                stopCircuitFrozenListener();
                 hideAdminRequestInbox();
                 alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -3193,6 +3390,7 @@
                     stopPaidPricingListener();
                     stopRealtimeRequestListeners();
                     stopConnectionCountListener();
+                    stopCircuitFrozenListener();
                     hideAdminRequestInbox();
                     document.getElementById('login-section').style.display = 'flex';
                     document.getElementById('admin-section').style.display = 'none';
