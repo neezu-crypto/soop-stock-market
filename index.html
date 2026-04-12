@@ -2689,7 +2689,7 @@
 ══════════════════════════════════════════ -->
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, get, set, remove, onDisconnect, serverTimestamp, push, query, orderByChild, equalTo }
+import { getDatabase, ref, onValue, onChildAdded, onChildChanged, onChildRemoved, get, set, remove, onDisconnect, serverTimestamp, push, query, orderByChild, equalTo }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
@@ -4185,77 +4185,140 @@ function subscribeRelayApprovedRequestsOnly() {
 }
 subscribeRelayApprovedRequestsOnly();
 
-// 서킷브레이커 실시간 구독
-onValue(ref(db, 'siteConfig/frozenStocks'), (snap) => {
-    const prev = siteConfig.frozenStocks || {};
-    siteConfig.frozenStocks = snap.val() || {};
-    const now = Date.now();
-    Object.entries(siteConfig.frozenStocks).forEach(([stockId, frozenUntil]) => {
-        if (frozenUntil > now) {
-            const wasNotFrozen = !prev[stockId] || prev[stockId] <= now;
-            if (wasNotFrozen && !isSoopAdminEmail()) {
-                const stockName = stockNameForId(stockId);
-                // 즐겨찾기·보유한 종목에만 알림(전역 frozenStocks 구독이라 무관 유저까지 팝업 가지 않게)
-                const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
+// 서킷브레이커: 부모 onValue 대신 자식 이벤트 + 로컬 병합 → 부분 갱신 시 맵 전체 재수신 방지
+// (초기 onChildAdded 연쇄 시 알림 폭주 방지용 짧은 억제 — FCM 토픽은 Functions 쪽 선택 전송)
+let frozenStocksChildUiRaf = 0;
+let frozenStocksNotifySuppressUntil = 0;
+const FROZEN_NOTIFY_SUPPRESS_MS = 3500;
+
+function scheduleFrozenStocksChildUiRefresh() {
+    if (frozenStocksChildUiRaf) return;
+    frozenStocksChildUiRaf = requestAnimationFrame(() => {
+        frozenStocksChildUiRaf = 0;
+        try { updateUI(true); } catch (_) { /* noop */ }
+        try { refreshCircuitFreezeOnAllListCards(); } catch (_) { /* noop */ }
+        try { ensureCircuitFreezeCountdownTimer(); } catch (_) { /* noop */ }
+    });
+}
+
+function shouldSuppressFrozenUserNotifications() {
+    return Date.now() < frozenStocksNotifySuppressUntil;
+}
+
+function applyCircuitFreezeSideEffectsForStock(stockId, frozenUntil, prevUntil, now) {
+    if (!stockId || isSoopAdminEmail()) return;
+    const nUntil = Number(frozenUntil);
+    if (!Number.isFinite(nUntil)) return;
+    const pUntil = Number(prevUntil);
+    const hadPrev = Number.isFinite(pUntil);
+
+    if (nUntil > now) {
+        const wasNotFrozen = !hadPrev || pUntil <= now;
+        const stockName = stockNameForId(stockId);
+        const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
+
+        if (wasNotFrozen) {
+            if (!shouldSuppressFrozenUserNotifications()) {
                 if (isMyStock) {
-                    const remaining = Math.ceil((frozenUntil - now) / 1000);
+                    const remaining = Math.ceil((nUntil - now) / 1000);
                     alert(`⚠️ [서킷브레이커] "${stockName}" 종목의 변동성이 너무 커서 ${remaining}초간 거래가 동결됩니다.`);
                 }
                 if (isMyStock && notifPermission && browserNotificationsGranted()) {
-                    const remaining = Math.ceil((frozenUntil - now) / 1000);
+                    const remaining = Math.ceil((nUntil - now) / 1000);
                     new Notification(`⚡ ${stockName} 서킷브레이커 발동!`, {
                         body: `거래가 ${remaining}초간 동결됩니다. 해제 시 알림을 드립니다.`,
                         icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
                     });
                 }
-
-                // 동결 중 구독 일시 중단 (데이터 절약)
-                if (favoriteUnsubs[stockId]) { favoriteUnsubs[stockId](); delete favoriteUnsubs[stockId]; }
-                if (ownedUnsubs[stockId])    { ownedUnsubs[stockId]();    delete ownedUnsubs[stockId]; }
-                if (favPollTimers[stockId])  { clearInterval(favPollTimers[stockId]); delete favPollTimers[stockId]; }
-
-                try { stopAutoTrade(stockId); } catch (_) { /* noop */ }
-
-                // 동결 해제 시점에 재구독 + 해제 알림
-                const remaining = frozenUntil - now;
-                setTimeout(() => {
-                    try {
-                        if (typeof updateSyncStrategy === 'function') updateSyncStrategy();
-                    } catch (_) {
-                        if (favorites[stockId]) subscribeToFavorite(stockId);
-                        if (ownedStocks[stockId]) subscribeToOwned(stockId);
-                    }
-
-                    // 해제 알림 — 즐겨찾기/보유 종목만
-                    if (isMyStock && notifPermission && browserNotificationsGranted()) {
-                        new Notification(`✅ ${stockName} 거래 재개!`, {
-                            body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
-                            icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
-                        });
-                    }
-                }, remaining + 500);
             }
+
+            if (favoriteUnsubs[stockId]) { favoriteUnsubs[stockId](); delete favoriteUnsubs[stockId]; }
+            if (ownedUnsubs[stockId])    { ownedUnsubs[stockId]();    delete ownedUnsubs[stockId]; }
+            if (favPollTimers[stockId])  { clearInterval(favPollTimers[stockId]); delete favPollTimers[stockId]; }
+
+            try { stopAutoTrade(stockId); } catch (_) { /* noop */ }
+
+            const remainingMs = nUntil - now;
+            setTimeout(() => {
+                try {
+                    if (typeof updateSyncStrategy === 'function') updateSyncStrategy();
+                } catch (_) {
+                    if (favorites[stockId]) subscribeToFavorite(stockId);
+                    if (ownedStocks[stockId]) subscribeToOwned(stockId);
+                }
+
+                if (!shouldSuppressFrozenUserNotifications() && isMyStock && notifPermission && browserNotificationsGranted()) {
+                    new Notification(`✅ ${stockName} 거래 재개!`, {
+                        body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
+                        icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+                    });
+                }
+            }, remainingMs + 500);
         }
+    }
+}
+
+function notifyCircuitThawIfNeeded(stockId, prevUntil, now) {
+    if (!stockId || isSoopAdminEmail()) return;
+    const p = Number(prevUntil);
+    if (!Number.isFinite(p) || p <= now) return;
+    if (!shouldSuppressFrozenUserNotifications()) {
+        const stockName = stockNameForId(stockId);
+        const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
+        if (isMyStock && notifPermission && browserNotificationsGranted()) {
+            new Notification(`✅ ${stockName} 거래 재개!`, {
+                body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
+                icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
+            });
+        }
+    }
+}
+
+(function attachFrozenStocksChildListeners() {
+    const frozenRoot = ref(db, 'siteConfig/frozenStocks');
+    siteConfig.frozenStocks = siteConfig.frozenStocks || {};
+    frozenStocksNotifySuppressUntil = Date.now() + FROZEN_NOTIFY_SUPPRESS_MS;
+
+    get(frozenRoot).then((snap) => {
+        siteConfig.frozenStocks = snap.exists() ? (snap.val() || {}) : {};
+        scheduleFrozenStocksChildUiRefresh();
+    }).catch(() => {
+        siteConfig.frozenStocks = {};
     });
 
-    // 이전에 동결됐다가 해제된 종목 감지 (Firebase에서 삭제된 경우)
-    Object.keys(prev).forEach(stockId => {
-        if (!siteConfig.frozenStocks[stockId] && prev[stockId] > now) {
-            if (isSoopAdminEmail()) return;
-            const stockName = stockNameForId(stockId);
-            const isMyStock = !!favorites[stockId] || !!ownedStocks[stockId];
-            if (isMyStock && notifPermission && browserNotificationsGranted()) {
-                new Notification(`✅ ${stockName} 거래 재개!`, {
-                    body: `서킷브레이커가 해제됐습니다. 지금 거래 가능합니다.`,
-                    icon: 'https://stimg.sooplive.com/LOGO/sk/skftodwocks2/skftodwocks2.jpg'
-                });
-            }
-        }
+    onChildAdded(frozenRoot, (snap) => {
+        const stockId = snap.key;
+        const raw = snap.val();
+        const frozenUntil = Number(raw);
+        const prevUntil = siteConfig.frozenStocks[stockId];
+        if (!Number.isFinite(frozenUntil)) return;
+        siteConfig.frozenStocks[stockId] = frozenUntil;
+        const now = Date.now();
+        applyCircuitFreezeSideEffectsForStock(stockId, frozenUntil, prevUntil, now);
+        scheduleFrozenStocksChildUiRefresh();
     });
-    updateUI(true);
-    refreshCircuitFreezeOnAllListCards();
-    ensureCircuitFreezeCountdownTimer();
-});
+
+    onChildChanged(frozenRoot, (snap) => {
+        const stockId = snap.key;
+        const frozenUntil = Number(snap.val());
+        const prevUntil = siteConfig.frozenStocks[stockId];
+        if (!Number.isFinite(frozenUntil)) return;
+        siteConfig.frozenStocks[stockId] = frozenUntil;
+        const now = Date.now();
+        applyCircuitFreezeSideEffectsForStock(stockId, frozenUntil, prevUntil, now);
+        scheduleFrozenStocksChildUiRefresh();
+    });
+
+    onChildRemoved(frozenRoot, (snap) => {
+        const stockId = snap.key;
+        const prevUntil = siteConfig.frozenStocks[stockId];
+        if (siteConfig.frozenStocks && Object.prototype.hasOwnProperty.call(siteConfig.frozenStocks, stockId)) {
+            delete siteConfig.frozenStocks[stockId];
+        }
+        notifyCircuitThawIfNeeded(stockId, prevUntil, Date.now());
+        scheduleFrozenStocksChildUiRefresh();
+    });
+})();
 
 // 현재 시각이 전체 오픈 시간 이내인지 여부 반환
 function isMarketOpen() {

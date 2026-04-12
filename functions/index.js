@@ -427,7 +427,14 @@ async function maybeApplyStockVolatilityCircuitBreaker(db, stockId, auth) {
     if (variation < CB_VARIATION_PCT) return;
 
     const frozenUntilMs = now + CB_FREEZE_MS;
-    await db.ref(`siteConfig/frozenStocks/${stockId}`).set(frozenUntilMs);
+    const frozenRef = db.ref(`siteConfig/frozenStocks/${stockId}`);
+    const verifySnap = await frozenRef.get();
+    if (verifySnap.exists()) {
+      const v = Number(verifySnap.val());
+      if (Number.isFinite(v) && v > now) return;
+      if (Number.isFinite(v) && v === frozenUntilMs) return;
+    }
+    await frozenRef.set(frozenUntilMs);
     await db.ref(`siteConfig/circuitBreakerLastTrigger/${stockId}`).set(now);
     console.warn("[trade] stock volatility circuit breaker", stockId, variation.toFixed(2));
   } catch (e) {
@@ -1430,6 +1437,40 @@ exports.updateConnectionCount = onValueWritten(
       await db.ref("siteStats/connectionCount").set(count);
     } catch (e) {
       console.error("[updateConnectionCount]", e?.message || e);
+    }
+  }
+);
+
+/**
+ * 서킷 동결 시 RTDB 대역 외 푸시(선택): SOOP_CIRCUIT_FCM_TOPIC 이 설정된 경우에만 FCM topic 전송.
+ * 앱에서 해당 토픽을 구독하면 알림을 RTDB 리스너 없이 받을 수 있음.
+ */
+exports.onFrozenStockFcmBroadcast = onValueWritten(
+  "/siteConfig/frozenStocks/{stockId}",
+  async (event) => {
+    const topic = process.env.SOOP_CIRCUIT_FCM_TOPIC;
+    if (!topic || typeof topic !== "string" || !String(topic).trim()) return;
+
+    const after = event.data.after.exists() ? event.data.after.val() : null;
+    if (after == null) return;
+
+    const untilMs = Number(after);
+    if (!Number.isFinite(untilMs) || untilMs <= Date.now()) return;
+
+    const stockId = String(event.params.stockId || "").trim();
+    if (!stockId) return;
+
+    try {
+      await admin.messaging().send({
+        topic: String(topic).trim(),
+        data: {
+          type: "circuitFreeze",
+          stockId,
+          frozenUntil: String(untilMs),
+        },
+      });
+    } catch (e) {
+      console.warn("[onFrozenStockFcmBroadcast]", e?.code || e?.message || e);
     }
   }
 );
