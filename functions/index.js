@@ -380,7 +380,7 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
 
 /** 메인 앱 checkCircuitBreaker 와 동일: 최근 10분 고저 대비 변동 ≥30% → siteConfig/frozenStocks (전 유저 동일 적용) */
 const CB_VARIATION_PCT = 30;
-const CB_FREEZE_MS = 180000;
+const CB_FREEZE_MS = 60 * 1000;
 const CB_COOLDOWN_MS = 600000;
 const CB_RECENT_BUCKET_COUNT = 15;
 const CB_WINDOW_SEC = 600;
