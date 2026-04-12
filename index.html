@@ -1951,13 +1951,13 @@
             <strong style="color:var(--text-main);">시스템 Safari 또는 Chrome</strong>에서 아래 주소를 여시면 정상 로그인됩니다.
         </p>
         <ol class="gw-ol">
-            <li><b>주소 복사</b> 후 Safari·Chrome 주소창에 붙여넣기</li>
-            <li>또는 <b>새 창에서 열기</b>를 눌러 외부 브라우저로 열기 시도</li>
+            <li><b>주소 복사</b> 후 <b>Safari·Chrome 앱</b>을 직접 연 다음 주소창에 붙여넣기 (인앱에서 가장 확실)</li>
+            <li>Android만: 아래 「시스템 브라우저로 열기 시도」— 일부 앱 WebView 에서는 막히거나 반응이 없을 수 있음</li>
         </ol>
         <div class="gw-url" id="google-webview-auth-url" aria-readonly="true"></div>
         <div class="google-webview-auth-btns">
             <button type="button" class="gw-btn-copy" onclick="window.copyGoogleLoginSiteUrl?.()">📋 이 페이지 주소 복사</button>
-            <button type="button" class="gw-btn-open" onclick="window.tryOpenSiteInExternalBrowserTab?.()">↗ 새 창에서 열기 (외부 브라우저 시도)</button>
+            <button type="button" class="gw-btn-open" onclick="window.tryOpenSiteInExternalBrowserTab?.()">↗ 시스템 브라우저로 열기 시도 (Android)</button>
             <button type="button" class="gw-btn-close" onclick="window.closeGoogleWebviewAuthHelp?.()">닫기</button>
         </div>
     </div>
@@ -4972,32 +4972,38 @@ function syncGoogleWebviewAuthUrlEl() {
 
 /**
  * 시스템 브라우저·새 창으로 현재 URL 열기 (인앱 WebView 한계로 100% 보장은 불가).
- * 메인 창 location 은 바꾸지 않음 (인앱에서 폴백으로 같은 URL 재로드 → 새로고침처럼 보이는 문제 방지).
+ * 인앱에서는 window.open(현재 URL) 이 같은 WebView 안에서 다시 로드되어 새로고침처럼 보이는 경우가 많아 건너뜀.
+ * 메인 창 location 은 바꾸지 않음.
  * @returns {'window'|'attempted'|'failed'}
  */
 function attemptOpenExternalBrowserForCurrentUrl() {
     const u = location.href;
     const ua = navigator.userAgent || '';
-
+    let inAppOAuth = false;
     try {
-        const w = window.open(u, '_system');
-        if (w) return 'window';
+        inAppOAuth = needsExternalBrowserForGoogleOAuth();
     } catch (_) { /* noop */ }
 
-    try {
-        const w2 = window.open(u, '_blank', 'noopener,noreferrer');
-        if (w2 && !w2.closed) return 'window';
-    } catch (_) { /* noop */ }
+    if (!inAppOAuth) {
+        try {
+            const w = window.open(u, '_system');
+            if (w) return 'window';
+        } catch (_) { /* noop */ }
+
+        try {
+            const w2 = window.open(u, '_blank', 'noopener,noreferrer');
+            if (w2 && !w2.closed) return 'window';
+        } catch (_) { /* noop */ }
+    }
 
     if (/android/i.test(ua)) {
         try {
             const parsed = new URL(u);
             const path = parsed.pathname + parsed.search + parsed.hash;
-            // S.browser_fallback_url 에 현재 https URL 을 넣으면 Intent 실패 시
-            // 인앱 WebView 가 같은 탭에서 그 URL 을 다시 로드 → 모달 직후 전체 새로고침처럼 보임.
-            // 메인 문서에는 location.href 로 커스텀 스킴을 쓰지 않는다 (동일 증상 방지).
+            // package 미지정: 시스템이 기본 브라우저 Activity 로 넘길 여지. Chrome 고정보다 인앱 이탈에 유리한 경우가 있음.
+            // browser_fallback_url / location.href 사용 안 함 (같은 https 재로드 방지).
             const intent =
-                `intent://${parsed.host}${path}#Intent;scheme=https;package=com.android.chrome;` +
+                `intent://${parsed.host}${path}#Intent;scheme=https;` +
                 `action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`;
             const a = document.createElement('a');
             a.href = intent;
@@ -5023,7 +5029,11 @@ function openGoogleWebviewAuthHelpAfterExternalAttempt(result) {
     } else if (result === 'attempted') {
         autoEl.hidden = false;
         autoEl.textContent =
-            'Chrome 등 외부 브라우저로 열기를 시도했습니다. 반응이 없으면 아래 「주소 복사」를 이용해 주세요.';
+            '시스템 브라우저로 넘기기를 시도했습니다. 변화가 없으면 인앱이 막은 것입니다—「이 페이지 주소 복사」로 Safari·Chrome 앱에서 여세요.';
+    } else if (result === 'inapp_no_automation') {
+        autoEl.hidden = false;
+        autoEl.textContent =
+            '이 앱 안 브라우저는 웹에서 외부 브라우저를 열 수 없습니다. 아래 주소를 복사한 뒤, 기기의 Safari 또는 Chrome 앱을 직접 실행해 주소창에 붙여넣기 해 주세요.';
     } else {
         autoEl.hidden = true;
         autoEl.textContent = '';
@@ -5034,9 +5044,19 @@ function openGoogleWebviewAuthHelpAfterExternalAttempt(result) {
 function showInAppGoogleLoginExternalBrowserHelp() {
     const r = attemptOpenExternalBrowserForCurrentUrl();
     syncGoogleWebviewAuthUrlEl();
-    openGoogleWebviewAuthHelpAfterExternalAttempt(
-        r === 'window' ? 'window' : r === 'attempted' ? 'attempted' : 'failed'
-    );
+    let inApp = false;
+    try {
+        inApp = needsExternalBrowserForGoogleOAuth();
+    } catch (_) { /* noop */ }
+    const hint =
+        r === 'window'
+            ? 'window'
+            : r === 'attempted'
+              ? 'attempted'
+              : inApp
+                ? 'inapp_no_automation'
+                : 'failed';
+    openGoogleWebviewAuthHelpAfterExternalAttempt(hint);
     document.getElementById('google-webview-auth-overlay')?.classList.add('active');
 }
 
@@ -5079,10 +5099,16 @@ window.tryOpenSiteInExternalBrowserTab = function() {
     if (r === 'window' || r === 'attempted') {
         openGoogleWebviewAuthHelpAfterExternalAttempt(r);
     } else {
-        openGoogleWebviewAuthHelpAfterExternalAttempt('failed');
-    }
-    if (r === 'failed') {
-        alert('새 창이 막혔거나 같은 앱 안에서만 열렸을 수 있습니다.\n「이 페이지 주소 복사」로 Safari·Chrome에 붙여넣기 해 주세요.');
+        let inApp = false;
+        try {
+            inApp = needsExternalBrowserForGoogleOAuth();
+        } catch (_) { /* noop */ }
+        openGoogleWebviewAuthHelpAfterExternalAttempt(inApp ? 'inapp_no_automation' : 'failed');
+        if (!inApp) {
+            alert(
+                '새 창이 막혔을 수 있습니다.\n「이 페이지 주소 복사」로 브라우저 주소창에 붙여넣기 해 주세요.'
+            );
+        }
     }
 };
 
