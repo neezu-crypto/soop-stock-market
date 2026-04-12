@@ -5483,7 +5483,8 @@ setTimeout(() => {
 }, 5000);
 
 // ── 실시간 접속자: presence는 Cloud Function이 집계 → siteStats/connectionCount 스칼라만 구독 (다운로드 절감) ──
-const PRESENCE_HEARTBEAT_MS = 2 * 60 * 1000; // 주기적 갱신 — onDisconnect 실패 시에도 TTL로 고스트 제거
+/** 6분 TTL(PRESENCE_TTL_MS, Functions) 안에 여유 있게 갱신 — 쓰기 빈도·배터리 절감 */
+const PRESENCE_HEARTBEAT_MS = 4 * 60 * 1000;
 
 function subscribePresenceCountOnce() {
     if (presenceCountUnsub) return;
@@ -9891,6 +9892,8 @@ async function loadStockNameCache() {
 
 // 검색 비동기 작업 취소용 — 새 검색·주식/코인 탭 전환 시 이전 fetch/UI 갱신 무시
 let searchRequestGen = 0;
+/** 짧은 검색어 매칭 폭주 시 DOM·가격 조회 상한 (fetchSearchQuotes ids 스케일과 맞춤) */
+const SEARCH_MATCH_UI_CAP = 40;
 let searchQuoteObserver = null;
 let searchQuoteFlushTimer = 0;
 
@@ -10113,18 +10116,30 @@ async function handleSearch(query) {
         }
         if (myGen !== searchRequestGen) return;
 
-        searchResults = {};
         const coinMode = isCoinMarket();
+        const rawMatches = [];
         Object.entries(stockNameCache).forEach(([id, name]) => {
             const nameNorm = normalizeSearchKeyword(name);
-            if (nameNorm.includes(q)) {
-                const cached = coinMode
-                    ? (favoriteCoins[id] || ownedCoins[id])
-                    : (favorites[id] || ownedStocks[id]);
-                searchResults[id] = cached
-                    ? { ...cached, id }
-                    : { id, name, price: 0, change: 0, volume: 0 };
-            }
+            if (!nameNorm.includes(q)) return;
+            rawMatches.push({
+                id,
+                name,
+                nameNorm,
+                idx: nameNorm.indexOf(q)
+            });
+        });
+        rawMatches.sort((a, b) => {
+            if (a.idx !== b.idx) return a.idx - b.idx;
+            return a.nameNorm.length - b.nameNorm.length;
+        });
+        searchResults = {};
+        rawMatches.slice(0, SEARCH_MATCH_UI_CAP).forEach(({ id, name }) => {
+            const cached = coinMode
+                ? (favoriteCoins[id] || ownedCoins[id])
+                : (favorites[id] || ownedStocks[id]);
+            searchResults[id] = cached
+                ? { ...cached, id }
+                : { id, name, price: 0, change: 0, volume: 0 };
         });
 
         if (myGen !== searchRequestGen) return;
