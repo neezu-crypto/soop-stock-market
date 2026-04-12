@@ -3215,16 +3215,23 @@ function ensureCircuitFreezeCountdownTimer() {
     circuitFreezeCountdownTimer = setInterval(() => {
         const list = document.getElementById('stock-list');
         if (!list) return;
-        let anyActive = false;
-        list.querySelectorAll('.stock-card[data-id]').forEach((card) => {
+        const now = Date.now();
+        const ids = new Set();
+        Object.keys(siteConfig.frozenStocks || {}).forEach((id) => {
+            if (getEffectiveFrozenUntil(id) > now) ids.add(id);
+        });
+        list.querySelectorAll('.stock-card.circuit-frozen[data-id]').forEach((card) => {
             const id = card.getAttribute('data-id');
-            if (!id) return;
-            if (getEffectiveFrozenUntil(id) > Date.now()) {
-                anyActive = true;
-                refreshCircuitFreezeOnStockCard(card, id);
-            } else if (card.classList.contains('circuit-frozen')) {
-                refreshCircuitFreezeOnStockCard(card, id);
-            }
+            if (id) ids.add(id);
+        });
+        let anyActive = false;
+        ids.forEach((id) => {
+            const card = list.querySelector(
+                `.stock-card[data-id="${CSS.escape(String(id))}"]`
+            );
+            if (!card) return;
+            if (getEffectiveFrozenUntil(id) > now) anyActive = true;
+            refreshCircuitFreezeOnStockCard(card, id);
         });
         if (!anyActive) {
             clearInterval(circuitFreezeCountdownTimer);
@@ -3468,6 +3475,9 @@ let isTrading        = null; // 거래 중인 종목 ID (null이면 미거래)
 let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0; // 비정규장: localStorage `lastOffPeakTradeTime_${uid}`와 동기화
+/** 1초 쿨다운 인터벌: 전역 쿨다운 해제 직후 한 프레임만 전체 카드 갱신하기 위해 */
+let prevGlobalTradeCooldownActive = false;
+let tradeCooldownIntervalRaf = 0;
 /** 종목별 자동매매 — { side: 'buy'|'sell', source: 'card'|'modal' } */
 let autoTradeState = {};
 /** 카드 재생성(검색/탭 전환) 시 수량이 1로 초기화되지 않도록 종목별 마지막 입력 수량 보존 */
@@ -6931,9 +6941,58 @@ function refreshTradeCooldownButtons() {
     refreshChartModalTradeButtons();
 }
 
+/**
+ * 쿨다운 표시는 전역(lastTradeTime)이라, 평시에는 카드 전체 순회를 생략하고
+ * 거래 진행·자동매매·차트 모달 등 실제로 변할 수 있는 카드만 갱신한다.
+ */
+function onTradeCooldownIntervalTick() {
+    const g = isGlobalTradeCooldownActive();
+    const cooldownJustEnded = prevGlobalTradeCooldownActive && !g;
+    prevGlobalTradeCooldownActive = g;
+
+    const autoIds = Object.keys(autoTradeState).filter((k) => autoTradeState[k]);
+    const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    const needFullList =
+        g || cooldownJustEnded || (isLiquidatingAll && isAdminUser);
+
+    const modalNeedsTick =
+        !!chartModalStockId &&
+        (needFullList ||
+            isTrading === chartModalStockId ||
+            autoIds.includes(chartModalStockId));
+
+    if (!needFullList && !isTrading && autoIds.length === 0 && !modalNeedsTick) return;
+
+    if (tradeCooldownIntervalRaf) cancelAnimationFrame(tradeCooldownIntervalRaf);
+    tradeCooldownIntervalRaf = requestAnimationFrame(() => {
+        tradeCooldownIntervalRaf = 0;
+        try {
+            if (needFullList) {
+                document.querySelectorAll('#stock-list .stock-card[data-id]').forEach((card) => {
+                    const id = card.getAttribute('data-id');
+                    if (id) applyTradeCooldownStateToCard(card, id);
+                });
+            } else {
+                const list = document.getElementById('stock-list');
+                if (list) {
+                    const idsToTouch = new Set(autoIds);
+                    if (isTrading) idsToTouch.add(isTrading);
+                    idsToTouch.forEach((id) => {
+                        const card = list.querySelector(
+                            `.stock-card[data-id="${CSS.escape(String(id))}"]`
+                        );
+                        if (card) applyTradeCooldownStateToCard(card, id);
+                    });
+                }
+            }
+            if (modalNeedsTick) refreshChartModalTradeButtons();
+        } catch (_) { /* noop */ }
+    });
+}
+
 setInterval(() => {
     try {
-        if (userUID && isTradingUiUnlocked()) refreshTradeCooldownButtons();
+        if (userUID && isTradingUiUnlocked()) onTradeCooldownIntervalTick();
     } catch (_) { /* noop */ }
 }, 1000);
 
