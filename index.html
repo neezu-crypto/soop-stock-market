@@ -1786,6 +1786,51 @@
             transition: color 0.2s;
         }
         .btn-skip-login:hover { color: var(--text-sub); }
+        /* ── Google WebView(앱 인앱) 로그인 안내 ── */
+        #google-webview-auth-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.82);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 4200;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+        #google-webview-auth-overlay.active {
+            opacity: 1; pointer-events: auto;
+        }
+        .google-webview-auth-box {
+            background: var(--card-bg); border-radius: 18px;
+            border: 1px solid var(--border);
+            padding: 22px 20px 18px;
+            width: 100%; max-width: 400px;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.55);
+        }
+        .google-webview-auth-box h3 {
+            font-size: 16px; font-weight: 800; color: var(--text-main);
+            margin: 0 0 10px; text-align: center; line-height: 1.35;
+        }
+        .google-webview-auth-box .gw-desc {
+            font-size: 12px; color: var(--text-sub); line-height: 1.75;
+            margin-bottom: 14px;
+        }
+        .google-webview-auth-box .gw-url {
+            width: 100%; font-size: 11px; padding: 10px 12px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--bg-color);
+            color: var(--muted); box-sizing: border-box; word-break: break-all;
+            margin-bottom: 12px;
+        }
+        .google-webview-auth-btns { display: flex; flex-direction: column; gap: 8px; }
+        .google-webview-auth-btns button {
+            width: 100%; padding: 12px 14px; border-radius: 10px; border: none;
+            font-size: 13px; font-weight: 800; cursor: pointer; transition: opacity 0.2s;
+        }
+        .google-webview-auth-btns button:hover { opacity: 0.9; }
+        .gw-btn-copy { background: linear-gradient(135deg, #38bdf8, #0ea5e9); color: #0f172a; }
+        .gw-btn-open { background: rgba(255,255,255,0.08); color: var(--text-main); border: 1px solid var(--border) !important; }
+        .gw-btn-close { background: transparent; color: var(--muted); font-weight: 700 !important; }
+        .gw-ol { margin: 0 0 12px 1.1em; padding: 0; font-size: 12px; color: var(--text-sub); line-height: 1.7; }
         /* ── 즐겨찾기 ── */
         /* ── 알림 버튼 ── */
         .btn-alert {
@@ -1880,6 +1925,31 @@
         <button class="btn-skip-login" onclick="closeAccountWarn()">
             괜찮아요, 익명으로 계속할게요
         </button>
+        <p style="font-size:11px;color:#94a3b8;margin:14px 0 0;text-align:center;line-height:1.55;">
+            SOOP·카카오 등 <b style="color:#cbd5e1;">앱 안</b>에서 구글 로그인이 막히면<br>
+            <a href="#" onclick="event.preventDefault(); window.openGoogleWebviewAuthHelp?.();" style="color:#38bdf8;font-weight:700;">Safari·Chrome에서 여는 방법</a>
+        </p>
+    </div>
+</div>
+
+<!-- ── Google 앱 인앱 WebView 차단(403 disallowed_useragent) 안내 ── -->
+<div id="google-webview-auth-overlay" onclick="if(event.target===this)window.closeGoogleWebviewAuthHelp?.()">
+    <div class="google-webview-auth-box" onclick="event.stopPropagation()">
+        <h3>앱 안 브라우저에서는 Google 로그인이 차단될 수 있어요</h3>
+        <p class="gw-desc">
+            Google 정책(<b>403 disallowed_useragent</b>)으로, SOOP·카카오 등 <b>앱 속 웹화면</b>에서는 로그인 요청이 거절되는 경우가 많습니다.
+            <strong style="color:var(--text-main);">시스템 Safari 또는 Chrome</strong>에서 아래 주소를 여시면 정상 로그인됩니다.
+        </p>
+        <ol class="gw-ol">
+            <li><b>주소 복사</b> 후 Safari·Chrome 주소창에 붙여넣기</li>
+            <li>또는 <b>새 창에서 열기</b>를 눌러 외부 브라우저로 열기 시도</li>
+        </ol>
+        <div class="gw-url" id="google-webview-auth-url" aria-readonly="true"></div>
+        <div class="google-webview-auth-btns">
+            <button type="button" class="gw-btn-copy" onclick="window.copyGoogleLoginSiteUrl?.()">📋 이 페이지 주소 복사</button>
+            <button type="button" class="gw-btn-open" onclick="window.tryOpenSiteInExternalBrowserTab?.()">↗ 새 창에서 열기 (외부 브라우저 시도)</button>
+            <button type="button" class="gw-btn-close" onclick="window.closeGoogleWebviewAuthHelp?.()">닫기</button>
+        </div>
     </div>
 </div>
 
@@ -2889,7 +2959,9 @@ getRedirectResult(auth)
         try { sessionStorage.removeItem(GOOGLE_REDIRECT_INTENT_KEY); } catch (_) { /* noop */ }
         const msg = String(err?.message || '');
         if (/disallowed_useragent|disallowed.useragent/i.test(msg)) {
-            alert('Google은 SOOP·카카오톡 등 앱 안 브라우저에서 로그인을 막는 경우가 있습니다.\n\n📱 Safari 또는 Chrome을 연 뒤 같은 주소로 접속해 구글 로그인을 해 주세요.');
+            try { window.openGoogleWebviewAuthHelp?.(); } catch (_) {
+                alert('SOOP·카카오 등 앱 안에서는 Google 로그인이 막힐 수 있습니다.\nSafari 또는 Chrome에서 같은 주소로 접속해 주세요.');
+            }
         } else if (err?.code && err.code !== 'auth/popup-closed-by-user') {
             console.warn('[Auth] getRedirectResult', err);
         }
@@ -4854,6 +4926,48 @@ window.closeAccountWarn = function() {
     document.getElementById('account-warn-overlay')?.classList.remove('active');
 };
 
+/** Google 403 disallowed_useragent — 앱 WebView 에서는 우회 불가, 외부 브라우저 안내 */
+function syncGoogleWebviewAuthUrlEl() {
+    const el = document.getElementById('google-webview-auth-url');
+    if (el) el.textContent = location.href;
+}
+window.openGoogleWebviewAuthHelp = function() {
+    syncGoogleWebviewAuthUrlEl();
+    document.getElementById('google-webview-auth-overlay')?.classList.add('active');
+};
+window.closeGoogleWebviewAuthHelp = function() {
+    document.getElementById('google-webview-auth-overlay')?.classList.remove('active');
+};
+window.copyGoogleLoginSiteUrl = async function() {
+    const u = location.href;
+    try {
+        await navigator.clipboard.writeText(u);
+        alert('주소를 복사했습니다.\n\nSafari 또는 Chrome을 연 뒤 주소창에 붙여넣기 해 주세요.');
+    } catch (_) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = u;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert('주소를 복사했습니다.');
+        } catch (e2) {
+            prompt('아래 주소를 길게 눌러 전체 선택 후 복사하세요:', u);
+        }
+    }
+};
+window.tryOpenSiteInExternalBrowserTab = function() {
+    const u = location.href;
+    const w = window.open(u, '_blank', 'noopener,noreferrer');
+    if (!w || w.closed || typeof w.closed === 'undefined') {
+        alert('새 창이 막혔거나 같은 앱 안에서만 열렸을 수 있습니다.\n「이 페이지 주소 복사」로 Safari·Chrome에 붙여넣기 해 주세요.');
+    }
+};
+
 // 구글 팝업 로그인 — 익명(게스트)은 미연동; 로그인 시 Google UID 자산으로 전환 (게스트 임시 데이터는 대체됨)
 // ── 로그인 상태 UI 업데이트 ─────────────────────────────────
 function updateAuthStatusUI(user) {
@@ -4887,7 +5001,7 @@ function alertGoogleSignInError(err) {
         '📱 기기에서 Safari 또는 Chrome을 연 뒤, 같은 주소로 접속해 구글 로그인을 해 주세요.\n\n';
     const popupHint = '팝업이 차단되었거나 시크릿 모드에서 제한될 수 있습니다.\n브라우저에서 팝업을 허용하거나, 일반 창에서 다시 시도해 주세요.\n\n(Please allow popups or try a non-incognito window for a stable experience.)';
     if (/disallowed_useragent|disallowed.useragent|403/i.test(msg)) {
-        alert(inAppHint + '(Google 오류: 보안 브라우저 정책)');
+        try { window.openGoogleWebviewAuthHelp?.(); } catch (_) { alert(inAppHint + '(Google 오류: 보안 브라우저 정책)'); }
         return;
     }
     if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
