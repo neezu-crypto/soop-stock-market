@@ -1616,26 +1616,36 @@
         .chart-modal-trade button:hover { filter: brightness(1.15); transform: translateY(-1px); }
 
         .stock-title-badge {
-            display:inline-flex; align-items:center; gap:4px;
-            padding:2px 10px; border-radius:999px; font-size:11px; font-weight:800;
-            background: linear-gradient(135deg, rgba(201,168,76,0.24), rgba(232,201,122,0.14));
-            color:#f6e6b2; border:1px solid rgba(201,168,76,0.5);
-            text-shadow: 0 1px 0 rgba(4,22,40,.65);
-            margin-left:6px; vertical-align:middle;
-            box-shadow: inset 0 1px 0 rgba(255,239,192,.35), 0 0 0 1px rgba(4,22,40,.25);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            background: linear-gradient(135deg, rgba(201,168,76,0.28), rgba(232,201,122,0.18));
+            color: #f6e6b2;
+            border: 1px solid rgba(201,168,76,0.62);
+            text-shadow: 0 1px 0 rgba(4,22,40,0.68);
+            margin-left: 6px;
+            vertical-align: middle;
+            box-shadow: inset 0 1px 0 rgba(255,239,192,0.4), 0 0 0 1px rgba(4,22,40,0.22);
         }
-        .cm-title-badge { margin-left:6px; }
+        .cm-title-badge { margin-left: 6px; }
+
         .stock-card.title-theme-preset1,
         .chart-modal.title-theme-preset1,
         .title-preview-card {
             position: relative;
             isolation: isolate;
-            border: 1px solid rgba(201,168,76,0.42);
+            border-color: rgba(201,168,76,0.62) !important;
             box-shadow:
-                inset 0 1px 0 rgba(255,233,166,0.22),
-                0 12px 28px rgba(2,13,26,0.45),
-                0 0 0 1px rgba(8,17,30,0.45);
-            transition: box-shadow .28s ease, border-color .24s ease;
+                inset 0 1px 0 rgba(255,233,166,0.28),
+                0 14px 34px rgba(2,13,26,0.55),
+                0 0 0 1px rgba(201,168,76,0.22),
+                0 0 28px rgba(201,168,76,0.12);
+            transition: box-shadow .25s ease, border-color .2s ease;
         }
         .stock-card.title-theme-preset1::before,
         .chart-modal.title-theme-preset1::before,
@@ -1646,41 +1656,74 @@
             pointer-events: none;
             z-index: 0;
             background:
-                radial-gradient(circle at 18% 12%, rgba(232,201,122,0.14), transparent 38%),
-                radial-gradient(circle at 84% 84%, rgba(90,155,224,0.12), transparent 42%),
-                linear-gradient(145deg, rgba(3,14,26,0.58) 0%, rgba(6,26,47,0.46) 45%, rgba(10,37,64,0.36) 100%);
+                radial-gradient(circle at 16% 12%, rgba(232,201,122,0.2), transparent 34%),
+                radial-gradient(circle at 84% 80%, rgba(90,155,224,0.16), transparent 44%),
+                linear-gradient(145deg, rgba(3,14,26,0.72) 0%, rgba(6,26,47,0.58) 45%, rgba(10,37,64,0.46) 100%);
         }
         .stock-card.title-theme-preset1::after,
         .chart-modal.title-theme-preset1::after,
         .title-preview-card::after {
             content: '';
             position: absolute;
-            inset: -45%;
+            inset: -42%;
             pointer-events: none;
             z-index: 0;
-            background: linear-gradient(120deg, transparent 30%, rgba(232,201,122,0.14) 48%, transparent 66%);
-            transform: translateX(-55%) rotate(8deg);
-            transition: transform .6s ease;
+            background: linear-gradient(120deg, transparent 30%, rgba(232,201,122,0.22) 49%, transparent 67%);
+            transform: translateX(-58%) rotate(8deg);
+            transition: transform .62s ease;
         }
         .stock-card.title-theme-preset1:hover,
         .title-preview-card:hover {
-            border-color: rgba(232,201,122,0.7);
+            border-color: rgba(232,201,122,0.86) !important;
             box-shadow:
-                inset 0 1px 0 rgba(255,239,192,0.34),
-                0 18px 42px rgba(2,13,26,0.6),
-                0 0 26px rgba(201,168,76,0.16);
-        }
-        .chart-modal.title-theme-preset1 {
-            border-color: rgba(232,201,122,0.6);
-            box-shadow:
-                inset 0 1px 0 rgba(255,239,192,0.3),
-                0 0 42px rgba(201,168,76,0.16);
+                inset 0 1px 0 rgba(255,239,192,0.4),
+                0 18px 42px rgba(2,13,26,0.64),
+                0 0 0 1px rgba(201,168,76,0.3),
+                0 0 34px rgba(201,168,76,0.2);
         }
         .stock-card.title-theme-preset1:hover::after,
         .chart-modal.title-theme-preset1:hover::after,
         .title-preview-card:hover::after {
-            transform: translateX(58%) rotate(8deg);
+            transform: translateX(60%) rotate(8deg);
         }
+
+        .stock-card.title-theme-preset1 .stock-name,
+        .chart-modal.title-theme-preset1 .stock-title-name {
+            color: #f8e9be;
+            text-shadow: 0 0 10px rgba(201,168,76,0.2);
+        }
+        .stock-card.title-theme-preset1 .current-price,
+        .chart-modal.title-theme-preset1 .stock-title-price {
+            color: #ffd88b !important;
+            text-shadow: 0 0 12px rgba(201,168,76,0.28);
+        }
+        .stock-card.title-theme-preset1 .price-change,
+        .chart-modal.title-theme-preset1 .stock-title-change {
+            border: 1px solid rgba(201,168,76,0.45);
+            box-shadow: inset 0 1px 0 rgba(255,239,192,0.2);
+        }
+
+        .chart-modal.title-theme-preset1 .chart-modal-header,
+        .chart-modal.title-theme-preset1 .chart-timeframe-tabs,
+        .chart-modal.title-theme-preset1 .chart-interval-tabs,
+        .chart-modal.title-theme-preset1 .chart-ohlc-bar,
+        .chart-modal.title-theme-preset1 .chart-modal-footer,
+        .chart-modal.title-theme-preset1 .chart-modal-trade {
+            background:
+                linear-gradient(90deg, rgba(201,168,76,0.08), rgba(6,26,47,0.86) 22%, rgba(10,37,64,0.78) 74%, rgba(201,168,76,0.08));
+            border-color: rgba(201,168,76,0.28);
+        }
+
+        .stock-card.title-theme-preset1 .btn-trade-maxsell,
+        .chart-modal.title-theme-preset1 .modal-maxsell,
+        .chart-modal.title-theme-preset1 .modal-halfsell,
+        .chart-modal.title-theme-preset1 .modal-titlebuy {
+            background: linear-gradient(135deg, #d8b66a 0%, #bc8c3c 45%, #8b6525 100%);
+            color: #07101d;
+            border: 1px solid rgba(255,227,160,0.35);
+            box-shadow: inset 0 1px 0 rgba(255,239,192,0.42), 0 6px 14px rgba(201,168,76,0.24);
+        }
+
         .title-preview-card {
             border-radius: 12px;
             padding: 12px;
@@ -1703,7 +1746,6 @@
         .stock-card.title-theme-preset1 .btn-favorite,
         .stock-card.title-theme-preset1 .btn-alert,
         .stock-card.title-theme-preset1 .price-group {
-            position: relative;
             z-index: 3;
         }
         /* 차트 모달 하단 광고 배너 — 원본 비율 720×150 */
