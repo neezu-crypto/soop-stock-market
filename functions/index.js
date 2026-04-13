@@ -950,6 +950,15 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const uid = auth.uid;
   const stockId = String(req.data?.stockId || "").trim();
   const market = String(req.data?.market || "stock").trim().toLowerCase(); // stock | coin
+  const fractionRaw = req.data?.fraction;
+  let fraction = 1;
+  if (fractionRaw != null && fractionRaw !== "") {
+    const f = Number(fractionRaw);
+    if (!Number.isFinite(f) || f <= 0 || f > 1) {
+      throw new HttpsError("invalid-argument", "fraction must be a number in (0, 1].");
+    }
+    fraction = f;
+  }
   if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
   if (market !== "stock" && market !== "coin") {
     throw new HttpsError("invalid-argument", "market must be stock|coin.");
@@ -985,9 +994,16 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   assertServerTradeCooldownAllowed(auth, siteConfig, preUserForCooldown);
 
   const bookSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
-  const qty = Math.floor(Number(bookSnap.val()?.qty || 0));
-  if (!Number.isFinite(qty) || qty <= 0) {
+  const haveQty = Math.floor(Number(bookSnap.val()?.qty || 0));
+  if (!Number.isFinite(haveQty) || haveQty <= 0) {
     throw new HttpsError("failed-precondition", "No holdings.");
+  }
+  let qty;
+  if (fraction >= 1 - 1e-9) {
+    qty = haveQty;
+  } else {
+    qty = Math.max(1, Math.floor(haveQty * fraction));
+    if (qty > haveQty) qty = haveQty;
   }
 
   const userRef = db.ref(`users/${uid}`);

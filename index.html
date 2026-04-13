@@ -1594,17 +1594,18 @@
         /* 거래 버튼 (모달 안) */
         .chart-modal-trade {
             padding: 14px 24px;
-            display: flex; gap: 10px;
+            display: flex; flex-wrap: wrap; gap: 10px;
             border-top: 1px solid var(--chart-line);
             background: var(--chart-chrome);
         }
         .chart-modal-trade button {
-            flex: 1; padding: 12px; border: none; border-radius: 10px;
+            flex: 1; min-width: 72px; padding: 12px; border: none; border-radius: 10px;
             font-weight: 800; font-size: 14px; cursor: pointer; transition: all 0.2s;
         }
         .chart-modal-trade .modal-buy    { background: var(--up-color); color: white; }
         .chart-modal-trade .modal-buy10  { background: #991b1b; color: white; }
         .chart-modal-trade .modal-maxsell { background: #7f1d1d; color: #fff; font-weight: 900; }
+        .chart-modal-trade .modal-halfsell { background: #9a3412; color: #fff; font-weight: 900; }
         .chart-modal-trade .modal-sell   { background: var(--down-color); color: white; }
         .chart-modal-trade .modal-sell10 { background: #1e3a8a; color: white; }
         .chart-modal-trade button:hover { filter: brightness(1.15); transform: translateY(-1px); }
@@ -2409,7 +2410,8 @@
                 <span style="font-size:11px; color:var(--hint); white-space:nowrap;">최대 100주</span>
             </div>
             <button class="modal-buy"  data-trade-type="buy" type="button" title="탭: 1회 매수 · 3초 이상 누르면 자동매수(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'buy')" >매수</button>
-            <button class="modal-maxsell" data-trade-type="sell" type="button" title="전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료 적용" onclick="handleModalMaxSellButtonClick(event)">MAX</button>
+            <button class="modal-maxsell" data-trade-type="sell" type="button" title="전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용" onclick="handleModalMaxSellButtonClick(event)">MAX</button>
+            <button class="modal-halfsell" data-trade-type="sell" type="button" title="보유의 약 50% 매도 — MAX와 동일하게 8% 추가 수수료·전량매도 임팩트 계수 적용" onclick="handleModalHalfSellButtonClick(event)">50%</button>
             <button class="modal-sell" data-trade-type="sell" type="button" title="탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'sell')">매도</button>
         </div>
 
@@ -6576,7 +6578,7 @@ window.handleMaxSellButtonClick = function (e, id) {
     }
     const ok = confirm('전량매도 시 해당 종목의 보유수량을 전부 매도하며, 8%의 추가 수수료가 발생합니다.\n\n계속 진행하시겠습니까?');
     if (!ok) return;
-    sellAllHoldingsByFunction(id, market);
+    sellAllHoldingsByFunction(id, market, { fraction: 1 });
 };
 
 window.handleModalMaxSellButtonClick = function (e) {
@@ -6589,9 +6591,31 @@ window.handleModalMaxSellButtonClick = function (e) {
         alert('보유 수량이 없어 전량매도를 진행할 수 없습니다.');
         return;
     }
-    const ok = confirm('전량매도 시 해당 종목의 보유수량을 전부 매도하며, 8%의 추가 수수료가 발생합니다.\n\n계속 진행하시겠습니까?');
+    const ok = confirm(
+        '전량매도 시 해당 종목의 보유수량을 전부 매도하며, 8%의 추가 수수료와 관리자가 설정한 전량매도용 가격 임팩트 계수가 적용됩니다.\n\n계속 진행하시겠습니까?'
+    );
     if (!ok) return;
-    sellAllHoldingsByFunction(chartModalStockId, market);
+    sellAllHoldingsByFunction(chartModalStockId, market, { fraction: 1 });
+};
+
+window.handleModalHalfSellButtonClick = function (e) {
+    e.stopPropagation();
+    if (!chartModalStockId) return;
+    const market = chartModalMarket === 'coin' ? 'coin' : 'stock';
+    const book = market === 'coin' ? (myData?.coins || {}) : (myData?.stocks || {});
+    const curQty = Math.floor(Math.max(0, Number(book?.[chartModalStockId]?.qty) || 0));
+    if (curQty <= 0) {
+        alert('보유 수량이 없어 매도를 진행할 수 없습니다.');
+        return;
+    }
+    const sellQty = Math.max(1, Math.floor(curQty * 0.5));
+    const unit = market === 'coin' ? '수량' : '주';
+    const ok = confirm(
+        `보유의 약 50%에 해당하는 ${sellQty}${unit}를 매도합니다. (보유 ${curQty}${unit})\n` +
+            '전량매도(MAX)와 동일하게 8% 추가 수수료와 전량매도용 가격 임팩트 계수가 적용됩니다.\n\n계속 진행하시겠습니까?'
+    );
+    if (!ok) return;
+    sellAllHoldingsByFunction(chartModalStockId, market, { fraction: 0.5 });
 };
 
 // ── 매매 가능 최대 수량 계산 ─────────────────────────────────
@@ -6913,7 +6937,7 @@ function applyTradeCooldownStateToCard(card, stockId) {
         maxBtn.style.opacity = maxDis ? '0.55' : '';
         maxBtn.title = autoTradeState[stockId]
             ? '자동매매 중에는 MAX를 사용할 수 없습니다.'
-            : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료 적용';
+            : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용';
     }
 }
 
@@ -6930,7 +6954,16 @@ function refreshChartModalTradeButtons() {
         maxBtn.style.opacity = maxDis ? '0.55' : '';
         maxBtn.title = autoTradeState[id]
             ? '자동매매 중에는 MAX를 사용할 수 없습니다.'
-            : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료 적용';
+            : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용';
+    }
+    const halfBtn = wrap.querySelector('.modal-halfsell');
+    if (halfBtn) {
+        const halfDis = isMaxSellButtonDisabled(id);
+        halfBtn.disabled = halfDis;
+        halfBtn.style.opacity = halfDis ? '0.55' : '';
+        halfBtn.title = autoTradeState[id]
+            ? '자동매매 중에는 50% 매도를 사용할 수 없습니다.'
+            : '보유의 약 50% 매도 — MAX와 동일 수수료·임팩트(서버 일괄 처리)';
     }
 }
 
@@ -7027,7 +7060,7 @@ function clampUserCash(n) {
 }
 
 let isLiquidatingAll = false;
-async function sellAllHoldingsByFunction(stockId, market) {
+async function sellAllHoldingsByFunction(stockId, market, opts) {
     if (!stockId) return;
     if (isLiquidatingAll) return;
     if (!myData) { alert('데이터 로딩 중입니다.'); return; }
@@ -7035,6 +7068,11 @@ async function sellAllHoldingsByFunction(stockId, market) {
     const book = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
     const curQty = Math.floor(Math.max(0, Number(book?.[stockId]?.qty) || 0));
     if (curQty <= 0) { alert('보유 수량이 없습니다.'); return; }
+    let fraction = 1;
+    if (opts && opts.fraction != null) {
+        const f = Number(opts.fraction);
+        if (Number.isFinite(f) && f > 0 && f <= 1) fraction = f;
+    }
 
     isLiquidatingAll = true;
     isTrading = stockId;
@@ -7042,7 +7080,9 @@ async function sellAllHoldingsByFunction(stockId, market) {
     try { refreshTradeCooldownButtons(); } catch (_) { /* noop */ }
     try {
         const liquidateAll = httpsCallable(fns, 'liquidateAll');
-        await liquidateAll({ stockId, market: isCoin ? 'coin' : 'stock' });
+        const payload = { stockId, market: isCoin ? 'coin' : 'stock' };
+        if (fraction < 1 - 1e-9) payload.fraction = fraction;
+        await liquidateAll(payload);
         sellSound.currentTime = 0;
         sellSound.play().catch(() => {});
         // MAX 전량매도도 일반 거래와 동일하게 쿨다운 기준 시각을 갱신
@@ -7182,7 +7222,7 @@ async function sellAllHoldingsByFunction(stockId, market) {
         }, 0);
     } catch (e) {
         console.error('[MAX SELL][function]', e);
-        alert('전량매도 중 오류가 발생했습니다.');
+        alert(fraction < 1 - 1e-9 ? '일괄 매도(50%) 중 오류가 발생했습니다.' : '전량매도 중 오류가 발생했습니다.');
     } finally {
         isLiquidatingAll = false;
         isTrading = null;
