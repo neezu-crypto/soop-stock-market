@@ -2059,6 +2059,7 @@
     const adminGrantAssetRequestFn = httpsCallable(functions, 'adminGrantAssetRequest');
     const adminBulkListStocksFn = httpsCallable(functions, 'adminBulkListStocks');
     const adminBulkDeleteStocksFn = httpsCallable(functions, 'adminBulkDeleteStocks');
+    const adminSyncCoinsFromStocksFn = httpsCallable(functions, 'adminSyncCoinsFromStocks');
     const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
 
@@ -3452,46 +3453,12 @@
         const statusEl = document.getElementById('sync-coins-status');
         if (statusEl) statusEl.textContent = '진행 중...';
         try {
-            const [sSnap, cSnap] = await Promise.all([
-                get(ref(db, 'stocks/')),
-                get(ref(db, 'coins/'))
-            ]);
-            const stocks = sSnap.exists() ? sSnap.val() : {};
-            const coins = cSnap.exists() ? cSnap.val() : {};
-            let created = 0;
-            const updates = {};
-            const INITIAL = 100000000;
-            for (const [id, row] of Object.entries(stocks)) {
-                if (coins[id]) continue;
-                const name = row?.name || '';
-                updates[`coins/${id}`] = {
-                    name,
-                    price: INITIAL,
-                    volume: 0,
-                    buyVol: 0,
-                    sellVol: 0,
-                    change: '0.00'
-                };
-                created++;
-            }
-            if (created === 0) {
+            const { data } = await adminSyncCoinsFromStocksFn({});
+            const created = Number(data?.created || 0);
+            if (created <= 0) {
                 if (statusEl) statusEl.textContent = '새로 만들 코인 종목이 없습니다. (이미 coins/에 모두 있음)';
                 return;
             }
-            const indexUp = {};
-            Object.keys(updates).forEach((pathKey) => {
-                const m = /^coins\/(.+)$/.exec(pathKey);
-                if (!m) return;
-                const cid = m[1];
-                const row = updates[pathKey];
-                const nm = row && typeof row === 'object' ? row.name : '';
-                if (typeof nm === 'string' && nm) indexUp[`coinSearchIndex/${cid}/name`] = nm;
-            });
-            await update(ref(db), updates);
-            if (Object.keys(indexUp).length > 0) {
-                await update(ref(db), indexUp);
-            }
-            await bumpSearchNameIndexVersions();
             if (statusEl) statusEl.textContent = `완료: ${created}개 코인 종목 생성 (시가 1억원)`;
         } catch (e) {
             if (statusEl) statusEl.textContent = '실패: ' + (e.message || e);

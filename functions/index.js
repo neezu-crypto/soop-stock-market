@@ -655,6 +655,48 @@ exports.adminBulkDeleteStocks = onCall(
   }
 );
 
+/** 관리자: stocks 기준으로 coins 미존재 종목 생성(시가 1억원) */
+exports.adminSyncCoinsFromStocks = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    const now = Date.now();
+    const [stocksSnap, coinsSnap] = await Promise.all([
+      db.ref("stocks").get(),
+      db.ref("coins").get(),
+    ]);
+    const stocks = stocksSnap.exists() ? stocksSnap.val() || {} : {};
+    const coins = coinsSnap.exists() ? coinsSnap.val() || {} : {};
+    const INITIAL = 100000000;
+    const updates = {};
+    let created = 0;
+
+    Object.entries(stocks).forEach(([id, row]) => {
+      if (coins[id]) return;
+      const name = String(row?.name || "");
+      updates[`coins/${id}`] = {
+        name,
+        price: INITIAL,
+        volume: 0,
+        buyVol: 0,
+        sellVol: 0,
+        change: "0.00",
+      };
+      if (name) updates[`coinSearchIndex/${id}/name`] = name;
+      created++;
+    });
+
+    if (!created) return { ok: true, created: 0 };
+    updates["siteConfig/coinNameIndexVersion"] = now;
+    updates["siteConfig/stockCacheVersion"] = now;
+    await db.ref().update(updates);
+    return { ok: true, created };
+  }
+);
+
 exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
