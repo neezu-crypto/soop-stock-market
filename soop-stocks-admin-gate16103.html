@@ -2302,6 +2302,62 @@
         }).join('');
     }
 
+    async function backfillStockTitlesFromApprovedRequests() {
+        if (!isAdmin()) return 0;
+        const reqSnap = await get(ref(db, 'titleRequests'));
+        if (!reqSnap.exists()) return 0;
+        const titleReqs = reqSnap.val() || {};
+        const curSnap = await get(ref(db, 'stockTitles'));
+        const cur = curSnap.exists() ? (curSnap.val() || {}) : {};
+        const now = Date.now();
+        const durationMs = 5 * 24 * 60 * 60 * 1000;
+        const latestByStock = {};
+        Object.entries(titleReqs).forEach(([reqId, r]) => {
+            if (!r || typeof r !== 'object') return;
+            if (String(r.status || '').toLowerCase() !== 'approved') return;
+            const sid = String(r.stockId || '').trim();
+            if (!sid) return;
+            const ts = Number(r.approvedAt || r.startedAt || r.createdAt || 0);
+            if (!latestByStock[sid] || ts > latestByStock[sid].ts) {
+                latestByStock[sid] = { reqId, r, ts };
+            }
+        });
+        const updates = {};
+        Object.entries(latestByStock).forEach(([sid, info]) => {
+            const existing = cur[sid];
+            if (existing && typeof existing === 'object') {
+                const active = existing.active !== false;
+                const approved = String(existing.status || 'approved').toLowerCase() === 'approved';
+                const exp = Number(existing.expiresAt || 0);
+                if (active && approved && (!exp || exp > now)) return;
+            }
+            const r = info.r;
+            const startedAt = Number(r.startedAt || info.ts || now);
+            const expiresAt = Number(r.expiresAt || 0) > 0 ? Number(r.expiresAt) : (startedAt + durationMs);
+            if (expiresAt <= now) return;
+            updates[`stockTitles/${sid}`] = {
+                title: String(r.title || ''),
+                theme: String(r.theme || 'preset1'),
+                status: 'approved',
+                active: true,
+                uid: String(r.uid || ''),
+                stockId: sid,
+                stockName: String(r.stockName || sid),
+                approvedAt: Number(r.approvedAt || startedAt),
+                startedAt,
+                expiresAt,
+                durationMs: Number(r.durationMs || durationMs),
+                requestId: info.reqId,
+                updatedAt: now,
+                migratedFrom: 'titleRequestsBackfill'
+            };
+        });
+        const keys = Object.keys(updates);
+        if (!keys.length) return 0;
+        await update(ref(db), updates);
+        return keys.length;
+    }
+
     function renderTitleSponsorActiveList(data) {
         const wrap = document.getElementById('title-sponsor-active-list');
         const statusEl = document.getElementById('title-sponsor-active-status');
@@ -2419,6 +2475,14 @@
 
     function startTitleSponsorRequestListener() {
         if (titleSponsorReqUnsub || titleSponsorActiveUnsub) return;
+        Promise.resolve()
+            .then(() => backfillStockTitlesFromApprovedRequests())
+            .then((n) => {
+                if (n > 0) showAdminToast(`칭호 전역 데이터 ${n}건 복구 완료`);
+            })
+            .catch((e) => {
+                console.warn('[TitleSponsor] backfill failed', e);
+            });
         titleSponsorReqUnsub = onValue(ref(db, 'titleRequests'), (snap) => {
             renderTitleSponsorRequests(snap.exists() ? snap.val() : {});
         }, () => {
