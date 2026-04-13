@@ -1628,10 +1628,18 @@
             background: linear-gradient(135deg, #c9a84c, #a87d2a);
             color: #f5f8fc;
             border: 1px solid #c9a84c;
-            text-shadow: 0 1px 0 #020d1a;
+            text-shadow: 0 1px 0 #000000;
             margin-left: 6px;
             vertical-align: middle;
             box-shadow: inset 0 1px 0 #e8c97a;
+            white-space: nowrap;
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stock-card .stock-name .stock-title-badge {
+            display: none;
+            vertical-align: baseline;
         }
         .cm-title-badge { margin-left: 6px; }
 
@@ -1641,7 +1649,7 @@
             position: relative;
             isolation: isolate;
             overflow: hidden;
-            background: #020d1a !important;
+            background: #000000 !important;
             border-color: #c9a84c !important;
             box-shadow: none;
             transition: box-shadow .4s ease, border-color .35s ease, transform .4s cubic-bezier(.22, 1, .36, 1);
@@ -1656,9 +1664,9 @@
             pointer-events: none;
             z-index: 0;
             background:
-                radial-gradient(circle at 14% 10%, #c9a84c 0%, #020d1a 34%),
-                radial-gradient(circle at 84% 82%, #a87d2a 0%, #020d1a 42%),
-                linear-gradient(145deg, #020d1a 0%, #041628 46%, #0a2540 100%);
+                radial-gradient(circle at 14% 10%, #c9a84c 0%, #000000 34%),
+                radial-gradient(circle at 84% 82%, #a87d2a 0%, #000000 42%),
+                linear-gradient(145deg, #000000 0%, #000000 46%, #000000 100%);
         }
         .stock-card.title-theme-preset1::after,
         .chart-modal.title-theme-preset1::after,
@@ -1669,7 +1677,7 @@
             border-radius: inherit;
             pointer-events: none;
             z-index: 0;
-            background: linear-gradient(120deg, #020d1a 30%, #c9a84c 49%, #020d1a 67%);
+            background: linear-gradient(120deg, #000000 30%, #c9a84c 49%, #000000 67%);
             transform: translateX(-58%) rotate(8deg);
             transition: transform .68s ease;
         }
@@ -1677,7 +1685,7 @@
         .title-preview-card:hover {
             border-color: #c9a84c !important;
             box-shadow:
-                0 24px 64px rgba(2, 13, 26, 0.75),
+                0 24px 64px rgba(0, 0, 0, 0.75),
                 0 0 40px rgba(201, 168, 76, 0.07);
             transform: translateY(-7px) scale(1.015);
         }
@@ -1697,7 +1705,7 @@
             margin-right: 8px;
             border-radius: 6px;
             color: #e8c97a;
-            background: #041628;
+            background: #000000;
             border: 1px solid #c9a84c;
             font-size: 12px;
             vertical-align: middle;
@@ -1707,6 +1715,12 @@
         .chart-modal.title-theme-preset1 .stock-title-name {
             color: #f5f8fc;
             text-shadow: none;
+        }
+        .stock-card.title-theme-preset1 .stock-name {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
         }
         .stock-card.title-theme-preset1 .current-price,
         .chart-modal.title-theme-preset1 .stock-title-price {
@@ -1724,8 +1738,10 @@
         .chart-modal.title-theme-preset1 .chart-interval-tabs,
         .chart-modal.title-theme-preset1 .chart-ohlc-bar,
         .chart-modal.title-theme-preset1 .chart-modal-footer,
-        .chart-modal.title-theme-preset1 .chart-modal-trade {
-            background: linear-gradient(90deg, #020d1a, #041628 20%, #0a2540 80%, #020d1a);
+        .chart-modal.title-theme-preset1 .chart-modal-trade,
+        .chart-modal.title-theme-preset1 #candle-container,
+        .chart-modal.title-theme-preset1 #chart-container {
+            background: #000000 !important;
             border-color: #c9a84c;
         }
 
@@ -1738,7 +1754,7 @@
         .chart-modal.title-theme-preset1 .modal-halfsell,
         .chart-modal.title-theme-preset1 .modal-titlebuy {
             background: linear-gradient(135deg, #c9a84c, #a87d2a);
-            color: #020d1a !important;
+            color: #000000 !important;
             border: 1px solid #c9a84c;
             box-shadow: none;
             font-weight: 900;
@@ -1749,126 +1765,6 @@
         .chart-modal.title-theme-preset1 .modal-halfsell:hover,
         .chart-modal.title-theme-preset1 .modal-titlebuy:hover {
             filter: brightness(1.12);
-        }
-
-        .title-preview-card {
-            position: relative;
-            isolation: isolate;
-            overflow: hidden;
-            background: #020d1a !important;
-            border-color: rgba(201,168,76,0.72) !important;
-            box-shadow:
-                inset 0 1px 0 rgba(255,233,166,0.26),
-                0 20px 42px rgba(2,13,26,0.72),
-                0 0 0 1px rgba(201,168,76,0.24),
-                0 0 36px rgba(201,168,76,0.16);
-            transition: box-shadow .3s ease, border-color .22s ease, transform .22s ease;
-        }
-        .stock-card.title-theme-preset1::before,
-        .chart-modal.title-theme-preset1::before,
-        .title-preview-card::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            pointer-events: none;
-            z-index: 0;
-            background:
-                radial-gradient(circle at 14% 10%, rgba(201,168,76,0.2), transparent 34%),
-                radial-gradient(circle at 84% 82%, rgba(201,168,76,0.08), transparent 42%),
-                linear-gradient(145deg, rgba(2,13,26,0.96) 0%, rgba(4,22,40,0.9) 46%, rgba(10,37,64,0.68) 100%);
-        }
-        .stock-card.title-theme-preset1::after,
-        .chart-modal.title-theme-preset1::after,
-        .title-preview-card::after {
-            content: '';
-            position: absolute;
-            inset: -42%;
-            border-radius: inherit;
-            pointer-events: none;
-            z-index: 0;
-            background: linear-gradient(120deg, transparent 30%, rgba(201,168,76,0.34) 49%, transparent 67%);
-            transform: translateX(-58%) rotate(8deg);
-            transition: transform .68s ease;
-        }
-        .stock-card.title-theme-preset1:hover,
-        .title-preview-card:hover {
-            border-color: rgba(232,201,122,0.94) !important;
-            box-shadow:
-                inset 0 1px 0 rgba(255,239,192,0.52),
-                0 24px 52px rgba(2,13,26,0.78),
-                0 0 0 1px rgba(201,168,76,0.34),
-                0 0 46px rgba(201,168,76,0.24);
-            transform: translateY(-1px);
-        }
-        .stock-card.title-theme-preset1:hover::after,
-        .chart-modal.title-theme-preset1:hover::after,
-        .title-preview-card:hover::after {
-            transform: translateX(60%) rotate(8deg);
-        }
-
-        .stock-card.title-theme-preset1 .info-group::before {
-            content: '◈';
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 20px;
-            height: 20px;
-            margin-right: 8px;
-            border-radius: 6px;
-            color: #e8c97a;
-            background: rgba(201,168,76,0.14);
-            border: 1px solid rgba(201,168,76,0.42);
-            font-size: 12px;
-            vertical-align: middle;
-        }
-
-        .stock-card.title-theme-preset1 .stock-name,
-        .chart-modal.title-theme-preset1 .stock-title-name {
-            color: #f5f8fc;
-            text-shadow: 0 0 8px rgba(201,168,76,0.2);
-        }
-        .stock-card.title-theme-preset1 .current-price,
-        .chart-modal.title-theme-preset1 .stock-title-price {
-            color: #e8c97a !important;
-            text-shadow: 0 0 12px rgba(201,168,76,0.28);
-        }
-        .stock-card.title-theme-preset1 .price-change,
-        .chart-modal.title-theme-preset1 .stock-title-change {
-            border: 1px solid rgba(201,168,76,0.52);
-            box-shadow: inset 0 1px 0 rgba(255,239,192,0.22);
-        }
-
-        .chart-modal.title-theme-preset1 .chart-modal-header,
-        .chart-modal.title-theme-preset1 .chart-timeframe-tabs,
-        .chart-modal.title-theme-preset1 .chart-interval-tabs,
-        .chart-modal.title-theme-preset1 .chart-ohlc-bar,
-        .chart-modal.title-theme-preset1 .chart-modal-footer,
-        .chart-modal.title-theme-preset1 .chart-modal-trade {
-            background: linear-gradient(90deg, rgba(201,168,76,0.12), rgba(2,13,26,0.95) 20%, rgba(4,22,40,0.92) 80%, rgba(201,168,76,0.12));
-            border-color: rgba(201,168,76,0.34);
-        }
-
-        .stock-card.title-theme-preset1 .btn-trade-buy,
-        .stock-card.title-theme-preset1 .btn-trade-sell,
-        .stock-card.title-theme-preset1 .btn-trade-maxsell,
-        .chart-modal.title-theme-preset1 .modal-buy,
-        .chart-modal.title-theme-preset1 .modal-sell,
-        .chart-modal.title-theme-preset1 .modal-maxsell,
-        .chart-modal.title-theme-preset1 .modal-halfsell,
-        .chart-modal.title-theme-preset1 .modal-titlebuy {
-            background: linear-gradient(135deg, #d8b66a 0%, #bc8c3c 45%, #8b6525 100%);
-            color: #07101d !important;
-            border: 1px solid rgba(232,201,122,0.46);
-            box-shadow: inset 0 1px 0 rgba(255,239,192,0.5), 0 6px 16px rgba(201,168,76,0.28);
-            font-weight: 900;
-        }
-        .chart-modal.title-theme-preset1 .modal-buy:hover,
-        .chart-modal.title-theme-preset1 .modal-sell:hover,
-        .chart-modal.title-theme-preset1 .modal-maxsell:hover,
-        .chart-modal.title-theme-preset1 .modal-halfsell:hover,
-        .chart-modal.title-theme-preset1 .modal-titlebuy:hover {
-            filter: brightness(1.08);
         }
 
         .title-preview-card {
@@ -1894,6 +1790,18 @@
         .stock-card.title-theme-preset1 .btn-alert,
         .stock-card.title-theme-preset1 .price-group {
             z-index: 3;
+        }
+        @media (max-width: 768px) {
+            .stock-card.title-theme-preset1 .stock-name {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+            .stock-card.title-theme-preset1 .stock-name .stock-title-badge {
+                margin-left: 0;
+                max-width: 100%;
+            }
         }
         /* 차트 모달 하단 광고 배너 — 원본 비율 720×150 */
         #chart-ad-banner {
