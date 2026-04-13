@@ -10530,6 +10530,8 @@ function renderFavoriteList() {
 
     snapshotVisibleTradeQtyInputs();
     clearStockListStatusNodes(listDiv);
+    // 호버 중에는 카드 재부착(appendChild)으로 인한 hover 애니메이션 리셋을 막는다.
+    const hoverFreeze = !!listDiv.querySelector('.stock-card:hover');
     // listDiv를 비우지 않고 카드를 재사용/재정렬
     const fragment = document.createDocumentFragment();
     items.sort((a, b) => (b.price || 0) - (a.price || 0)).forEach(s => {
@@ -10570,16 +10572,22 @@ function renderFavoriteList() {
         const alertBtnEl = btnGroup.querySelector('.btn-alert');
         if (alertBtnEl) { alertBtnEl.textContent = getAlertIcon(s.id); alertBtnEl.title = '알림 설정'; }
 
-        fragment.appendChild(card);
-    });
-    // 더 이상 필요 없는 카드 제거
-    Object.keys(stockElements).forEach(id => {
-        if (!items.find(s => s.id === id)) {
-            stockElements[id]?.remove();
-            delete stockElements[id];
+        if (hoverFreeze) {
+            if (!card.isConnected) listDiv.appendChild(card);
+        } else {
+            fragment.appendChild(card);
         }
     });
-    listDiv.appendChild(fragment);
+    // 더 이상 필요 없는 카드 제거(호버 중엔 보류)
+    if (!hoverFreeze) {
+        Object.keys(stockElements).forEach(id => {
+            if (!items.find(s => s.id === id)) {
+                stockElements[id]?.remove();
+                delete stockElements[id];
+            }
+        });
+        listDiv.appendChild(fragment);
+    }
     refreshCircuitFreezeOnAllListCards();
     ensureCircuitFreezeCountdownTimer();
 }
@@ -11019,6 +11027,7 @@ function renderSearchResults() {
     // listDiv를 비우지 않고 카드를 재사용/재정렬 (코인 검색에서 "잠깐 보였다가 사라짐" 방지)
     snapshotVisibleTradeQtyInputs();
     clearStockListStatusNodes(listDiv);
+    const hoverFreeze = !!listDiv.querySelector('.stock-card:hover');
     const fragment = document.createDocumentFragment();
     items.forEach((raw) => {
         const s = enrichCoinListRow(raw);
@@ -11043,15 +11052,21 @@ function renderSearchResults() {
         favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
         favBtn.textContent = isFav ? '⭐' : '☆';
 
-        fragment.appendChild(card);
-    });
-    Object.keys(stockElements).forEach((id) => {
-        if (!items.find((row) => row.id === id)) {
-            stockElements[id]?.remove();
-            delete stockElements[id];
+        if (hoverFreeze) {
+            if (!card.isConnected) listDiv.appendChild(card);
+        } else {
+            fragment.appendChild(card);
         }
     });
-    listDiv.appendChild(fragment);
+    if (!hoverFreeze) {
+        Object.keys(stockElements).forEach((id) => {
+            if (!items.find((row) => row.id === id)) {
+                stockElements[id]?.remove();
+                delete stockElements[id];
+            }
+        });
+        listDiv.appendChild(fragment);
+    }
     refreshCircuitFreezeOnAllListCards();
     ensureCircuitFreezeCountdownTimer();
 }
