@@ -651,6 +651,10 @@
                 <span class="inbox-label">👑 랭킹</span>
                 <span class="inbox-count" data-inbox-count="ranking-req">…</span>
             </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="title-sponsor" title="종목 칭호 신청 검수로 이동">
+                <span class="inbox-label">🏷️ 칭호</span>
+                <span class="inbox-count" data-inbox-count="title-sponsor">…</span>
+            </button>
         </div>
     </div>
 
@@ -1149,6 +1153,8 @@
             <input type="number" id="pricing-extend-balloons" min="1" max="999" value="33" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
             <label style="color:#94a3b8;">자산 지원 모달 · 라이브 룰렛 안내 (개)</label>
             <input type="number" id="pricing-asset-support-roulette" min="1" max="999" value="22" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">종목 칭호 후원 단가 (개)</label>
+            <input type="number" id="pricing-title-sponsor-unit-cost" min="1" max="9999" value="50" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
         </div>
         <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn-success" onclick="savePaidPricingFromAdmin()">💾 저장</button>
@@ -2010,16 +2016,11 @@
         </div>
     </div>
 
-    <div class="container" style="display:block; border-color:#8b5cf6;" id="admin-accordion-title-sponsor">
-        <div class="accordion-header"><h1>🏷️ 종목 칭호 후원 관리</h1><span class="accordion-arrow">▼</span></div>
+    <div id="admin-accordion-title-sponsor" class="container admin-accordion-anchor" style="display:block; border-color:#8b5cf6;">
+        <div class="accordion-header"><h1>🏷️ 종목 칭호 신청 검수</h1><span class="accordion-arrow">▼</span></div>
         <div class="accordion-body">
             <div class="accordion-sep">
-                <div class="info-box">칭호는 승인 시 <b>users/{uid}/stockTitles/{stockId}</b>로 무기한 적용됩니다. (계정별 적용)</div>
-                <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-                    <span style="font-size:12px; color:#94a3b8;">별풍선 단가</span>
-                    <input type="number" id="title-sponsor-unit-cost" value="50" min="1" step="1" style="flex:1; background:#0f172a; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px;">
-                    <button type="button" class="btn-primary" style="margin-top:0; width:auto; padding:8px 14px; background:#8b5cf6;" onclick="saveTitleSponsorConfig()">저장</button>
-                </div>
+                <div class="info-box">칭호는 승인 시 <b>users/{uid}/stockTitles/{stockId}</b>로 무기한 적용됩니다. (계정별 적용)<br><span style="color:#94a3b8;">단가 설정은 상단 <b>유료 단가 (별풍선)</b> 섹션에서 관리합니다.</span></div>
                 <div id="title-sponsor-status" style="font-size:12px; color:#94a3b8; margin-bottom:10px;">대기 신청 불러오는 중...</div>
                 <div id="title-sponsor-requests" style="display:flex; flex-direction:column; gap:8px;"></div>
             </div>
@@ -2232,12 +2233,12 @@
         return v && String(v.status || '').trim().toLowerCase() === 'pending';
     }
 
-    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null };
+    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null, 'title-sponsor': null };
 
     function paintAdminRequestInbox() {
         const box = document.getElementById('admin-request-inbox');
         if (!box) return;
-        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req'].forEach((k) => {
+        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req', 'title-sponsor'].forEach((k) => {
             const el = box.querySelector(`[data-inbox-count="${k}"]`);
             const chip = el && el.closest('.admin-inbox-chip');
             const v = adminInboxCounts[k];
@@ -2268,32 +2269,6 @@
         return escapeHtml(v == null ? '' : String(v));
     }
 
-    async function loadTitleSponsorConfig() {
-        try {
-            const snap = await get(ref(db, 'siteConfig/titleSponsorConfig'));
-            const d = snap.exists() ? snap.val() : {};
-            const n = Number(d.unitCost);
-            if (Number.isFinite(n) && n > 0) document.getElementById('title-sponsor-unit-cost').value = String(Math.floor(n));
-        } catch (_) { /* noop */ }
-    }
-
-    window.saveTitleSponsorConfig = async function() {
-        if (!isAdmin()) return;
-        const el = document.getElementById('title-sponsor-unit-cost');
-        const statusEl = document.getElementById('title-sponsor-status');
-        const v = Math.floor(Number(el?.value || 0));
-        if (!Number.isFinite(v) || v < 1) {
-            alert('별풍선 단가는 1 이상이어야 합니다.');
-            return;
-        }
-        try {
-            await update(ref(db, 'siteConfig/titleSponsorConfig'), { unitCost: v, updatedAt: Date.now() });
-            if (statusEl) statusEl.textContent = `✅ 단가 저장 완료: ${v.toLocaleString()}개`;
-        } catch (e) {
-            if (statusEl) statusEl.textContent = `❌ 저장 실패: ${e?.message || e}`;
-        }
-    };
-
     function renderTitleSponsorRequests(data) {
         const wrap = document.getElementById('title-sponsor-requests');
         const statusEl = document.getElementById('title-sponsor-status');
@@ -2301,6 +2276,7 @@
         const entries = Object.entries(data || {})
             .filter(([, r]) => String(r?.status || '').toLowerCase() === 'pending')
             .sort((a, b) => (b?.[1]?.createdAt || 0) - (a?.[1]?.createdAt || 0));
+        setAdminInboxCount('title-sponsor', entries.length);
         if (statusEl) statusEl.textContent = `대기 신청 ${entries.length}건`;
         if (entries.length === 0) {
             wrap.innerHTML = '<div style="font-size:12px; color:#64748b;">대기 신청이 없습니다.</div>';
@@ -2359,12 +2335,19 @@
     };
 
     function startTitleSponsorRequestListener() {
-        onValue(ref(db, 'titleRequests'), (snap) => {
+        if (titleSponsorReqUnsub) return;
+        titleSponsorReqUnsub = onValue(ref(db, 'titleRequests'), (snap) => {
             renderTitleSponsorRequests(snap.exists() ? snap.val() : {});
         }, () => {
+            setAdminInboxCount('title-sponsor', 0);
             const statusEl = document.getElementById('title-sponsor-status');
             if (statusEl) statusEl.textContent = '칭호 신청 읽기 실패';
         });
+    }
+    function stopTitleSponsorRequestListener() {
+        if (!titleSponsorReqUnsub) return;
+        try { titleSponsorReqUnsub(); } catch (_) { /* noop */ }
+        titleSponsorReqUnsub = null;
     }
 
     function scrollAdminToRequestSection(key) {
@@ -2375,6 +2358,7 @@
             'chart-ad': 'admin-accordion-chart-ad',
             relay: 'admin-accordion-relay',
             'ranking-req': 'admin-accordion-ranking-access',
+            'title-sponsor': 'admin-accordion-title-sponsor',
         };
         const id = idMap[key];
         const el = id ? document.getElementById(id) : null;
@@ -3555,7 +3539,6 @@
                 await loadSellConfig();
                 await loadMarketParams();
                 await loadStockHolderScheduler();
-                await loadTitleSponsorConfig();
                 startTitleSponsorRequestListener();
             } catch (e) {
                 console.warn('[Admin] reload sell/marketParams', e);
@@ -3569,6 +3552,7 @@
                 stopDailyAutoSettingsListener();
                 stopPaidPricingListener();
                 stopRealtimeRequestListeners();
+                stopTitleSponsorRequestListener();
                 stopConnectionCountListener();
                 stopCircuitFrozenListener();
                 hideAdminRequestInbox();
@@ -3583,6 +3567,7 @@
                     stopDailyAutoSettingsListener();
                     stopPaidPricingListener();
                     stopRealtimeRequestListeners();
+                    stopTitleSponsorRequestListener();
                     stopConnectionCountListener();
                     stopCircuitFrozenListener();
                     hideAdminRequestInbox();
@@ -3941,6 +3926,7 @@
             relayOffPeakPerHour: 10,
             regularExtendBalloons: 33,
             assetSupportRouletteBalloons: 22,
+            titleSponsorUnitCost: 50,
         };
         const o = raw && typeof raw === 'object' ? raw : {};
         const clamp = (v, fb) => {
@@ -3955,6 +3941,7 @@
             relayOffPeakPerHour: clamp(o.relayOffPeakPerHour, d.relayOffPeakPerHour),
             regularExtendBalloons: clamp(o.regularExtendBalloons, d.regularExtendBalloons),
             assetSupportRouletteBalloons: clamp(o.assetSupportRouletteBalloons, d.assetSupportRouletteBalloons),
+            titleSponsorUnitCost: clamp(o.titleSponsorUnitCost, d.titleSponsorUnitCost),
         };
     }
     function applyPaidPricingToAdminInputs(p) {
@@ -3969,6 +3956,7 @@
         set('pricing-relay-offpeak-h', p.relayOffPeakPerHour);
         set('pricing-extend-balloons', p.regularExtendBalloons);
         set('pricing-asset-support-roulette', p.assetSupportRouletteBalloons);
+        set('pricing-title-sponsor-unit-cost', p.titleSponsorUnitCost);
     }
     function startPaidPricingListener() {
         if (paidPricingUnsub) return;
@@ -3989,9 +3977,14 @@
             relayOffPeakPerHour: document.getElementById('pricing-relay-offpeak-h')?.value,
             regularExtendBalloons: document.getElementById('pricing-extend-balloons')?.value,
             assetSupportRouletteBalloons: document.getElementById('pricing-asset-support-roulette')?.value,
+            titleSponsorUnitCost: document.getElementById('pricing-title-sponsor-unit-cost')?.value,
         });
         try {
-            await set(ref(db, 'siteConfig/pricing'), { ...p, updatedAt: Date.now() });
+            const now = Date.now();
+            await Promise.all([
+                set(ref(db, 'siteConfig/pricing'), { ...p, updatedAt: now }),
+                update(ref(db, 'siteConfig/titleSponsorConfig'), { unitCost: p.titleSponsorUnitCost, updatedAt: now })
+            ]);
             showAdminToast('유료 단가 저장 완료');
             if (st) st.textContent = '저장됨';
         } catch (e) {
@@ -5824,6 +5817,7 @@
     let coinImpactAutoCountdownTimer = null;
     let stockHolderAutoTimer = null;
     let stockHolderAutoCountdownTimer = null;
+    let titleSponsorReqUnsub = null;
 
     async function loadSellConfig() {
         try {
