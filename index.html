@@ -1608,7 +1608,38 @@
         .chart-modal-trade .modal-halfsell { background: #9a3412; color: #fff; font-weight: 900; }
         .chart-modal-trade .modal-sell   { background: var(--down-color); color: white; }
         .chart-modal-trade .modal-sell10 { background: #1e3a8a; color: white; }
+        .chart-modal-trade .modal-titlebuy { background: linear-gradient(135deg,#a855f7,#6366f1); color:#fff; font-weight:900; }
         .chart-modal-trade button:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+        .stock-title-badge {
+            display:inline-flex; align-items:center; gap:4px;
+            padding:2px 8px; border-radius:999px; font-size:11px; font-weight:800;
+            background:rgba(168,85,247,0.14); color:#e9d5ff; border:1px solid rgba(192,132,252,0.4);
+            margin-left:6px; vertical-align:middle;
+        }
+        .cm-title-badge { margin-left:6px; }
+        .stock-card.title-theme-preset1,
+        .chart-modal.title-theme-preset1 {
+            position:relative;
+            border-color: rgba(167,139,250,0.5);
+            box-shadow: 0 0 0 1px rgba(167,139,250,0.15), 0 6px 18px rgba(99,102,241,0.14);
+            transition: box-shadow .2s ease, transform .2s ease;
+        }
+        .stock-card.title-theme-preset1:hover,
+        .chart-modal.title-theme-preset1:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 0 0 1px rgba(196,181,253,0.45), 0 8px 24px rgba(99,102,241,0.28);
+        }
+        .title-preview-card {
+            background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(168,85,247,0.16));
+            border:1px solid rgba(167,139,250,0.45);
+            border-radius:12px; padding:12px;
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+        .title-preview-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(99,102,241,0.28);
+        }
 
         /* 차트 모달 하단 광고 배너 — 원본 비율 720×150 */
         #chart-ad-banner {
@@ -2345,6 +2376,7 @@
         <div class="chart-modal-header">
             <div class="chart-modal-title">
                 <span class="stock-title-name" id="cm-name">-</span>
+                <span class="stock-title-badge cm-title-badge" id="cm-title-badge" style="display:none;">칭호</span>
                 <span class="stock-title-price up"  id="cm-price">-</span>
                 <span class="stock-title-change up" id="cm-change">-</span>
                 <span class="stock-title-rank" id="cm-rank" style="display:none;">순위 -</span>
@@ -2413,6 +2445,7 @@
             <button class="modal-maxsell" data-trade-type="sell" type="button" title="전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용" onclick="handleModalMaxSellButtonClick(event)">MAX</button>
             <button class="modal-halfsell" data-trade-type="sell" type="button" title="보유의 약 50% 매도 — MAX와 동일하게 8% 추가 수수료·전량매도 임팩트 계수 적용" onclick="handleModalHalfSellButtonClick(event)">50%</button>
             <button class="modal-sell" data-trade-type="sell" type="button" title="탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'sell')">매도</button>
+            <button class="modal-titlebuy" type="button" title="종목 칭호 구매/미리보기" onclick="openTitlePurchaseModal()">칭호</button>
         </div>
 
         <!-- 차트 모달 하단 광고 배너 -->
@@ -2465,6 +2498,32 @@
     </div>
 </div>
 
+
+<div id="title-purchase-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content" style="max-width:460px;">
+        <div class="promo-modal-header"><h2>🏷️ 종목 칭호 구매</h2></div>
+        <p style="font-size:12px; color:var(--text-sub); line-height:1.6; margin:0 0 10px 0;">
+            승인되면 해당 계정에서만 이 종목 카드·캔들 차트에 칭호 디자인이 적용됩니다. (무기한)
+        </p>
+        <div id="title-preview-card" class="title-preview-card" style="margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-weight:800; color:#f8fafc;"><span id="title-preview-stock-name">종목명</span><span class="stock-title-badge" id="title-preview-badge">칭호</span></div>
+                <span style="font-size:11px; color:#a78bfa;">프리셋 1</span>
+            </div>
+            <div style="font-size:11px; color:#cbd5e1; margin-top:8px;">마우스 호버 시 글로우가 강조됩니다.</div>
+        </div>
+        <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">칭호명 (2~16자, 도배 방지)</label>
+        <input type="text" id="title-purchase-input" maxlength="16" placeholder="예: 우주 대장" autocomplete="off"
+            style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text-main); font-size:14px; margin-bottom:8px;">
+        <div id="title-purchase-cost" style="font-size:12px; color:#f59e0b; margin-bottom:8px;">별풍선 단가 불러오는 중...</div>
+        <div id="title-purchase-msg" style="font-size:12px; color:var(--text-sub); margin-bottom:12px; min-height:18px;"></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" onclick="closeTitlePurchaseModal()" style="flex:1; min-width:96px; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button type="button" onclick="submitTitlePurchaseRequest()" style="flex:1; min-width:96px; background:#8b5cf6; color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">구매 신청</button>
+            <button type="button" id="title-admin-apply-btn" onclick="adminApplyTitleForMe()" style="display:none; flex:1; min-width:96px; background:#0ea5e9; color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">관리자 테스트 적용</button>
+        </div>
+    </div>
+</div>
 <div id="chart-ad-modal" class="promo-modal-overlay">
     <div class="promo-modal-content" style="max-width:420px;">
         <div class="promo-modal-header">
@@ -2861,6 +2920,14 @@ try {
     });
 } catch (_) { /* noop */ }
 
+try {
+    onValue(ref(db, 'siteConfig/titleSponsorConfig'), (snap) => {
+        const d = snap.exists() ? snap.val() : {};
+        const n = Math.floor(Number(d?.unitCost));
+        if (Number.isFinite(n) && n > 0) titleSponsorUnitCost = n;
+    });
+} catch (_) { /* noop */ }
+
 /** Firebase 서버와의 시각 차이(ms). Date.now()+값 ≈ 서버 시각 — 정규/비정규장·쿨다운이 로컬 시계 조작에 흔들리지 않게 함 */
 let serverTimeOffsetMs = 0;
 try {
@@ -3245,6 +3312,9 @@ function ensureCircuitFreezeCountdownTimer() {
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
 let userUID          = null;
+let myStockTitles    = {};
+let titleSponsorUnitCost = 50;
+const TITLE_THEME_PRESET_ID = 'preset1';
 /** 직전 로그인 UID — 계정 전환 시 구독·캐시 초기화용 */
 let previousAuthUid  = null;
 /** users/{uid} 하위 분할 onValue 일괄 해제용 — summary / cash / 쿨다운 경로 + 보유 폴링 타이머 */
@@ -3260,6 +3330,68 @@ function logAuthTrail(...args) {
 function logAuthTrailError(label, err) {
     console.error('[Critical Error]', label, err);
     if (err && typeof err === 'object') console.dir(err);
+}
+
+function sanitizeTitleName(raw) {
+    return String(raw || '').trim().replace(/\s+/g, ' ').slice(0, 16);
+}
+
+function isTitleNameTooSpammy(name) {
+    if (/(.){3,}/.test(name)) return true;
+    const only = name.replace(/\s+/g, '');
+    if (only.length >= 6 && /^(.{1,2})+$/.test(only)) return true;
+    return false;
+}
+
+function validateTitleNameInput(raw) {
+    const name = sanitizeTitleName(raw);
+    if (name.length < 2 || name.length > 16) return { ok: false, reason: '칭호는 2~16자로 입력해주세요.' };
+    if (isTitleNameTooSpammy(name)) return { ok: false, reason: '같은 글자/패턴 반복이 많은 칭호는 사용할 수 없습니다.' };
+    return { ok: true, name };
+}
+
+function getOwnedTitleForStock(stockId) {
+    if (!stockId || !myStockTitles || typeof myStockTitles !== 'object') return null;
+    const rec = myStockTitles[stockId];
+    if (!rec || typeof rec !== 'object') return null;
+    const approved = rec.status ? String(rec.status).toLowerCase() === 'approved' : true;
+    const active = rec.active !== false;
+    if (!approved || !active) return null;
+    const title = sanitizeTitleName(rec.title || rec.name || '');
+    if (!title) return null;
+    return { title, theme: rec.theme || TITLE_THEME_PRESET_ID };
+}
+
+function applyTitleDecorationToCard(card, stockId) {
+    if (!card) return;
+    const titleRec = getOwnedTitleForStock(stockId);
+    const badge = card.querySelector('.stock-title-badge');
+    card.classList.remove('title-theme-preset1');
+    if (!titleRec) {
+        if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+        return;
+    }
+    if (badge) {
+        badge.style.display = 'inline-flex';
+        badge.textContent = titleRec.title;
+    }
+    if (titleRec.theme === TITLE_THEME_PRESET_ID) card.classList.add('title-theme-preset1');
+}
+
+function applyTitleDecorationToChartModal(stockId) {
+    const modal = document.querySelector('#chart-modal-overlay .chart-modal');
+    const badge = document.getElementById('cm-title-badge');
+    if (!modal || !badge) return;
+    modal.classList.remove('title-theme-preset1');
+    const titleRec = getOwnedTitleForStock(stockId);
+    if (!titleRec) {
+        badge.style.display = 'none';
+        badge.textContent = '';
+        return;
+    }
+    badge.style.display = 'inline-flex';
+    badge.textContent = titleRec.title;
+    if (titleRec.theme === TITLE_THEME_PRESET_ID) modal.classList.add('title-theme-preset1');
 }
 
 function scheduleUserDataUiRefresh() {
@@ -3397,6 +3529,27 @@ function attachUserDataShardListeners(uid) {
         );
     } catch (e) {
         logAuthTrailError('attachUserDataShardListeners cash', e);
+    }
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/stockTitles`),
+                (snap) => {
+                    try {
+                        const v = snap.exists() ? snap.val() : {};
+                        myStockTitles = v && typeof v === 'object' ? v : {};
+                        scheduleUserDataUiRefresh();
+                        if (chartModalStockId) applyTitleDecorationToChartModal(chartModalStockId);
+                    } catch (e) {
+                        console.warn('[Auth] users/.../stockTitles', e);
+                    }
+                },
+                (err) => console.error('[Auth] users/.../stockTitles onValue', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners stockTitles', e);
     }
 
     try {
@@ -5956,6 +6109,7 @@ function updateChartModalHeader(s) {
         rankEl.style.display = '';
         rankEl.textContent = `순위 ${getMarketRankText(s.id, chartModalMarket)}`;
     }
+    applyTitleDecorationToChartModal(s.id);
 }
 
 /** 차트 모달용 — 랭킹 탭을 열지 않았어도 권한 판별 */
@@ -6055,6 +6209,10 @@ function closeChartModal() {
         hr.style.display = 'none';
         hr.innerHTML = '';
     }
+    const modal = document.querySelector('#chart-modal-overlay .chart-modal');
+    if (modal) modal.classList.remove('title-theme-preset1');
+    const badge = document.getElementById('cm-title-badge');
+    if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
 }
 document.getElementById('chart-modal-close-btn').addEventListener('click', closeChartModal);
 document.getElementById('chart-modal-overlay').addEventListener('click', (e) => {
@@ -8662,6 +8820,111 @@ document.addEventListener('input', (e) => {
 });
 
 // ── 홍보 신청 제출 ───────────────────────────────────────────
+window.openTitlePurchaseModal = async function() {
+    if (!chartModalStockId) return;
+    const modal = document.getElementById('title-purchase-modal');
+    const stockNameEl = document.getElementById('title-preview-stock-name');
+    const msgEl = document.getElementById('title-purchase-msg');
+    const costEl = document.getElementById('title-purchase-cost');
+    const inputEl = document.getElementById('title-purchase-input');
+    const previewBadge = document.getElementById('title-preview-badge');
+    const s = chartModalMarket === 'coin'
+        ? (favoriteCoins[chartModalStockId] || ownedCoins[chartModalStockId] || searchResults[chartModalStockId] || allCoins.find((x) => x.id === chartModalStockId))
+        : stockRowForId(chartModalStockId);
+    const stockName = s?.name || stockNameCache[chartModalStockId] || chartModalStockId;
+    if (stockNameEl) stockNameEl.textContent = stockName;
+    if (msgEl) { msgEl.style.color = 'var(--text-sub)'; msgEl.textContent = '칭호를 입력하면 미리보기에 반영됩니다.'; }
+    if (costEl) costEl.textContent = `별풍선 ${Number(titleSponsorUnitCost || 50).toLocaleString()}개 (관리자 설정)`;
+    if (previewBadge) previewBadge.textContent = sanitizeTitleName(inputEl?.value || '') || '칭호';
+    const isAdmin = (auth.currentUser?.email || '').toLowerCase() === 'skftodwocks2@gmail.com';
+    const adminBtn = document.getElementById('title-admin-apply-btn');
+    if (adminBtn) adminBtn.style.display = isAdmin ? '' : 'none';
+    if (modal) modal.classList.add('active');
+};
+
+window.closeTitlePurchaseModal = function() {
+    document.getElementById('title-purchase-modal')?.classList.remove('active');
+};
+
+window.submitTitlePurchaseRequest = async function() {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return alert('로그인이 필요합니다.');
+    if (!chartModalStockId) return alert('종목을 먼저 선택해주세요.');
+    const msgEl = document.getElementById('title-purchase-msg');
+    const inputEl = document.getElementById('title-purchase-input');
+    const check = validateTitleNameInput(inputEl?.value || '');
+    if (!check.ok) {
+        if (msgEl) { msgEl.style.color = '#ef4444'; msgEl.textContent = check.reason; }
+        return;
+    }
+    const title = check.name;
+    const now = Date.now();
+    if (msgEl) { msgEl.style.color = 'var(--text-sub)'; msgEl.textContent = '신청 중...'; }
+    try {
+        const reqId = `title_${uid}_${now}`;
+        const market = chartModalMarket === 'coin' ? 'coin' : 'stock';
+        const stockName = stockNameForId(chartModalStockId);
+        await set(ref(db, `titleRequests/${reqId}`), {
+            uid,
+            stockId: chartModalStockId,
+            stockName,
+            market,
+            title,
+            theme: TITLE_THEME_PRESET_ID,
+            status: 'pending',
+            cost: Number(titleSponsorUnitCost || 50),
+            createdAt: now,
+            updatedAt: now
+        });
+        if (msgEl) {
+            msgEl.style.color = '#22c55e';
+            msgEl.textContent = `✅ 신청 완료! 관리자 승인 후 적용됩니다. (별풍선 ${Number(titleSponsorUnitCost || 50).toLocaleString()}개)`;
+        }
+    } catch (e) {
+        if (msgEl) {
+            msgEl.style.color = '#ef4444';
+            msgEl.textContent = '신청 실패: ' + (e?.message || e);
+        }
+    }
+};
+
+window.adminApplyTitleForMe = async function() {
+    const isAdmin = (auth.currentUser?.email || '').toLowerCase() === 'skftodwocks2@gmail.com';
+    if (!isAdmin) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid || !chartModalStockId) return;
+    const inputEl = document.getElementById('title-purchase-input');
+    const msgEl = document.getElementById('title-purchase-msg');
+    const check = validateTitleNameInput(inputEl?.value || '');
+    if (!check.ok) {
+        if (msgEl) { msgEl.style.color = '#ef4444'; msgEl.textContent = check.reason; }
+        return;
+    }
+    try {
+        await set(ref(db, `users/${uid}/stockTitles/${chartModalStockId}`), {
+            title: check.name,
+            theme: TITLE_THEME_PRESET_ID,
+            status: 'approved',
+            active: true,
+            approvedAt: Date.now(),
+            source: 'admin_test'
+        });
+        if (msgEl) { msgEl.style.color = '#22c55e'; msgEl.textContent = '✅ 관리자 테스트 적용 완료'; }
+    } catch (e) {
+        if (msgEl) { msgEl.style.color = '#ef4444'; msgEl.textContent = '적용 실패: ' + (e?.message || e); }
+    }
+};
+
+document.getElementById('title-purchase-input')?.addEventListener('input', (e) => {
+    const v = sanitizeTitleName(e.target.value || '');
+    const badge = document.getElementById('title-preview-badge');
+    if (badge) badge.textContent = v || '칭호';
+});
+
+document.getElementById('title-purchase-modal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('title-purchase-modal')) closeTitlePurchaseModal();
+});
+
 window.updatePromoCost = function() {
     const days   = parseInt(document.getElementById('promo-days').value);
     const costEl = document.getElementById('promo-cost');
@@ -8989,7 +9252,7 @@ function updateCardContent(card, s, userStock) {
         const rankText = ` · 순위 ${getMarketRankText(s.id, coin ? 'coin' : 'stock')}`;
         card.innerHTML = `
             <div class="info-group">
-                <div class="stock-name">${escapeHtml(name)}</div>
+                <div class="stock-name">${escapeHtml(name)}<span class="stock-title-badge" style="display:none;"></span></div>
                 <div class="my-qty">보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>${rankText}</div>
             </div>
             <div class="price-group">
@@ -9024,6 +9287,7 @@ function updateCardContent(card, s, userStock) {
         `;
         refreshCircuitFreezeOnStockCard(card, s.id);
         applyTradeCooldownStateToCard(card, s.id);
+        applyTitleDecorationToCard(card, s.id);
         return;
     }
 
@@ -9056,6 +9320,7 @@ function updateCardContent(card, s, userStock) {
     applyTradeCooldownStateToCard(card, s.id);
 
     refreshCircuitFreezeOnStockCard(card, s.id);
+    applyTitleDecorationToCard(card, s.id);
 }
 
 // ── 주식 데이터 리스너 (stocks/ 전체 + 즐겨찾기/보유 개별) ───
