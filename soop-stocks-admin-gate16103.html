@@ -1653,7 +1653,7 @@
             유저가 신청한 배너 홍보 목록입니다. <b>수락</b> 시 stocksBanner에 자동 등록됩니다.
         </div>
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
-            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
+            <span class="realtime-bar" title="실시간: 홍보·상장 등은 createdAt 기준 최근 280건만 구독(대역 절약). 자산 지원은 status=pending만. 그 밖의 이력은 Firebase 콘솔에서 확인."><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div id="ad-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
@@ -1672,7 +1672,7 @@
             유저가 신청한 차트 하단 배너 목록입니다. <b>수락</b> 시 chartBanner에 자동 등록됩니다.
         </div>
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
-            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
+            <span class="realtime-bar" title="실시간: 홍보·상장 등은 createdAt 기준 최근 280건만 구독(대역 절약). 자산 지원은 status=pending만. 그 밖의 이력은 Firebase 콘솔에서 확인."><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div id="chart-ad-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
@@ -1692,7 +1692,7 @@
             <span style="color:#38bdf8;">Firebase DB의 <b>relayRequests</b> 경로를 변경합니다.</span>
         </div>
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
-            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
+            <span class="realtime-bar" title="실시간: 홍보·상장 등은 createdAt 기준 최근 280건만 구독(대역 절약). 자산 지원은 status=pending만. 그 밖의 이력은 Firebase 콘솔에서 확인."><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div id="relay-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
@@ -1934,7 +1934,7 @@
             <span style="color:#38bdf8;">Firebase DB의 <b>listingRequests</b> 경로에서 관리됩니다.</span>
         </div>
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
-            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
+            <span class="realtime-bar" title="실시간: 홍보·상장 등은 createdAt 기준 최근 280건만 구독(대역 절약). 자산 지원은 status=pending만. 그 밖의 이력은 Firebase 콘솔에서 확인."><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div id="listing-request-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
@@ -1954,7 +1954,7 @@
             <span style="color:#38bdf8;">Firebase: <b>assetRequests/</b> · 감사 로그: <b>adminLogs/grants/</b></span>
         </div>
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
-            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
+            <span class="realtime-bar" title="실시간: 홍보·상장 등은 createdAt 기준 최근 280건만 구독(대역 절약). 자산 지원은 status=pending만. 그 밖의 이력은 Firebase 콘솔에서 확인."><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div style="overflow-x:auto; border:1px solid #334155; border-radius:10px;">
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
@@ -2003,7 +2003,7 @@
         </div>
 
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
-            <span class="realtime-bar" title="Firebase onValue — 새 신청이 즉시 반영됩니다"><span class="live-dot"></span>실시간 연동</span>
+            <span class="realtime-bar" title="실시간: 홍보·상장 등은 createdAt 기준 최근 280건만 구독(대역 절약). 자산 지원은 status=pending만. 그 밖의 이력은 Firebase 콘솔에서 확인."><span class="live-dot"></span>실시간 연동</span>
         </div>
         <div id="asset-ranking-access-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
@@ -2015,7 +2015,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set, remove, onValue, serverTimestamp, runTransaction, push, query, orderByChild, orderByKey, limitToLast, limitToFirst } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, update, set, remove, onValue, serverTimestamp, runTransaction, push, query, orderByChild, orderByKey, limitToLast, limitToFirst, equalTo } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, initializeAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, browserPopupRedirectResolver,
         indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
@@ -2080,6 +2080,63 @@
     }
     const provider = new GoogleAuthProvider();
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
+
+    /** 전체 users/ 스냅샷 — 짧은 TTL로 연속 관리 작업(미거래 정리·배치 등)의 중복 다운로드 완화. 집계(랭킹)는 항상 fresh. */
+    const USERS_ROOT_CACHE_TTL_MS = 55000;
+    let usersRootCache = { snap: null, at: 0 };
+    function invalidateUsersRootCache() {
+        usersRootCache = { snap: null, at: 0 };
+    }
+    async function getUsersRootCached(opts) {
+        const bypass = opts && opts.bypassCache;
+        const now = Date.now();
+        if (!bypass && usersRootCache.snap && now - usersRootCache.at < USERS_ROOT_CACHE_TTL_MS) {
+            return usersRootCache.snap;
+        }
+        const snap = await get(ref(db, 'users/'));
+        usersRootCache = { snap, at: now };
+        return snap;
+    }
+
+    /** 인박스: createdAt 기준 최근 N건만 실시간 구독(전체 루트 대비 대역 절약). 아주 오래된 대기 건은 콘솔에서 확인. */
+    const ADMIN_REQUESTS_RECENT_LIMIT = 280;
+    function adminRecentRequestsQuery(pathNoSlash) {
+        return query(ref(db, pathNoSlash), orderByChild('createdAt'), limitToLast(ADMIN_REQUESTS_RECENT_LIMIT));
+    }
+
+    async function fetchUserLiveCashDisplay(uid) {
+        if (!uid) return '—';
+        try {
+            const cashSnap = await get(ref(db, `users/${uid}/cash`));
+            if (cashSnap.exists()) {
+                const c = Number(cashSnap.val());
+                if (Number.isFinite(c)) return Math.floor(c).toLocaleString();
+            }
+            const sumSnap = await get(ref(db, `users/${uid}/summary/cash`));
+            if (sumSnap.exists()) {
+                const c = Number(sumSnap.val());
+                if (Number.isFinite(c)) return Math.floor(c).toLocaleString();
+            }
+        } catch (_) { /* noop */ }
+        return '—';
+    }
+
+    async function mapWithConcurrency(items, limit, mapper) {
+        const n = items.length;
+        if (n === 0) return [];
+        const cap = Math.max(1, Math.min(limit, n));
+        const out = new Array(n);
+        let next = 0;
+        async function worker() {
+            for (;;) {
+                const i = next++;
+                if (i >= n) break;
+                out[i] = await mapper(items[i], i);
+            }
+        }
+        await Promise.all(Array.from({ length: cap }, () => worker()));
+        return out;
+    }
 
     // 인증 가드 헬퍼 — 모든 admin 함수 진입부에서 호출
     function isAdmin() {
@@ -2258,15 +2315,11 @@
             return;
         }
         try {
-        const rows = await Promise.all(pending.map(async ([reqId, req]) => {
-            let liveCash = '—';
-            try {
-                const us = await get(ref(db, `users/${req.uid}`));
-                if (us.exists()) {
-                    const c = Number(us.val().cash);
-                    liveCash = Number.isFinite(c) ? Math.floor(c).toLocaleString() : '—';
-                }
-            } catch (_) { /* noop */ }
+        const liveCashList = await mapWithConcurrency(pending, 12, ([, req]) =>
+            fetchUserLiveCashDisplay(req.uid)
+        );
+        const rows = pending.map(([reqId, req], i) => {
+            const liveCash = liveCashList[i] || '—';
             const reqBal = (req.currentBalance != null) ? Math.floor(Number(req.currentBalance) || 0).toLocaleString() : '—';
             const reason = (req.requestReason || '').trim();
             const reasonFull = escapeHtml(reason || '—');
@@ -2303,7 +2356,7 @@
                             style="background:#22c55e; color:white; border:none; padding:10px 12px; border-radius:8px; cursor:pointer; font-weight:800; font-size:12px; white-space:nowrap; min-width:88px;">Grant</button>
                     </td>
                 </tr>`;
-        }));
+        });
         tbody.innerHTML = rows.join('');
         tbody.querySelectorAll('.btn-grant-asset').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -2826,7 +2879,7 @@
         resetAdminInboxCounts();
         maybeRequestNotifPermission();
 
-        requestRealtimeUnsubs.ad = onValue(ref(db, 'adRequests/'), (snap) => {
+        requestRealtimeUnsubs.ad = onValue(adminRecentRequestsQuery('adRequests'), (snap) => {
             try {
                 const data = snap.val() || {};
                 const keys = Object.keys(data);
@@ -2851,7 +2904,7 @@
             }
         });
 
-        requestRealtimeUnsubs.chart = onValue(ref(db, 'chartAdRequests/'), (snap) => {
+        requestRealtimeUnsubs.chart = onValue(adminRecentRequestsQuery('chartAdRequests'), (snap) => {
             try {
                 const data = snap.val() || {};
                 const keys = Object.keys(data);
@@ -2876,7 +2929,7 @@
             }
         });
 
-        requestRealtimeUnsubs.listing = onValue(ref(db, 'listingRequests/'), (snap) => {
+        requestRealtimeUnsubs.listing = onValue(adminRecentRequestsQuery('listingRequests'), (snap) => {
             try {
                 const data = snap.val() || {};
                 const keys = Object.keys(data);
@@ -2901,7 +2954,7 @@
             }
         });
 
-        requestRealtimeUnsubs.relay = onValue(ref(db, 'relayRequests/'), (snap) => {
+        requestRealtimeUnsubs.relay = onValue(adminRecentRequestsQuery('relayRequests'), (snap) => {
             try {
                 const data = snap.val() || {};
                 const keys = Object.keys(data);
@@ -2927,7 +2980,7 @@
         });
 
         requestRealtimeUnsubs.rankingAccess = onValue(
-            ref(db, 'assetRankingRequests/'),
+            adminRecentRequestsQuery('assetRankingRequests'),
             (snap) => {
                 try {
                     const data = snap.val() || {};
@@ -2964,12 +3017,12 @@
         );
 
         requestRealtimeUnsubs.asset = onValue(
-            ref(db, 'assetRequests'),
+            query(ref(db, 'assetRequests'), orderByChild('status'), equalTo('pending')),
             (snap) => {
                 try {
                     const data = snap.val() || {};
                     const keys = Object.keys(data);
-                    console.log('[assetRequests][Stage3-admin] onValue snapshot exists=', snap.exists(), 'childCount=', keys.length, '(listener: full path assetRequests/, not orderByChild)');
+                    console.log('[assetRequests][Stage3-admin] onValue pending query childCount=', keys.length);
                     let added = [];
                     if (prevAssetKeys !== null) {
                         added = keys.filter((k) => !prevAssetKeys.has(k));
@@ -2998,13 +3051,6 @@
                 setAdminInboxCount('asset', 0);
             }
         );
-
-        get(ref(db, 'assetRequests')).then((snap) => {
-            console.log('[assetRequests][Stage3-admin] one-shot get() exists=', snap.exists(), 'keys=', snap.exists() ? Object.keys(snap.val() || {}).length : 0);
-            renderAssetRequestsTable(snap.val() || {}, new Set());
-        }).catch((e) => {
-            console.error('[assetRequests][Stage3-admin] one-shot get failed:', e?.code || '', e?.message || e);
-        });
     }
 
     // 사용자 페이지 배너 캐시 무효화 — bannerCacheVersion 증가
@@ -3428,7 +3474,7 @@
 
     // ── 미거래 유저 정리 ─────────────────────────────────────
     async function getInactiveUsers() {
-        const snap = await get(ref(db, 'users/'));
+        const snap = await getUsersRootCached();
         const data = snap.val() || {};
         const inactive = [];
         Object.entries(data).forEach(([uid, user]) => {
@@ -3468,6 +3514,7 @@
                 deleted += batch.length;
                 statusEl.innerText = `삭제 중... (${deleted}/${inactive.length})`;
             }
+            invalidateUsersRootCache();
             statusEl.innerText = `✅ ${inactive.length.toLocaleString()}명 삭제 완료`;
         } catch(e) { statusEl.innerText = '삭제 실패: ' + e.message; }
     };
@@ -3668,10 +3715,17 @@
             let nickname = '';
             let blockedUntil = 0;
             try {
-                const userSnap = await get(ref(db, `users/${m.uid}`));
-                const u = userSnap.exists() ? (userSnap.val() || {}) : {};
-                nickname = String(u.nickname || u.name || '');
-                blockedUntil = Number(u?.moderation?.tradeBlockedUntil || u?.tradeBlockedUntil || 0);
+                const [nickSnap, nameSnap, modSnap, tbSnap] = await Promise.all([
+                    get(ref(db, `users/${m.uid}/nickname`)),
+                    get(ref(db, `users/${m.uid}/name`)),
+                    get(ref(db, `users/${m.uid}/moderation`)),
+                    get(ref(db, `users/${m.uid}/tradeBlockedUntil`))
+                ]);
+                if (nickSnap.exists()) nickname = String(nickSnap.val() || '');
+                else if (nameSnap.exists()) nickname = String(nameSnap.val() || '');
+                const mod = modSnap.exists() ? (modSnap.val() || {}) : {};
+                const tbRoot = tbSnap.exists() ? Number(tbSnap.val()) : 0;
+                blockedUntil = Number(mod.tradeBlockedUntil || tbRoot || 0);
             } catch (_) { /* noop */ }
             return { ...m, nickname, blockedUntil };
         }));
@@ -4927,7 +4981,7 @@
                 }));
             }
 
-            const usersSnap = await get(ref(db, 'users/'));
+            const usersSnap = await getUsersRootCached({ bypassCache: true });
             const usersData = usersSnap.val() || {};
             const userIds   = Object.keys(usersData);
             const holdingPairs = [];
@@ -4953,6 +5007,7 @@
                 });
                 await update(ref(db), batch);
             }
+            invalidateUsersRootCache();
             statusEl.innerText = `종목·유저 반영 완료 (${userIds.length}명 스캔)`;
 
             statusEl.innerText = '🟢 점검 모드 해제 중...';
@@ -5082,7 +5137,7 @@
 
         if (statusEl) statusEl.textContent = '유저 데이터 조회 중...';
         try {
-            const usersSnap = await get(ref(db, 'users/'));
+            const usersSnap = await getUsersRootCached({ bypassCache: true });
             if (!usersSnap.exists()) {
                 if (statusEl) statusEl.textContent = '유저 데이터가 없습니다.';
                 return;
@@ -5104,6 +5159,7 @@
 
             if (statusEl) statusEl.textContent = `삭제 중... (${targetCount}명)`;
             await update(ref(db), updates);
+            invalidateUsersRootCache();
             if (statusEl) statusEl.textContent = `완료: ${targetCount}명 코인 보유량 삭제`;
             alert(`✅ 완료: ${targetCount}명의 코인 보유량(users/*/coins)을 삭제했습니다.`);
         } catch (e) {
@@ -6888,7 +6944,7 @@
         if (statusEl) statusEl.textContent = '조회 중...';
         const BATCH_KEYS = 400;
         try {
-            const snap = await get(ref(db, 'users/'));
+            const snap = await getUsersRootCached();
             if (!snap.exists()) {
                 if (statusEl) statusEl.textContent = '유저 데이터 없음';
                 return;
@@ -6929,6 +6985,7 @@
                 await update(ref(db), batch);
                 if (statusEl) statusEl.textContent = `반영 중… ${i + 1}/${chunks.length}`;
             }
+            invalidateUsersRootCache();
             if (statusEl) statusEl.textContent = `완료: ${keys.length}개 경로 갱신`;
         } catch (e) {
             console.error('[sanitizeAllUserStocksData]', e);
@@ -7116,7 +7173,7 @@
                 }));
             }
 
-            const usersSnap = await get(ref(db, 'users/'));
+            const usersSnap = await getUsersRootCached({ bypassCache: true });
             const usersData = usersSnap.val() || {};
             const userIds = Object.keys(usersData);
 
@@ -7144,6 +7201,7 @@
                 });
                 await update(ref(db), batch);
             }
+            invalidateUsersRootCache();
 
             if (logEl) {
                 const thresholdStr = thresholdWon.toLocaleString();
@@ -7486,7 +7544,7 @@
         try {
             // 1. 전체 유저 데이터 읽기 (부모 users/.read 는 관리자 이메일만 — database.rules.json)
             logEl.innerHTML += '<div>유저 데이터 읽는 중...</div>';
-            const usersSnap = await get(ref(db, 'users/'));
+            const usersSnap = await getUsersRootCached({ bypassCache: true });
             if (!usersSnap.exists()) {
                 logEl.innerHTML += '<div style="color:#ef4444;">유저 데이터 없음</div>';
                 chipEl.className   = 'status-chip expired';
@@ -7733,7 +7791,7 @@
         try {
             appendLog('<div>유저·주식·코인 읽는 중...</div>');
             const [usersSnap, stocksSnap, coinsSnap] = await Promise.all([
-                get(ref(db, 'users/')),
+                getUsersRootCached({ bypassCache: true }),
                 get(ref(db, 'stocks/')),
                 get(ref(db, 'coins/'))
             ]);
