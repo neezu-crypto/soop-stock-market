@@ -2023,6 +2023,10 @@
                 <div class="info-box">칭호는 승인 시 <b>stockTitles/{stockId}</b>로 전체 유저에게 <b>5일간</b> 적용됩니다. (종목당 활성 1개)<br><span style="color:#94a3b8;">단가 설정은 상단 <b>유료 단가 (별풍선)</b> 섹션에서 관리합니다.</span></div>
                 <div id="title-sponsor-status" style="font-size:12px; color:#94a3b8; margin-bottom:10px;">대기 신청 불러오는 중...</div>
                 <div id="title-sponsor-requests" style="display:flex; flex-direction:column; gap:8px;"></div>
+                <div style="height:10px;"></div>
+                <div style="font-size:12px; color:#cbd5e1; font-weight:700; margin-bottom:8px;">현재 적용중 칭호/스킨</div>
+                <div id="title-sponsor-active-status" style="font-size:12px; color:#94a3b8; margin-bottom:8px;">적용 현황 불러오는 중...</div>
+                <div id="title-sponsor-active-list" style="display:flex; flex-direction:column; gap:8px;"></div>
             </div>
         </div>
     </div>
@@ -2298,6 +2302,46 @@
         }).join('');
     }
 
+    function renderTitleSponsorActiveList(data) {
+        const wrap = document.getElementById('title-sponsor-active-list');
+        const statusEl = document.getElementById('title-sponsor-active-status');
+        if (!wrap) return;
+        const now = Date.now();
+        const entries = Object.entries(data || {})
+            .filter(([, r]) => {
+                if (!r || typeof r !== 'object') return false;
+                const active = r.active !== false;
+                const approved = String(r.status || 'approved').toLowerCase() === 'approved';
+                const expiresAt = Number(r.expiresAt || 0);
+                return active && approved && (!expiresAt || expiresAt > now);
+            })
+            .sort((a, b) => (Number(a?.[1]?.expiresAt || 0) - Number(b?.[1]?.expiresAt || 0)));
+
+        if (statusEl) statusEl.textContent = `현재 적용 중 ${entries.length}건`;
+        if (entries.length === 0) {
+            wrap.innerHTML = '<div style="font-size:12px; color:#64748b;">현재 적용 중인 칭호가 없습니다.</div>';
+            return;
+        }
+        wrap.innerHTML = entries.map(([stockId, r]) => {
+            const expiresAt = Number(r.expiresAt || 0);
+            const expiresText = expiresAt > 0 ? new Date(expiresAt).toLocaleString('ko-KR') : '만료 없음';
+            const owner = String(r.uid || '-');
+            const title = escapeAdminText(r.title || '');
+            const stockName = escapeAdminText(r.stockName || stockId);
+            const theme = escapeAdminText(r.theme || 'preset1');
+            return `<div style="border:1px solid #334155; border-radius:10px; padding:10px; background:#0f172a;">
+                <div style="display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:6px;">
+                    <div style="font-size:12px; color:#f8fafc; font-weight:800;">${title} <span style="color:#a78bfa; font-weight:700;">@ ${stockName}</span></div>
+                    <div style="font-size:11px; color:#94a3b8;">theme: ${theme}</div>
+                </div>
+                <div style="font-size:11px; color:#94a3b8; margin-bottom:8px;">stockId: ${escapeAdminText(stockId)} · uid: ${escapeAdminText(owner)} · 만료: ${expiresText}</div>
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button type="button" style="background:#f59e0b; color:#0f172a; border:none; padding:6px 10px; border-radius:6px; font-size:12px; font-weight:700;" onclick="deactivateTitleSponsorActive('${escapeAdminText(stockId)}')">즉시 해제</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
     window.approveTitleSponsorRequest = async function(reqId) {
         if (!isAdmin()) return;
         try {
@@ -2354,8 +2398,27 @@
         }
     };
 
+    window.deactivateTitleSponsorActive = async function(stockId) {
+        if (!isAdmin()) return;
+        const sid = String(stockId || '').trim();
+        if (!sid) return;
+        if (!confirm(`종목(${sid})의 현재 칭호 적용을 즉시 해제할까요?`)) return;
+        try {
+            await update(ref(db, `stockTitles/${sid}`), {
+                active: false,
+                status: 'expired',
+                expiredAt: Date.now(),
+                updatedAt: Date.now(),
+                expiredBy: ADMIN_EMAIL
+            });
+            showAdminToast('현재 적용 칭호를 해제했습니다.');
+        } catch (e) {
+            alert('해제 실패: ' + (e?.message || e));
+        }
+    };
+
     function startTitleSponsorRequestListener() {
-        if (titleSponsorReqUnsub) return;
+        if (titleSponsorReqUnsub || titleSponsorActiveUnsub) return;
         titleSponsorReqUnsub = onValue(ref(db, 'titleRequests'), (snap) => {
             renderTitleSponsorRequests(snap.exists() ? snap.val() : {});
         }, () => {
@@ -2363,11 +2426,24 @@
             const statusEl = document.getElementById('title-sponsor-status');
             if (statusEl) statusEl.textContent = '칭호 신청 읽기 실패';
         });
+        titleSponsorActiveUnsub = onValue(ref(db, 'stockTitles'), (snap) => {
+            renderTitleSponsorActiveList(snap.exists() ? snap.val() : {});
+        }, () => {
+            const statusEl = document.getElementById('title-sponsor-active-status');
+            const wrap = document.getElementById('title-sponsor-active-list');
+            if (statusEl) statusEl.textContent = '적용 현황 읽기 실패';
+            if (wrap) wrap.innerHTML = '<div style="font-size:12px; color:#ef4444;">stockTitles 읽기 실패</div>';
+        });
     }
     function stopTitleSponsorRequestListener() {
-        if (!titleSponsorReqUnsub) return;
-        try { titleSponsorReqUnsub(); } catch (_) { /* noop */ }
-        titleSponsorReqUnsub = null;
+        if (titleSponsorReqUnsub) {
+            try { titleSponsorReqUnsub(); } catch (_) { /* noop */ }
+            titleSponsorReqUnsub = null;
+        }
+        if (titleSponsorActiveUnsub) {
+            try { titleSponsorActiveUnsub(); } catch (_) { /* noop */ }
+            titleSponsorActiveUnsub = null;
+        }
     }
 
     function scrollAdminToRequestSection(key) {
@@ -5838,6 +5914,7 @@
     let stockHolderAutoTimer = null;
     let stockHolderAutoCountdownTimer = null;
     let titleSponsorReqUnsub = null;
+    let titleSponsorActiveUnsub = null;
 
     async function loadSellConfig() {
         try {
