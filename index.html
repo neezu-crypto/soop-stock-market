@@ -1815,6 +1815,22 @@
                 max-width: 100%;
             }
         }
+        @media (hover: none), (pointer: coarse), (max-width: 768px) {
+            /* Mobile Safari/Chrome: prevent glossy layer tearing in modal */
+            .stock-card.title-theme-preset1::after,
+            .chart-modal.title-theme-preset1::after {
+                inset: -8%;
+                background: linear-gradient(120deg, transparent 38%, rgba(232, 201, 122, 0.2) 50%, transparent 62%);
+                mix-blend-mode: normal;
+                opacity: 0.9;
+                transform: translateX(-42%) rotate(6deg);
+                will-change: transform;
+            }
+            .stock-card.title-theme-preset1:hover::after,
+            .chart-modal.title-theme-preset1:hover::after {
+                transform: translateX(42%) rotate(6deg);
+            }
+        }
         /* 차트 모달 하단 광고 배너 — 원본 비율 720×150 */
         #chart-ad-banner {
             background: var(--deep);
