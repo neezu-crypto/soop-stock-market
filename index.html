@@ -1804,6 +1804,10 @@
             z-index: 3;
         }
         @media (max-width: 768px) {
+            /* Reduce repaint/compositing cost when many themed cards are on screen */
+            .stock-card.title-theme-preset1 {
+                contain: paint;
+            }
             .stock-card.title-theme-preset1 .stock-name {
                 display: flex;
                 flex-direction: column;
@@ -3597,8 +3601,82 @@ function applyTitleDecorationToAllVisibleCards() {
 const titleParticleSystems = new Map();
 let titleParticleRaf = 0;
 
+/** Pause particle work for off-screen list cards (saves CPU/GPU when many themed rows exist). */
+let titleParticleListIo = null;
+if (typeof IntersectionObserver !== 'undefined') {
+    titleParticleListIo = new IntersectionObserver((entries) => {
+        entries.forEach((en) => {
+            const el = en.target;
+            const sys = titleParticleSystems.get(el);
+            if (!sys || !sys.listCardIo) return;
+            if (en.isIntersecting) {
+                sys.visible = true;
+                sys.particles.length = 0;
+                if (sys.touchMode) startTitleParticleMobileTwinkle(sys, el);
+            } else {
+                sys.visible = false;
+                stopTitleParticleMobileTwinkle(sys);
+                sys.particles.length = 0;
+            }
+        });
+    }, { root: null, rootMargin: '96px 0px', threshold: 0 });
+}
+
 function isTouchLikeDevice() {
     return window.matchMedia('(hover: none), (pointer: coarse)').matches || 'ontouchstart' in window;
+}
+
+function getTitleParticleTier(el) {
+    if (el && el.classList && el.classList.contains('stock-card') && el.closest && el.closest('#stock-list')) return 'list';
+    if (el && ((el.classList && el.classList.contains('chart-modal')) || el.id === 'title-preview-card')) return 'chrome';
+    return 'default';
+}
+
+function getTitleParticleCanvasDpr(el) {
+    const tier = el ? getTitleParticleTier(el) : 'default';
+    if (isTouchLikeDevice() || (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 768px)').matches)) {
+        return tier === 'list' ? 1 : Math.min(1.5, window.devicePixelRatio || 1);
+    }
+    return Math.min(2, window.devicePixelRatio || 1);
+}
+
+function stopTitleParticleMobileTwinkle(sys) {
+    if (!sys) return;
+    if (sys.mobileTwinkleTimer) {
+        clearInterval(sys.mobileTwinkleTimer);
+        sys.mobileTwinkleTimer = null;
+    }
+}
+
+function startTitleParticleMobileTwinkle(sys, el) {
+    if (!sys || !el || !sys.touchMode) return;
+    stopTitleParticleMobileTwinkle(sys);
+    const tier = sys.tier || getTitleParticleTier(el);
+    let intervalMs;
+    let perTick;
+    let initialBurst;
+    if (tier === 'list') {
+        intervalMs = 2200;
+        perTick = 1;
+        initialBurst = 2;
+    } else if (tier === 'chrome') {
+        intervalMs = 950;
+        perTick = () => 2 + ((Math.random() * 2) | 0);
+        initialBurst = 5;
+    } else {
+        intervalMs = 650;
+        perTick = () => 2 + ((Math.random() * 2) | 0);
+        initialBurst = 8;
+    }
+    const tick = () => {
+        if (sys.visible === false) return;
+        const n = typeof perTick === 'function' ? perTick() : perTick;
+        spawnTitleParticlesRandom(el, n);
+        ensureTitleParticleLoop();
+    };
+    sys.mobileTwinkleTimer = setInterval(tick, intervalMs);
+    spawnTitleParticlesRandom(el, initialBurst);
+    ensureTitleParticleLoop();
 }
 
 function ensureTitleParticleCanvas(el) {
@@ -3610,7 +3688,7 @@ function ensureTitleParticleCanvas(el) {
         el.prepend(canvas);
     }
     const rect = el.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = getTitleParticleCanvasDpr(el);
     const w = Math.max(1, Math.floor(rect.width * dpr));
     const h = Math.max(1, Math.floor(rect.height * dpr));
     if (canvas.width !== w || canvas.height !== h) {
@@ -3624,7 +3702,7 @@ function ensureTitleParticleCanvas(el) {
 
 function spawnTitleParticles(el, x, y, count) {
     const sys = titleParticleSystems.get(el);
-    if (!sys) return;
+    if (!sys || sys.visible === false) return;
     const rect = el.getBoundingClientRect();
     const lx = x - rect.left;
     const ly = y - rect.top;
@@ -3655,6 +3733,8 @@ function spawnTitleParticles(el, x, y, count) {
 }
 
 function spawnTitleParticlesRandom(el, count) {
+    const sys = titleParticleSystems.get(el);
+    if (!sys || sys.visible === false) return;
     const rect = el.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const x = rect.left + Math.random() * rect.width;
@@ -3668,7 +3748,14 @@ function bindTitleParticleSystem(el) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const sys = { canvas, ctx, particles: [], lastMoveSpawn: 0 };
+    const tier = getTitleParticleTier(el);
+    const touchMode = isTouchLikeDevice();
+    const sys = {
+        canvas, ctx, particles: [], lastMoveSpawn: 0,
+        touchMode,
+        tier,
+        visible: true,
+    };
     titleParticleSystems.set(el, sys);
 
     const onMove = (e) => {
@@ -3689,21 +3776,24 @@ function bindTitleParticleSystem(el) {
     const onTouchStart = (e) => {
         const t = e.touches && e.touches[0] ? e.touches[0] : e.changedTouches?.[0];
         if (!t) return;
-        spawnTitleParticles(el, t.clientX, t.clientY, 12);
+        const burst = tier === 'list' && touchMode ? 6 : 12;
+        spawnTitleParticles(el, t.clientX, t.clientY, burst);
         ensureTitleParticleLoop();
     };
     const onResize = () => ensureTitleParticleCanvas(el);
 
-    const touchMode = isTouchLikeDevice();
+    const useListIo = tier === 'list' && titleParticleListIo;
+    if (useListIo) {
+        sys.listCardIo = true;
+        sys.visible = false;
+        titleParticleListIo.observe(el);
+    }
+
     if (touchMode) {
-        sys.mobileTwinkleTimer = setInterval(() => {
-            spawnTitleParticlesRandom(el, 2 + ((Math.random() * 2) | 0));
-            ensureTitleParticleLoop();
-        }, 650);
         el.addEventListener('touchstart', onTouchStart, { passive: true });
-        // 초기에 한 번 반짝임
-        spawnTitleParticlesRandom(el, 8);
-        ensureTitleParticleLoop();
+        if (!useListIo) {
+            startTitleParticleMobileTwinkle(sys, el);
+        }
     } else {
         el.addEventListener('mousemove', onMove);
         el.addEventListener('click', onClick);
@@ -3711,9 +3801,9 @@ function bindTitleParticleSystem(el) {
     }
     window.addEventListener('resize', onResize);
     sys.cleanup = () => {
-        if (sys.mobileTwinkleTimer) {
-            clearInterval(sys.mobileTwinkleTimer);
-            sys.mobileTwinkleTimer = null;
+        stopTitleParticleMobileTwinkle(sys);
+        if (sys.listCardIo && titleParticleListIo) {
+            try { titleParticleListIo.unobserve(el); } catch (_) { /* noop */ }
         }
         el.removeEventListener('mousemove', onMove);
         el.removeEventListener('click', onClick);
@@ -3739,6 +3829,7 @@ function ensureTitleParticleLoop() {
         titleParticleRaf = 0;
         let hasLive = false;
         titleParticleSystems.forEach((sys, el) => {
+            if (sys.visible === false) return;
             ensureTitleParticleCanvas(el);
             const ctx = sys.ctx;
             const canvas = sys.canvas;
