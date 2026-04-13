@@ -2057,6 +2057,8 @@
     const adminStockSplitFn = httpsCallable(functions, 'adminStockSplit');
     const adminPurgeUserActivityLogsFn = httpsCallable(functions, 'adminPurgeUserActivityLogs');
     const adminGrantAssetRequestFn = httpsCallable(functions, 'adminGrantAssetRequest');
+    const adminBulkListStocksFn = httpsCallable(functions, 'adminBulkListStocks');
+    const adminBulkDeleteStocksFn = httpsCallable(functions, 'adminBulkDeleteStocks');
     const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
 
@@ -5043,46 +5045,13 @@
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("이름을 입력해주세요.");
         const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
-        const batchNow = Date.now();
-        const initialPrice = 10000;
-        const initialVolume = 0;
-        const initialTotalShares = 1000000;
-        const initialStatus = "active";
-        const defaultImpactCoef = 0.0005;
-        const t = serverTimestamp();
-        const stocksToCreate = uniqueNames.map((name, i) => {
-            const newId = `id_${batchNow}_${i}`;
-            return {
-                id: newId,
-                completeObject: {
-                    name,
-                    price: initialPrice,
-                    volume: initialVolume,
-                    totalShares: initialTotalShares,
-                    status: initialStatus,
-                    createdAt: t,
-                    lastUpdate: t,
-                    impactCoef: defaultImpactCoef,
-                    // trade/UI가 history를 '존재'로 기대할 수 있으므로 기본값 제공
-                    history: [initialPrice, initialPrice],
-                    // trade 로직에서 volume/buyVol/sellVol 등을 안전하게 사용 가능하도록 기본값 제공
-                    change: 0,
-                    buyVol: 0,
-                    sellVol: 0,
-                }
-            };
-        });
         if (confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
             try {
-                // 각 종목을 "완성된 스키마"로 원자적으로 생성
-                await Promise.all(stocksToCreate.map(s => set(ref(db, 'stocks/' + s.id), s.completeObject)));
-                const idxUp = {};
-                stocksToCreate.forEach((s) => {
-                    idxUp[`stockSearchIndex/${s.id}/name`] = s.completeObject.name;
-                });
-                await update(ref(db), idxUp);
-                await bumpSearchNameIndexVersions();
+                const { data } = await adminBulkListStocksFn({ names: uniqueNames });
                 alert("🎉 상장이 완료되었습니다!");
+                if (Array.isArray(data?.skipped) && data.skipped.length) {
+                    showAdminToast(`중복으로 스킵: ${data.skipped.length}건`);
+                }
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
             } catch (e) { alert("오류 발생: " + e.message); }
@@ -5095,34 +5064,17 @@
         if (!text.trim()) return alert("삭제할 이름을 입력해주세요.");
         const namesToDelete = text.split('\n').map(n => n.trim()).filter(n => n !== "");
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
-            const data = snapshot.val();
-            if (!data) return alert("데이터가 없습니다.");
-            const deleteUpdates = {};
-            let foundCount = 0;
-            Object.entries(data).forEach(([id, stock]) => {
-                if (namesToDelete.includes(stock.name)) { deleteUpdates[id] = null; foundCount++; }
-            });
-            if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
-            if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
-                await update(ref(db, 'stocks/'), deleteUpdates);
-                const coinDel = {};
-                const indexUp = {};
-                Object.keys(deleteUpdates).forEach((k) => {
-                    if (deleteUpdates[k] === null) {
-                        coinDel[k] = null;
-                        indexUp[`stockSearchIndex/${k}`] = null;
-                        indexUp[`coinSearchIndex/${k}`] = null;
-                    }
-                });
-                if (Object.keys(coinDel).length > 0) {
-                    await update(ref(db, 'coins/'), coinDel);
+            if (confirm(`${namesToDelete.length}개 이름 대상으로 삭제를 진행할까요?`)) {
+                const { data } = await adminBulkDeleteStocksFn({ names: namesToDelete });
+                const deleted = Number(data?.deleted || 0);
+                if (deleted <= 0) {
+                    alert("❌ 일치하는 종목이 없습니다.");
+                    return;
                 }
-                if (Object.keys(indexUp).length > 0) {
-                    await update(ref(db), indexUp);
+                if (Array.isArray(data?.notFound) && data.notFound.length) {
+                    showAdminToast(`미일치 이름 ${data.notFound.length}건`);
                 }
-                await bumpSearchNameIndexVersions();
-                alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
+                alert(`🔥 총 ${deleted}개의 종목을 삭제했습니다!`);
                 document.getElementById('list').value = "";
                 await loadStocksOnce();
             }

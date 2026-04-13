@@ -555,6 +555,106 @@ exports.adminRebuildSearchIndexes = onCall(
   }
 );
 
+/** 관리자 상장 세션: 닉네임 목록으로 stocks 신규 생성 + stockSearchIndex 갱신 */
+exports.adminBulkListStocks = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const rawNames = Array.isArray(request.data?.names) ? request.data.names : [];
+    const names = [...new Set(rawNames.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 300);
+    if (!names.length) {
+      throw new HttpsError("invalid-argument", "names is required.");
+    }
+
+    const db = admin.database();
+    const now = Date.now();
+    const stocksSnap = await db.ref("stocks").get();
+    const stocks = stocksSnap.exists() ? stocksSnap.val() || {} : {};
+    const existingNameSet = new Set(
+      Object.values(stocks)
+        .map((row) => String(row?.name || "").trim())
+        .filter(Boolean)
+    );
+
+    const toCreate = names.filter((n) => !existingNameSet.has(n));
+    const skipped = names.filter((n) => existingNameSet.has(n));
+    if (!toCreate.length) return { ok: true, created: 0, skipped };
+
+    const updates = {};
+    toCreate.forEach((name, i) => {
+      const id = `id_${now}_${i}`;
+      updates[`stocks/${id}`] = {
+        name,
+        price: 10000,
+        volume: 0,
+        totalShares: 1000000,
+        status: "active",
+        createdAt: now,
+        lastUpdate: now,
+        impactCoef: 0.0005,
+        history: [10000, 10000],
+        change: 0,
+        buyVol: 0,
+        sellVol: 0,
+      };
+      updates[`stockSearchIndex/${id}/name`] = name;
+    });
+    updates["siteConfig/stockNameIndexVersion"] = now;
+    updates["siteConfig/stockCacheVersion"] = now;
+    await db.ref().update(updates);
+    return { ok: true, created: toCreate.length, skipped };
+  }
+);
+
+/** 관리자 삭제 세션: 닉네임 목록으로 stocks/coins + 검색 인덱스 삭제 */
+exports.adminBulkDeleteStocks = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const rawNames = Array.isArray(request.data?.names) ? request.data.names : [];
+    const names = [...new Set(rawNames.map((v) => String(v || "").trim()).filter(Boolean))].slice(0, 300);
+    if (!names.length) {
+      throw new HttpsError("invalid-argument", "names is required.");
+    }
+
+    const db = admin.database();
+    const now = Date.now();
+    const stocksSnap = await db.ref("stocks").get();
+    const stocks = stocksSnap.exists() ? stocksSnap.val() || {} : {};
+
+    const targetIds = [];
+    Object.entries(stocks).forEach(([id, row]) => {
+      const name = String(row?.name || "").trim();
+      if (name && names.includes(name)) targetIds.push(id);
+    });
+    if (!targetIds.length) return { ok: true, deleted: 0, notFound: names };
+
+    const updates = {};
+    targetIds.forEach((id) => {
+      updates[`stocks/${id}`] = null;
+      updates[`coins/${id}`] = null;
+      updates[`stockSearchIndex/${id}`] = null;
+      updates[`coinSearchIndex/${id}`] = null;
+    });
+    updates["siteConfig/stockNameIndexVersion"] = now;
+    updates["siteConfig/coinNameIndexVersion"] = now;
+    updates["siteConfig/stockCacheVersion"] = now;
+    await db.ref().update(updates);
+
+    const deletedNameSet = new Set(
+      targetIds
+        .map((id) => String(stocks[id]?.name || "").trim())
+        .filter(Boolean)
+    );
+    const notFound = names.filter((n) => !deletedNameSet.has(n));
+    return { ok: true, deleted: targetIds.length, notFound };
+  }
+);
+
 exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
