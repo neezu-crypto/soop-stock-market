@@ -1252,6 +1252,10 @@
                 width: 94%;
                 flex-shrink: 0;
             }
+            /* 프리셋2 네온: 모바일도 차트 모달 밖으로 글로우가 화면 전체를 덮지 않도록 */
+            .chart-modal.title-theme-preset2 {
+                overflow: hidden;
+            }
             .chart-canvas-wrap {
                 flex: 0 0 auto;
                 flex-grow: 0;
@@ -1707,7 +1711,8 @@
         .title-preview-card.title-theme-preset2 {
             position: relative;
             isolation: isolate;
-            overflow: visible;
+            /* 회전 conic+blur가 뷰포트 전체로 번지지 않도록 클립 (과거 overflow:visible 제거) */
+            overflow: hidden;
             background: transparent !important;
             border: none !important;
             border-color: transparent !important;
@@ -1738,8 +1743,9 @@
             position: absolute;
             left: 50%;
             top: 50%;
-            width: min(999px, max(140%, 85vmin));
-            height: min(999px, max(140%, 85vmin));
+            /* 부모 박스 기준으로만 크게 잡고 vmin/뷰포트 크기 디스크 금지 → 화면 전체 번짐 방지 */
+            width: min(520px, max(128%, 260px));
+            height: min(520px, max(128%, 260px));
             margin: 0;
             border-radius: inherit;
             pointer-events: none;
@@ -1754,7 +1760,7 @@
             );
             background-repeat: no-repeat;
             background-position: center center;
-            filter: blur(28px);
+            filter: blur(22px);
             opacity: 0.4;
             transform: translate(-50%, -50%) rotate(0deg);
             transform-origin: center center;
@@ -1767,7 +1773,7 @@
             .chart-modal.title-theme-preset2:hover::after,
             .title-preview-card.title-theme-preset2:hover::after {
                 animation-duration: 2.4s;
-                filter: blur(28px) brightness(1.12) saturate(1.06);
+                filter: blur(22px) brightness(1.12) saturate(1.06);
                 opacity: 0.52;
             }
             .stock-card.title-theme-preset2:hover,
@@ -1981,6 +1987,10 @@
         .title-preview-card.title-theme-preset2 {
             border-radius: 12px;
             padding: 12px;
+        }
+        /* 구매 모달 미리보기: 카드는 샘플만, 설명은 카드 밖 캡션으로 분리 */
+        .title-preview-card.title-theme-preset2 #title-preview-stock-name {
+            text-shadow: 0 0 14px rgba(167, 139, 250, 0.35);
         }
         .title-particle-canvas {
             position: absolute;
@@ -2960,12 +2970,14 @@
             <button type="button" id="title-theme-chip-p1" onclick="setSelectedTitleThemePreset('preset1')" style="flex:1; min-width:120px; padding:8px 10px; border-radius:10px; border:1px solid rgba(201,168,76,.45); background:rgba(201,168,76,.12); color:#fde68a; font-weight:800; font-size:12px; cursor:pointer;">프리셋 1 · 골드</button>
             <button type="button" id="title-theme-chip-p2" onclick="setSelectedTitleThemePreset('preset2')" style="flex:1; min-width:120px; padding:8px 10px; border-radius:10px; border:1px solid rgba(107,77,196,.4); background:rgba(64,47,181,.15); color:#e9d5ff; font-weight:800; font-size:12px; cursor:pointer;">프리셋 2 · 네온</button>
         </div>
-        <div id="title-preview-card" class="title-preview-card title-theme-preset1" style="margin-bottom:10px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div style="font-weight:800; color:#f8fafc;"><span id="title-preview-stock-name">종목명</span><span class="stock-title-badge" id="title-preview-badge">칭호</span></div>
-                <span id="title-preview-preset-label" style="font-size:11px; color:#a78bfa;">프리셋 1</span>
+        <div class="title-preview-block" style="margin-bottom:10px;">
+            <div id="title-preview-preset-label" style="font-size:11px; color:#a78bfa; margin-bottom:6px; font-weight:800;">미리보기 · 골드</div>
+            <div id="title-preview-card" class="title-preview-card title-theme-preset1">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <div style="font-weight:800; color:#f8fafc;"><span id="title-preview-stock-name">종목명</span><span class="stock-title-badge" id="title-preview-badge">칭호</span></div>
+                </div>
             </div>
-            <div id="title-preview-hint" style="font-size:11px; color:#cbd5e1; margin-top:8px;">마우스 호버 시 골드 글로우가 강조됩니다.</div>
+            <div id="title-preview-hint" style="font-size:11px; color:var(--text-sub); margin-top:8px; line-height:1.45;">PC에서 마우스를 올리면 골드 글로우가 강해집니다.</div>
         </div>
         <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">칭호명 (2~16자, 도배 방지)</label>
         <input type="text" id="title-purchase-input" maxlength="16" placeholder="예: 우주 대장" autocomplete="off"
@@ -9627,13 +9639,13 @@ window.setSelectedTitleThemePreset = function(id) {
     const lab = document.getElementById('title-preview-preset-label');
     const hint = document.getElementById('title-preview-hint');
     if (lab) {
-        lab.textContent = selectedTitleThemePreset === 'preset2' ? '프리셋 2' : '프리셋 1';
+        lab.textContent = selectedTitleThemePreset === 'preset2' ? '미리보기 · 네온' : '미리보기 · 골드';
         lab.style.color = selectedTitleThemePreset === 'preset2' ? '#c4b5fd' : '#a78bfa';
     }
     if (hint) {
         hint.textContent = selectedTitleThemePreset === 'preset2'
-            ? '다크 그리드 + 테두리 밖 퍼플·마젠타 네온 글로우 회전 (데스크톱 호버 시 가속)'
-            : '마우스 호버 시 골드 글로우가 강조됩니다.';
+            ? '보라·마젠타 네온이 카드 테두리를 따라 움직입니다. PC에서 마우스를 올리면 더 밝아집니다.'
+            : 'PC에서 마우스를 올리면 골드 글로우가 강해집니다.';
     }
     const previewCard = document.getElementById('title-preview-card');
     if (previewCard) {
