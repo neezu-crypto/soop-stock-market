@@ -1623,14 +1623,15 @@
             border-radius: 999px;
             font-size: 11px;
             font-weight: 800;
-            letter-spacing: 0.01em;
-            background: linear-gradient(135deg, rgba(201,168,76,0.34), rgba(168,125,42,0.22));
-            color: #f6e6b2;
-            border: 1px solid rgba(201,168,76,0.62);
-            text-shadow: 0 1px 0 rgba(2,13,26,0.82);
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, rgba(201,168,76,0.34), rgba(168,125,42,0.24));
+            color: #f7e2a5;
+            border: 1px solid rgba(201,168,76,0.75);
+            text-shadow: 0 1px 0 rgba(2,13,26,0.85);
             margin-left: 6px;
             vertical-align: middle;
-            box-shadow: inset 0 1px 0 rgba(255,239,192,0.4), 0 0 0 1px rgba(4,22,40,0.22);
+            box-shadow: inset 0 1px 0 rgba(255,239,192,0.48), 0 0 0 1px rgba(2,13,26,0.32);
         }
         .cm-title-badge { margin-left: 6px; }
 
@@ -1640,13 +1641,14 @@
             position: relative;
             isolation: isolate;
             overflow: hidden;
-            border-color: rgba(201,168,76,0.62) !important;
+            background: #020d1a !important;
+            border-color: rgba(201,168,76,0.72) !important;
             box-shadow:
-                inset 0 1px 0 rgba(255,233,166,0.28),
-                0 14px 34px rgba(2,13,26,0.55),
-                0 0 0 1px rgba(201,168,76,0.22),
-                0 0 28px rgba(201,168,76,0.12);
-            transition: box-shadow .25s ease, border-color .2s ease;
+                inset 0 1px 0 rgba(255,233,166,0.26),
+                0 20px 42px rgba(2,13,26,0.72),
+                0 0 0 1px rgba(201,168,76,0.24),
+                0 0 36px rgba(201,168,76,0.16);
+            transition: box-shadow .3s ease, border-color .22s ease, transform .22s ease;
         }
         .stock-card.title-theme-preset1::before,
         .chart-modal.title-theme-preset1::before,
@@ -1658,9 +1660,9 @@
             pointer-events: none;
             z-index: 0;
             background:
-                radial-gradient(circle at 16% 12%, rgba(232,201,122,0.2), transparent 34%),
-                radial-gradient(circle at 84% 80%, rgba(201,168,76,0.08), transparent 44%),
-                linear-gradient(145deg, rgba(2,13,26,0.9) 0%, rgba(4,22,40,0.82) 46%, rgba(10,37,64,0.62) 100%);
+                radial-gradient(circle at 14% 10%, rgba(201,168,76,0.2), transparent 34%),
+                radial-gradient(circle at 84% 82%, rgba(201,168,76,0.08), transparent 42%),
+                linear-gradient(145deg, rgba(2,13,26,0.96) 0%, rgba(4,22,40,0.9) 46%, rgba(10,37,64,0.68) 100%);
         }
         .stock-card.title-theme-preset1::after,
         .chart-modal.title-theme-preset1::after,
@@ -1671,18 +1673,19 @@
             border-radius: inherit;
             pointer-events: none;
             z-index: 0;
-            background: linear-gradient(120deg, transparent 30%, rgba(201,168,76,0.3) 49%, transparent 67%);
+            background: linear-gradient(120deg, transparent 30%, rgba(201,168,76,0.34) 49%, transparent 67%);
             transform: translateX(-58%) rotate(8deg);
-            transition: transform .62s ease;
+            transition: transform .68s ease;
         }
         .stock-card.title-theme-preset1:hover,
         .title-preview-card:hover {
-            border-color: rgba(232,201,122,0.92) !important;
+            border-color: rgba(232,201,122,0.94) !important;
             box-shadow:
-                inset 0 1px 0 rgba(255,239,192,0.4),
-                0 18px 42px rgba(2,13,26,0.64),
-                0 0 0 1px rgba(201,168,76,0.3),
-                0 0 40px rgba(201,168,76,0.24);
+                inset 0 1px 0 rgba(255,239,192,0.52),
+                0 24px 52px rgba(2,13,26,0.78),
+                0 0 0 1px rgba(201,168,76,0.34),
+                0 0 46px rgba(201,168,76,0.24);
+            transform: translateY(-1px);
         }
         .stock-card.title-theme-preset1:hover::after,
         .chart-modal.title-theme-preset1:hover::after,
@@ -1690,20 +1693,36 @@
             transform: translateX(60%) rotate(8deg);
         }
 
+        .stock-card.title-theme-preset1 .info-group::before {
+            content: '◈';
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 6px;
+            color: #e8c97a;
+            background: rgba(201,168,76,0.14);
+            border: 1px solid rgba(201,168,76,0.42);
+            font-size: 12px;
+            vertical-align: middle;
+        }
+
         .stock-card.title-theme-preset1 .stock-name,
         .chart-modal.title-theme-preset1 .stock-title-name {
             color: #f5f8fc;
-            text-shadow: 0 0 8px rgba(201,168,76,0.16);
+            text-shadow: 0 0 8px rgba(201,168,76,0.2);
         }
         .stock-card.title-theme-preset1 .current-price,
         .chart-modal.title-theme-preset1 .stock-title-price {
             color: #e8c97a !important;
-            text-shadow: 0 0 10px rgba(201,168,76,0.24);
+            text-shadow: 0 0 12px rgba(201,168,76,0.28);
         }
         .stock-card.title-theme-preset1 .price-change,
         .chart-modal.title-theme-preset1 .stock-title-change {
-            border: 1px solid rgba(201,168,76,0.45);
-            box-shadow: inset 0 1px 0 rgba(255,239,192,0.2);
+            border: 1px solid rgba(201,168,76,0.52);
+            box-shadow: inset 0 1px 0 rgba(255,239,192,0.22);
         }
 
         .chart-modal.title-theme-preset1 .chart-modal-header,
@@ -1712,19 +1731,30 @@
         .chart-modal.title-theme-preset1 .chart-ohlc-bar,
         .chart-modal.title-theme-preset1 .chart-modal-footer,
         .chart-modal.title-theme-preset1 .chart-modal-trade {
-            background:
-                linear-gradient(90deg, rgba(201,168,76,0.12), rgba(2,13,26,0.94) 20%, rgba(4,22,40,0.9) 80%, rgba(201,168,76,0.12));
-            border-color: rgba(201,168,76,0.28);
+            background: linear-gradient(90deg, rgba(201,168,76,0.12), rgba(2,13,26,0.95) 20%, rgba(4,22,40,0.92) 80%, rgba(201,168,76,0.12));
+            border-color: rgba(201,168,76,0.34);
         }
 
+        .stock-card.title-theme-preset1 .btn-trade-buy,
+        .stock-card.title-theme-preset1 .btn-trade-sell,
         .stock-card.title-theme-preset1 .btn-trade-maxsell,
+        .chart-modal.title-theme-preset1 .modal-buy,
+        .chart-modal.title-theme-preset1 .modal-sell,
         .chart-modal.title-theme-preset1 .modal-maxsell,
         .chart-modal.title-theme-preset1 .modal-halfsell,
         .chart-modal.title-theme-preset1 .modal-titlebuy {
             background: linear-gradient(135deg, #d8b66a 0%, #bc8c3c 45%, #8b6525 100%);
-            color: #07101d;
-            border: 1px solid rgba(232,201,122,0.42);
-            box-shadow: inset 0 1px 0 rgba(255,239,192,0.45), 0 6px 16px rgba(201,168,76,0.28);
+            color: #07101d !important;
+            border: 1px solid rgba(232,201,122,0.46);
+            box-shadow: inset 0 1px 0 rgba(255,239,192,0.5), 0 6px 16px rgba(201,168,76,0.28);
+            font-weight: 900;
+        }
+        .chart-modal.title-theme-preset1 .modal-buy:hover,
+        .chart-modal.title-theme-preset1 .modal-sell:hover,
+        .chart-modal.title-theme-preset1 .modal-maxsell:hover,
+        .chart-modal.title-theme-preset1 .modal-halfsell:hover,
+        .chart-modal.title-theme-preset1 .modal-titlebuy:hover {
+            filter: brightness(1.08);
         }
 
         .title-preview-card {
@@ -9219,14 +9249,20 @@ window.adminApplyTitleForMe = async function() {
         return;
     }
     try {
-        await set(ref(db, `users/${uid}/stockTitles/${chartModalStockId}`), {
+        const payload = {
             title: check.name,
             theme: TITLE_THEME_PRESET_ID,
             status: 'approved',
             active: true,
             approvedAt: Date.now(),
             source: 'admin_test'
-        });
+        };
+        await set(ref(db, `users/${uid}/stockTitles/${chartModalStockId}`), payload);
+        myStockTitles = myStockTitles || {};
+        myStockTitles[chartModalStockId] = payload;
+        const card = document.querySelector(`#stock-list .stock-card[data-id="${CSS.escape(String(chartModalStockId))}"]`);
+        if (card) applyTitleDecorationToCard(card, chartModalStockId);
+        applyTitleDecorationToChartModal(chartModalStockId);
         if (msgEl) { msgEl.style.color = '#22c55e'; msgEl.textContent = '✅ 관리자 테스트 적용 완료'; }
     } catch (e) {
         if (msgEl) { msgEl.style.color = '#ef4444'; msgEl.textContent = '적용 실패: ' + (e?.message || e); }
