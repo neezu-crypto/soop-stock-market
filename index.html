@@ -1697,7 +1697,11 @@
             transform: translateX(60%) rotate(8deg);
         }
 
-        /* 칭호 프리셋 2 — Search Bar Mastery (다크 그리드 + 퍼플/마젠타 콘ic) */
+        /* 칭호 프리셋 2 — Search Bar Mastery: 테두리를 따라 도는 conic 글로우 (내부 전면 회전 X) */
+        @keyframes title-preset2-border-orbit {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
         .stock-card.title-theme-preset2,
         .chart-modal.title-theme-preset2,
         .title-preview-card.title-theme-preset2 {
@@ -1722,8 +1726,8 @@
             background:
                 linear-gradient(to right, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
                 linear-gradient(to bottom, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
-                radial-gradient(circle at 14% 12%, rgba(64, 47, 181, 0.22) 0%, transparent 40%),
-                radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.14) 0%, transparent 44%),
+                radial-gradient(circle at 14% 12%, rgba(64, 47, 181, 0.18) 0%, transparent 40%),
+                radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.1) 0%, transparent 44%),
                 #010201;
             background-size: 14px 14px, 14px 14px, auto, auto, auto;
         }
@@ -1732,44 +1736,77 @@
         .title-preview-card.title-theme-preset2::after {
             content: '';
             position: absolute;
-            inset: -22%;
+            inset: 0;
             border-radius: inherit;
             pointer-events: none;
             z-index: 0;
-            opacity: 0.48;
-            mix-blend-mode: screen;
+            box-sizing: border-box;
+            padding: 2px;
             background: conic-gradient(
-                from 72deg,
-                #050308 0%,
-                #402fb5 7%,
-                #1a1422 18%,
-                #08080a 46%,
-                #cf30aa 56%,
-                #2a1530 70%,
-                #050308 100%
+                from 0deg,
+                #1c191c 0%,
+                #402fb5 5%,
+                #1c191c 14%,
+                #1c191c 50%,
+                #cf30aa 60%,
+                #1c191c 64%,
+                #1c191c 100%
             );
-            transform: rotate(18deg) scale(1.05);
-            transition: transform 1s ease, opacity 0.35s ease;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            transform-origin: 50% 50%;
+            animation: title-preset2-border-orbit 5.5s linear infinite;
+            opacity: 0.92;
+            will-change: transform;
         }
-        .stock-card.title-theme-preset2:hover,
-        .title-preview-card.title-theme-preset2:hover {
-            border-color: transparent !important;
-            box-shadow:
-                0 22px 56px rgba(0, 0, 0, 0.82),
-                0 0 48px rgba(64, 47, 181, 0.12);
-            transform: translateY(-6px) scale(1.012);
-        }
-        .stock-card.title-theme-preset2:hover::after,
-        .chart-modal.title-theme-preset2:hover::after,
-        .title-preview-card.title-theme-preset2:hover::after {
-            opacity: 0.62;
-            transform: rotate(212deg) scale(1.08);
+        /* 마우스만: 호버 시 궤도 가속 — 터치는 아래 미디어에서 호버 무시 */
+        @media (hover: hover) and (pointer: fine) {
+            .stock-card.title-theme-preset2:hover::after,
+            .chart-modal.title-theme-preset2:hover::after,
+            .title-preview-card.title-theme-preset2:hover::after {
+                animation-duration: 2.4s;
+                filter: brightness(1.2) saturate(1.08);
+                opacity: 1;
+            }
+            .stock-card.title-theme-preset2:hover,
+            .title-preview-card.title-theme-preset2:hover {
+                border-color: transparent !important;
+                box-shadow:
+                    0 22px 56px rgba(0, 0, 0, 0.82),
+                    0 0 48px rgba(64, 47, 181, 0.12);
+                transform: translateY(-6px) scale(1.012);
+            }
         }
         @media (hover: none), (pointer: coarse) {
             .title-preview-card.title-theme-preset1:hover,
             .title-preview-card.title-theme-preset2:hover {
                 transform: none;
                 box-shadow: none;
+            }
+            /* 터치: 호버 없음 — 테두리 궤도는 5.5s 유지. 저사양: 얇은 링 + 미리보기 will-change 완화 */
+            .stock-card.title-theme-preset2::after,
+            .chart-modal.title-theme-preset2::after,
+            .title-preview-card.title-theme-preset2::after {
+                padding: 1.5px;
+                animation-duration: 5.5s;
+                opacity: 0.9;
+                filter: none;
+                will-change: transform;
+            }
+            .title-preview-card.title-theme-preset2::after {
+                will-change: auto;
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .stock-card.title-theme-preset2::after,
+            .chart-modal.title-theme-preset2::after,
+            .title-preview-card.title-theme-preset2::after {
+                animation: none !important;
+                filter: none !important;
+                transform: none;
+                opacity: 0.88;
             }
         }
 
@@ -2016,35 +2053,6 @@
             .stock-card.title-theme-preset1:hover::after,
             .chart-modal.title-theme-preset1:hover::after {
                 transform: translateX(42%) rotate(6deg);
-            }
-            .stock-card.title-theme-preset2::after,
-            .chart-modal.title-theme-preset2::after,
-            .title-preview-card.title-theme-preset2::after {
-                inset: -10%;
-                opacity: 0.4;
-                mix-blend-mode: normal;
-                background: conic-gradient(
-                    from 72deg,
-                    #050308 0%,
-                    rgba(64, 47, 181, 0.85) 8%,
-                    #121018 22%,
-                    #0a0a0c 48%,
-                    rgba(207, 48, 170, 0.75) 56%,
-                    #1a1220 70%,
-                    #050308 100%
-                );
-                transform: rotate(22deg) scale(1.02);
-                will-change: transform;
-            }
-            .title-preview-card.title-theme-preset2::after {
-                will-change: auto;
-                transition: transform 0.45s ease, opacity 0.35s ease;
-            }
-            .stock-card.title-theme-preset2:hover::after,
-            .chart-modal.title-theme-preset2:hover::after,
-            .title-preview-card.title-theme-preset2:hover::after {
-                opacity: 0.52;
-                transform: rotate(198deg) scale(1.04);
             }
             .title-preview-card.title-theme-preset1::after {
                 inset: -8%;
