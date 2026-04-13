@@ -1831,6 +1831,32 @@
                 transform: translateX(42%) rotate(6deg);
             }
         }
+        @media (max-width: 768px) {
+            .chart-modal-header {
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .chart-modal-title {
+                flex: 1 1 auto;
+                min-width: 0;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                column-gap: 8px;
+                row-gap: 6px;
+            }
+            .chart-modal-title .stock-title-name,
+            .chart-modal-title .stock-title-badge,
+            .chart-modal-title .stock-title-price,
+            .chart-modal-title .stock-title-change,
+            .chart-modal-title .stock-title-rank {
+                white-space: nowrap;
+            }
+            .chart-modal-close {
+                flex: 0 0 auto;
+                margin-top: 0;
+            }
+        }
         /* 차트 모달 하단 광고 배너 — 원본 비율 720×150 */
         #chart-ad-banner {
             background: var(--deep);
