@@ -7516,8 +7516,44 @@
                 runLogEl.innerHTML = '';
             }
             const routines = getDailyRoutineItemsFromUI();
+            const routineLabelMap = {
+                ranking: '📊 자산 랭킹 집계',
+                stockHolders: '📈 종목별 익명 보유 TOP3 갱신',
+                candlePrune: '🗑 오래된 캔들 정리',
+                userActivityPurge: '🧾 유저 활동로그 데이터 삭제',
+                rankingVolumeReset: '📊 실시간 랭킹 거래량만 초기화',
+                clearAssetRequests: '🗑 자산 지원 신청 리스트 전체 삭제',
+                clearAdRequests: '🗑 홍보 신청 검수 리스트 전체 삭제',
+                autoSplit: '✂️ 주가 자동 액면분할',
+                regularHoursSet: '⚡ 정규장 시간 변경',
+                maintenanceMode: '🔧 점검 모드 반영',
+                circuitBreakerClear: '⚡ 서킷브레이커 전체 해제',
+                marketRankRefresh: '📈 시장 순위·거래량 TOP 집계',
+            };
+            const setRoutineMaintenanceRuntime = async (payload) => {
+                try {
+                    await update(ref(db, 'siteConfig/maintenanceRuntime'), payload);
+                } catch (_) { /* noop */ }
+            };
+            await setRoutineMaintenanceRuntime({
+                running: true,
+                source: 'dailyRoutine',
+                reason: '정기점검중',
+                currentItem: '',
+                currentIndex: 0,
+                totalItems: routines.length,
+                startedAt: Date.now(),
+                updatedAt: Date.now(),
+            });
             for (let i = 0; i < routines.length; i++) {
                 const it = routines[i];
+                const itemLabel = routineLabelMap[it?.type] || String(it?.type || '알 수 없는 항목');
+                await setRoutineMaintenanceRuntime({
+                    currentItem: itemLabel,
+                    currentIndex: i + 1,
+                    totalItems: routines.length,
+                    updatedAt: Date.now(),
+                });
                 try {
                     if (it.type === 'ranking') {
                         if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 📊 자산 랭킹 집계 실행</div>`;
@@ -7627,6 +7663,9 @@
                 await update(ref(db, 'siteConfig/dailyAuto'), { lastRunAt: doneMs, updatedAt: doneMs });
                 flashDailyAutoSaved();
             } catch (_) { /* 무시 */ }
+            try {
+                await set(ref(db, 'siteConfig/maintenanceRuntime'), null);
+            } catch (_) { /* noop */ }
 
             // 다음 날 재예약
             if (document.getElementById('auto-daily-toggle').checked) {

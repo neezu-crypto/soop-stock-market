@@ -3771,9 +3771,9 @@ function applyTitleDecorationToCard(card, stockId) {
     if (!card) return;
     const titleRec = getOwnedTitleForStock(stockId);
     const badge = card.querySelector('.stock-title-badge');
-    card.classList.remove('title-theme-preset1');
     if (!titleRec) {
         if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+        card.classList.remove('title-theme-preset1');
         unbindTitleParticleSystem(card);
         return;
     }
@@ -3782,9 +3782,14 @@ function applyTitleDecorationToCard(card, stockId) {
         badge.textContent = titleRec.title;
     }
     if (titleRec.theme === TITLE_THEME_PRESET_ID) {
-        card.classList.add('title-theme-preset1');
-        bindTitleParticleSystem(card);
+        if (!card.classList.contains('title-theme-preset1')) {
+            card.classList.add('title-theme-preset1');
+            bindTitleParticleSystem(card);
+        } else if (!titleParticleSystems.get(card)) {
+            bindTitleParticleSystem(card);
+        }
     } else {
+        card.classList.remove('title-theme-preset1');
         unbindTitleParticleSystem(card);
     }
 }
@@ -3793,20 +3798,25 @@ function applyTitleDecorationToChartModal(stockId) {
     const modal = document.querySelector('#chart-modal-overlay .chart-modal');
     const badge = document.getElementById('cm-title-badge');
     if (!modal || !badge) return;
-    modal.classList.remove('title-theme-preset1');
     const titleRec = getOwnedTitleForStock(stockId);
     if (!titleRec) {
         badge.style.display = 'none';
         badge.textContent = '';
+        modal.classList.remove('title-theme-preset1');
         unbindTitleParticleSystem(modal);
         return;
     }
     badge.style.display = 'inline-flex';
     badge.textContent = titleRec.title;
     if (titleRec.theme === TITLE_THEME_PRESET_ID) {
-        modal.classList.add('title-theme-preset1');
-        bindTitleParticleSystem(modal);
+        if (!modal.classList.contains('title-theme-preset1')) {
+            modal.classList.add('title-theme-preset1');
+            bindTitleParticleSystem(modal);
+        } else if (!titleParticleSystems.get(modal)) {
+            bindTitleParticleSystem(modal);
+        }
     } else {
+        modal.classList.remove('title-theme-preset1');
         unbindTitleParticleSystem(modal);
     }
 }
@@ -4735,6 +4745,11 @@ onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
     updateExtendRequestBar();
 });
 
+onValue(ref(db, 'siteConfig/maintenanceRuntime'), (snap) => {
+    siteConfig.maintenanceRuntime = snap.exists() ? (snap.val() || {}) : null;
+    applyMarketState();
+});
+
 // 장 운영 시간 변경 시 UI·구독 모드 갱신
 onValue(ref(db, 'siteConfig/marketHours'), (snap) => {
     siteConfig.marketHours = snap.exists() ? snap.val() : null;
@@ -5420,6 +5435,9 @@ function applyMarketState() {
     const descMain = document.getElementById('maintenance-desc-main');
     const descSub  = document.getElementById('maintenance-desc-sub');
     const badge    = document.getElementById('maintenance-time-badge');
+    const maintenanceRuntime = siteConfig?.maintenanceRuntime && typeof siteConfig.maintenanceRuntime === 'object'
+        ? siteConfig.maintenanceRuntime
+        : null;
 
     // ── 3. 점검 중 또는 시장 마감 ────────────────────────────
     if (maintenance || (mh && mh.enabled && !marketOpen)) {
@@ -5434,8 +5452,24 @@ function applyMarketState() {
         if (maintenance) {
             if (timerEl) timerEl.innerText = '관리자 점검 중';
             if (title) title.innerText = '서버 점검 중';
-            if (descMain) descMain.innerHTML = '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
+            const isDailyRoutineMaintenance = !!(maintenanceRuntime && maintenanceRuntime.running && maintenanceRuntime.source === 'dailyRoutine');
+            if (descMain) {
+                descMain.innerHTML = isDailyRoutineMaintenance
+                    ? '정기점검중'
+                    : '더 나은 서비스를 위해 점검 중입니다.<br>잠시 후 다시 이용해주세요.';
+            }
             if (badge) badge.innerHTML = '🔧 관리자 점검 중';
+            if (isDailyRoutineMaintenance) {
+                const current = String(maintenanceRuntime.currentItem || '').trim();
+                const idx = Number(maintenanceRuntime.currentIndex || 0);
+                const total = Number(maintenanceRuntime.totalItems || 0);
+                if (descSub) {
+                    descSub.style.display = '';
+                    descSub.innerHTML = current
+                        ? `점검 진행현황: <b style="color:#f8fafc;">${escapeHtml(current)}</b>${total > 0 ? ` <span style="color:#64748b;">(${idx}/${total})</span>` : ''}`
+                        : '점검 진행현황: 준비 중';
+                }
+            }
         } else {
             const o = mh.open || '09:00';
             const c = mh.close || '04:00';
