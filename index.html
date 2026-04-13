@@ -1625,18 +1625,132 @@
             font-weight: 800;
             letter-spacing: 0.03em;
             text-transform: uppercase;
-            background: linear-gradient(135deg, rgba(201,168,76,0.34), rgba(168,125,42,0.24));
-            color: #f7e2a5;
-            border: 1px solid rgba(201,168,76,0.75);
-            text-shadow: 0 1px 0 rgba(2,13,26,0.85);
+            background: linear-gradient(135deg, #c9a84c, #a87d2a);
+            color: #f5f8fc;
+            border: 1px solid #c9a84c;
+            text-shadow: 0 1px 0 #020d1a;
             margin-left: 6px;
             vertical-align: middle;
-            box-shadow: inset 0 1px 0 rgba(255,239,192,0.48), 0 0 0 1px rgba(2,13,26,0.32);
+            box-shadow: inset 0 1px 0 #e8c97a;
         }
         .cm-title-badge { margin-left: 6px; }
 
         .stock-card.title-theme-preset1,
         .chart-modal.title-theme-preset1,
+        .title-preview-card {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+            background: #020d1a !important;
+            border-color: #c9a84c !important;
+            box-shadow: none;
+            transition: box-shadow .4s ease, border-color .35s ease, transform .4s cubic-bezier(.22, 1, .36, 1);
+        }
+        .stock-card.title-theme-preset1::before,
+        .chart-modal.title-theme-preset1::before,
+        .title-preview-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(circle at 14% 10%, #c9a84c 0%, #020d1a 34%),
+                radial-gradient(circle at 84% 82%, #a87d2a 0%, #020d1a 42%),
+                linear-gradient(145deg, #020d1a 0%, #041628 46%, #0a2540 100%);
+        }
+        .stock-card.title-theme-preset1::after,
+        .chart-modal.title-theme-preset1::after,
+        .title-preview-card::after {
+            content: '';
+            position: absolute;
+            inset: -42%;
+            border-radius: inherit;
+            pointer-events: none;
+            z-index: 0;
+            background: linear-gradient(120deg, #020d1a 30%, #c9a84c 49%, #020d1a 67%);
+            transform: translateX(-58%) rotate(8deg);
+            transition: transform .68s ease;
+        }
+        .stock-card.title-theme-preset1:hover,
+        .title-preview-card:hover {
+            border-color: #c9a84c !important;
+            box-shadow:
+                0 24px 64px rgba(2, 13, 26, 0.75),
+                0 0 40px rgba(201, 168, 76, 0.07);
+            transform: translateY(-7px) scale(1.015);
+        }
+        .stock-card.title-theme-preset1:hover::after,
+        .chart-modal.title-theme-preset1:hover::after,
+        .title-preview-card:hover::after {
+            transform: translateX(60%) rotate(8deg);
+        }
+
+        .stock-card.title-theme-preset1 .info-group::before {
+            content: '◈';
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 6px;
+            color: #e8c97a;
+            background: #041628;
+            border: 1px solid #c9a84c;
+            font-size: 12px;
+            vertical-align: middle;
+        }
+
+        .stock-card.title-theme-preset1 .stock-name,
+        .chart-modal.title-theme-preset1 .stock-title-name {
+            color: #f5f8fc;
+            text-shadow: none;
+        }
+        .stock-card.title-theme-preset1 .current-price,
+        .chart-modal.title-theme-preset1 .stock-title-price {
+            color: #e8c97a !important;
+            text-shadow: none;
+        }
+        .stock-card.title-theme-preset1 .price-change,
+        .chart-modal.title-theme-preset1 .stock-title-change {
+            border: 1px solid #c9a84c;
+            box-shadow: none;
+        }
+
+        .chart-modal.title-theme-preset1 .chart-modal-header,
+        .chart-modal.title-theme-preset1 .chart-timeframe-tabs,
+        .chart-modal.title-theme-preset1 .chart-interval-tabs,
+        .chart-modal.title-theme-preset1 .chart-ohlc-bar,
+        .chart-modal.title-theme-preset1 .chart-modal-footer,
+        .chart-modal.title-theme-preset1 .chart-modal-trade {
+            background: linear-gradient(90deg, #020d1a, #041628 20%, #0a2540 80%, #020d1a);
+            border-color: #c9a84c;
+        }
+
+        .stock-card.title-theme-preset1 .btn-trade-buy,
+        .stock-card.title-theme-preset1 .btn-trade-sell,
+        .stock-card.title-theme-preset1 .btn-trade-maxsell,
+        .chart-modal.title-theme-preset1 .modal-buy,
+        .chart-modal.title-theme-preset1 .modal-sell,
+        .chart-modal.title-theme-preset1 .modal-maxsell,
+        .chart-modal.title-theme-preset1 .modal-halfsell,
+        .chart-modal.title-theme-preset1 .modal-titlebuy {
+            background: linear-gradient(135deg, #c9a84c, #a87d2a);
+            color: #020d1a !important;
+            border: 1px solid #c9a84c;
+            box-shadow: none;
+            font-weight: 900;
+        }
+        .chart-modal.title-theme-preset1 .modal-buy:hover,
+        .chart-modal.title-theme-preset1 .modal-sell:hover,
+        .chart-modal.title-theme-preset1 .modal-maxsell:hover,
+        .chart-modal.title-theme-preset1 .modal-halfsell:hover,
+        .chart-modal.title-theme-preset1 .modal-titlebuy:hover {
+            filter: brightness(1.12);
+        }
+
         .title-preview-card {
             position: relative;
             isolation: isolate;
