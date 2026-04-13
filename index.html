@@ -1645,7 +1645,7 @@
 
         .stock-card.title-theme-preset1,
         .chart-modal.title-theme-preset1,
-        .title-preview-card {
+        .title-preview-card.title-theme-preset1 {
             position: relative;
             isolation: isolate;
             overflow: hidden;
@@ -1657,7 +1657,7 @@
         }
         .stock-card.title-theme-preset1::before,
         .chart-modal.title-theme-preset1::before,
-        .title-preview-card::before {
+        .title-preview-card.title-theme-preset1::before {
             content: '';
             position: absolute;
             inset: 0;
@@ -1671,7 +1671,7 @@
         }
         .stock-card.title-theme-preset1::after,
         .chart-modal.title-theme-preset1::after,
-        .title-preview-card::after {
+        .title-preview-card.title-theme-preset1::after {
             content: '';
             position: absolute;
             inset: -14%;
@@ -1684,7 +1684,7 @@
             transition: transform .68s ease;
         }
         .stock-card.title-theme-preset1:hover,
-        .title-preview-card:hover {
+        .title-preview-card.title-theme-preset1:hover {
             border-color: transparent !important;
             box-shadow:
                 0 24px 64px rgba(0, 0, 0, 0.75),
@@ -1693,8 +1693,84 @@
         }
         .stock-card.title-theme-preset1:hover::after,
         .chart-modal.title-theme-preset1:hover::after,
-        .title-preview-card:hover::after {
+        .title-preview-card.title-theme-preset1:hover::after {
             transform: translateX(60%) rotate(8deg);
+        }
+
+        /* 칭호 프리셋 2 — Search Bar Mastery (다크 그리드 + 퍼플/마젠타 콘ic) */
+        .stock-card.title-theme-preset2,
+        .chart-modal.title-theme-preset2,
+        .title-preview-card.title-theme-preset2 {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+            background: #010201 !important;
+            border: none !important;
+            border-color: transparent !important;
+            box-shadow: none;
+            transition: box-shadow .45s ease, border-color .35s ease, transform .45s cubic-bezier(.22, 1, .36, 1);
+        }
+        .stock-card.title-theme-preset2::before,
+        .chart-modal.title-theme-preset2::before,
+        .title-preview-card.title-theme-preset2::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                linear-gradient(to right, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
+                radial-gradient(circle at 14% 12%, rgba(64, 47, 181, 0.22) 0%, transparent 40%),
+                radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.14) 0%, transparent 44%),
+                #010201;
+            background-size: 14px 14px, 14px 14px, auto, auto, auto;
+        }
+        .stock-card.title-theme-preset2::after,
+        .chart-modal.title-theme-preset2::after,
+        .title-preview-card.title-theme-preset2::after {
+            content: '';
+            position: absolute;
+            inset: -22%;
+            border-radius: inherit;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.48;
+            mix-blend-mode: screen;
+            background: conic-gradient(
+                from 72deg,
+                #050308 0%,
+                #402fb5 7%,
+                #1a1422 18%,
+                #08080a 46%,
+                #cf30aa 56%,
+                #2a1530 70%,
+                #050308 100%
+            );
+            transform: rotate(18deg) scale(1.05);
+            transition: transform 1s ease, opacity 0.35s ease;
+        }
+        .stock-card.title-theme-preset2:hover,
+        .title-preview-card.title-theme-preset2:hover {
+            border-color: transparent !important;
+            box-shadow:
+                0 22px 56px rgba(0, 0, 0, 0.82),
+                0 0 48px rgba(64, 47, 181, 0.12);
+            transform: translateY(-6px) scale(1.012);
+        }
+        .stock-card.title-theme-preset2:hover::after,
+        .chart-modal.title-theme-preset2:hover::after,
+        .title-preview-card.title-theme-preset2:hover::after {
+            opacity: 0.62;
+            transform: rotate(212deg) scale(1.08);
+        }
+        @media (hover: none), (pointer: coarse) {
+            .title-preview-card.title-theme-preset1:hover,
+            .title-preview-card.title-theme-preset2:hover {
+                transform: none;
+                box-shadow: none;
+            }
         }
 
         .stock-card.title-theme-preset1 .info-group::before {
@@ -1779,7 +1855,94 @@
             filter: brightness(1.12);
         }
 
-        .title-preview-card {
+        .stock-card.title-theme-preset2 .info-group::before {
+            content: '⌕';
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border-radius: 6px;
+            color: #e9d5ff;
+            background: #0c0a12;
+            border: 1px solid rgba(107, 76, 204, 0.85);
+            font-size: 12px;
+            vertical-align: middle;
+        }
+        .stock-card.title-theme-preset2 .stock-name,
+        .chart-modal.title-theme-preset2 .stock-title-name {
+            color: #f5f3ff;
+            text-shadow: none;
+        }
+        .stock-card.title-theme-preset2 .stock-name {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .stock-card.title-theme-preset2 .current-price,
+        .chart-modal.title-theme-preset2 .stock-title-price {
+            color: #e9d5ff !important;
+            text-shadow: 0 0 18px rgba(167, 139, 250, 0.22);
+        }
+        .stock-card.title-theme-preset2 .price-change,
+        .chart-modal.title-theme-preset2 .stock-title-change {
+            border: 1px solid rgba(107, 76, 204, 0.65);
+            box-shadow: none;
+        }
+        .chart-modal.title-theme-preset2 .chart-modal-header,
+        .chart-modal.title-theme-preset2 .chart-timeframe-tabs,
+        .chart-modal.title-theme-preset2 .chart-interval-tabs,
+        .chart-modal.title-theme-preset2 .chart-ohlc-bar,
+        .chart-modal.title-theme-preset2 .chart-modal-footer,
+        .chart-modal.title-theme-preset2 .chart-modal-trade,
+        .chart-modal.title-theme-preset2 #candle-container,
+        .chart-modal.title-theme-preset2 #chart-container {
+            background: transparent !important;
+            border-color: rgba(107, 76, 204, 0.45);
+        }
+        .chart-modal.title-theme-preset2 #chart-ad-banner {
+            background: transparent !important;
+            border-top-color: rgba(107, 76, 204, 0.45) !important;
+        }
+        .chart-modal.title-theme-preset2 #chart-ad-banner a,
+        .chart-modal.title-theme-preset2 #chart-ad-banner img,
+        .chart-modal.title-theme-preset2 #chart-ad-label {
+            position: relative;
+            z-index: 4;
+        }
+        .stock-card.title-theme-preset2 .btn-trade-buy,
+        .stock-card.title-theme-preset2 .btn-trade-sell,
+        .stock-card.title-theme-preset2 .btn-trade-maxsell,
+        .chart-modal.title-theme-preset2 .modal-buy,
+        .chart-modal.title-theme-preset2 .modal-sell,
+        .chart-modal.title-theme-preset2 .modal-maxsell,
+        .chart-modal.title-theme-preset2 .modal-halfsell,
+        .chart-modal.title-theme-preset2 .modal-titlebuy {
+            background: linear-gradient(135deg, #5b3ea8 0%, #402fb5 42%, #9d1f7a 100%);
+            color: #f8fafc !important;
+            border: 1px solid rgba(167, 139, 250, 0.55);
+            box-shadow: 0 0 20px rgba(64, 47, 181, 0.25);
+            font-weight: 900;
+        }
+        .chart-modal.title-theme-preset2 .modal-buy:hover,
+        .chart-modal.title-theme-preset2 .modal-sell:hover,
+        .chart-modal.title-theme-preset2 .modal-maxsell:hover,
+        .chart-modal.title-theme-preset2 .modal-halfsell:hover,
+        .chart-modal.title-theme-preset2 .modal-titlebuy:hover {
+            filter: brightness(1.14);
+        }
+        .title-theme-preset2 .stock-title-badge {
+            background: linear-gradient(135deg, #6b4dc4, #a21caf);
+            color: #faf5ff;
+            border: 1px solid rgba(167, 139, 250, 0.85);
+            text-shadow: 0 1px 0 #1a1025;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        }
+
+        .title-preview-card.title-theme-preset1,
+        .title-preview-card.title-theme-preset2 {
             border-radius: 12px;
             padding: 12px;
         }
@@ -1794,19 +1957,39 @@
         }
         .stock-card.title-theme-preset1 > *:not(.title-particle-canvas),
         .chart-modal.title-theme-preset1 > *:not(.title-particle-canvas),
-        .title-preview-card > *:not(.title-particle-canvas) {
+        .stock-card.title-theme-preset2 > *:not(.title-particle-canvas),
+        .chart-modal.title-theme-preset2 > *:not(.title-particle-canvas),
+        .title-preview-card.title-theme-preset1 > *:not(.title-particle-canvas),
+        .title-preview-card.title-theme-preset2 > *:not(.title-particle-canvas) {
             position: relative;
             z-index: 2;
         }
         .stock-card.title-theme-preset1 .btn-favorite,
         .stock-card.title-theme-preset1 .btn-alert,
-        .stock-card.title-theme-preset1 .price-group {
+        .stock-card.title-theme-preset1 .price-group,
+        .stock-card.title-theme-preset2 .btn-favorite,
+        .stock-card.title-theme-preset2 .btn-alert,
+        .stock-card.title-theme-preset2 .price-group {
             z-index: 3;
         }
         @media (max-width: 768px) {
             /* Reduce repaint/compositing cost when many themed cards are on screen */
-            .stock-card.title-theme-preset1 {
+            .stock-card.title-theme-preset1,
+            .stock-card.title-theme-preset2 {
                 contain: paint;
+            }
+            #title-preview-card.title-preview-card {
+                contain: layout paint;
+            }
+            .stock-card.title-theme-preset2 .stock-name {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+            .stock-card.title-theme-preset2 .stock-name .stock-title-badge {
+                margin-left: 0;
+                max-width: 100%;
             }
             .stock-card.title-theme-preset1 .stock-name {
                 display: flex;
@@ -1832,6 +2015,47 @@
             }
             .stock-card.title-theme-preset1:hover::after,
             .chart-modal.title-theme-preset1:hover::after {
+                transform: translateX(42%) rotate(6deg);
+            }
+            .stock-card.title-theme-preset2::after,
+            .chart-modal.title-theme-preset2::after,
+            .title-preview-card.title-theme-preset2::after {
+                inset: -10%;
+                opacity: 0.4;
+                mix-blend-mode: normal;
+                background: conic-gradient(
+                    from 72deg,
+                    #050308 0%,
+                    rgba(64, 47, 181, 0.85) 8%,
+                    #121018 22%,
+                    #0a0a0c 48%,
+                    rgba(207, 48, 170, 0.75) 56%,
+                    #1a1220 70%,
+                    #050308 100%
+                );
+                transform: rotate(22deg) scale(1.02);
+                will-change: transform;
+            }
+            .title-preview-card.title-theme-preset2::after {
+                will-change: auto;
+                transition: transform 0.45s ease, opacity 0.35s ease;
+            }
+            .stock-card.title-theme-preset2:hover::after,
+            .chart-modal.title-theme-preset2:hover::after,
+            .title-preview-card.title-theme-preset2:hover::after {
+                opacity: 0.52;
+                transform: rotate(198deg) scale(1.04);
+            }
+            .title-preview-card.title-theme-preset1::after {
+                inset: -8%;
+                background: linear-gradient(120deg, transparent 38%, rgba(232, 201, 122, 0.2) 50%, transparent 62%);
+                mix-blend-mode: normal;
+                opacity: 0.9;
+                transform: translateX(-42%) rotate(6deg);
+                will-change: auto;
+                transition: transform 0.45s ease, opacity 0.35s ease;
+            }
+            .title-preview-card.title-theme-preset1:hover::after {
                 transform: translateX(42%) rotate(6deg);
             }
         }
@@ -2725,12 +2949,17 @@
         <p style="font-size:12px; color:var(--text-sub); line-height:1.6; margin:0 0 10px 0;">
             승인되면 이 종목의 카드·캔들 차트 칭호 디자인이 전체 유저에게 5일간 적용됩니다.
         </p>
-        <div id="title-preview-card" class="title-preview-card" style="margin-bottom:10px;">
+        <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">칭호 스킨 프리셋</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+            <button type="button" id="title-theme-chip-p1" onclick="setSelectedTitleThemePreset('preset1')" style="flex:1; min-width:120px; padding:8px 10px; border-radius:10px; border:1px solid rgba(201,168,76,.45); background:rgba(201,168,76,.12); color:#fde68a; font-weight:800; font-size:12px; cursor:pointer;">프리셋 1 · 골드</button>
+            <button type="button" id="title-theme-chip-p2" onclick="setSelectedTitleThemePreset('preset2')" style="flex:1; min-width:120px; padding:8px 10px; border-radius:10px; border:1px solid rgba(107,77,196,.4); background:rgba(64,47,181,.15); color:#e9d5ff; font-weight:800; font-size:12px; cursor:pointer;">프리셋 2 · 네온</button>
+        </div>
+        <div id="title-preview-card" class="title-preview-card title-theme-preset1" style="margin-bottom:10px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div style="font-weight:800; color:#f8fafc;"><span id="title-preview-stock-name">종목명</span><span class="stock-title-badge" id="title-preview-badge">칭호</span></div>
-                <span style="font-size:11px; color:#a78bfa;">프리셋 1</span>
+                <span id="title-preview-preset-label" style="font-size:11px; color:#a78bfa;">프리셋 1</span>
             </div>
-            <div style="font-size:11px; color:#cbd5e1; margin-top:8px;">마우스 호버 시 글로우가 강조됩니다.</div>
+            <div id="title-preview-hint" style="font-size:11px; color:#cbd5e1; margin-top:8px;">마우스 호버 시 골드 글로우가 강조됩니다.</div>
         </div>
         <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">칭호명 (2~16자, 도배 방지)</label>
         <input type="text" id="title-purchase-input" maxlength="16" placeholder="예: 우주 대장" autocomplete="off"
@@ -3536,6 +3765,26 @@ let globalStockTitles = {};
 let titleSponsorUnitCost = 50;
 const TITLE_THEME_PRESET_ID = 'preset1';
 const TITLE_SPONSOR_DURATION_MS = 5 * 24 * 60 * 60 * 1000;
+let selectedTitleThemePreset = 'preset1';
+
+function normalizeTitleThemeId(theme) {
+    const t = String(theme || '').trim();
+    return t === 'preset2' ? 'preset2' : 'preset1';
+}
+function titleThemeClassFor(theme) {
+    return normalizeTitleThemeId(theme) === 'preset2' ? 'title-theme-preset2' : 'title-theme-preset1';
+}
+function stripTitleThemeClasses(el) {
+    if (!el) return;
+    el.classList.remove('title-theme-preset1', 'title-theme-preset2');
+}
+
+const TITLE_PARTICLE_COLORS_GOLD = Object.freeze([
+    [232, 201, 122], [201, 168, 76], [255, 225, 140], [168, 125, 42],
+]);
+const TITLE_PARTICLE_COLORS_NEON = Object.freeze([
+    [207, 48, 170], [99, 79, 220], [160, 153, 216], [167, 139, 250], [223, 162, 218],
+]);
 /** 직전 로그인 UID — 계정 전환 시 구독·캐시 초기화용 */
 let previousAuthUid  = null;
 /** users/{uid} 하위 분할 onValue 일괄 해제용 — summary / cash / 쿨다운 경로 + 보유 폴링 타이머 */
@@ -3583,7 +3832,7 @@ function getOwnedTitleForStock(stockId) {
     if (expiresAt > 0 && expiresAt <= now) return null;
     const title = sanitizeTitleName(rec.title || rec.name || '');
     if (!title) return null;
-    return { title, theme: rec.theme || TITLE_THEME_PRESET_ID, expiresAt };
+    return { title, theme: normalizeTitleThemeId(rec.theme), expiresAt };
 }
 
 function isTitleSkinActiveForStock(stockId) {
@@ -3706,16 +3955,11 @@ function spawnTitleParticles(el, x, y, count) {
     const rect = el.getBoundingClientRect();
     const lx = x - rect.left;
     const ly = y - rect.top;
-    const gold = [
-        [232, 201, 122],
-        [201, 168, 76],
-        [255, 225, 140],
-        [168, 125, 42],
-    ];
     for (let i = 0; i < count; i++) {
         const ang = Math.random() * Math.PI * 2;
         const speed = 0.4 + Math.random() * 1.5;
-        const c = gold[(Math.random() * gold.length) | 0];
+        const palette = sys.particleColors || TITLE_PARTICLE_COLORS_GOLD;
+        const c = palette[(Math.random() * palette.length) | 0];
         sys.particles.push({
             x: lx,
             y: ly,
@@ -3744,6 +3988,7 @@ function spawnTitleParticlesRandom(el, count) {
 
 function bindTitleParticleSystem(el) {
     if (!el || titleParticleSystems.has(el)) return;
+    if (el.id === 'title-preview-card' && isTouchLikeDevice()) return;
     const canvas = ensureTitleParticleCanvas(el);
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -3755,6 +4000,7 @@ function bindTitleParticleSystem(el) {
         touchMode,
         tier,
         visible: true,
+        particleColors: el.classList.contains('title-theme-preset2') ? TITLE_PARTICLE_COLORS_NEON : TITLE_PARTICLE_COLORS_GOLD,
     };
     titleParticleSystems.set(el, sys);
 
@@ -3880,7 +4126,7 @@ function applyTitleDecorationToCard(card, stockId) {
     const badge = card.querySelector('.stock-title-badge');
     if (!titleRec) {
         if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
-        card.classList.remove('title-theme-preset1');
+        stripTitleThemeClasses(card);
         unbindTitleParticleSystem(card);
         return;
     }
@@ -3888,16 +4134,15 @@ function applyTitleDecorationToCard(card, stockId) {
         badge.style.display = 'inline-flex';
         badge.textContent = titleRec.title;
     }
-    if (titleRec.theme === TITLE_THEME_PRESET_ID) {
-        if (!card.classList.contains('title-theme-preset1')) {
-            card.classList.add('title-theme-preset1');
-            bindTitleParticleSystem(card);
-        } else if (!titleParticleSystems.get(card)) {
-            bindTitleParticleSystem(card);
-        }
-    } else {
-        card.classList.remove('title-theme-preset1');
+    const nextClass = titleThemeClassFor(titleRec.theme);
+    const same = card.classList.contains(nextClass);
+    stripTitleThemeClasses(card);
+    card.classList.add(nextClass);
+    if (!same) {
         unbindTitleParticleSystem(card);
+        bindTitleParticleSystem(card);
+    } else if (!titleParticleSystems.get(card)) {
+        bindTitleParticleSystem(card);
     }
 }
 
@@ -3909,22 +4154,21 @@ function applyTitleDecorationToChartModal(stockId) {
     if (!titleRec) {
         badge.style.display = 'none';
         badge.textContent = '';
-        modal.classList.remove('title-theme-preset1');
+        stripTitleThemeClasses(modal);
         unbindTitleParticleSystem(modal);
         return;
     }
     badge.style.display = 'inline-flex';
     badge.textContent = titleRec.title;
-    if (titleRec.theme === TITLE_THEME_PRESET_ID) {
-        if (!modal.classList.contains('title-theme-preset1')) {
-            modal.classList.add('title-theme-preset1');
-            bindTitleParticleSystem(modal);
-        } else if (!titleParticleSystems.get(modal)) {
-            bindTitleParticleSystem(modal);
-        }
-    } else {
-        modal.classList.remove('title-theme-preset1');
+    const nextClass = titleThemeClassFor(titleRec.theme);
+    const same = modal.classList.contains(nextClass);
+    stripTitleThemeClasses(modal);
+    modal.classList.add(nextClass);
+    if (!same) {
         unbindTitleParticleSystem(modal);
+        bindTitleParticleSystem(modal);
+    } else if (!titleParticleSystems.get(modal)) {
+        bindTitleParticleSystem(modal);
     }
 }
 
@@ -6754,7 +6998,7 @@ function closeChartModal() {
     }
     const modal = document.querySelector('#chart-modal-overlay .chart-modal');
     if (modal) {
-        modal.classList.remove('title-theme-preset1');
+        stripTitleThemeClasses(modal);
         unbindTitleParticleSystem(modal);
     }
     const badge = document.getElementById('cm-title-badge');
@@ -9365,6 +9609,35 @@ document.addEventListener('input', (e) => {
     preview.style.display = 'flex';
 });
 
+window.setSelectedTitleThemePreset = function(id) {
+    selectedTitleThemePreset = normalizeTitleThemeId(id);
+    const b1 = document.getElementById('title-theme-chip-p1');
+    const b2 = document.getElementById('title-theme-chip-p2');
+    if (b1 && b2) {
+        const p1 = selectedTitleThemePreset === 'preset1';
+        b1.style.boxShadow = p1 ? '0 0 0 2px rgba(250, 204, 21, 0.55)' : 'none';
+        b2.style.boxShadow = !p1 ? '0 0 0 2px rgba(167, 139, 250, 0.55)' : 'none';
+    }
+    const lab = document.getElementById('title-preview-preset-label');
+    const hint = document.getElementById('title-preview-hint');
+    if (lab) {
+        lab.textContent = selectedTitleThemePreset === 'preset2' ? '프리셋 2' : '프리셋 1';
+        lab.style.color = selectedTitleThemePreset === 'preset2' ? '#c4b5fd' : '#a78bfa';
+    }
+    if (hint) {
+        hint.textContent = selectedTitleThemePreset === 'preset2'
+            ? '다크 그리드 + 퍼플·마젠타 네온 (호버 시 광택 회전)'
+            : '마우스 호버 시 골드 글로우가 강조됩니다.';
+    }
+    const previewCard = document.getElementById('title-preview-card');
+    if (previewCard) {
+        stripTitleThemeClasses(previewCard);
+        previewCard.classList.add(titleThemeClassFor(selectedTitleThemePreset));
+        unbindTitleParticleSystem(previewCard);
+        bindTitleParticleSystem(previewCard);
+    }
+};
+
 // ── 홍보 신청 제출 ───────────────────────────────────────────
 window.openTitlePurchaseModal = async function() {
     if (!chartModalStockId) return;
@@ -9385,8 +9658,7 @@ window.openTitlePurchaseModal = async function() {
     const isAdmin = (auth.currentUser?.email || '').toLowerCase() === 'skftodwocks2@gmail.com';
     const adminBtn = document.getElementById('title-admin-apply-btn');
     if (adminBtn) adminBtn.style.display = isAdmin ? '' : 'none';
-    const previewCard = document.getElementById('title-preview-card');
-    if (previewCard) bindTitleParticleSystem(previewCard);
+    setSelectedTitleThemePreset(selectedTitleThemePreset);
     if (modal) modal.classList.add('active');
 };
 
@@ -9427,7 +9699,7 @@ window.submitTitlePurchaseRequest = async function() {
             stockName,
             market,
             title,
-            theme: TITLE_THEME_PRESET_ID,
+            theme: normalizeTitleThemeId(selectedTitleThemePreset),
             status: 'pending',
             cost: Number(titleSponsorUnitCost || 50),
             durationMs: TITLE_SPONSOR_DURATION_MS,
@@ -9469,7 +9741,7 @@ window.adminApplyTitleForMe = async function() {
         const now = Date.now();
         const payload = {
             title: check.name,
-            theme: TITLE_THEME_PRESET_ID,
+            theme: normalizeTitleThemeId(selectedTitleThemePreset),
             status: 'approved',
             active: true,
             approvedAt: now,
