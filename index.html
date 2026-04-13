@@ -9646,7 +9646,7 @@ function updateCardContent(card, s, userStock) {
         const rankText = ` · 순위 ${getMarketRankText(s.id, coin ? 'coin' : 'stock')}`;
         card.innerHTML = `
             <div class="info-group">
-                <div class="stock-name">${escapeHtml(name)}<span class="stock-title-badge" style="display:none;"></span></div>
+                <div class="stock-name"><span class="stock-name-text">${escapeHtml(name)}</span><span class="stock-title-badge" style="display:none;"></span></div>
                 <div class="my-qty">보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>${rankText}</div>
             </div>
             <div class="price-group">
@@ -9689,7 +9689,18 @@ function updateCardContent(card, s, userStock) {
     const nameEl = card.querySelector('.stock-name');
     if (nameEl) {
         const name = s.name || stockNameCache[s.id];
-        if (name) nameEl.textContent = name;
+        if (name) {
+            let textEl = nameEl.querySelector('.stock-name-text');
+            if (!textEl) {
+                // Legacy DOM safety: keep existing badge node and only wrap text.
+                textEl = document.createElement('span');
+                textEl.className = 'stock-name-text';
+                const badgeEl = nameEl.querySelector('.stock-title-badge');
+                if (badgeEl) nameEl.insertBefore(textEl, badgeEl);
+                else nameEl.prepend(textEl);
+            }
+            textEl.textContent = name;
+        }
     }
 
     const myQtyEl = card.querySelector('.my-qty');
