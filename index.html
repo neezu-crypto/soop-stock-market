@@ -1650,7 +1650,7 @@
             isolation: isolate;
             overflow: hidden;
             background: #000000 !important;
-            border-color: #c9a84c !important;
+            border-color: #8f7a3f !important;
             box-shadow: none;
             transition: box-shadow .4s ease, border-color .35s ease, transform .4s cubic-bezier(.22, 1, .36, 1);
         }
@@ -1664,8 +1664,8 @@
             pointer-events: none;
             z-index: 0;
             background:
-                radial-gradient(circle at 14% 10%, #c9a84c 0%, #000000 34%),
-                radial-gradient(circle at 84% 82%, #a87d2a 0%, #000000 42%),
+                radial-gradient(circle at 14% 10%, rgba(201, 168, 76, 0.14) 0%, transparent 36%),
+                radial-gradient(circle at 84% 82%, rgba(168, 125, 42, 0.10) 0%, transparent 44%),
                 linear-gradient(145deg, #000000 0%, #000000 46%, #000000 100%);
         }
         .stock-card.title-theme-preset1::after,
@@ -1673,17 +1673,18 @@
         .title-preview-card::after {
             content: '';
             position: absolute;
-            inset: -42%;
+            inset: -14%;
             border-radius: inherit;
             pointer-events: none;
             z-index: 0;
-            background: linear-gradient(120deg, #000000 30%, #c9a84c 49%, #000000 67%);
+            background: linear-gradient(120deg, transparent 35%, rgba(232, 201, 122, 0.30) 50%, transparent 65%);
+            mix-blend-mode: screen;
             transform: translateX(-58%) rotate(8deg);
             transition: transform .68s ease;
         }
         .stock-card.title-theme-preset1:hover,
         .title-preview-card:hover {
-            border-color: #c9a84c !important;
+            border-color: #9f8950 !important;
             box-shadow:
                 0 24px 64px rgba(0, 0, 0, 0.75),
                 0 0 40px rgba(201, 168, 76, 0.07);
@@ -1706,7 +1707,7 @@
             border-radius: 6px;
             color: #e8c97a;
             background: #000000;
-            border: 1px solid #c9a84c;
+            border: 1px solid #8f7a3f;
             font-size: 12px;
             vertical-align: middle;
         }
@@ -1729,7 +1730,7 @@
         }
         .stock-card.title-theme-preset1 .price-change,
         .chart-modal.title-theme-preset1 .stock-title-change {
-            border: 1px solid #c9a84c;
+            border: 1px solid #8f7a3f;
             box-shadow: none;
         }
 
@@ -1741,8 +1742,18 @@
         .chart-modal.title-theme-preset1 .chart-modal-trade,
         .chart-modal.title-theme-preset1 #candle-container,
         .chart-modal.title-theme-preset1 #chart-container {
-            background: #000000 !important;
-            border-color: #c9a84c;
+            background: transparent !important;
+            border-color: #8f7a3f;
+        }
+        .chart-modal.title-theme-preset1 #chart-ad-banner {
+            background: transparent !important;
+            border-top-color: #8f7a3f !important;
+        }
+        .chart-modal.title-theme-preset1 #chart-ad-banner a,
+        .chart-modal.title-theme-preset1 #chart-ad-banner img,
+        .chart-modal.title-theme-preset1 #chart-ad-label {
+            position: relative;
+            z-index: 4;
         }
 
         .stock-card.title-theme-preset1 .btn-trade-buy,
@@ -1755,7 +1766,7 @@
         .chart-modal.title-theme-preset1 .modal-titlebuy {
             background: linear-gradient(135deg, #c9a84c, #a87d2a);
             color: #000000 !important;
-            border: 1px solid #c9a84c;
+            border: 1px solid #8f7a3f;
             box-shadow: none;
             font-weight: 900;
         }
