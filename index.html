@@ -1608,37 +1608,93 @@
         .chart-modal-trade .modal-halfsell { background: #9a3412; color: #fff; font-weight: 900; }
         .chart-modal-trade .modal-sell   { background: var(--down-color); color: white; }
         .chart-modal-trade .modal-sell10 { background: #1e3a8a; color: white; }
-        .chart-modal-trade .modal-titlebuy { background: linear-gradient(135deg,#a855f7,#6366f1); color:#fff; font-weight:900; }
+        .chart-modal-trade .modal-titlebuy {
+            background: linear-gradient(135deg, #d7b15d 0%, #b9852f 45%, #8a6421 100%);
+            color:#07101d; font-weight:900; letter-spacing:.02em;
+            box-shadow: inset 0 1px 0 rgba(255,240,200,.45), 0 6px 14px rgba(201,168,76,.22);
+        }
         .chart-modal-trade button:hover { filter: brightness(1.15); transform: translateY(-1px); }
 
         .stock-title-badge {
             display:inline-flex; align-items:center; gap:4px;
-            padding:2px 8px; border-radius:999px; font-size:11px; font-weight:800;
-            background:rgba(168,85,247,0.14); color:#e9d5ff; border:1px solid rgba(192,132,252,0.4);
+            padding:2px 10px; border-radius:999px; font-size:11px; font-weight:800;
+            background: linear-gradient(135deg, rgba(201,168,76,0.24), rgba(232,201,122,0.14));
+            color:#f6e6b2; border:1px solid rgba(201,168,76,0.5);
+            text-shadow: 0 1px 0 rgba(4,22,40,.65);
             margin-left:6px; vertical-align:middle;
+            box-shadow: inset 0 1px 0 rgba(255,239,192,.35), 0 0 0 1px rgba(4,22,40,.25);
         }
         .cm-title-badge { margin-left:6px; }
         .stock-card.title-theme-preset1,
-        .chart-modal.title-theme-preset1 {
-            position:relative;
-            border-color: rgba(167,139,250,0.5);
-            box-shadow: 0 0 0 1px rgba(167,139,250,0.15), 0 6px 18px rgba(99,102,241,0.14);
-            transition: box-shadow .2s ease, transform .2s ease;
+        .chart-modal.title-theme-preset1,
+        .title-preview-card {
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 18% 12%, rgba(232,201,122,0.14), transparent 38%),
+                radial-gradient(circle at 84% 84%, rgba(90,155,224,0.12), transparent 42%),
+                linear-gradient(145deg, #030e1a 0%, #061a2f 45%, #0a2540 100%);
+            border: 1px solid rgba(201,168,76,0.42);
+            box-shadow:
+                inset 0 1px 0 rgba(255,233,166,0.22),
+                0 12px 28px rgba(2,13,26,0.45),
+                0 0 0 1px rgba(8,17,30,0.45);
+            transition: transform .28s cubic-bezier(.22, 1, .36, 1), box-shadow .28s ease, border-color .24s ease;
+        }
+        .stock-card.title-theme-preset1::before,
+        .chart-modal.title-theme-preset1::before,
+        .title-preview-card::before {
+            content: '';
+            position: absolute;
+            left: 10%; right: 10%; top: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(232,201,122,0.92), transparent);
+            opacity: 0.9;
+            pointer-events: none;
+        }
+        .stock-card.title-theme-preset1::after,
+        .chart-modal.title-theme-preset1::after,
+        .title-preview-card::after {
+            content: '';
+            position: absolute;
+            inset: -45%;
+            pointer-events: none;
+            background: linear-gradient(120deg, transparent 30%, rgba(232,201,122,0.14) 48%, transparent 66%);
+            transform: translateX(-55%) rotate(8deg);
+            transition: transform .6s ease;
         }
         .stock-card.title-theme-preset1:hover,
-        .chart-modal.title-theme-preset1:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 0 0 1px rgba(196,181,253,0.45), 0 8px 24px rgba(99,102,241,0.28);
+        .chart-modal.title-theme-preset1:hover,
+        .title-preview-card:hover {
+            transform: translateY(-2px) scale(1.006);
+            border-color: rgba(232,201,122,0.7);
+            box-shadow:
+                inset 0 1px 0 rgba(255,239,192,0.34),
+                0 18px 42px rgba(2,13,26,0.6),
+                0 0 26px rgba(201,168,76,0.16);
+        }
+        .stock-card.title-theme-preset1:hover::after,
+        .chart-modal.title-theme-preset1:hover::after,
+        .title-preview-card:hover::after {
+            transform: translateX(58%) rotate(8deg);
         }
         .title-preview-card {
-            background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(168,85,247,0.16));
-            border:1px solid rgba(167,139,250,0.45);
-            border-radius:12px; padding:12px;
-            transition: transform .2s ease, box-shadow .2s ease;
+            border-radius: 12px;
+            padding: 12px;
         }
-        .title-preview-card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 24px rgba(99,102,241,0.28);
+        .title-particle-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            border-radius: inherit;
+            z-index: 0;
+        }
+        .stock-card.title-theme-preset1 > *,
+        .chart-modal.title-theme-preset1 > * {
+            position: relative;
+            z-index: 1;
         }
 
         /* 차트 모달 하단 광고 배너 — 원본 비율 720×150 */
@@ -3362,6 +3418,195 @@ function getOwnedTitleForStock(stockId) {
     return { title, theme: rec.theme || TITLE_THEME_PRESET_ID };
 }
 
+const titleParticleSystems = new Map();
+let titleParticleRaf = 0;
+
+function isTouchLikeDevice() {
+    return window.matchMedia('(hover: none), (pointer: coarse)').matches || 'ontouchstart' in window;
+}
+
+function ensureTitleParticleCanvas(el) {
+    if (!el) return null;
+    let canvas = el.querySelector(':scope > .title-particle-canvas');
+    if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.className = 'title-particle-canvas';
+        el.prepend(canvas);
+    }
+    const rect = el.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.floor(rect.width * dpr));
+    const h = Math.max(1, Math.floor(rect.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+    }
+    return canvas;
+}
+
+function spawnTitleParticles(el, x, y, count) {
+    const sys = titleParticleSystems.get(el);
+    if (!sys) return;
+    const rect = el.getBoundingClientRect();
+    const lx = x - rect.left;
+    const ly = y - rect.top;
+    const gold = [
+        [232, 201, 122],
+        [201, 168, 76],
+        [255, 225, 140],
+        [168, 125, 42],
+    ];
+    for (let i = 0; i < count; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const speed = 0.4 + Math.random() * 1.5;
+        const c = gold[(Math.random() * gold.length) | 0];
+        sys.particles.push({
+            x: lx,
+            y: ly,
+            vx: Math.cos(ang) * speed + (Math.random() - 0.5) * 0.25,
+            vy: Math.sin(ang) * speed - 0.45 - Math.random() * 0.55,
+            size: 0.8 + Math.random() * 2,
+            life: 42 + Math.random() * 34,
+            maxLife: 76,
+            shape: Math.random() > 0.52 ? 'diamond' : 'circle',
+            r: c[0], g: c[1], b: c[2],
+            rot: Math.random() * Math.PI * 2,
+            rotV: (Math.random() - 0.5) * 0.08,
+        });
+    }
+}
+
+function spawnTitleParticlesRandom(el, count) {
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = rect.left + Math.random() * rect.width;
+    const y = rect.top + Math.random() * rect.height;
+    spawnTitleParticles(el, x, y, count);
+}
+
+function bindTitleParticleSystem(el) {
+    if (!el || titleParticleSystems.has(el)) return;
+    const canvas = ensureTitleParticleCanvas(el);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const sys = { canvas, ctx, particles: [], lastMoveSpawn: 0 };
+    titleParticleSystems.set(el, sys);
+
+    const onMove = (e) => {
+        const now = Date.now();
+        if (now - sys.lastMoveSpawn < 36) return;
+        spawnTitleParticles(el, e.clientX, e.clientY, 2);
+        sys.lastMoveSpawn = now;
+        ensureTitleParticleLoop();
+    };
+    const onClick = (e) => {
+        spawnTitleParticles(el, e.clientX, e.clientY, 14);
+        ensureTitleParticleLoop();
+    };
+    const onEnter = (e) => {
+        spawnTitleParticles(el, e.clientX, e.clientY, 10);
+        ensureTitleParticleLoop();
+    };
+    const onTouchStart = (e) => {
+        const t = e.touches && e.touches[0] ? e.touches[0] : e.changedTouches?.[0];
+        if (!t) return;
+        spawnTitleParticles(el, t.clientX, t.clientY, 12);
+        ensureTitleParticleLoop();
+    };
+    const onResize = () => ensureTitleParticleCanvas(el);
+
+    const touchMode = isTouchLikeDevice();
+    if (touchMode) {
+        sys.mobileTwinkleTimer = setInterval(() => {
+            spawnTitleParticlesRandom(el, 2 + ((Math.random() * 2) | 0));
+            ensureTitleParticleLoop();
+        }, 650);
+        el.addEventListener('touchstart', onTouchStart, { passive: true });
+        // 초기에 한 번 반짝임
+        spawnTitleParticlesRandom(el, 8);
+        ensureTitleParticleLoop();
+    } else {
+        el.addEventListener('mousemove', onMove);
+        el.addEventListener('click', onClick);
+        el.addEventListener('mouseenter', onEnter);
+    }
+    window.addEventListener('resize', onResize);
+    sys.cleanup = () => {
+        if (sys.mobileTwinkleTimer) {
+            clearInterval(sys.mobileTwinkleTimer);
+            sys.mobileTwinkleTimer = null;
+        }
+        el.removeEventListener('mousemove', onMove);
+        el.removeEventListener('click', onClick);
+        el.removeEventListener('mouseenter', onEnter);
+        el.removeEventListener('touchstart', onTouchStart);
+        window.removeEventListener('resize', onResize);
+        sys.particles.length = 0;
+        const c = el.querySelector(':scope > .title-particle-canvas');
+        if (c) c.remove();
+    };
+}
+
+function unbindTitleParticleSystem(el) {
+    const sys = el ? titleParticleSystems.get(el) : null;
+    if (!sys) return;
+    try { sys.cleanup && sys.cleanup(); } catch (_) { /* noop */ }
+    titleParticleSystems.delete(el);
+}
+
+function ensureTitleParticleLoop() {
+    if (titleParticleRaf) return;
+    const tick = () => {
+        titleParticleRaf = 0;
+        let hasLive = false;
+        titleParticleSystems.forEach((sys, el) => {
+            ensureTitleParticleCanvas(el);
+            const ctx = sys.ctx;
+            const canvas = sys.canvas;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = sys.particles.length - 1; i >= 0; i--) {
+                const p = sys.particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.018;
+                p.vx *= 0.992;
+                p.rot += p.rotV;
+                p.life -= 1;
+                if (p.life <= 0) {
+                    sys.particles.splice(i, 1);
+                    continue;
+                }
+                hasLive = true;
+                const alpha = Math.max(0, p.life / p.maxLife) * 0.75;
+                const r = p.size;
+                ctx.fillStyle = `rgba(${p.r},${p.g},${p.b},${alpha})`;
+                if (p.shape === 'diamond') {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rot);
+                    ctx.beginPath();
+                    ctx.moveTo(0, -r);
+                    ctx.lineTo(r, 0);
+                    ctx.lineTo(0, r);
+                    ctx.lineTo(-r, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        });
+        if (hasLive) titleParticleRaf = requestAnimationFrame(tick);
+    };
+    titleParticleRaf = requestAnimationFrame(tick);
+}
+
 function applyTitleDecorationToCard(card, stockId) {
     if (!card) return;
     const titleRec = getOwnedTitleForStock(stockId);
@@ -3369,13 +3614,19 @@ function applyTitleDecorationToCard(card, stockId) {
     card.classList.remove('title-theme-preset1');
     if (!titleRec) {
         if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+        unbindTitleParticleSystem(card);
         return;
     }
     if (badge) {
         badge.style.display = 'inline-flex';
         badge.textContent = titleRec.title;
     }
-    if (titleRec.theme === TITLE_THEME_PRESET_ID) card.classList.add('title-theme-preset1');
+    if (titleRec.theme === TITLE_THEME_PRESET_ID) {
+        card.classList.add('title-theme-preset1');
+        bindTitleParticleSystem(card);
+    } else {
+        unbindTitleParticleSystem(card);
+    }
 }
 
 function applyTitleDecorationToChartModal(stockId) {
@@ -3387,11 +3638,17 @@ function applyTitleDecorationToChartModal(stockId) {
     if (!titleRec) {
         badge.style.display = 'none';
         badge.textContent = '';
+        unbindTitleParticleSystem(modal);
         return;
     }
     badge.style.display = 'inline-flex';
     badge.textContent = titleRec.title;
-    if (titleRec.theme === TITLE_THEME_PRESET_ID) modal.classList.add('title-theme-preset1');
+    if (titleRec.theme === TITLE_THEME_PRESET_ID) {
+        modal.classList.add('title-theme-preset1');
+        bindTitleParticleSystem(modal);
+    } else {
+        unbindTitleParticleSystem(modal);
+    }
 }
 
 function scheduleUserDataUiRefresh() {
@@ -6210,7 +6467,10 @@ function closeChartModal() {
         hr.innerHTML = '';
     }
     const modal = document.querySelector('#chart-modal-overlay .chart-modal');
-    if (modal) modal.classList.remove('title-theme-preset1');
+    if (modal) {
+        modal.classList.remove('title-theme-preset1');
+        unbindTitleParticleSystem(modal);
+    }
     const badge = document.getElementById('cm-title-badge');
     if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
 }
@@ -8839,10 +9099,14 @@ window.openTitlePurchaseModal = async function() {
     const isAdmin = (auth.currentUser?.email || '').toLowerCase() === 'skftodwocks2@gmail.com';
     const adminBtn = document.getElementById('title-admin-apply-btn');
     if (adminBtn) adminBtn.style.display = isAdmin ? '' : 'none';
+    const previewCard = document.getElementById('title-preview-card');
+    if (previewCard) bindTitleParticleSystem(previewCard);
     if (modal) modal.classList.add('active');
 };
 
 window.closeTitlePurchaseModal = function() {
+    const previewCard = document.getElementById('title-preview-card');
+    if (previewCard) unbindTitleParticleSystem(previewCard);
     document.getElementById('title-purchase-modal')?.classList.remove('active');
 };
 
