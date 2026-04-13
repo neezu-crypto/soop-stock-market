@@ -1691,8 +1691,8 @@
             border-radius: inherit;
             z-index: 0;
         }
-        .stock-card.title-theme-preset1 > *,
-        .chart-modal.title-theme-preset1 > * {
+        .stock-card.title-theme-preset1 > *:not(.title-particle-canvas),
+        .chart-modal.title-theme-preset1 > *:not(.title-particle-canvas) {
             position: relative;
             z-index: 1;
         }
@@ -9095,7 +9095,7 @@ window.openTitlePurchaseModal = async function() {
     if (stockNameEl) stockNameEl.textContent = stockName;
     if (msgEl) { msgEl.style.color = 'var(--text-sub)'; msgEl.textContent = '칭호를 입력하면 미리보기에 반영됩니다.'; }
     if (costEl) costEl.textContent = `별풍선 ${Number(titleSponsorUnitCost || 50).toLocaleString()}개 (관리자 설정)`;
-    if (previewBadge) previewBadge.textContent = sanitizeTitleName(inputEl?.value || '') || '칭호';
+    syncTitlePreviewBadgeText();
     const isAdmin = (auth.currentUser?.email || '').toLowerCase() === 'skftodwocks2@gmail.com';
     const adminBtn = document.getElementById('title-admin-apply-btn');
     if (adminBtn) adminBtn.style.display = isAdmin ? '' : 'none';
@@ -9179,10 +9179,17 @@ window.adminApplyTitleForMe = async function() {
     }
 };
 
-document.getElementById('title-purchase-input')?.addEventListener('input', (e) => {
-    const v = sanitizeTitleName(e.target.value || '');
+function syncTitlePreviewBadgeText() {
+    const inputEl = document.getElementById('title-purchase-input');
     const badge = document.getElementById('title-preview-badge');
-    if (badge) badge.textContent = v || '칭호';
+    if (!badge) return;
+    const v = sanitizeTitleName(inputEl?.value || '');
+    badge.textContent = v || '칭호';
+}
+
+const titleInputEl = document.getElementById('title-purchase-input');
+['input', 'change', 'keyup', 'compositionend'].forEach((evt) => {
+    titleInputEl?.addEventListener(evt, syncTitlePreviewBadgeText);
 });
 
 document.getElementById('title-purchase-modal')?.addEventListener('click', (e) => {
