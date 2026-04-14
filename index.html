@@ -3361,7 +3361,7 @@
         <ul>
             <li>켜 두면 <b>매수</b>로 종목을 <b>마이너스 수량(숏)</b>으로 늘릴 수 있습니다.</li>
             <li>체결·수수료·임팩트 공식은 같고, <b>매수는 시세를 내리고 매도는 올리는</b> 방향으로 반영됩니다.</li>
-            <li>이미 <b>롱(양수)</b>으로 보유 중인 종목에는 인버스 매수를 할 수 없습니다. 숏 포지션은 <b>매도</b>로 줄입니다.</li>
+            <li>인버스에서 <b>매수</b>는 보유 수량을 줄이는 방향으로 잡힙니다. <b>롱</b>이면 그만큼 롱이 줄고, 수량을 크게 잡으면 <b>숏</b>으로 넘어갈 수 있습니다. <b>숏</b>은 <b>매도</b>로 줄입니다.</li>
         </ul>
         <p style="margin:0 0 14px 0;font-size:12px;color:var(--muted);">전량매도(MAX)는 롱 보유에만 사용할 수 있습니다.</p>
         <button type="button" class="btn-inverse-ok" id="inverse-mode-modal-ok">확인</button>
@@ -10908,6 +10908,17 @@ window.submitTitlePurchaseRequest = async function() {
         if (msgEl) {
             msgEl.style.color = '#22c55e';
             msgEl.textContent = `✅ 신청 완료! 승인 시 전체 유저에게 5일간 적용됩니다. (별풍선 ${Number(titleSponsorUnitCost || 50).toLocaleString()}개)`;
+        }
+        // 후원 창 자동 오픈 (모바일/PC 분기) — relay·홍보·차트배너 신청과 동일
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        if (isMobile) {
+            window.open(`https://m.sooplive.com/item/a/starballoongift?szBjId=skftodwocks2&r=${Math.random()}`, '_blank');
+        } else {
+            window.open(
+                'https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station',
+                '_blank',
+                'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes'
+            );
         }
     } catch (e) {
         if (msgEl) {
