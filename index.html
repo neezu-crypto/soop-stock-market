@@ -2017,6 +2017,7 @@
             color: var(--cute-pk4);
             border: 1.5px solid var(--cute-pk2);
             box-shadow: 0 2px 10px rgba(255, 173, 210, 0.35);
+            font-size: 13px;
         }
 
         .title-preview-card.title-theme-preset1,
@@ -4326,6 +4327,7 @@ const TITLE_PARTICLE_COLORS_NEON = Object.freeze([
 const TITLE_PARTICLE_COLORS_CUTE = Object.freeze([
     [255, 173, 210], [211, 173, 247], [247, 89, 171], [146, 84, 222], [149, 222, 100],
 ]);
+const TITLE_CUTE_EMOJI_POOL = Object.freeze(['🌸', '✨', '💜', '🎀', '🍓', '🐰', '🌈', '💖']);
 /** 직전 로그인 UID — 계정 전환 시 구독·캐시 초기화용 */
 let previousAuthUid  = null;
 /** users/{uid} 하위 분할 onValue 일괄 해제용 — summary / cash / 쿨다운 경로 + 보유 폴링 타이머 */
@@ -4512,6 +4514,33 @@ function ensureTitleParticleCanvas(el) {
 function spawnTitleParticles(el, x, y, count) {
     const sys = titleParticleSystems.get(el);
     if (!sys || sys.visible === false) return;
+    if (sys.isCuteEmoji) {
+        const rect = titleParticleCanvasHost(el).getBoundingClientRect();
+        const lx = x - rect.left;
+        const ly = y - rect.top;
+        for (let i = 0; i < count; i++) {
+            const ang = Math.random() * Math.PI * 2;
+            const speed = 0.55 + Math.random() * 1.25;
+            const ch = TITLE_CUTE_EMOJI_POOL[(Math.random() * TITLE_CUTE_EMOJI_POOL.length) | 0];
+            sys.particles.push({
+                kind: 'emoji',
+                ch,
+                x: lx + (Math.random() - 0.5) * 10,
+                y: ly + (Math.random() - 0.5) * 8,
+                vx: Math.cos(ang) * speed * 0.7,
+                vy: Math.sin(ang) * speed - 0.65,
+                size: 13 + Math.random() * 7,
+                life: 95 + Math.random() * 70,
+                maxLife: 165,
+                alpha: 0.48 + Math.random() * 0.22,
+                rot: (Math.random() - 0.5) * 0.35,
+                rotV: (Math.random() - 0.5) * 0.025,
+                settled: false,
+                bin: -1,
+            });
+        }
+        return;
+    }
     const rect = titleParticleCanvasHost(el).getBoundingClientRect();
     const lx = x - rect.left;
     const ly = y - rect.top;
@@ -4542,8 +4571,91 @@ function spawnTitleParticlesRandom(el, count) {
     const rect = titleParticleCanvasHost(el).getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const x = rect.left + Math.random() * rect.width;
-    const y = rect.top + Math.random() * rect.height;
+    const y = sys.isCuteEmoji ? (rect.top + Math.random() * Math.min(28, rect.height * 0.2)) : (rect.top + Math.random() * rect.height);
     spawnTitleParticles(el, x, y, count);
+}
+
+function getCuteEmojiDropX(sys, canvasW) {
+    const bins = 16;
+    const binW = Math.max(12, canvasW / bins);
+    if (!sys.cutePileHeights || sys.cutePileHeights.length !== bins) {
+        sys.cutePileHeights = Array.from({ length: bins }, () => 0);
+    }
+    // 낮은 더미 쪽으로 우선 배치해서 "쌓이는" 느낌을 만듦
+    let minIdx = 0;
+    let minH = sys.cutePileHeights[0];
+    for (let i = 1; i < bins; i++) {
+        if (sys.cutePileHeights[i] < minH) { minH = sys.cutePileHeights[i]; minIdx = i; }
+    }
+    const spread = Math.min(2, bins - 1);
+    const idx = Math.max(0, Math.min(bins - 1, minIdx + (((Math.random() * (spread * 2 + 1)) | 0) - spread)));
+    return { idx, x: idx * binW + binW * (0.2 + Math.random() * 0.6), binW };
+}
+
+function spawnCuteHoverShower(sys, el, count) {
+    const rect = titleParticleCanvasHost(el).getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    for (let i = 0; i < count; i++) {
+        const ch = TITLE_CUTE_EMOJI_POOL[(Math.random() * TITLE_CUTE_EMOJI_POOL.length) | 0];
+        sys.particles.push({
+            kind: 'emoji',
+            ch,
+            x: Math.random() * rect.width,
+            y: -10 - Math.random() * 16,
+            vx: (Math.random() - 0.5) * 0.9,
+            vy: 0.7 + Math.random() * 0.8,
+            size: 12 + Math.random() * 8,
+            life: 180 + Math.random() * 120,
+            maxLife: 300,
+            alpha: 0.45 + Math.random() * 0.25,
+            rot: (Math.random() - 0.5) * 0.3,
+            rotV: (Math.random() - 0.5) * 0.02,
+            settled: false,
+            bin: -1,
+        });
+    }
+}
+
+function spawnCuteMobileDrop(sys, el) {
+    if (!sys || !sys.isCuteEmoji || !sys.cuteMode || sys.cuteMode.phase !== 'drop') return;
+    const rect = titleParticleCanvasHost(el).getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const sel = getCuteEmojiDropX(sys, rect.width);
+    const ch = TITLE_CUTE_EMOJI_POOL[(Math.random() * TITLE_CUTE_EMOJI_POOL.length) | 0];
+    sys.particles.push({
+        kind: 'emoji',
+        ch,
+        x: sel.x,
+        y: -12,
+        vx: (Math.random() - 0.5) * 0.25,
+        vy: 0.45 + Math.random() * 0.4,
+        size: 14 + Math.random() * 6,
+        life: 2400,
+        maxLife: 2400,
+        alpha: 0.52,
+        rot: (Math.random() - 0.5) * 0.2,
+        rotV: (Math.random() - 0.5) * 0.012,
+        settled: false,
+        bin: sel.idx,
+        mobileDrop: true,
+    });
+    ensureTitleParticleLoop();
+}
+
+function triggerCuteMobileFlush(sys) {
+    if (!sys || !sys.isCuteEmoji || !sys.cuteMode) return;
+    sys.cuteMode.phase = 'flush';
+    sys.cuteMode.resumeAt = Date.now() + 10000;
+    (sys.particles || []).forEach((p) => {
+        if (p && p.kind === 'emoji') {
+            p.settled = false;
+            p.vy = 2.2 + Math.random() * 2.2;
+            p.vx = (Math.random() - 0.5) * 1.6;
+            p.rotV = (Math.random() - 0.5) * 0.08;
+            p.life = Math.max(p.life, 150);
+            p.maxLife = Math.max(p.maxLife, 180);
+        }
+    });
 }
 
 function bindTitleParticleSystem(el) {
@@ -4561,7 +4673,16 @@ function bindTitleParticleSystem(el) {
         tier,
         visible: true,
         particleColors: titleParticlePaletteForElement(el),
+        isCuteEmoji: el.classList.contains('title-theme-preset3'),
     };
+    if (sys.isCuteEmoji) {
+        sys.cuteMode = touchMode
+            ? { phase: 'drop', resumeAt: 0 }
+            : { phase: 'hover-idle', resumeAt: 0 };
+        sys.cuteHoverTimer = null;
+        sys.cuteMobileTimer = null;
+        sys.cutePileHeights = [];
+    }
     titleParticleSystems.set(el, sys);
 
     const onMove = (e) => {
@@ -4577,6 +4698,23 @@ function bindTitleParticleSystem(el) {
     };
     const onEnter = (e) => {
         spawnTitleParticles(el, e.clientX, e.clientY, 10);
+        if (sys.isCuteEmoji && !sys.touchMode && !sys.cuteHoverTimer) {
+            sys.cuteMode.phase = 'hover-shower';
+            sys.cuteHoverTimer = setInterval(() => {
+                if (sys.visible === false) return;
+                spawnCuteHoverShower(sys, el, 2);
+                ensureTitleParticleLoop();
+            }, 140);
+            spawnCuteHoverShower(sys, el, 6);
+        }
+        ensureTitleParticleLoop();
+    };
+    const onLeave = () => {
+        if (sys.isCuteEmoji && sys.cuteHoverTimer) {
+            clearInterval(sys.cuteHoverTimer);
+            sys.cuteHoverTimer = null;
+            sys.cuteMode.phase = 'hover-idle';
+        }
         ensureTitleParticleLoop();
     };
     const onTouchStart = (e) => {
@@ -4597,13 +4735,22 @@ function bindTitleParticleSystem(el) {
 
     if (touchMode) {
         el.addEventListener('touchstart', onTouchStart, { passive: true });
-        if (!useListIo) {
+        if (!useListIo && !sys.isCuteEmoji) {
             startTitleParticleMobileTwinkle(sys, el);
+        } else if (!useListIo && sys.isCuteEmoji) {
+            sys.cuteMobileTimer = setInterval(() => {
+                if (sys.visible === false) return;
+                if (!sys.cuteMode) return;
+                if (sys.cuteMode.phase !== 'drop') return;
+                spawnCuteMobileDrop(sys, el);
+            }, 1000);
+            spawnCuteMobileDrop(sys, el);
         }
     } else {
         el.addEventListener('mousemove', onMove);
         el.addEventListener('click', onClick);
         el.addEventListener('mouseenter', onEnter);
+        el.addEventListener('mouseleave', onLeave);
     }
     window.addEventListener('resize', onResize);
     sys.cleanup = () => {
@@ -4614,8 +4761,17 @@ function bindTitleParticleSystem(el) {
         el.removeEventListener('mousemove', onMove);
         el.removeEventListener('click', onClick);
         el.removeEventListener('mouseenter', onEnter);
+        el.removeEventListener('mouseleave', onLeave);
         el.removeEventListener('touchstart', onTouchStart);
         window.removeEventListener('resize', onResize);
+        if (sys.cuteHoverTimer) {
+            clearInterval(sys.cuteHoverTimer);
+            sys.cuteHoverTimer = null;
+        }
+        if (sys.cuteMobileTimer) {
+            clearInterval(sys.cuteMobileTimer);
+            sys.cuteMobileTimer = null;
+        }
         sys.particles.length = 0;
         const host = titleParticleCanvasHost(el);
         const c = host.querySelector(':scope > .title-particle-canvas');
@@ -4643,6 +4799,66 @@ function ensureTitleParticleLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             for (let i = sys.particles.length - 1; i >= 0; i--) {
                 const p = sys.particles[i];
+                if (p.kind === 'emoji') {
+                    if (!p.settled) {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.03;
+                        p.vx *= 0.996;
+                    }
+                    p.rot += (p.rotV || 0);
+                    p.life -= 1;
+                    if (p.life <= 0) {
+                        sys.particles.splice(i, 1);
+                        continue;
+                    }
+                    // 모바일 적층
+                    if (sys.isCuteEmoji && sys.touchMode && p.mobileDrop && !p.settled && sys.cuteMode?.phase === 'drop') {
+                        const bins = Math.max(1, (sys.cutePileHeights || []).length || 16);
+                        const binW = canvas.width / bins;
+                        const idx = (typeof p.bin === 'number' && p.bin >= 0) ? p.bin : Math.max(0, Math.min(bins - 1, (p.x / Math.max(1, binW)) | 0));
+                        if (!sys.cutePileHeights || sys.cutePileHeights.length !== bins) {
+                            sys.cutePileHeights = Array.from({ length: bins }, () => 0);
+                        }
+                        const pile = sys.cutePileHeights[idx] || 0;
+                        const floorY = canvas.height - 8 - pile - p.size * 0.5;
+                        if (p.y >= floorY) {
+                            p.y = floorY;
+                            p.x = idx * binW + binW * 0.5;
+                            p.vx = 0;
+                            p.vy = 0;
+                            p.rotV = 0;
+                            p.settled = true;
+                            p.life = Math.max(p.life, 2000);
+                            p.maxLife = Math.max(p.maxLife, 2000);
+                            sys.cutePileHeights[idx] = pile + p.size * 0.62;
+                            const maxPile = Math.max(...sys.cutePileHeights);
+                            if (maxPile >= canvas.height * 0.72) {
+                                triggerCuteMobileFlush(sys);
+                            }
+                        }
+                    }
+                    if (sys.isCuteEmoji && sys.touchMode && sys.cuteMode?.phase === 'flush' && p.y > canvas.height + p.size * 1.2) {
+                        sys.particles.splice(i, 1);
+                        continue;
+                    }
+                    hasLive = true;
+                    const alpha = Math.max(0, (p.life / p.maxLife) * (p.alpha || 0.55));
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    ctx.font = `${Math.max(12, Math.round(p.size))}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Noto Emoji","sans-serif"`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    if (p.rot) {
+                        ctx.translate(p.x, p.y);
+                        ctx.rotate(p.rot);
+                        ctx.fillText(p.ch || '✨', 0, 0);
+                    } else {
+                        ctx.fillText(p.ch || '✨', p.x, p.y);
+                    }
+                    ctx.restore();
+                    continue;
+                }
                 p.x += p.vx;
                 p.y += p.vy;
                 p.vy += 0.018;
@@ -4673,6 +4889,14 @@ function ensureTitleParticleLoop() {
                     ctx.beginPath();
                     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
                     ctx.fill();
+                }
+            }
+            if (sys.isCuteEmoji && sys.touchMode && sys.cuteMode?.phase === 'flush' && (!sys.particles.length)) {
+                if (Date.now() >= (sys.cuteMode.resumeAt || 0)) {
+                    sys.cutePileHeights = [];
+                    sys.cuteMode.phase = 'drop';
+                } else {
+                    hasLive = true;
                 }
             }
         });
