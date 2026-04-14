@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOOP STOCK - 거래소</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Gaegu:wght@400;700&display=swap">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
@@ -1252,8 +1253,9 @@
                 width: 94%;
                 flex-shrink: 0;
             }
-            /* 프리셋2 네온: 모바일도 차트 모달 밖으로 글로우가 화면 전체를 덮지 않도록 */
-            .chart-modal.title-theme-preset2 {
+            /* 프리셋2·3: 모바일도 차트 모달 밖으로 글로우가 화면 전체를 덮지 않도록 */
+            .chart-modal.title-theme-preset2,
+            .chart-modal.title-theme-preset3 {
                 overflow: hidden;
             }
             .chart-canvas-wrap {
@@ -1732,7 +1734,8 @@
         }
         @media (hover: none), (pointer: coarse) {
             .title-preview-card.title-theme-preset1:hover,
-            .title-preview-card.title-theme-preset2:hover {
+            .title-preview-card.title-theme-preset2:hover,
+            .title-preview-card.title-theme-preset3:hover {
                 transform: none;
                 box-shadow: none;
             }
@@ -1905,9 +1908,120 @@
             text-shadow: 0 1px 0 #1a1025;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
         }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset3 {
+            --cute-pk1: #fff0f6;
+            --cute-pk2: #ffd6e8;
+            --cute-pk3: #ffadd2;
+            --cute-pk4: #f759ab;
+            --cute-lv1: #f9f0ff;
+            --cute-lv2: #efdbff;
+            --cute-lv3: #d3adf7;
+            --cute-lv4: #9254de;
+            --cute-txt: #3d2c4e;
+            --cute-txt2: #7c5fa0;
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+            background: transparent !important;
+            border: none !important;
+            border-color: transparent !important;
+            box-shadow: none;
+            font-family: 'Nunito', 'Pretendard', sans-serif;
+            transition: box-shadow .4s ease, transform .35s cubic-bezier(.34, 1.56, .64, 1);
+        }
+        .stock-card.title-theme-preset3 {
+            padding: 0;
+            display: block;
+        }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset3::before,
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset3::after {
+            content: none !important;
+        }
+        @media (hover: hover) and (pointer: fine) {
+            .stock-card.title-theme-preset3:hover,
+            #title-preview-card.title-theme-preset3:hover {
+                box-shadow: 0 10px 36px rgba(146, 84, 222, 0.14);
+                transform: translateY(-4px) scale(1.008);
+            }
+        }
+        .stock-card.title-theme-preset3 .info-group::before {
+            content: '🌸';
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            margin-right: 8px;
+            border-radius: 50%;
+            font-size: 12px;
+            line-height: 1;
+            background: linear-gradient(135deg, var(--cute-pk3), var(--cute-lv3));
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(247, 89, 171, 0.25);
+            vertical-align: middle;
+        }
+        .stock-card.title-theme-preset3 .stock-name,
+        .chart-modal.title-theme-preset3 .stock-title-name {
+            color: var(--cute-txt);
+            font-weight: 800;
+        }
+        .stock-card.title-theme-preset3 .stock-name {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .stock-card.title-theme-preset3 .my-qty { color: var(--cute-txt2); }
+        .stock-card.title-theme-preset3 .current-price,
+        .chart-modal.title-theme-preset3 .stock-title-price {
+            color: var(--cute-lv4) !important;
+        }
+        .stock-card.title-theme-preset3 .price-change,
+        .chart-modal.title-theme-preset3 .stock-title-change {
+            border: 1.5px solid var(--cute-pk2);
+            background: rgba(255, 255, 255, 0.65);
+            box-shadow: none;
+        }
+        .chart-modal.title-theme-preset3 .chart-modal-header,
+        .chart-modal.title-theme-preset3 .chart-timeframe-tabs,
+        .chart-modal.title-theme-preset3 .chart-interval-tabs,
+        .chart-modal.title-theme-preset3 .chart-ohlc-bar,
+        .chart-modal.title-theme-preset3 .chart-modal-footer,
+        .chart-modal.title-theme-preset3 .chart-modal-trade,
+        .chart-modal.title-theme-preset3 #candle-container,
+        .chart-modal.title-theme-preset3 #chart-container {
+            background: transparent !important;
+            border-color: var(--cute-pk2);
+        }
+        .chart-modal.title-theme-preset3 #chart-ad-banner {
+            background: transparent !important;
+            border-top-color: var(--cute-pk2) !important;
+        }
+        .stock-card.title-theme-preset3 .btn-trade-buy,
+        .stock-card.title-theme-preset3 .btn-trade-sell,
+        .stock-card.title-theme-preset3 .btn-trade-maxsell,
+        .chart-modal.title-theme-preset3 .modal-buy,
+        .chart-modal.title-theme-preset3 .modal-sell,
+        .chart-modal.title-theme-preset3 .modal-maxsell,
+        .chart-modal.title-theme-preset3 .modal-halfsell,
+        .chart-modal.title-theme-preset3 .modal-titlebuy {
+            background: linear-gradient(135deg, var(--cute-pk4), var(--cute-lv4));
+            color: #fff !important;
+            border: 1.5px solid var(--cute-lv2);
+            box-shadow: 0 4px 14px rgba(146, 84, 222, 0.28);
+            font-weight: 800;
+        }
+        .title-theme-preset3 .stock-title-badge {
+            font-family: 'Gaegu', 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #fff 0%, var(--cute-pk1) 100%);
+            color: var(--cute-pk4);
+            border: 1.5px solid var(--cute-pk2);
+            box-shadow: 0 2px 10px rgba(255, 173, 210, 0.35);
+        }
 
         .title-preview-card.title-theme-preset1,
-        .title-preview-card.title-theme-preset2 {
+        .title-preview-card.title-theme-preset2,
+        .title-preview-card.title-theme-preset3 {
             border-radius: 12px;
             padding: 12px;
         }
@@ -1923,6 +2037,13 @@
             box-sizing: border-box;
         }
         #title-preview-card.title-theme-preset1 .title-sbm-stack {
+            display: none !important;
+        }
+        #title-preview-card.title-theme-preset1 .title-cute-stack,
+        #title-preview-card.title-theme-preset2 .title-cute-stack {
+            display: none !important;
+        }
+        #title-preview-card.title-theme-preset3 .title-sbm-stack {
             display: none !important;
         }
         :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-stack {
@@ -2089,6 +2210,38 @@
             :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-white::before { transform: translate(-50%, -50%) rotate(263deg); }
             :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-border::before { transform: translate(-50%, -50%) rotate(250deg); }
         }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset3 .title-cute-stack {
+            display: block;
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            border-radius: inherit;
+            overflow: hidden;
+        }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset3 .title-cute-ring {
+            position: absolute;
+            border-radius: inherit;
+            pointer-events: none;
+        }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset3 .title-cute-ring--soft {
+            inset: -18%;
+            background: conic-gradient(from 40deg, #ffd6e8, #f9f0ff, #ffadd2, #d3adf7, #ffe8f3, #ffd6e8);
+            opacity: 0.5;
+            filter: blur(16px);
+            animation: title-cute-ring-spin 14s linear infinite;
+        }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset3 .title-cute-ring--accent {
+            inset: 0;
+            box-shadow:
+                inset 0 0 0 2px rgba(255, 255, 255, 0.95),
+                inset 0 0 0 3px rgba(255, 214, 232, 0.95),
+                inset 0 0 0 5px rgba(239, 219, 255, 0.55);
+        }
+        @keyframes title-cute-ring-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
         #title-preview-card .title-preview-card-body {
             position: relative;
             z-index: 7;
@@ -2111,6 +2264,13 @@
                 radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.1) 0%, transparent 44%),
                 #010201;
             background-size: 14px 14px, 14px 14px, auto, auto, auto;
+        }
+        #title-preview-card.title-theme-preset3 .title-preview-card-body {
+            margin: 6px;
+            border-radius: 18px;
+            background: #fff;
+            border: 1.5px solid #ffd6e8;
+            box-shadow: 0 4px 18px rgba(146, 84, 222, 0.08);
         }
         .stock-card.title-theme-preset2 > .title-sbm-body {
             display: grid;
@@ -2162,6 +2322,46 @@
                 #010201;
             background-size: 14px 14px, 14px 14px, auto, auto, auto;
         }
+        .stock-card.title-theme-preset3 > .title-cute-body {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+            grid-template-areas: "info price chart trade";
+            align-items: center;
+            gap: 10px;
+            padding: 18px 20px;
+            box-sizing: border-box;
+            min-height: 100%;
+            position: relative;
+            z-index: 7;
+            margin: 6px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #fffafd 100%);
+            border: 1.5px solid #ffd6e8;
+        }
+        @media (max-width: 600px) {
+            .stock-card.title-theme-preset3 > .title-cute-body {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto;
+                grid-template-areas:
+                    "info  price"
+                    "chart chart"
+                    "trade trade";
+            }
+        }
+        .chart-modal.title-theme-preset3 > .title-cute-body {
+            position: relative;
+            z-index: 7;
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            margin: 6px;
+            border-radius: 22px;
+            overflow: hidden;
+            box-sizing: border-box;
+            background: linear-gradient(180deg, #ffffff 0%, #fdf6ff 100%);
+            border: 1.5px solid #ffd6e8;
+        }
         .stock-card.title-theme-preset2 > .title-sbm-body > .title-particle-canvas,
         .chart-modal.title-theme-preset2 > .title-sbm-body > .title-particle-canvas {
             position: absolute;
@@ -2171,6 +2371,18 @@
         }
         .stock-card.title-theme-preset2 > .title-sbm-body > :not(.title-particle-canvas),
         .chart-modal.title-theme-preset2 > .title-sbm-body > :not(.title-particle-canvas) {
+            position: relative;
+            z-index: 2;
+        }
+        .stock-card.title-theme-preset3 > .title-cute-body > .title-particle-canvas,
+        .chart-modal.title-theme-preset3 > .title-cute-body > .title-particle-canvas {
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            z-index: 1;
+        }
+        .stock-card.title-theme-preset3 > .title-cute-body > :not(.title-particle-canvas),
+        .chart-modal.title-theme-preset3 > .title-cute-body > :not(.title-particle-canvas) {
             position: relative;
             z-index: 2;
         }
@@ -2188,6 +2400,13 @@
         .title-preview-card.title-theme-preset2 #title-preview-stock-name {
             text-shadow: 0 0 14px rgba(167, 139, 250, 0.35);
         }
+        .title-preview-card.title-theme-preset3 #title-preview-stock-name {
+            color: #3d2c4e;
+            font-weight: 800;
+        }
+        #title-preview-card.title-theme-preset3 .title-preview-faux-row > div {
+            color: #3d2c4e !important;
+        }
         .title-particle-canvas {
             position: absolute;
             inset: 0;
@@ -2200,7 +2419,8 @@
         .stock-card.title-theme-preset1 > *:not(.title-particle-canvas),
         .chart-modal.title-theme-preset1 > *:not(.title-particle-canvas),
         .title-preview-card.title-theme-preset1 > *:not(.title-particle-canvas),
-        .title-preview-card.title-theme-preset2 > *:not(.title-particle-canvas) {
+        .title-preview-card.title-theme-preset2 > *:not(.title-particle-canvas),
+        .title-preview-card.title-theme-preset3 > *:not(.title-particle-canvas) {
             position: relative;
             z-index: 2;
         }
@@ -2209,7 +2429,10 @@
         .stock-card.title-theme-preset1 .price-group,
         .stock-card.title-theme-preset2 .btn-favorite,
         .stock-card.title-theme-preset2 .btn-alert,
-        .stock-card.title-theme-preset2 .price-group {
+        .stock-card.title-theme-preset2 .price-group,
+        .stock-card.title-theme-preset3 .btn-favorite,
+        .stock-card.title-theme-preset3 .btn-alert,
+        .stock-card.title-theme-preset3 .price-group {
             z-index: 3;
         }
         @media (max-width: 768px) {
@@ -2217,7 +2440,7 @@
             .stock-card.title-theme-preset1 {
                 contain: paint;
             }
-            #title-preview-card.title-preview-card:not(.title-theme-preset2) {
+            #title-preview-card.title-preview-card:not(.title-theme-preset2):not(.title-theme-preset3) {
                 contain: layout paint;
             }
             .stock-card.title-theme-preset2 .stock-name {
@@ -2237,6 +2460,16 @@
                 gap: 4px;
             }
             .stock-card.title-theme-preset1 .stock-name .stock-title-badge {
+                margin-left: 0;
+                max-width: 100%;
+            }
+            .stock-card.title-theme-preset3 .stock-name {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+            .stock-card.title-theme-preset3 .stock-name .stock-title-badge {
                 margin-left: 0;
                 max-width: 100%;
             }
@@ -3161,8 +3394,9 @@
         </p>
         <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">칭호 스킨 프리셋</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-            <button type="button" id="title-theme-chip-p1" onclick="setSelectedTitleThemePreset('preset1')" style="flex:1; min-width:120px; padding:8px 10px; border-radius:10px; border:1px solid rgba(201,168,76,.45); background:rgba(201,168,76,.12); color:#fde68a; font-weight:800; font-size:12px; cursor:pointer;">프리셋 1 · 골드</button>
-            <button type="button" id="title-theme-chip-p2" onclick="setSelectedTitleThemePreset('preset2')" style="flex:1; min-width:120px; padding:8px 10px; border-radius:10px; border:1px solid rgba(107,77,196,.4); background:rgba(64,47,181,.15); color:#e9d5ff; font-weight:800; font-size:12px; cursor:pointer;">프리셋 2 · 네온</button>
+            <button type="button" id="title-theme-chip-p1" onclick="setSelectedTitleThemePreset('preset1')" style="flex:1; min-width:100px; padding:8px 10px; border-radius:10px; border:1px solid rgba(201,168,76,.45); background:rgba(201,168,76,.12); color:#fde68a; font-weight:800; font-size:12px; cursor:pointer;">프리셋 1 · 골드</button>
+            <button type="button" id="title-theme-chip-p2" onclick="setSelectedTitleThemePreset('preset2')" style="flex:1; min-width:100px; padding:8px 10px; border-radius:10px; border:1px solid rgba(107,77,196,.4); background:rgba(64,47,181,.15); color:#e9d5ff; font-weight:800; font-size:12px; cursor:pointer;">프리셋 2 · 네온</button>
+            <button type="button" id="title-theme-chip-p3" onclick="setSelectedTitleThemePreset('preset3')" style="flex:1; min-width:100px; padding:8px 10px; border-radius:10px; border:1.5px solid rgba(255,173,210,.65); background:linear-gradient(135deg,rgba(255,240,246,.95),rgba(249,240,255,.9)); color:#c41d7f; font-weight:800; font-size:12px; cursor:pointer;">프리셋 3 · 큐트</button>
         </div>
         <div class="title-preview-block" style="margin-bottom:10px;">
             <div id="title-preview-preset-label" style="font-size:11px; color:#a78bfa; margin-bottom:6px; font-weight:800;">미리보기 · 골드</div>
@@ -3174,6 +3408,10 @@
                     <div class="title-sbm-darkBorderBg"></div>
                     <div class="title-sbm-white"></div>
                     <div class="title-sbm-border"></div>
+                </div>
+                <div class="title-cute-stack" aria-hidden="true">
+                    <div class="title-cute-ring title-cute-ring--soft"></div>
+                    <div class="title-cute-ring title-cute-ring--accent"></div>
                 </div>
                 <div class="title-preview-card-body">
                     <div class="title-preview-faux-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -3990,18 +4228,32 @@ const TITLE_SPONSOR_DURATION_MS = 5 * 24 * 60 * 60 * 1000;
 let selectedTitleThemePreset = 'preset1';
 
 function normalizeTitleThemeId(theme) {
-    const t = String(theme || '').trim();
-    return t === 'preset2' ? 'preset2' : 'preset1';
+    const t = String(theme || '').trim().toLowerCase();
+    if (t === 'preset2') return 'preset2';
+    if (t === 'preset3') return 'preset3';
+    return 'preset1';
 }
 function titleThemeClassFor(theme) {
-    return normalizeTitleThemeId(theme) === 'preset2' ? 'title-theme-preset2' : 'title-theme-preset1';
+    const id = normalizeTitleThemeId(theme);
+    if (id === 'preset2') return 'title-theme-preset2';
+    if (id === 'preset3') return 'title-theme-preset3';
+    return 'title-theme-preset1';
 }
 function stripTitleThemeClasses(el) {
     if (!el) return;
-    el.classList.remove('title-theme-preset1', 'title-theme-preset2');
+    el.classList.remove('title-theme-preset1', 'title-theme-preset2', 'title-theme-preset3');
 }
 
 /** 미리보기는 HTML에 스택 고정 — 종목 카드·차트 모달만 동적 삽입/제거 */
+function removeTitleCuteChrome(el) {
+    if (!el || el.id === 'title-preview-card') return;
+    const body = el.querySelector(':scope > .title-cute-body');
+    if (body) {
+        while (body.firstChild) el.insertBefore(body.firstChild, body);
+        body.remove();
+    }
+    el.querySelector(':scope > .title-cute-stack')?.remove();
+}
 function removeTitleSbmChrome(el) {
     if (!el || el.id === 'title-preview-card') return;
     const body = el.querySelector(':scope > .title-sbm-body');
@@ -4038,12 +4290,41 @@ function ensureTitleSbmChrome(el) {
     }
     el.appendChild(body);
 }
+function ensureTitleCuteChrome(el) {
+    if (!el || el.id === 'title-preview-card') return;
+    if (!el.classList.contains('title-theme-preset3')) return;
+    const hadStack = el.querySelector(':scope > .title-cute-stack');
+    const hadBody = el.querySelector(':scope > .title-cute-body');
+    if (hadStack && hadBody) return;
+    if (hadStack && !hadBody) hadStack.remove();
+    const stack = document.createElement('div');
+    stack.className = 'title-cute-stack';
+    stack.setAttribute('aria-hidden', 'true');
+    stack.innerHTML = '<div class="title-cute-ring title-cute-ring--soft"></div><div class="title-cute-ring title-cute-ring--accent"></div>';
+    el.insertBefore(stack, el.firstChild);
+    const body = document.createElement('div');
+    body.className = 'title-cute-body';
+    let n = stack.nextSibling;
+    while (n) {
+        const next = n.nextSibling;
+        if (n.nodeType === 1 && n.classList && n.classList.contains('circuit-freeze-overlay')) {
+            n = next;
+            continue;
+        }
+        body.appendChild(n);
+        n = next;
+    }
+    el.appendChild(body);
+}
 
 const TITLE_PARTICLE_COLORS_GOLD = Object.freeze([
     [232, 201, 122], [201, 168, 76], [255, 225, 140], [168, 125, 42],
 ]);
 const TITLE_PARTICLE_COLORS_NEON = Object.freeze([
     [207, 48, 170], [99, 79, 220], [160, 153, 216], [167, 139, 250], [223, 162, 218],
+]);
+const TITLE_PARTICLE_COLORS_CUTE = Object.freeze([
+    [255, 173, 210], [211, 173, 247], [247, 89, 171], [146, 84, 222], [149, 222, 100],
 ]);
 /** 직전 로그인 UID — 계정 전환 시 구독·캐시 초기화용 */
 let previousAuthUid  = null;
@@ -4188,13 +4469,19 @@ function startTitleParticleMobileTwinkle(sys, el) {
     ensureTitleParticleLoop();
 }
 
+function titleParticlePaletteForElement(el) {
+    if (!el || !el.classList) return TITLE_PARTICLE_COLORS_GOLD;
+    if (el.classList.contains('title-theme-preset2')) return TITLE_PARTICLE_COLORS_NEON;
+    if (el.classList.contains('title-theme-preset3')) return TITLE_PARTICLE_COLORS_CUTE;
+    return TITLE_PARTICLE_COLORS_GOLD;
+}
 function titleParticleCanvasHost(el) {
     if (el && el.id === 'title-preview-card') {
         const b = el.querySelector('.title-preview-card-body');
         if (b) return b;
     }
     if (el && (el.classList.contains('stock-card') || el.classList.contains('chart-modal'))) {
-        const b = el.querySelector(':scope > .title-sbm-body');
+        const b = el.querySelector(':scope > .title-sbm-body') || el.querySelector(':scope > .title-cute-body');
         if (b) return b;
     }
     return el;
@@ -4231,7 +4518,7 @@ function spawnTitleParticles(el, x, y, count) {
     for (let i = 0; i < count; i++) {
         const ang = Math.random() * Math.PI * 2;
         const speed = 0.4 + Math.random() * 1.5;
-        const palette = sys.particleColors || TITLE_PARTICLE_COLORS_GOLD;
+        const palette = sys.particleColors || titleParticlePaletteForElement(el);
         const c = palette[(Math.random() * palette.length) | 0];
         sys.particles.push({
             x: lx,
@@ -4273,7 +4560,7 @@ function bindTitleParticleSystem(el) {
         touchMode,
         tier,
         visible: true,
-        particleColors: el.classList.contains('title-theme-preset2') ? TITLE_PARTICLE_COLORS_NEON : TITLE_PARTICLE_COLORS_GOLD,
+        particleColors: titleParticlePaletteForElement(el),
     };
     titleParticleSystems.set(el, sys);
 
@@ -4401,6 +4688,7 @@ function applyTitleDecorationToCard(card, stockId) {
     if (!titleRec) {
         if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
         removeTitleSbmChrome(card);
+        removeTitleCuteChrome(card);
         stripTitleThemeClasses(card);
         unbindTitleParticleSystem(card);
         return;
@@ -4413,8 +4701,10 @@ function applyTitleDecorationToCard(card, stockId) {
     const same = card.classList.contains(nextClass);
     stripTitleThemeClasses(card);
     card.classList.add(nextClass);
+    removeTitleSbmChrome(card);
+    removeTitleCuteChrome(card);
     if (nextClass === 'title-theme-preset2') ensureTitleSbmChrome(card);
-    else removeTitleSbmChrome(card);
+    else if (nextClass === 'title-theme-preset3') ensureTitleCuteChrome(card);
     if (!same) {
         unbindTitleParticleSystem(card);
         bindTitleParticleSystem(card);
@@ -4432,6 +4722,7 @@ function applyTitleDecorationToChartModal(stockId) {
         badge.style.display = 'none';
         badge.textContent = '';
         removeTitleSbmChrome(modal);
+        removeTitleCuteChrome(modal);
         stripTitleThemeClasses(modal);
         unbindTitleParticleSystem(modal);
         return;
@@ -4442,8 +4733,10 @@ function applyTitleDecorationToChartModal(stockId) {
     const same = modal.classList.contains(nextClass);
     stripTitleThemeClasses(modal);
     modal.classList.add(nextClass);
+    removeTitleSbmChrome(modal);
+    removeTitleCuteChrome(modal);
     if (nextClass === 'title-theme-preset2') ensureTitleSbmChrome(modal);
-    else removeTitleSbmChrome(modal);
+    else if (nextClass === 'title-theme-preset3') ensureTitleCuteChrome(modal);
     if (!same) {
         unbindTitleParticleSystem(modal);
         bindTitleParticleSystem(modal);
@@ -7279,6 +7572,7 @@ function closeChartModal() {
     const modal = document.querySelector('#chart-modal-overlay .chart-modal');
     if (modal) {
         removeTitleSbmChrome(modal);
+        removeTitleCuteChrome(modal);
         stripTitleThemeClasses(modal);
         unbindTitleParticleSystem(modal);
     }
@@ -9894,21 +10188,26 @@ window.setSelectedTitleThemePreset = function(id) {
     selectedTitleThemePreset = normalizeTitleThemeId(id);
     const b1 = document.getElementById('title-theme-chip-p1');
     const b2 = document.getElementById('title-theme-chip-p2');
-    if (b1 && b2) {
-        const p1 = selectedTitleThemePreset === 'preset1';
-        b1.style.boxShadow = p1 ? '0 0 0 2px rgba(250, 204, 21, 0.55)' : 'none';
-        b2.style.boxShadow = !p1 ? '0 0 0 2px rgba(167, 139, 250, 0.55)' : 'none';
-    }
+    const b3 = document.getElementById('title-theme-chip-p3');
+    const sel = selectedTitleThemePreset;
+    if (b1) b1.style.boxShadow = sel === 'preset1' ? '0 0 0 2px rgba(250, 204, 21, 0.55)' : 'none';
+    if (b2) b2.style.boxShadow = sel === 'preset2' ? '0 0 0 2px rgba(167, 139, 250, 0.55)' : 'none';
+    if (b3) b3.style.boxShadow = sel === 'preset3' ? '0 0 0 2px rgba(247, 89, 171, 0.55)' : 'none';
     const lab = document.getElementById('title-preview-preset-label');
     const hint = document.getElementById('title-preview-hint');
     if (lab) {
-        lab.textContent = selectedTitleThemePreset === 'preset2' ? '미리보기 · 네온' : '미리보기 · 골드';
-        lab.style.color = selectedTitleThemePreset === 'preset2' ? '#c4b5fd' : '#a78bfa';
+        const labels = { preset1: ['미리보기 · 골드', '#a78bfa'], preset2: ['미리보기 · 네온', '#c4b5fd'], preset3: ['미리보기 · 큐트 SNS', '#d9469f'] };
+        const L = labels[selectedTitleThemePreset] || labels.preset1;
+        lab.textContent = L[0];
+        lab.style.color = L[1];
     }
     if (hint) {
-        hint.textContent = selectedTitleThemePreset === 'preset2'
-            ? '보라·마젠타 네온이 카드 테두리를 따라 움직입니다. PC에서 마우스를 올리면 더 밝아집니다.'
-            : 'PC에서 마우스를 올리면 골드 글로우가 강해집니다.';
+        const hints = {
+            preset1: 'PC에서 마우스를 올리면 골드 글로우가 강해집니다.',
+            preset2: '보라·마젠타 네온이 카드 테두리를 따라 움직입니다. PC에서 마우스를 올리면 더 밝아집니다.',
+            preset3: '파스텔 핑크·라벤더 말풍선 느낌의 테두리입니다. PC에서 마우스를 올리면 살짝 떠요 ✦',
+        };
+        hint.textContent = hints[selectedTitleThemePreset] || hints.preset1;
     }
     const previewCard = document.getElementById('title-preview-card');
     if (previewCard) {
