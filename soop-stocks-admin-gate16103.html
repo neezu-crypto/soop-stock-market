@@ -5304,6 +5304,7 @@
                     Object.entries(user.stocks).forEach(([stockId, info]) => {
                         if (!info || !info.qty || !top100Ids.has(stockId)) return;
                     const q = Math.floor(Number(info.qty) || 0);
+                    /* 액면분할: 롱(양수) 보유만 수량 증가·평단 조정. 숏(음수)는 변경 없음 */
                     if (q <= 0) return;
                     const newQty = Math.floor(q * ratio);
                     const newAvg = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));
@@ -7509,6 +7510,7 @@
                     if (!targetSet.has(stockId)) return;
                     if (!info) return;
                     const q = Math.floor(Number(info.qty) || 0);
+                    /* 액면분할: 롱(양수) 보유만 수량 증가·평단 조정. 숏(음수)는 변경 없음 */
                     if (q <= 0) return;
                     const newQty = Math.floor(q * ratio);
                     const newAvg = Math.max(1, Math.floor((Number(info.avg) || 0) / ratio));

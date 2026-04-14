@@ -1606,6 +1606,7 @@ exports.adminStockSplit = onCall(
         Object.entries(user.stocks).forEach(([stockId, info]) => {
           if (!targetSet.has(stockId) || !info) return;
           const q = Math.floor(Number(info.qty) || 0);
+          // 액면분할 보유 반영: 롱(양수)만 수량·평단 조정. 숏(음수)는 스킵.
           if (q <= 0) return;
           const newQty = Math.floor(q * ratioN);
           const newAvg = Math.max(1, Math.floor((Number(info.avg) || 0) / ratioN));
