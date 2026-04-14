@@ -34,6 +34,27 @@
             --input-border: #475569;
             --intro-border: rgba(56, 189, 248, 0.22);
         }
+        /* 인버스 모드: 어두운 붉은 톤 테마 */
+        body.inverse-mode {
+            --bg-color: #140a0c;
+            --card-bg: #231216;
+            --primary: #f87171;
+            --primary-light: #fca5a5;
+            --text-main: #fef2f2;
+            --text-sub: #a8a29e;
+            --text-soft: #d6d3d1;
+            --muted: #78716c;
+            --border: #4c1e26;
+            --on-primary: #140a0c;
+            --card-hover: #2d1519;
+            --hint: #d6d3d1;
+            --chart-line: #3f1720;
+            --chart-chrome: #1a0c10;
+            --chart-panel: #1f0e12;
+            --deep: #0d0608;
+            --input-border: #7f1d1d;
+            --intro-border: rgba(248, 113, 113, 0.25);
+        }
         body { font-family: 'Pretendard', sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .wrapper { width: 100%; max-width: 800px; }
         .wallet-bar { 
@@ -68,6 +89,128 @@
         .market-mode-btn:hover { color: var(--text-main); border-color: var(--primary); }
         .market-mode-btn.active { color: #f59e0b; border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.08); }
         header { padding: 10px 0; border-bottom: 1px solid var(--card-bg); margin-bottom: 10px; }
+        .main-hero-bar {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+        .main-hero-text { flex: 1; min-width: 0; }
+        .inverse-mode-box {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .inverse-mode-box__title {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: -0.02em;
+        }
+        .inverse-mode-box__hint {
+            font-size: 10px;
+            color: var(--text-sub);
+            line-height: 1.35;
+            max-width: 160px;
+            text-align: right;
+        }
+        .inverse-mode-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .inverse-mode-toggle input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .inverse-mode-switch {
+            width: 44px;
+            height: 24px;
+            border-radius: 999px;
+            background: var(--border);
+            position: relative;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+        .inverse-mode-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--text-main);
+            transition: transform 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+        }
+        .inverse-mode-toggle input:checked + .inverse-mode-switch {
+            background: #b91c1c;
+        }
+        .inverse-mode-toggle input:checked + .inverse-mode-switch::after {
+            transform: translateX(20px);
+        }
+        .inverse-mode-toggle:focus-within .inverse-mode-switch {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+        #inverse-mode-info-modal.inverse-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10050;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #inverse-mode-info-modal.inverse-modal-overlay.active { display: flex; }
+        .inverse-modal-content {
+            width: 100%;
+            max-width: 400px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px 18px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+        }
+        .inverse-modal-content h2 {
+            margin: 0 0 12px 0;
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+        .inverse-modal-content p, .inverse-modal-content li {
+            font-size: 13px;
+            line-height: 1.65;
+            color: var(--text-sub);
+        }
+        .inverse-modal-content ul { margin: 0 0 16px 0; padding-left: 18px; }
+        .inverse-modal-content .btn-inverse-ok {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            background: #b91c1c;
+            color: #fff;
+        }
+        .inverse-modal-content .btn-inverse-ok:hover { filter: brightness(1.08); }
         /* 거래량 TOP5 아래 · 종목 카드 영역 위 */
         .main-search-wrap {
             width: 100%;
@@ -3211,6 +3354,20 @@
     </div>
 </div>
 
+<!-- ── 인버스 모드 안내 모달 ── -->
+<div id="inverse-mode-info-modal" class="inverse-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="inverse-mode-modal-title">
+    <div class="inverse-modal-content">
+        <h2 id="inverse-mode-modal-title">인버스 모드</h2>
+        <ul>
+            <li>켜 두면 <b>매수</b>로 종목을 <b>마이너스 수량(숏)</b>으로 늘릴 수 있습니다.</li>
+            <li>체결·수수료·임팩트 공식은 같고, <b>매수는 시세를 내리고 매도는 올리는</b> 방향으로 반영됩니다.</li>
+            <li>이미 <b>롱(양수)</b>으로 보유 중인 종목에는 인버스 매수를 할 수 없습니다. 숏 포지션은 <b>매도</b>로 줄입니다.</li>
+        </ul>
+        <p style="margin:0 0 14px 0;font-size:12px;color:var(--muted);">전량매도(MAX)는 롱 보유에만 사용할 수 있습니다.</p>
+        <button type="button" class="btn-inverse-ok" id="inverse-mode-modal-ok">확인</button>
+    </div>
+</div>
+
 <!-- ── 프로모 모달 ── -->
 <div id="promo-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
@@ -3653,11 +3810,21 @@
     <div class="volume-top5-meta" id="volume-top5-meta"></div>
 </div>
 
-    <header>
-        <h1 id="main-market-title" style="font-size:20px;margin:0;">📈 스트리머 주식시장</h1>
-        <p id="main-market-subtitle" style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
-            관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.
-        </p>
+    <header class="main-hero-bar">
+        <div class="main-hero-text">
+            <h1 id="main-market-title" style="font-size:20px;margin:0;">📈 스트리머 주식시장</h1>
+            <p id="main-market-subtitle" style="font-size:13px;color:var(--text-sub);margin:5px 0 0 0;">
+                관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.
+            </p>
+        </div>
+        <div class="inverse-mode-box" aria-label="인버스 모드">
+            <div class="inverse-mode-box__title">인버스 모드</div>
+            <div class="inverse-mode-box__hint">숏(마이너스 보유) · 매수 시 하락 / 매도 시 상승</div>
+            <label class="inverse-mode-toggle">
+                <input type="checkbox" id="inverse-mode-toggle" autocomplete="off">
+                <span class="inverse-mode-switch" aria-hidden="true"></span>
+            </label>
+        </div>
     </header>
 
     <div class="main-search-wrap">
@@ -6243,16 +6410,18 @@ function isCoinMarket() {
 function computeTotalWealthWon() {
     let w = Math.floor(Math.max(0, Number(myData?.cash) || 0));
     const addStockVal = (id, qty) => {
-        if (!qty || qty <= 0) return;
+        const q = Math.floor(Number(qty) || 0);
+        if (!q) return;
         const row = stockRowForId(id);
         const p = Number(row?.price);
-        if (Number.isFinite(p) && p > 0) w += Math.floor(p * qty);
+        if (Number.isFinite(p) && p > 0) w += Math.floor(p * q);
     };
     const addCoinVal = (id, qty) => {
-        if (!qty || qty <= 0) return;
+        const q = Math.floor(Number(qty) || 0);
+        if (!q) return;
         const row = favoriteCoins[id] || ownedCoins[id] || allCoins.find(s => s.id === id);
         const p = Number(row?.price);
-        if (Number.isFinite(p) && p > 0) w += Math.floor(p * qty);
+        if (Number.isFinite(p) && p > 0) w += Math.floor(p * q);
     };
     Object.entries(myData?.stocks || {}).forEach(([id, p]) => addStockVal(id, Math.floor(Number(p?.qty) || 0)));
     if (myData?.coins) {
@@ -6792,7 +6961,7 @@ function portfolioSubPaneVisible(elId) {
 
 function countOwnedSymbolsInBook(book) {
     if (!book || typeof book !== 'object') return 0;
-    return Object.values(book).filter((s) => s && Math.floor(Math.max(0, Number(s.qty) || 0)) > 0).length;
+    return Object.values(book).filter((s) => s && Math.floor(Number(s.qty) || 0) !== 0).length;
 }
 
 /** 좌측 포트폴리오 제목 옆 N/10 — 현재 탭(주식·코인) 기준 */
@@ -6826,7 +6995,7 @@ function renderMyPortfolio() {
     if (!portfolioDiv) return;
 
     const userStocks = myData?.stocks || {};
-    const stockIds   = Object.keys(userStocks).filter(id => userStocks[id] && userStocks[id].qty > 0);
+    const stockIds   = Object.keys(userStocks).filter(id => userStocks[id] && Math.floor(Number(userStocks[id].qty) || 0) !== 0);
     let totalStockValue = 0;
 
     if (stockIds.length === 0) {
@@ -6847,8 +7016,12 @@ function renderMyPortfolio() {
 
         // 주가 미로드 시 수익률 표시 보류
         const priceLoaded = currentPrice > 0;
+        const q = Math.floor(Number(info.qty) || 0);
         const profit = !priceLoaded ? null
-            : info.avg > 0 ? (((currentPrice - info.avg) / info.avg) * 100).toFixed(1)
+            : info.avg > 0 && q !== 0
+                ? (q > 0
+                    ? (((currentPrice - info.avg) / info.avg) * 100)
+                    : (((info.avg - currentPrice) / info.avg) * 100)).toFixed(1)
             : '0.0';
         const profitClass = profit === null ? 'steady'
             : profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
@@ -6865,7 +7038,7 @@ function renderMyPortfolio() {
                 <span class="my-stock-profit ${profitClass}">${profitText}</span>
             </div>
             <div class="my-stock-details">
-                <span>${info.qty}주 보유</span>
+                <span>${info.qty}주 보유${q < 0 ? ' <span style="color:var(--muted);font-size:11px;">(숏)</span>' : ''}</span>
                 <span>평균 ${info.avg.toLocaleString()}원</span>
             </div>`;
         portfolioDiv.appendChild(item);
@@ -6883,7 +7056,7 @@ function renderMyCoinPortfolio() {
     if (!portfolioDiv) return;
 
     const userCoins = myData?.coins || {};
-    const coinIds   = Object.keys(userCoins).filter((id) => userCoins[id] && userCoins[id].qty > 0);
+    const coinIds   = Object.keys(userCoins).filter((id) => userCoins[id] && Math.floor(Number(userCoins[id].qty) || 0) !== 0);
     let totalCoinValue = 0;
 
     if (coinIds.length === 0) {
@@ -6903,8 +7076,12 @@ function renderMyCoinPortfolio() {
         totalCoinValue += currentPrice * info.qty;
 
         const priceLoaded = currentPrice > 0;
+        const cq = Math.floor(Number(info.qty) || 0);
         const profit = !priceLoaded ? null
-            : info.avg > 0 ? (((currentPrice - info.avg) / info.avg) * 100).toFixed(1)
+            : info.avg > 0 && cq !== 0
+                ? (cq > 0
+                    ? (((currentPrice - info.avg) / info.avg) * 100)
+                    : (((info.avg - currentPrice) / info.avg) * 100)).toFixed(1)
             : '0.0';
         const profitClass = profit === null ? 'steady'
             : profit > 0 ? 'up' : (profit < 0 ? 'down' : 'steady');
@@ -6921,8 +7098,8 @@ function renderMyCoinPortfolio() {
                 <span class="my-stock-profit ${profitClass}">${profitText}</span>
             </div>
             <div class="my-stock-details">
-                <span>${info.qty}코인 보유</span>
-                <span>평균 매수 ${info.avg.toLocaleString()}원${priceLoaded ? ` · 시세 ${currentPrice.toLocaleString()}원` : ''}</span>
+                <span>${info.qty}코인 보유${cq < 0 ? ' <span style="color:var(--muted);font-size:11px;">(숏)</span>' : ''}</span>
+                <span>평균 ${info.avg.toLocaleString()}원${priceLoaded ? ` · 시세 ${currentPrice.toLocaleString()}원` : ''}</span>
             </div>`;
         portfolioDiv.appendChild(item);
     });
@@ -8204,9 +8381,9 @@ async function runAutoTradeLoop(id) {
                 return;
             }
             const book = coinQ ? (myData.coins || {}) : (myData.stocks || {});
-            const currentQtyOf = Math.floor(Math.max(0, Number(book[id]?.qty) || 0));
+            const currentQtyOf = Math.floor(Number(book[id]?.qty) || 0);
             if (currentQtyOf === 0) {
-                const ownedCount = Object.values(book).filter((s) => s && Math.floor(Math.max(0, Number(s.qty) || 0)) > 0).length;
+                const ownedCount = Object.values(book).filter((s) => s && Math.floor(Number(s.qty) || 0) !== 0).length;
                 if (ownedCount >= MAX_OWNED_STOCK_SYMBOLS) {
                     console.warn('[autoTrade] 보유 종목 수 한도 → 자동매매 종료', id);
                     stopAutoTrade(id);
@@ -8365,8 +8542,12 @@ window.handleMaxSellButtonClick = function (e, id) {
     if (!id) return;
     const market = isCoinMarket() ? 'coin' : 'stock';
     const book = market === 'coin' ? (myData?.coins || {}) : (myData?.stocks || {});
-    const curQty = Math.floor(Math.max(0, Number(book?.[id]?.qty) || 0));
-    if (curQty <= 0) {
+    const rawQ = Math.floor(Number(book?.[id]?.qty) || 0);
+    if (rawQ < 0) {
+        alert('숏(마이너스 보유) 포지션은 전량매도(MAX)를 사용할 수 없습니다. 매도 버튼으로 정리해 주세요.');
+        return;
+    }
+    if (rawQ <= 0) {
         alert('보유 수량이 없어 전량매도를 진행할 수 없습니다.');
         return;
     }
@@ -8380,8 +8561,12 @@ window.handleModalMaxSellButtonClick = function (e) {
     if (!chartModalStockId) return;
     const market = chartModalMarket === 'coin' ? 'coin' : 'stock';
     const book = market === 'coin' ? (myData?.coins || {}) : (myData?.stocks || {});
-    const curQty = Math.floor(Math.max(0, Number(book?.[chartModalStockId]?.qty) || 0));
-    if (curQty <= 0) {
+    const rawQ = Math.floor(Number(book?.[chartModalStockId]?.qty) || 0);
+    if (rawQ < 0) {
+        alert('숏(마이너스 보유) 포지션은 전량매도(MAX)를 사용할 수 없습니다. 매도 버튼으로 정리해 주세요.');
+        return;
+    }
+    if (rawQ <= 0) {
         alert('보유 수량이 없어 전량매도를 진행할 수 없습니다.');
         return;
     }
@@ -8397,15 +8582,19 @@ window.handleModalHalfSellButtonClick = function (e) {
     if (!chartModalStockId) return;
     const market = chartModalMarket === 'coin' ? 'coin' : 'stock';
     const book = market === 'coin' ? (myData?.coins || {}) : (myData?.stocks || {});
-    const curQty = Math.floor(Math.max(0, Number(book?.[chartModalStockId]?.qty) || 0));
-    if (curQty <= 0) {
+    const rawQ = Math.floor(Number(book?.[chartModalStockId]?.qty) || 0);
+    if (rawQ < 0) {
+        alert('숏(마이너스 보유) 포지션은 50% 매도를 사용할 수 없습니다. 매도 버튼으로 정리해 주세요.');
+        return;
+    }
+    if (rawQ <= 0) {
         alert('보유 수량이 없어 매도를 진행할 수 없습니다.');
         return;
     }
-    const sellQty = Math.max(1, Math.floor(curQty * 0.5));
+    const sellQty = Math.max(1, Math.floor(rawQ * 0.5));
     const unit = market === 'coin' ? '수량' : '주';
     const ok = confirm(
-        `보유의 약 50%에 해당하는 ${sellQty}${unit}를 매도합니다. (보유 ${curQty}${unit})\n` +
+        `보유의 약 50%에 해당하는 ${sellQty}${unit}를 매도합니다. (보유 ${rawQ}${unit})\n` +
             '전량매도(MAX)와 동일하게 8% 추가 수수료와 전량매도용 가격 임팩트 계수가 적용됩니다.\n\n계속 진행하시겠습니까?'
     );
     if (!ok) return;
@@ -8443,8 +8632,9 @@ function calcMaxQty(stockId, type, inputQty) {
         const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
         return Math.min(v, maxAfford, maxByCap, 100);
     } else if (type === 'sell') {
-        const uq = Math.floor(Math.max(0, Number(userStock.qty) || 0));
-        return Math.min(v, uq, 100);
+        const raw = Math.floor(Number(userStock.qty) || 0);
+        const cap = raw > 0 ? raw : raw < 0 ? -raw : 0;
+        return Math.min(v, cap, 100);
     }
     return v;
 }
@@ -8491,8 +8681,9 @@ window.smartClampQty = function(el, stockId, type) {
         const maxBuy    = Math.min(v, maxAfford, maxByCap, 100);
         el.value = Math.max(1, maxBuy);
     } else if (type === 'sell') {
-        const uq = Math.floor(Math.max(0, Number(userStock.qty) || 0));
-        const maxSell = Math.min(v, uq, 100);
+        const raw = Math.floor(Number(userStock.qty) || 0);
+        const cap = raw > 0 ? raw : raw < 0 ? -raw : 0;
+        const maxSell = Math.min(v, cap, 100);
         el.value = Math.max(1, maxSell);
     } else {
         el.value = v;
@@ -8609,6 +8800,13 @@ function isTradeButtonDisabled(stockId) {
 function isMaxSellButtonDisabled(stockId) {
     if (!stockId) return true;
     if (autoTradeState[stockId]) return true;
+    const useCoinBook =
+        chartModalStockId != null && chartModalStockId === stockId
+            ? chartModalMarket === 'coin'
+            : isCoinMarket();
+    const book = useCoinBook ? myData?.coins : myData?.stocks;
+    const rawQ = Math.floor(Number(book?.[stockId]?.qty) || 0);
+    if (rawQ <= 0) return true;
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) {
         if (isLiquidatingAll) return true;
@@ -8832,15 +9030,65 @@ const USER_STOCK_QTY_CAP = Number.MAX_SAFE_INTEGER;
 /** 서로 다른 종목 최대 10개 (사용자 페이지 정책; 규칙·trade 서버와 동일) */
 const MAX_OWNED_STOCK_SYMBOLS = 10;
 
+const INVERSE_MODE_LS_KEY = 'soopStockInverseMode';
+
+function isInverseModeEnabled() {
+    try {
+        return localStorage.getItem(INVERSE_MODE_LS_KEY) === '1';
+    } catch (_) {
+        return false;
+    }
+}
+
+function applyInverseModeBodyClass() {
+    try {
+        document.body.classList.toggle('inverse-mode', isInverseModeEnabled());
+    } catch (_) { /* noop */ }
+}
+
+/** 클라이언트 가격 예측용: 숏 포지션·인버스 신규 매수는 체결 방향이 뒤집힘 */
+function effectiveTradePriceSideForEstimate(rawQty, side) {
+    if (isInverseModeEnabled()) return side === 'buy' ? 'sell' : 'buy';
+    return side;
+}
+
+function setupInverseModeUi() {
+    const toggle = document.getElementById('inverse-mode-toggle');
+    const modal = document.getElementById('inverse-mode-info-modal');
+    const okBtn = document.getElementById('inverse-mode-modal-ok');
+    if (!toggle || !modal) return;
+    toggle.checked = isInverseModeEnabled();
+    applyInverseModeBodyClass();
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+    };
+    okBtn?.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+
+    toggle.addEventListener('change', () => {
+        const on = toggle.checked;
+        try {
+            localStorage.setItem(INVERSE_MODE_LS_KEY, on ? '1' : '0');
+        } catch (_) { /* noop */ }
+        applyInverseModeBodyClass();
+        if (on) modal.classList.add('active');
+        else closeModal();
+    });
+}
+
 /** users/.../stocks/$stockId 규칙 통과용 — qty·avg만 숫자로 정리(레거시 문자열·배열 stocks 등 제거) */
 function normalizeUserStocksForRules(raw) {
     const o = {};
     if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return o;
     Object.entries(raw).forEach(([sid, p]) => {
         if (p == null || typeof p !== 'object' || Array.isArray(p)) return;
-        const q = Math.floor(Math.max(0, Math.min(USER_STOCK_QTY_CAP, Number(p.qty))));
+        const qRaw = Math.floor(Math.min(USER_STOCK_QTY_CAP, Number(p.qty)));
+        const q = Math.max(-USER_STOCK_QTY_CAP, qRaw);
         const a = Math.round(Math.max(0, Math.min(USER_STOCK_AVG_MAX, Number(p.avg))));
-        if (q > 0 && Number.isFinite(a)) o[sid] = { qty: q, avg: a };
+        if (q !== 0 && Number.isFinite(a)) o[sid] = { qty: q, avg: a };
     });
     return o;
 }
@@ -8860,8 +9108,12 @@ async function sellAllHoldingsByFunction(stockId, market, opts) {
     if (!myData) { alert('데이터 로딩 중입니다.'); return; }
     const isCoin = market === 'coin';
     const book = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
-    const curQty = Math.floor(Math.max(0, Number(book?.[stockId]?.qty) || 0));
-    if (curQty <= 0) { alert('보유 수량이 없습니다.'); return; }
+    const rawQty = Math.floor(Number(book?.[stockId]?.qty) || 0);
+    if (rawQty < 0) {
+        alert('숏(마이너스 보유) 포지션은 전량매도(MAX)로 정리할 수 없습니다. 매도 버튼으로 포지션을 줄여 주세요.');
+        return;
+    }
+    if (rawQty <= 0) { alert('보유 수량이 없습니다.'); return; }
     let fraction = 1;
     if (opts && opts.fraction != null) {
         const f = Number(opts.fraction);
@@ -8936,7 +9188,7 @@ async function sellAllHoldingsByFunction(stockId, market, opts) {
             const currentQty = isCoin ? (myData?.coins?.[id]?.qty || 0) : (myData?.stocks?.[id]?.qty || 0);
 
             if (isCoin) {
-                if (currentQty > 0 && stockData) {
+                if (currentQty !== 0 && stockData) {
                     ownedCoins[id] = { ...stockData, id };
                 } else if (currentQty === 0) {
                     delete ownedCoins[id];
@@ -8975,7 +9227,7 @@ async function sellAllHoldingsByFunction(stockId, market, opts) {
                 return;
             }
 
-            if (currentQty > 0 && stockData) {
+            if (currentQty !== 0 && stockData) {
                 ownedStocks[id] = { ...stockData, id };
             } else if (currentQty === 0) {
                 delete ownedStocks[id];
@@ -9122,12 +9374,14 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         return;
     }
 
+    const bookPre = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
+    const rawQtyPre = Math.floor(Number(bookPre[id]?.qty) || 0);
     // 보유 종목 수 제한 — 매수 시 신규 종목 체크 (주식/코인 포트폴리오 각각)
     if (type === 'buy') {
         const book = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
         const currentQtyOf = book[id]?.qty || 0;
         if (currentQtyOf === 0) {
-            const ownedCount = Object.values(book).filter((s) => s.qty > 0).length;
+            const ownedCount = Object.values(book).filter((s) => Math.floor(Number(s?.qty) || 0) !== 0).length;
             if (ownedCount >= MAX_OWNED_STOCK_SYMBOLS) {
                 tradeNotify(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
                 abortAutoIf();
@@ -9167,12 +9421,13 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
             ? Math.max(1, Math.round(newPrice * (1 + spread)))
             : Math.max(1, Math.round(newPrice * (1 - spread)));
     };
+    const priceEstSide = effectiveTradePriceSideForEstimate(rawQtyPre, type);
     const stockForCheck = isCoin
         ? (favoriteCoins[id] || ownedCoins[id] || searchResults[id] || allCoins.find((s) => s.id === id))
         : stockRowForId(id);
     if (stockForCheck) {
         if (type === 'sell') {
-            const estSellPrice = estimateTradePriceForPrecheck(Math.max(1, Number(stockForCheck.price) || 1), 'sell', qty, isCoin);
+            const estSellPrice = estimateTradePriceForPrecheck(Math.max(1, Number(stockForCheck.price) || 1), priceEstSide, qty, isCoin);
             const estReceive   = Math.round(estSellPrice * qty * (1 - precheckFee));
             if (estReceive > maxOrderWon) {
                 tradeNotify(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 수령액: ${estReceive.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
@@ -9180,7 +9435,7 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
                 return;
             }
         } else {
-            const estBuyPrice  = estimateTradePriceForPrecheck(Math.max(1, Number(stockForCheck.price) || 1), 'buy', qty, isCoin);
+            const estBuyPrice  = estimateTradePriceForPrecheck(Math.max(1, Number(stockForCheck.price) || 1), priceEstSide, qty, isCoin);
             const estTotal     = estBuyPrice * qty;
             if (estTotal > maxOrderWon) {
                 tradeNotify(`1회 최대 거래 금액(${maxLabel})을 초과합니다.\n\n예상 구매액: ${estTotal.toLocaleString()}원\n수량을 줄여서 다시 시도해주세요.`);
@@ -9212,7 +9467,13 @@ const userRef = ref(db, `users/${tradeUid}`);
 
     try {
         const tradeFn = httpsCallable(fns, 'trade');
-        await tradeFn({ stockId: id, side: type, qty, market: isCoin ? 'coin' : 'stock' });
+        await tradeFn({
+            stockId: id,
+            side: type,
+            qty,
+            market: isCoin ? 'coin' : 'stock',
+            inverseMode: isInverseModeEnabled()
+        });
         const tradeTsCommitted = serverNowMs();
         lastTradeTime = tradeTsCommitted;
         if (userUID) {
@@ -9276,6 +9537,7 @@ const userRef = ref(db, `users/${tradeUid}`);
         } else if (code === 'functions/failed-precondition') {
             if (raw.includes('잔액')) tradeNotify('잔액이 부족합니다!');
             else if (raw.includes('보유 수량')) tradeNotify(isCoin ? '보유 코인이 부족합니다!' : '보유 주식이 부족합니다!');
+            else if (raw.includes('인버스 모드에서는 롱')) tradeNotify(raw);
             else if (raw.includes('종목한도')) {
                 tradeNotify(`보유 종목은 최대 ${MAX_OWNED_STOCK_SYMBOLS}종목까지 가능합니다.\n기존 종목을 매도 후 다시 시도해주세요.`);
             } else if (raw.includes('User validation failed')) {
@@ -9311,7 +9573,7 @@ const userRef = ref(db, `users/${tradeUid}`);
             const currentQty = isCoin ? (myData?.coins?.[id]?.qty || 0) : (myData?.stocks?.[id]?.qty || 0);
 
             if (isCoin) {
-                if (currentQty > 0 && stockData) {
+                if (currentQty !== 0 && stockData) {
                     ownedCoins[id] = { ...stockData, id };
                 } else if (currentQty === 0) {
                     delete ownedCoins[id];
@@ -9350,7 +9612,7 @@ const userRef = ref(db, `users/${tradeUid}`);
                 return;
             }
 
-            if (currentQty > 0 && stockData) {
+            if (currentQty !== 0 && stockData) {
                 ownedStocks[id] = { ...stockData, id };
             } else if (currentQty === 0) {
                 delete ownedStocks[id];
@@ -9915,10 +10177,10 @@ window.saveAlertSetting = function() {
 };
 
 function userHoldsStockForAlert(stockId) {
-    return Math.floor(Math.max(0, Number(myData?.stocks?.[stockId]?.qty) || 0)) > 0;
+    return Math.floor(Number(myData?.stocks?.[stockId]?.qty) || 0) !== 0;
 }
 function userHoldsCoinForAlert(stockId) {
-    return Math.floor(Math.max(0, Number(myData?.coins?.[stockId]?.qty) || 0)) > 0;
+    return Math.floor(Number(myData?.coins?.[stockId]?.qty) || 0) !== 0;
 }
 
 function idHasEnabledPriceAlert(id) {
@@ -11031,8 +11293,13 @@ function updateCardContent(card, s, userStock) {
     const marketChStr = formatMarketChangePctDisplay(changeNum, coin);
     const posUnit = coin ? '코인' : '주';
     let myProfit = 0, profitClass = 'steady';
-    if (userStock.qty > 0 && userStock.avg > 0) {
-        myProfit    = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
+    const uq = Math.floor(Number(userStock.qty) || 0);
+    if (userStock.avg > 0 && uq !== 0) {
+        const rawPct =
+            uq > 0
+                ? ((s.price - userStock.avg) / userStock.avg) * 100
+                : ((userStock.avg - s.price) / userStock.avg) * 100;
+        myProfit = rawPct.toFixed(1);
         profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
     }
 
@@ -11049,7 +11316,7 @@ function updateCardContent(card, s, userStock) {
         card.innerHTML = `
             <div class="info-group">
                 <div class="stock-name"><span class="stock-name-text">${escapeHtml(name)}</span><span class="stock-title-badge" style="display:none;"></span></div>
-                <div class="my-qty">보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>${rankText}</div>
+                <div class="my-qty">보유: ${userStock.qty}${posUnit}${uq < 0 ? ' <span style="color:var(--muted);font-size:11px;">(숏)</span>' : ''} <span class="${profitClass}">(${uq !== 0 && userStock.avg > 0 ? myProfit + '%' : '-'})</span>${rankText}</div>
             </div>
             <div class="price-group">
                 <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
@@ -11108,7 +11375,7 @@ function updateCardContent(card, s, userStock) {
     const myQtyEl = card.querySelector('.my-qty');
     if (myQtyEl) {
         const rankText = ` · 순위 ${getMarketRankText(s.id, coin ? 'coin' : 'stock')}`;
-        myQtyEl.innerHTML = `보유: ${userStock.qty}${posUnit} <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span>${rankText}`;
+        myQtyEl.innerHTML = `보유: ${userStock.qty}${posUnit}${uq < 0 ? ' <span style="color:var(--muted);font-size:11px;">(숏)</span>' : ''} <span class="${profitClass}">(${uq !== 0 && userStock.avg > 0 ? myProfit + '%' : '-'})</span>${rankText}`;
     }
 
     const hintEl = card.querySelector('.trade-qty-hint');
@@ -11627,8 +11894,8 @@ window.toggleFavorite = function(stockId) {
         renderSearchResults();
     } else {
         // 추가 — 보유하지 않은 종목은 5개까지만 허용
-        const isOwned       = (myData?.stocks?.[stockId]?.qty || 0) > 0;
-        const nonOwnedCount = Object.keys(favorites).filter(id => !(myData?.stocks?.[id]?.qty > 0)).length;
+        const isOwned       = Math.floor(Number(myData?.stocks?.[stockId]?.qty) || 0) !== 0;
+        const nonOwnedCount = Object.keys(favorites).filter((fid) => Math.floor(Number(myData?.stocks?.[fid]?.qty) || 0) === 0).length;
         if (!isOwned && nonOwnedCount >= 5) {
             alert('보유하지 않은 종목의 즐겨찾기는 최대 5개까지 가능합니다.');
             return;
@@ -11657,8 +11924,8 @@ window.toggleFavoriteCoin = function (stockId) {
         renderFavoriteCoinList();
         renderSearchResults();
     } else {
-        const isOwned = (myData?.coins?.[stockId]?.qty || 0) > 0;
-        const nonOwnedCount = Object.keys(favoriteCoins).filter((id) => !(myData?.coins?.[id]?.qty > 0)).length;
+        const isOwned = Math.floor(Number(myData?.coins?.[stockId]?.qty) || 0) !== 0;
+        const nonOwnedCount = Object.keys(favoriteCoins).filter((fid) => Math.floor(Number(myData?.coins?.[fid]?.qty) || 0) === 0).length;
         if (!isOwned && nonOwnedCount >= 5) {
             alert('보유하지 않은 종목의 즐겨찾기는 최대 5개까지 가능합니다.');
             return;
@@ -12632,6 +12899,10 @@ document.addEventListener('keydown', (e) => {
         if (closeIfActive('alert-modal', () => window.closeAlertModal())) return;
         if (closeIfActive('terms-modal', () => window.closeTerms())) return;
         if (closeIfActive('privacy-modal', () => window.closePrivacy())) return;
+        if (closeIfActive('inverse-mode-info-modal', () => {
+            const m = document.getElementById('inverse-mode-info-modal');
+            if (m) m.classList.remove('active');
+        })) return;
         if (document.getElementById('relay-container')?.classList.contains('mobile-open')) {
             window.closeRelayPanel();
             return;
@@ -12697,6 +12968,8 @@ document.addEventListener('keydown', (e) => {
             });
     }
 });
+
+try { setupInverseModeUi(); } catch (_) { /* noop */ }
 
 })();
 </script>

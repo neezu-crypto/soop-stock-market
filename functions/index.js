@@ -210,8 +210,8 @@ function computeUserSummaryForRtdb(u) {
   const cash = Math.floor(Number(u?.cash ?? 1000000));
   const stocks = u?.stocks && typeof u.stocks === "object" ? u.stocks : {};
   const coins = u?.coins && typeof u.coins === "object" ? u.coins : {};
-  const stockCount = Object.values(stocks).filter((row) => Math.floor(Number(row?.qty || 0)) > 0).length;
-  const coinCount = Object.values(coins).filter((row) => Math.floor(Number(row?.qty || 0)) > 0).length;
+  const stockCount = Object.values(stocks).filter((row) => Math.floor(Number(row?.qty || 0)) !== 0).length;
+  const coinCount = Object.values(coins).filter((row) => Math.floor(Number(row?.qty || 0)) !== 0).length;
   const c = Number.isFinite(cash) && cash >= 0 ? cash : 1000000;
   return {
     cash: c,
@@ -332,7 +332,8 @@ function jsonSanitizeForRtdb(obj) {
 }
 
 /** 메인 앱 `window.trade`와 동일한 가격·임팩트 계산 — prevPrice는 트랜잭션 내 현재가 */
-function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCoin) {
+function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCoin, invertPrice) {
+  const priceSide = invertPrice ? (side === "buy" ? "sell" : "buy") : side;
   const basePrice = Math.max(1, finiteOr(sellConfig.basePrice, 10000));
   const scalePrice = Math.max(1, finiteOr(sellConfig.scalePrice, 90000));
   const impactCoef = finiteOr(sellConfig.impact, 0.0005);
@@ -345,7 +346,7 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
   const dampingFactor = isCoin ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
   const effectiveImpactCoef = impactCoef * dampingFactor;
   let sellPressure = 1;
-  if (side === "sell" && !isCoin) {
+  if (priceSide === "sell" && !isCoin) {
     sellPressure = 1 + (Math.max(0, prevPrice - basePrice) / scalePrice);
   }
   let impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
@@ -353,12 +354,12 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
     const coinMul = finiteOr(marketParams?.coinImpactMultiplier, 1.85);
     impact *= coinMul > 0 ? coinMul : 1.85;
   }
-  if (side === "sell") {
+  if (priceSide === "sell") {
     impact *= isCoin ? coinSellImpactMultiplier : stockSellImpactMultiplier;
   }
   if (!Number.isFinite(impact) || impact < 0) impact = 0;
   let rawNewPrice;
-  if (side === "buy") {
+  if (priceSide === "buy") {
     rawNewPrice = prevPrice * (1 + impact);
   } else {
     rawNewPrice = prevPrice * (1 - impact);
@@ -366,7 +367,7 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
   if (!Number.isFinite(rawNewPrice) || rawNewPrice <= 0) rawNewPrice = prevPrice;
   const newPrice = Math.max(1, Math.round(rawNewPrice));
   const tradePrice =
-    side === "buy"
+    priceSide === "buy"
       ? Math.max(1, Math.round(newPrice * (1 + spread)))
       : Math.max(1, Math.round(newPrice * (1 - spread)));
   const changeStr =
@@ -709,6 +710,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const qty = clampInt(req.data?.qty, 1, 100);
   const market = String(req.data?.market || "stock").trim().toLowerCase();
   const isCoin = market === "coin";
+  const inverseModeReq = Boolean(req.data?.inverseMode);
 
   if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
   if (side !== "buy" && side !== "sell") throw new HttpsError("invalid-argument", "side must be buy|sell.");
@@ -760,6 +762,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const preCoinsMap = preUser.coins && typeof preUser.coins === "object" ? preUser.coins : {};
   const preBookPos = isCoin ? preCoinsMap[stockId] || { qty: 0, avg: 0 } : preStocksMap[stockId] || { qty: 0, avg: 0 };
   const preHaveQty = Math.floor(Number(preBookPos.qty || 0));
+  const invertPrice = inverseModeReq;
 
   const stockPath = isCoin ? "coins" : "stocks";
   const candleRoot = isCoin ? "coinCandles" : "candlesticks";
@@ -783,14 +786,15 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
     qty,
     sellConfig,
     marketParams,
-    isCoin
+    isCoin,
+    invertPrice
   );
 
   if (!isAdminAuth(auth)) {
     if (side === "buy") {
       const bookForLimit = isCoin ? preCoinsMap : preStocksMap;
       if (preHaveQty === 0) {
-        const ownedCount = Object.values(bookForLimit).filter((s) => Math.floor(Number(s?.qty || 0)) > 0).length;
+        const ownedCount = Object.values(bookForLimit).filter((s) => Math.floor(Number(s?.qty || 0)) !== 0).length;
         if (ownedCount >= 10) {
           throw new HttpsError("failed-precondition", "종목한도");
         }
@@ -813,7 +817,13 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           isCoin ? "1회 최대 거래 금액(1000억원)을 초과합니다." : "1회 최대 거래 금액(1억원)을 초과합니다."
         );
       }
-      if (preHaveQty < qty) {
+      if (preHaveQty > 0 && preHaveQty < qty) {
+        throw new HttpsError("failed-precondition", "보유 수량이 부족합니다.");
+      }
+      if (preHaveQty < 0 && preHaveQty > -qty) {
+        throw new HttpsError("failed-precondition", "보유 수량이 부족합니다.");
+      }
+      if (preHaveQty === 0) {
         throw new HttpsError("failed-precondition", "보유 수량이 부족합니다.");
       }
     }
@@ -862,7 +872,8 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           qty,
           sellConfig,
           marketParams,
-          isCoin
+          isCoin,
+          invertPrice
         );
         lastImpact = impact;
         lastTradePrice = tradePrice;
@@ -946,36 +957,133 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         const total = lastTradePrice * qty;
         if (cash < total && !isAdminAuth(auth)) return undefined;
         if (!isAdminAuth(auth) && haveQty === 0) {
-          const ownedCount = Object.values(coins).filter((s) => Math.floor(Number(s?.qty || 0)) > 0).length;
+          const ownedCount = Object.values(coins).filter((s) => Math.floor(Number(s?.qty || 0)) !== 0).length;
           if (ownedCount >= 10) return undefined;
         }
-        const totalCost = haveQty * haveAvg + total;
-        const newQty = haveQty + qty;
+        if (inverseModeReq) {
+          const newQty = haveQty - qty;
+          const nextCoins = { ...coins };
+          if (newQty === 0) {
+            nextCoins[stockId] = null;
+          } else if (haveQty > 0 && newQty > 0) {
+            // 롱 유지 구간: 기존 평균단가 유지
+            nextCoins[stockId] = { qty: newQty, avg: haveAvg };
+          } else if (newQty < 0) {
+            // 숏 진입/확대 구간: 신규 숏 체결가를 기준으로 평균단가 갱신
+            if (haveQty < 0) {
+              const absOld = Math.abs(haveQty);
+              const absNew = Math.abs(newQty);
+              const weighted = absOld * haveAvg + lastTradePrice * qty;
+              nextCoins[stockId] = { qty: newQty, avg: Math.round(weighted / absNew) };
+            } else {
+              nextCoins[stockId] = { qty: newQty, avg: Math.round(lastTradePrice) };
+            }
+          } else {
+            nextCoins[stockId] = { qty: newQty, avg: haveAvg };
+          }
+          return {
+            ...u,
+            cash: cash - total,
+            stocks,
+            coins: nextCoins,
+            lastTradeTime: null
+          };
+        }
+        if (haveQty < 0) {
+          const newQty = haveQty + qty;
+          const nextCoins = { ...coins };
+          if (newQty === 0) {
+            nextCoins[stockId] = null;
+          } else if (newQty < 0) {
+            // 숏 유지 구간: 기존 평균단가 유지
+            nextCoins[stockId] = { qty: newQty, avg: haveAvg };
+          } else {
+            // 롱 전환 구간: 남은 롱 수량의 기준단가는 전환 시점 체결가
+            nextCoins[stockId] = { qty: newQty, avg: Math.round(lastTradePrice) };
+          }
+          return {
+            ...u,
+            cash: cash - total,
+            stocks,
+            coins: nextCoins,
+            lastTradeTime: null
+          };
+        }
+        if (haveQty > 0) {
+          const totalCost = haveQty * haveAvg + total;
+          const newQty = haveQty + qty;
+          return {
+            ...u,
+            cash: cash - total,
+            stocks,
+            coins: { ...coins, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
+            lastTradeTime: null
+          };
+        }
+        if (haveQty === 0) {
+          if (inverseModeReq) {
+            return {
+              ...u,
+              cash: cash - total,
+              stocks,
+              coins: { ...coins, [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) } },
+              lastTradeTime: null
+            };
+          }
+          return {
+            ...u,
+            cash: cash - total,
+            stocks,
+            coins: { ...coins, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } },
+            lastTradeTime: null
+          };
+        }
         return {
           ...u,
           cash: cash - total,
           stocks,
-          coins: { ...coins, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
+          coins: { ...coins, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } },
           lastTradeTime: null
         };
       }
 
-      if (haveQty < qty && !isAdminAuth(auth)) return undefined;
-      const receive = Math.round(lastTradePrice * qty * (1 - fee));
-      const newQty = haveQty - qty;
-      const nextCoins = { ...coins };
-      if (newQty <= 0) {
-        nextCoins[stockId] = null;
-      } else {
-        nextCoins[stockId] = { qty: newQty, avg: haveAvg };
+      if (haveQty > 0) {
+        if (haveQty < qty && !isAdminAuth(auth)) return undefined;
+        const receive = Math.round(lastTradePrice * qty * (1 - fee));
+        const newQty = haveQty - qty;
+        const nextCoins = { ...coins };
+        if (newQty <= 0) {
+          nextCoins[stockId] = null;
+        } else {
+          nextCoins[stockId] = { qty: newQty, avg: haveAvg };
+        }
+        return {
+          ...u,
+          cash: cash + receive,
+          stocks,
+          coins: nextCoins,
+          lastTradeTime: null
+        };
       }
-      return {
-        ...u,
-        cash: cash + receive,
-        stocks,
-        coins: nextCoins,
-        lastTradeTime: null
-      };
+      if (haveQty < 0) {
+        if (haveQty > -qty && !isAdminAuth(auth)) return undefined;
+        const receive = Math.round(lastTradePrice * qty * (1 - fee));
+        const newQty = haveQty + qty;
+        const nextCoins = { ...coins };
+        if (newQty === 0) {
+          nextCoins[stockId] = null;
+        } else {
+          nextCoins[stockId] = { qty: newQty, avg: haveAvg };
+        }
+        return {
+          ...u,
+          cash: cash + receive,
+          stocks,
+          coins: nextCoins,
+          lastTradeTime: null
+        };
+      }
+      return undefined;
     }
 
     const us = stocks[stockId] || { qty: 0, avg: 0 };
@@ -986,36 +1094,133 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       const total = lastTradePrice * qty;
       if (cash < total && !isAdminAuth(auth)) return undefined;
       if (!isAdminAuth(auth) && haveQty === 0) {
-        const ownedCount = Object.values(stocks).filter((s) => Math.floor(Number(s?.qty || 0)) > 0).length;
+        const ownedCount = Object.values(stocks).filter((s) => Math.floor(Number(s?.qty || 0)) !== 0).length;
         if (ownedCount >= 10) return undefined;
       }
-      const totalCost = haveQty * haveAvg + total;
-      const newQty = haveQty + qty;
+      if (inverseModeReq) {
+        const newQty = haveQty - qty;
+        const nextStocks = { ...stocks };
+        if (newQty === 0) {
+          nextStocks[stockId] = null;
+        } else if (haveQty > 0 && newQty > 0) {
+          // 롱 유지 구간: 기존 평균단가 유지
+          nextStocks[stockId] = { qty: newQty, avg: haveAvg };
+        } else if (newQty < 0) {
+          // 숏 진입/확대 구간: 신규 숏 체결가를 기준으로 평균단가 갱신
+          if (haveQty < 0) {
+            const absOld = Math.abs(haveQty);
+            const absNew = Math.abs(newQty);
+            const weighted = absOld * haveAvg + lastTradePrice * qty;
+            nextStocks[stockId] = { qty: newQty, avg: Math.round(weighted / absNew) };
+          } else {
+            nextStocks[stockId] = { qty: newQty, avg: Math.round(lastTradePrice) };
+          }
+        } else {
+          nextStocks[stockId] = { qty: newQty, avg: haveAvg };
+        }
+        return {
+          ...u,
+          cash: cash - total,
+          stocks: nextStocks,
+          coins,
+          lastTradeTime: null
+        };
+      }
+      if (haveQty < 0) {
+        const newQty = haveQty + qty;
+        const nextStocks = { ...stocks };
+        if (newQty === 0) {
+          nextStocks[stockId] = null;
+        } else if (newQty < 0) {
+          // 숏 유지 구간: 기존 평균단가 유지
+          nextStocks[stockId] = { qty: newQty, avg: haveAvg };
+        } else {
+          // 롱 전환 구간: 남은 롱 수량의 기준단가는 전환 시점 체결가
+          nextStocks[stockId] = { qty: newQty, avg: Math.round(lastTradePrice) };
+        }
+        return {
+          ...u,
+          cash: cash - total,
+          stocks: nextStocks,
+          coins,
+          lastTradeTime: null
+        };
+      }
+      if (haveQty > 0) {
+        const totalCost = haveQty * haveAvg + total;
+        const newQty = haveQty + qty;
+        return {
+          ...u,
+          cash: cash - total,
+          stocks: { ...stocks, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
+          coins,
+          lastTradeTime: null
+        };
+      }
+      if (haveQty === 0) {
+        if (inverseModeReq) {
+          return {
+            ...u,
+            cash: cash - total,
+            stocks: { ...stocks, [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) } },
+            coins,
+            lastTradeTime: null
+          };
+        }
+        return {
+          ...u,
+          cash: cash - total,
+          stocks: { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } },
+          coins,
+          lastTradeTime: null
+        };
+      }
       return {
         ...u,
         cash: cash - total,
-        stocks: { ...stocks, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
+        stocks: { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } },
         coins,
         lastTradeTime: null
       };
     }
 
-    if (haveQty < qty && !isAdminAuth(auth)) return undefined;
-    const receive = Math.round(lastTradePrice * qty * (1 - fee));
-    const newQty = haveQty - qty;
-    const nextStocks = { ...stocks };
-    if (newQty <= 0) {
-      nextStocks[stockId] = null;
-    } else {
-      nextStocks[stockId] = { qty: newQty, avg: haveAvg };
+    if (haveQty > 0) {
+      if (haveQty < qty && !isAdminAuth(auth)) return undefined;
+      const receive = Math.round(lastTradePrice * qty * (1 - fee));
+      const newQty = haveQty - qty;
+      const nextStocks = { ...stocks };
+      if (newQty <= 0) {
+        nextStocks[stockId] = null;
+      } else {
+        nextStocks[stockId] = { qty: newQty, avg: haveAvg };
+      }
+      return {
+        ...u,
+        cash: cash + receive,
+        stocks: nextStocks,
+        coins,
+        lastTradeTime: null
+      };
     }
-    return {
-      ...u,
-      cash: cash + receive,
-      stocks: nextStocks,
-      coins,
-      lastTradeTime: null
-    };
+    if (haveQty < 0) {
+      if (haveQty > -qty && !isAdminAuth(auth)) return undefined;
+      const receive = Math.round(lastTradePrice * qty * (1 - fee));
+      const newQty = haveQty + qty;
+      const nextStocks = { ...stocks };
+      if (newQty === 0) {
+        nextStocks[stockId] = null;
+      } else {
+        nextStocks[stockId] = { qty: newQty, avg: haveAvg };
+      }
+      return {
+        ...u,
+        cash: cash + receive,
+        stocks: nextStocks,
+        coins,
+        lastTradeTime: null
+      };
+    }
+    return undefined;
   });
 
   if (!userTx.committed) {
