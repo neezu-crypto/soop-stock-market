@@ -2017,7 +2017,7 @@
             color: var(--cute-pk4);
             border: 1.5px solid var(--cute-pk2);
             box-shadow: 0 2px 10px rgba(255, 173, 210, 0.35);
-            font-size: 13px;
+            font-size: 14px;
         }
 
         .title-preview-card.title-theme-preset1,
@@ -4404,10 +4404,14 @@ if (typeof IntersectionObserver !== 'undefined') {
             if (en.isIntersecting) {
                 sys.visible = true;
                 sys.particles.length = 0;
-                if (sys.touchMode) startTitleParticleMobileTwinkle(sys, el);
+                if (sys.touchMode) {
+                    if (sys.isCuteEmoji) startCuteMobileDropLoop(sys, el);
+                    else startTitleParticleMobileTwinkle(sys, el);
+                }
             } else {
                 sys.visible = false;
                 stopTitleParticleMobileTwinkle(sys);
+                stopCuteMobileDropLoop(sys);
                 sys.particles.length = 0;
             }
         });
@@ -4658,6 +4662,26 @@ function triggerCuteMobileFlush(sys) {
     });
 }
 
+function stopCuteMobileDropLoop(sys) {
+    if (!sys) return;
+    if (sys.cuteMobileTimer) {
+        clearInterval(sys.cuteMobileTimer);
+        sys.cuteMobileTimer = null;
+    }
+}
+
+function startCuteMobileDropLoop(sys, el) {
+    if (!sys || !el || !sys.touchMode || !sys.isCuteEmoji) return;
+    stopCuteMobileDropLoop(sys);
+    if (!sys.cuteMode) sys.cuteMode = { phase: 'drop', resumeAt: 0 };
+    sys.cuteMobileTimer = setInterval(() => {
+        if (sys.visible === false) return;
+        if (!sys.cuteMode || sys.cuteMode.phase !== 'drop') return;
+        spawnCuteMobileDrop(sys, el);
+    }, 1000);
+    spawnCuteMobileDrop(sys, el);
+}
+
 function bindTitleParticleSystem(el) {
     if (!el || titleParticleSystems.has(el)) return;
     if (el.id === 'title-preview-card' && isTouchLikeDevice()) return;
@@ -4738,13 +4762,7 @@ function bindTitleParticleSystem(el) {
         if (!useListIo && !sys.isCuteEmoji) {
             startTitleParticleMobileTwinkle(sys, el);
         } else if (!useListIo && sys.isCuteEmoji) {
-            sys.cuteMobileTimer = setInterval(() => {
-                if (sys.visible === false) return;
-                if (!sys.cuteMode) return;
-                if (sys.cuteMode.phase !== 'drop') return;
-                spawnCuteMobileDrop(sys, el);
-            }, 1000);
-            spawnCuteMobileDrop(sys, el);
+            startCuteMobileDropLoop(sys, el);
         }
     } else {
         el.addEventListener('mousemove', onMove);
@@ -4769,8 +4787,7 @@ function bindTitleParticleSystem(el) {
             sys.cuteHoverTimer = null;
         }
         if (sys.cuteMobileTimer) {
-            clearInterval(sys.cuteMobileTimer);
-            sys.cuteMobileTimer = null;
+            stopCuteMobileDropLoop(sys);
         }
         sys.particles.length = 0;
         const host = titleParticleCanvasHost(el);
