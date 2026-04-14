@@ -1988,6 +1988,221 @@
             border-radius: 12px;
             padding: 12px;
         }
+        /* 구매 모달 미리보기: 종목 카드와 비슷한 가로 바 비율 + Search Bar Mastery 다층 네온(프리셋2 전용 DOM) */
+        .title-preview-block #title-preview-card {
+            width: 100%;
+            aspect-ratio: 38 / 8;
+            min-height: 96px;
+            max-width: 100%;
+            border-radius: 16px;
+            padding: 0;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        #title-preview-card.title-theme-preset2::before,
+        #title-preview-card.title-theme-preset2::after {
+            content: none !important;
+        }
+        #title-preview-card.title-theme-preset1 .title-sbm-stack {
+            display: none !important;
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-stack {
+            display: block;
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-stack {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            border-radius: inherit;
+        }
+        /* Search Bar Mastery.html — .glow / .darkBorderBg / .white / .border 레이어 (미리보기만) */
+        #title-preview-card.title-theme-preset2 .title-sbm-glow,
+        #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg,
+        #title-preview-card.title-theme-preset2 .title-sbm-white,
+        #title-preview-card.title-theme-preset2 .title-sbm-border {
+            position: absolute;
+            overflow: hidden;
+            pointer-events: none;
+            border-radius: inherit;
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-glow {
+            inset: 0;
+            z-index: 1;
+            filter: blur(30px);
+            opacity: 0.4;
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg {
+            inset: 0;
+            filter: blur(3px);
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(2) { z-index: 2; }
+        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(3) { z-index: 3; }
+        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(4) { z-index: 4; }
+        #title-preview-card.title-theme-preset2 .title-sbm-white {
+            top: 4px; right: 4px; bottom: 4px; left: 4px;
+            width: auto; height: auto;
+            z-index: 5;
+            filter: blur(2px);
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-border {
+            top: 6px; right: 6px; bottom: 6px; left: 6px;
+            width: auto; height: auto;
+            z-index: 6;
+            filter: blur(0.5px);
+        }
+        @keyframes title-sbm-glow-spin {
+            from { transform: translate(-50%, -50%) rotate(60deg); }
+            to { transform: translate(-50%, -50%) rotate(420deg); }
+        }
+        @keyframes title-sbm-dark-spin {
+            from { transform: translate(-50%, -50%) rotate(82deg); }
+            to { transform: translate(-50%, -50%) rotate(442deg); }
+        }
+        @keyframes title-sbm-white-spin {
+            from { transform: translate(-50%, -50%) rotate(83deg); }
+            to { transform: translate(-50%, -50%) rotate(443deg); }
+        }
+        @keyframes title-sbm-border-spin {
+            from { transform: translate(-50%, -50%) rotate(70deg); }
+            to { transform: translate(-50%, -50%) rotate(430deg); }
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-glow::before {
+            content: '';
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 999px; height: 999px;
+            margin: 0;
+            background-image: conic-gradient(
+                #000,
+                #402fb5 5%,
+                #000 38%,
+                #000 50%,
+                #cf30aa 60%,
+                #000 87%
+            );
+            background-repeat: no-repeat;
+            background-position: center;
+            animation: title-sbm-glow-spin 5.5s linear infinite;
+            will-change: transform;
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg::before {
+            content: '';
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 600px; height: 600px;
+            background-image: conic-gradient(
+                rgba(0, 0, 0, 0),
+                #18116a,
+                rgba(0, 0, 0, 0) 10%,
+                rgba(0, 0, 0, 0) 50%,
+                #6e1b60,
+                rgba(0, 0, 0, 0) 60%
+            );
+            background-repeat: no-repeat;
+            animation: title-sbm-dark-spin 5.5s linear infinite;
+            will-change: transform;
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(3)::before { animation-delay: -0.12s; }
+        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(4)::before { animation-delay: -0.24s; }
+        #title-preview-card.title-theme-preset2 .title-sbm-white::before {
+            content: '';
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 600px; height: 600px;
+            filter: brightness(1.4);
+            background-image: conic-gradient(
+                rgba(0, 0, 0, 0) 0%,
+                #a099d8,
+                rgba(0, 0, 0, 0) 8%,
+                rgba(0, 0, 0, 0) 50%,
+                #dfa2da,
+                rgba(0, 0, 0, 0) 58%
+            );
+            background-repeat: no-repeat;
+            animation: title-sbm-white-spin 5.5s linear infinite;
+            will-change: transform;
+        }
+        #title-preview-card.title-theme-preset2 .title-sbm-border::before {
+            content: '';
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 600px; height: 600px;
+            filter: brightness(1.3);
+            background-image: conic-gradient(
+                #1c191c,
+                #402fb5 5%,
+                #1c191c 14%,
+                #1c191c 50%,
+                #cf30aa 60%,
+                #1c191c 64%
+            );
+            background-repeat: no-repeat;
+            animation: title-sbm-border-spin 5.5s linear infinite;
+            will-change: transform;
+        }
+        @media (hover: hover) and (pointer: fine) {
+            #title-preview-card.title-theme-preset2:hover .title-sbm-glow::before,
+            #title-preview-card.title-theme-preset2:hover .title-sbm-darkBorderBg::before,
+            #title-preview-card.title-theme-preset2:hover .title-sbm-white::before,
+            #title-preview-card.title-theme-preset2:hover .title-sbm-border::before {
+                animation-duration: 2.4s;
+            }
+        }
+        @media (hover: none), (pointer: coarse) {
+            #title-preview-card.title-theme-preset2 .title-sbm-glow { filter: blur(22px); opacity: 0.38; }
+            #title-preview-card.title-theme-preset2 .title-sbm-glow::before,
+            #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg::before,
+            #title-preview-card.title-theme-preset2 .title-sbm-white::before,
+            #title-preview-card.title-theme-preset2 .title-sbm-border::before {
+                animation-duration: 5.5s;
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #title-preview-card.title-theme-preset2 .title-sbm-glow::before,
+            #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg::before,
+            #title-preview-card.title-theme-preset2 .title-sbm-white::before,
+            #title-preview-card.title-theme-preset2 .title-sbm-border::before {
+                animation: none !important;
+            }
+            #title-preview-card.title-theme-preset2 .title-sbm-glow::before { transform: translate(-50%, -50%) rotate(240deg); }
+            #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg::before { transform: translate(-50%, -50%) rotate(262deg); }
+            #title-preview-card.title-theme-preset2 .title-sbm-white::before { transform: translate(-50%, -50%) rotate(263deg); }
+            #title-preview-card.title-theme-preset2 .title-sbm-border::before { transform: translate(-50%, -50%) rotate(250deg); }
+        }
+        #title-preview-card .title-preview-card-body {
+            position: relative;
+            z-index: 7;
+            box-sizing: border-box;
+            min-height: 100%;
+            padding: 18px 20px;
+            display: flex;
+            align-items: center;
+        }
+        #title-preview-card.title-theme-preset1 .title-preview-card-body {
+            background: transparent;
+        }
+        #title-preview-card.title-theme-preset2 .title-preview-card-body {
+            margin: 5px;
+            border-radius: 11px;
+            background:
+                linear-gradient(to right, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
+                radial-gradient(circle at 14% 12%, rgba(64, 47, 181, 0.18) 0%, transparent 40%),
+                radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.1) 0%, transparent 44%),
+                #010201;
+            background-size: 14px 14px, 14px 14px, auto, auto, auto;
+        }
+        #title-preview-card .title-preview-card-body > .title-particle-canvas {
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            z-index: 1;
+        }
+        #title-preview-card .title-preview-card-body > :not(.title-particle-canvas) {
+            position: relative;
+            z-index: 2;
+        }
         /* 구매 모달 미리보기: 카드는 샘플만, 설명은 카드 밖 캡션으로 분리 */
         .title-preview-card.title-theme-preset2 #title-preview-stock-name {
             text-shadow: 0 0 14px rgba(167, 139, 250, 0.35);
@@ -2973,8 +3188,18 @@
         <div class="title-preview-block" style="margin-bottom:10px;">
             <div id="title-preview-preset-label" style="font-size:11px; color:#a78bfa; margin-bottom:6px; font-weight:800;">미리보기 · 골드</div>
             <div id="title-preview-card" class="title-preview-card title-theme-preset1">
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <div style="font-weight:800; color:#f8fafc;"><span id="title-preview-stock-name">종목명</span><span class="stock-title-badge" id="title-preview-badge">칭호</span></div>
+                <div class="title-sbm-stack" aria-hidden="true">
+                    <div class="title-sbm-glow"></div>
+                    <div class="title-sbm-darkBorderBg"></div>
+                    <div class="title-sbm-darkBorderBg"></div>
+                    <div class="title-sbm-darkBorderBg"></div>
+                    <div class="title-sbm-white"></div>
+                    <div class="title-sbm-border"></div>
+                </div>
+                <div class="title-preview-card-body">
+                    <div class="title-preview-faux-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <div style="font-weight:800; color:#f8fafc;"><span id="title-preview-stock-name">종목명</span><span class="stock-title-badge" id="title-preview-badge">칭호</span></div>
+                    </div>
                 </div>
             </div>
             <div id="title-preview-hint" style="font-size:11px; color:var(--text-sub); margin-top:8px; line-height:1.45;">PC에서 마우스를 올리면 골드 글로우가 강해집니다.</div>
@@ -3946,15 +4171,24 @@ function startTitleParticleMobileTwinkle(sys, el) {
     ensureTitleParticleLoop();
 }
 
+function titleParticleCanvasHost(el) {
+    if (el && el.id === 'title-preview-card') {
+        const b = el.querySelector('.title-preview-card-body');
+        if (b) return b;
+    }
+    return el;
+}
+
 function ensureTitleParticleCanvas(el) {
     if (!el) return null;
-    let canvas = el.querySelector(':scope > .title-particle-canvas');
+    const host = titleParticleCanvasHost(el);
+    let canvas = host.querySelector(':scope > .title-particle-canvas');
     if (!canvas) {
         canvas = document.createElement('canvas');
         canvas.className = 'title-particle-canvas';
-        el.prepend(canvas);
+        host.prepend(canvas);
     }
-    const rect = el.getBoundingClientRect();
+    const rect = host.getBoundingClientRect();
     const dpr = getTitleParticleCanvasDpr(el);
     const w = Math.max(1, Math.floor(rect.width * dpr));
     const h = Math.max(1, Math.floor(rect.height * dpr));
@@ -3970,7 +4204,7 @@ function ensureTitleParticleCanvas(el) {
 function spawnTitleParticles(el, x, y, count) {
     const sys = titleParticleSystems.get(el);
     if (!sys || sys.visible === false) return;
-    const rect = el.getBoundingClientRect();
+    const rect = titleParticleCanvasHost(el).getBoundingClientRect();
     const lx = x - rect.left;
     const ly = y - rect.top;
     for (let i = 0; i < count; i++) {
@@ -3997,7 +4231,7 @@ function spawnTitleParticles(el, x, y, count) {
 function spawnTitleParticlesRandom(el, count) {
     const sys = titleParticleSystems.get(el);
     if (!sys || sys.visible === false) return;
-    const rect = el.getBoundingClientRect();
+    const rect = titleParticleCanvasHost(el).getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const x = rect.left + Math.random() * rect.width;
     const y = rect.top + Math.random() * rect.height;
@@ -4075,7 +4309,8 @@ function bindTitleParticleSystem(el) {
         el.removeEventListener('touchstart', onTouchStart);
         window.removeEventListener('resize', onResize);
         sys.particles.length = 0;
-        const c = el.querySelector(':scope > .title-particle-canvas');
+        const host = titleParticleCanvasHost(el);
+        const c = host.querySelector(':scope > .title-particle-canvas');
         if (c) c.remove();
     };
 }
