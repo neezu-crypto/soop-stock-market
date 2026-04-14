@@ -2338,10 +2338,20 @@
         Object.entries(latestByStock).forEach(([sid, info]) => {
             const existing = cur[sid];
             if (existing && typeof existing === 'object') {
+                // 즉시 해제 등으로 비활성 — 승인 이력만으로 다시 켜지지 않게 함
+                if (existing.active === false) return;
                 const active = existing.active !== false;
                 const approved = String(existing.status || 'approved').toLowerCase() === 'approved';
                 const exp = Number(existing.expiresAt || 0);
+                // 아직 유효한 칭호 — 덮어쓰지 않음
                 if (active && approved && (!exp || exp > now)) return;
+                // 만료 시각이 이미 지남(자연 만료 또는 관리자가 과거로 저장) —
+                // titleRequests에 남은 예전 미래 만료 시각으로 되살리지 않음
+                if (active && approved && exp > 0 && exp <= now) return;
+                // 동일 승인 건으로 이미 반영됨 — 수동 만료 수정만 한 경우도 여기서 보존
+                const er = String(existing.requestId || '').trim();
+                const ir = String(info.reqId || '').trim();
+                if (er && ir && er === ir) return;
             }
             const r = info.r;
             const startedAt = Number(r.startedAt || info.ts || now);
