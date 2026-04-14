@@ -1166,6 +1166,9 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const liqMulRaw = Number(sellConfig.liquidationImpactMultiplier);
   const liquidationImpactMultiplier =
     Number.isFinite(liqMulRaw) && liqMulRaw >= 0 ? liqMulRaw : 1;
+  const liqSpreadMulRaw = Number(sellConfig.liquidationSpreadMultiplier);
+  const liquidationSpreadMultiplier =
+    Number.isFinite(liqSpreadMulRaw) && liqSpreadMulRaw >= 0 ? liqSpreadMulRaw : 1;
   const extraLiquidationFee = 0.08;
 
   const rawInstrumentVal = stockSnap.val();
@@ -1190,7 +1193,8 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     impact *= market === "coin" ? coinSellImpactMultiplier : stockSellImpactMultiplier;
     impact *= liquidationImpactMultiplier;
     nextPrice = Math.max(1, Math.round(prevPrice * (1 - impact)));
-    tradePrice = Math.max(1, Math.round(nextPrice * (1 - spread)));
+    const liquidationSpread = Math.max(0, spread * liquidationSpreadMultiplier);
+    tradePrice = Math.max(1, Math.round(nextPrice * (1 - liquidationSpread)));
     const { history: _h, ...rest } = row;
     const baseVol = Number(row.volume);
     const baseBuy = Number(row.buyVol);

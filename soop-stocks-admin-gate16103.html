@@ -871,6 +871,14 @@
                         <input type="number" id="sell-liquidation-impact-mult" value="1" min="0" max="10" step="0.05"
                             style="max-width:200px; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
                     </div>
+                    <div style="grid-column:1/-1;">
+                        <div style="font-size:11px; color:#22d3ee; font-weight:700; margin-bottom:6px;">전량매도 추가 스프레드 계수</div>
+                        <div style="font-size:10px; color:#64748b; margin-bottom:6px;">
+                            Cloud Function <code>liquidateAll</code>(전량·차트 모달 50% 등) 체결 시, 전량매도 체결가 계산의 spread에 이 배수를 곱합니다. (<code>sellConfig/liquidationSpreadMultiplier</code>) 기본 1
+                        </div>
+                        <input type="number" id="sell-liquidation-spread-mult" value="1" min="0" max="10" step="0.05"
+                            style="max-width:200px; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                    </div>
                 </div>
                 <div style="margin-top:12px; background:#1e293b; border-radius:8px; padding:10px 12px; border:1px solid #334155;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
@@ -6033,6 +6041,9 @@
             if (d.liquidationImpactMultiplier !== undefined) {
                 document.getElementById('sell-liquidation-impact-mult').value = d.liquidationImpactMultiplier;
             }
+            if (d.liquidationSpreadMultiplier !== undefined) {
+                document.getElementById('sell-liquidation-spread-mult').value = d.liquidationSpreadMultiplier;
+            }
 
             chip.className = 'status-chip active';
             chip.textContent = '커스텀 적용 중';
@@ -6290,12 +6301,16 @@
         const fee        = Number(document.getElementById('sell-fee').value);
         const coinSpread = Number(document.getElementById('sell-coin-spread').value);
         const liquidationImpactMultiplier = Number(document.getElementById('sell-liquidation-impact-mult').value);
+        const liquidationSpreadMultiplier = Number(document.getElementById('sell-liquidation-spread-mult').value);
 
         if (!basePrice || !scalePrice || scalePrice <= 0) {
             alert('기준 주가와 가중치 구간은 0보다 커야 합니다.'); return;
         }
         if (!Number.isFinite(liquidationImpactMultiplier) || liquidationImpactMultiplier < 0 || liquidationImpactMultiplier > 10) {
             alert('전량매도 추가 임팩트 변동계수는 0 이상 10 이하의 숫자여야 합니다.'); return;
+        }
+        if (!Number.isFinite(liquidationSpreadMultiplier) || liquidationSpreadMultiplier < 0 || liquidationSpreadMultiplier > 10) {
+            alert('전량매도 추가 스프레드 계수는 0 이상 10 이하의 숫자여야 합니다.'); return;
         }
         try {
             const snap = await get(ref(db, 'siteConfig/sellConfig'));
@@ -6304,6 +6319,7 @@
                 ...current,
                 basePrice, scalePrice, impact, spread, fee, coinSpread,
                 liquidationImpactMultiplier: Math.round(liquidationImpactMultiplier * 1000) / 1000,
+                liquidationSpreadMultiplier: Math.round(liquidationSpreadMultiplier * 1000) / 1000,
                 updatedAt: Date.now()
             });
             document.getElementById('sell-config-chip').className = 'status-chip active';
