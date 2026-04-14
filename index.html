@@ -9392,7 +9392,13 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
 
     const maxOrderWon = isCoin ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
     const maxLabel    = isCoin ? '1000억원' : '1억원';
-    const precheckFee = Number(siteConfig?.sellConfig?.fee ?? 0.003);
+    const baseFee = Number(siteConfig?.sellConfig?.fee ?? 0.003);
+    const invFeeRaw = siteConfig?.sellConfig?.inverseFee;
+    let precheckFee = baseFee;
+    if (isInverseModeEnabled() && invFeeRaw !== undefined && invFeeRaw !== null && invFeeRaw !== '') {
+        const n = Number(invFeeRaw);
+        if (Number.isFinite(n) && n >= 0 && n <= 1) precheckFee = n;
+    }
     const estimateTradePriceForPrecheck = (currentPrice, side, q, coinQ) => {
         const sc = siteConfig?.sellConfig || {};
         const mp = siteConfig?.marketParams || {};

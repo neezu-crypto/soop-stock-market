@@ -858,6 +858,12 @@
                         <div style="font-size:10px; color:#475569; margin-top:3px;">기본 0.003</div>
                     </div>
                     <div>
+                        <div style="font-size:11px; color:#f472b6; margin-bottom:6px;">인버스 전용 수수료 (inverseFee)</div>
+                        <input type="number" id="sell-inverse-fee" value="0.003" min="0" max="0.1" step="0.001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">인버스 모드 ON일 때 매도 체결에만 적용 · 미저장 시 fee와 동일 취급</div>
+                    </div>
+                    <div>
                         <div style="font-size:11px; color:#94a3b8; margin-bottom:6px;">코인 spread</div>
                         <input type="number" id="sell-coin-spread" value="0.001" min="0" max="0.1" step="0.001"
                             style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
@@ -6038,6 +6044,11 @@
             if (d.impact     !== undefined) document.getElementById('sell-impact').value      = d.impact;
             if (d.spread     !== undefined) document.getElementById('sell-spread').value      = d.spread;
             if (d.fee        !== undefined) document.getElementById('sell-fee').value         = d.fee;
+            if (d.inverseFee !== undefined && d.inverseFee !== null) {
+                document.getElementById('sell-inverse-fee').value = d.inverseFee;
+            } else if (d.fee !== undefined) {
+                document.getElementById('sell-inverse-fee').value = d.fee;
+            }
             if (d.coinSpread !== undefined) document.getElementById('sell-coin-spread').value = d.coinSpread;
             if (d.liquidationImpactMultiplier !== undefined) {
                 document.getElementById('sell-liquidation-impact-mult').value = d.liquidationImpactMultiplier;
@@ -6300,6 +6311,7 @@
         const impact     = Number(document.getElementById('sell-impact').value);
         const spread     = Number(document.getElementById('sell-spread').value);
         const fee        = Number(document.getElementById('sell-fee').value);
+        const inverseFee = Number(document.getElementById('sell-inverse-fee').value);
         const coinSpread = Number(document.getElementById('sell-coin-spread').value);
         const liquidationImpactMultiplier = Number(document.getElementById('sell-liquidation-impact-mult').value);
         const liquidationSpreadMultiplier = Number(document.getElementById('sell-liquidation-spread-mult').value);
@@ -6313,12 +6325,15 @@
         if (!Number.isFinite(liquidationSpreadMultiplier) || liquidationSpreadMultiplier < 0 || liquidationSpreadMultiplier > 10) {
             alert('전량매도 추가 스프레드 계수는 0 이상 10 이하의 숫자여야 합니다.'); return;
         }
+        if (!Number.isFinite(inverseFee) || inverseFee < 0 || inverseFee > 0.1) {
+            alert('인버스 전용 수수료는 0 이상 0.1 이하의 숫자여야 합니다.'); return;
+        }
         try {
             const snap = await get(ref(db, 'siteConfig/sellConfig'));
             const current = snap.exists() ? snap.val() : {};
             await set(ref(db, 'siteConfig/sellConfig'), {
                 ...current,
-                basePrice, scalePrice, impact, spread, fee, coinSpread,
+                basePrice, scalePrice, impact, spread, fee, inverseFee, coinSpread,
                 liquidationImpactMultiplier: Math.round(liquidationImpactMultiplier * 1000) / 1000,
                 liquidationSpreadMultiplier: Math.round(liquidationSpreadMultiplier * 1000) / 1000,
                 updatedAt: Date.now()

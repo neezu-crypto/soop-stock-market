@@ -285,6 +285,16 @@ function finiteOr(n, fallback) {
   return Number.isFinite(x) ? x : fallback;
 }
 
+/** 인버스 모드 거래 시 `siteConfig/sellConfig.inverseFee` (미설정·비유효 시 일반 fee) */
+function resolveTradeFee(standardFee, sellConfig, inverseModeReq) {
+  if (!inverseModeReq) return standardFee;
+  const inv = sellConfig?.inverseFee;
+  if (inv === undefined || inv === null || inv === "") return standardFee;
+  const n = Number(inv);
+  if (!Number.isFinite(n) || n < 0 || n > 1) return standardFee;
+  return n;
+}
+
 /** RTDB는 value에 undefined가 있으면 트랜잭션 커밋이 실패할 수 있어 1단계에서 제거 */
 function stripUndefinedShallow(obj) {
   const out = {};
@@ -750,7 +760,8 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
 
   const sellConfig = siteConfig.sellConfig || {};
   const marketParams = siteConfig.marketParams || {};
-  const fee = Number(sellConfig.fee ?? 0.003);
+  const standardFee = Number(sellConfig.fee ?? 0.003);
+  const fee = resolveTradeFee(standardFee, sellConfig, inverseModeReq);
 
   const preUser = preUserSnap.exists() ? preUserSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
   assertUserTradeRestrictionAllowed(auth, preUser);
