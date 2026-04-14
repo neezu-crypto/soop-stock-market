@@ -869,6 +869,18 @@
                             style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
                         <div style="font-size:10px; color:#475569; margin-top:3px;">미설정 시 spread와 동일</div>
                     </div>
+                    <div>
+                        <div style="font-size:11px; color:#f472b6; margin-bottom:6px;">인버스 전용 spread (inverseSpread)</div>
+                        <input type="number" id="sell-inverse-spread" value="0.001" min="0" max="0.1" step="0.001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">주식 인버스 체결가 · 미저장 시 spread와 동일</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#f472b6; margin-bottom:6px;">인버스 코인 spread (inverseCoinSpread)</div>
+                        <input type="number" id="sell-inverse-coin-spread" value="0.001" min="0" max="0.1" step="0.001"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;">미저장 시 inverseSpread → coinSpread 순</div>
+                    </div>
                     <div style="grid-column:1/-1;">
                         <div style="font-size:11px; color:#f472b6; font-weight:700; margin-bottom:6px;">전량매도 추가 임팩트 변동계수</div>
                         <div style="font-size:10px; color:#64748b; margin-bottom:6px;">
@@ -6050,6 +6062,18 @@
                 document.getElementById('sell-inverse-fee').value = d.fee;
             }
             if (d.coinSpread !== undefined) document.getElementById('sell-coin-spread').value = d.coinSpread;
+            if (d.inverseSpread !== undefined && d.inverseSpread !== null) {
+                document.getElementById('sell-inverse-spread').value = d.inverseSpread;
+            } else if (d.spread !== undefined) {
+                document.getElementById('sell-inverse-spread').value = d.spread;
+            }
+            if (d.inverseCoinSpread !== undefined && d.inverseCoinSpread !== null) {
+                document.getElementById('sell-inverse-coin-spread').value = d.inverseCoinSpread;
+            } else if (d.inverseSpread !== undefined && d.inverseSpread !== null) {
+                document.getElementById('sell-inverse-coin-spread').value = d.inverseSpread;
+            } else if (d.coinSpread !== undefined) {
+                document.getElementById('sell-inverse-coin-spread').value = d.coinSpread;
+            }
             if (d.liquidationImpactMultiplier !== undefined) {
                 document.getElementById('sell-liquidation-impact-mult').value = d.liquidationImpactMultiplier;
             }
@@ -6313,6 +6337,8 @@
         const fee        = Number(document.getElementById('sell-fee').value);
         const inverseFee = Number(document.getElementById('sell-inverse-fee').value);
         const coinSpread = Number(document.getElementById('sell-coin-spread').value);
+        const inverseSpread = Number(document.getElementById('sell-inverse-spread').value);
+        const inverseCoinSpread = Number(document.getElementById('sell-inverse-coin-spread').value);
         const liquidationImpactMultiplier = Number(document.getElementById('sell-liquidation-impact-mult').value);
         const liquidationSpreadMultiplier = Number(document.getElementById('sell-liquidation-spread-mult').value);
 
@@ -6328,12 +6354,18 @@
         if (!Number.isFinite(inverseFee) || inverseFee < 0 || inverseFee > 0.1) {
             alert('인버스 전용 수수료는 0 이상 0.1 이하의 숫자여야 합니다.'); return;
         }
+        if (!Number.isFinite(inverseSpread) || inverseSpread < 0 || inverseSpread > 0.1) {
+            alert('인버스 전용 spread는 0 이상 0.1 이하의 숫자여야 합니다.'); return;
+        }
+        if (!Number.isFinite(inverseCoinSpread) || inverseCoinSpread < 0 || inverseCoinSpread > 0.1) {
+            alert('인버스 코인 spread는 0 이상 0.1 이하의 숫자여야 합니다.'); return;
+        }
         try {
             const snap = await get(ref(db, 'siteConfig/sellConfig'));
             const current = snap.exists() ? snap.val() : {};
             await set(ref(db, 'siteConfig/sellConfig'), {
                 ...current,
-                basePrice, scalePrice, impact, spread, fee, inverseFee, coinSpread,
+                basePrice, scalePrice, impact, spread, fee, inverseFee, coinSpread, inverseSpread, inverseCoinSpread,
                 liquidationImpactMultiplier: Math.round(liquidationImpactMultiplier * 1000) / 1000,
                 liquidationSpreadMultiplier: Math.round(liquidationSpreadMultiplier * 1000) / 1000,
                 updatedAt: Date.now()

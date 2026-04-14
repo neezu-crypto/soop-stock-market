@@ -341,6 +341,29 @@ function jsonSanitizeForRtdb(obj) {
   }
 }
 
+/** 인버스 모드 체결가용 스프레드 — 미설정 시 기존 spread / coinSpread */
+function resolveSpreadForTrade(sellConfig, isCoin, invertPrice, stockSpread, coinSpread) {
+  if (!invertPrice) return isCoin ? coinSpread : stockSpread;
+  const invS = sellConfig?.inverseSpread;
+  const invC = sellConfig?.inverseCoinSpread;
+  if (isCoin) {
+    if (invC !== undefined && invC !== null && invC !== "") {
+      const n = Number(invC);
+      if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+    }
+    if (invS !== undefined && invS !== null && invS !== "") {
+      const n = Number(invS);
+      if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+    }
+    return coinSpread;
+  }
+  if (invS !== undefined && invS !== null && invS !== "") {
+    const n = Number(invS);
+    if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  }
+  return stockSpread;
+}
+
 /** 메인 앱 `window.trade`와 동일한 가격·임팩트 계산 — prevPrice는 트랜잭션 내 현재가 */
 function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCoin, invertPrice) {
   const priceSide = invertPrice ? (side === "buy" ? "sell" : "buy") : side;
@@ -349,7 +372,7 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
   const impactCoef = finiteOr(sellConfig.impact, 0.0005);
   const stockSpread = finiteOr(sellConfig.spread, 0.001);
   const coinSpread = finiteOr(sellConfig.coinSpread, stockSpread);
-  const spread = isCoin ? coinSpread : stockSpread;
+  const spread = resolveSpreadForTrade(sellConfig, isCoin, invertPrice, stockSpread, coinSpread);
   const impactRefPriceWon = Math.max(1, finiteOr(marketParams?.impactRefPrice, 100000));
   const stockSellImpactMultiplier = Math.max(1, finiteOr(marketParams?.stockSellImpactMultiplier, 1.2));
   const coinSellImpactMultiplier = Math.max(1, finiteOr(marketParams?.coinSellImpactMultiplier, 1.2));

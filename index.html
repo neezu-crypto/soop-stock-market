@@ -9407,7 +9407,32 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         const impactCoef = Number(sc.impact ?? 0.0005);
         const stockSpread = Number(sc.spread ?? 0.001);
         const coinSpread = Number(sc.coinSpread ?? stockSpread);
-        const spread = coinQ ? coinSpread : stockSpread;
+        const invMode = isInverseModeEnabled();
+        const invS = sc.inverseSpread;
+        const invC = sc.inverseCoinSpread;
+        let spread;
+        if (invMode) {
+            if (coinQ) {
+                if (invC !== undefined && invC !== null && invC !== '') {
+                    const n = Number(invC);
+                    if (Number.isFinite(n) && n >= 0 && n <= 1) spread = n;
+                }
+                if (spread === undefined && invS !== undefined && invS !== null && invS !== '') {
+                    const n = Number(invS);
+                    if (Number.isFinite(n) && n >= 0 && n <= 1) spread = n;
+                }
+                if (spread === undefined) spread = coinSpread;
+            } else {
+                if (invS !== undefined && invS !== null && invS !== '') {
+                    const n = Number(invS);
+                    spread = Number.isFinite(n) && n >= 0 && n <= 1 ? n : stockSpread;
+                } else {
+                    spread = stockSpread;
+                }
+            }
+        } else {
+            spread = coinQ ? coinSpread : stockSpread;
+        }
         const impactRefPriceWon = Math.max(1, Number(mp.impactRefPrice ?? 100000));
         const stockSellImpactMultiplier = Math.max(1, Number(mp.stockSellImpactMultiplier ?? 1.2));
         const coinSellImpactMultiplier = Math.max(1, Number(mp.coinSellImpactMultiplier ?? 1.2));
