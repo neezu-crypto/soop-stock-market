@@ -1701,17 +1701,10 @@
             transform: translateX(60%) rotate(8deg);
         }
 
-        /* 칭호 프리셋 2 — Search Bar Mastery.html .glow: 큰 conic + blur(30px) + 회전 → 테두리 밖 네온 (내부 링 마스크 X) */
-        @keyframes title-preset2-glow-orbit {
-            from { transform: translate(-50%, -50%) rotate(0deg); }
-            to { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-        .stock-card.title-theme-preset2,
-        .chart-modal.title-theme-preset2,
-        .title-preview-card.title-theme-preset2 {
+        /* 칭호 프리셋 2 — Search Bar 다층 DOM(.title-sbm-stack) + 내부면(.title-sbm-body / 미리보기는 .title-preview-card-body). 의사요소 네온은 사용하지 않음 */
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 {
             position: relative;
             isolation: isolate;
-            /* 회전 conic+blur가 뷰포트 전체로 번지지 않도록 클립 (과거 overflow:visible 제거) */
             overflow: hidden;
             background: transparent !important;
             border: none !important;
@@ -1719,65 +1712,17 @@
             box-shadow: none;
             transition: box-shadow .45s ease, border-color .35s ease, transform .45s cubic-bezier(.22, 1, .36, 1);
         }
-        .stock-card.title-theme-preset2::before,
-        .chart-modal.title-theme-preset2::before,
-        .title-preview-card.title-theme-preset2::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            pointer-events: none;
-            z-index: 1;
-            background:
-                linear-gradient(to right, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
-                radial-gradient(circle at 14% 12%, rgba(64, 47, 181, 0.18) 0%, transparent 40%),
-                radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.1) 0%, transparent 44%),
-                #010201;
-            background-size: 14px 14px, 14px 14px, auto, auto, auto;
+        .stock-card.title-theme-preset2 {
+            padding: 0;
+            display: block; /* 그리드는 .title-sbm-body — 스택/오버레이만 두고 한 덩어리로 감쌀 때 부모 grid 깨짐 방지 */
         }
-        .stock-card.title-theme-preset2::after,
-        .chart-modal.title-theme-preset2::after,
-        .title-preview-card.title-theme-preset2::after {
-            content: '';
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            /* 부모 박스 기준으로만 크게 잡고 vmin/뷰포트 크기 디스크 금지 → 화면 전체 번짐 방지 */
-            width: min(520px, max(128%, 260px));
-            height: min(520px, max(128%, 260px));
-            margin: 0;
-            border-radius: inherit;
-            pointer-events: none;
-            z-index: 0;
-            background-image: conic-gradient(
-                #000,
-                #402fb5 5%,
-                #000 38%,
-                #000 50%,
-                #cf30aa 60%,
-                #000 87%
-            );
-            background-repeat: no-repeat;
-            background-position: center center;
-            filter: blur(22px);
-            opacity: 0.4;
-            transform: translate(-50%, -50%) rotate(0deg);
-            transform-origin: center center;
-            animation: title-preset2-glow-orbit 5.5s linear infinite;
-            will-change: transform;
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2::before,
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2::after {
+            content: none !important;
         }
-        /* 마우스만: 호버 시 궤도 가속 — 터치는 아래 미디어에서 호버 무시 */
         @media (hover: hover) and (pointer: fine) {
-            .stock-card.title-theme-preset2:hover::after,
-            .chart-modal.title-theme-preset2:hover::after,
-            .title-preview-card.title-theme-preset2:hover::after {
-                animation-duration: 2.4s;
-                filter: blur(22px) brightness(1.12) saturate(1.06);
-                opacity: 0.52;
-            }
             .stock-card.title-theme-preset2:hover,
-            .title-preview-card.title-theme-preset2:hover {
+            #title-preview-card.title-theme-preset2:hover {
                 border-color: transparent !important;
                 box-shadow:
                     0 22px 56px rgba(0, 0, 0, 0.82),
@@ -1790,28 +1735,6 @@
             .title-preview-card.title-theme-preset2:hover {
                 transform: none;
                 box-shadow: none;
-            }
-            /* 터치: 호버 없음 — 궤도 5.5s 유지, 블러만 약간 줄여 저사양 대응 */
-            .stock-card.title-theme-preset2::after,
-            .chart-modal.title-theme-preset2::after,
-            .title-preview-card.title-theme-preset2::after {
-                animation-duration: 5.5s;
-                opacity: 0.38;
-                filter: blur(18px);
-                will-change: transform;
-            }
-            .title-preview-card.title-theme-preset2::after {
-                will-change: auto;
-            }
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .stock-card.title-theme-preset2::after,
-            .chart-modal.title-theme-preset2::after,
-            .title-preview-card.title-theme-preset2::after {
-                animation: none !important;
-                transform: translate(-50%, -50%) rotate(60deg);
-                filter: blur(22px) !important;
-                opacity: 0.36;
             }
         }
 
@@ -1999,17 +1922,13 @@
             overflow: hidden;
             box-sizing: border-box;
         }
-        #title-preview-card.title-theme-preset2::before,
-        #title-preview-card.title-theme-preset2::after {
-            content: none !important;
-        }
         #title-preview-card.title-theme-preset1 .title-sbm-stack {
             display: none !important;
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-stack {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-stack {
             display: block;
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-stack {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-stack {
             position: absolute;
             inset: 0;
             z-index: 0;
@@ -2017,35 +1936,35 @@
             border-radius: inherit;
         }
         /* Search Bar Mastery.html — .glow / .darkBorderBg / .white / .border 레이어 (미리보기만) */
-        #title-preview-card.title-theme-preset2 .title-sbm-glow,
-        #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg,
-        #title-preview-card.title-theme-preset2 .title-sbm-white,
-        #title-preview-card.title-theme-preset2 .title-sbm-border {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-glow,
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-darkBorderBg,
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-white,
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-border {
             position: absolute;
             overflow: hidden;
             pointer-events: none;
             border-radius: inherit;
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-glow {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-glow {
             inset: 0;
             z-index: 1;
             filter: blur(30px);
             opacity: 0.4;
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-darkBorderBg {
             inset: 0;
             filter: blur(3px);
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(2) { z-index: 2; }
-        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(3) { z-index: 3; }
-        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(4) { z-index: 4; }
-        #title-preview-card.title-theme-preset2 .title-sbm-white {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(2) { z-index: 2; }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(3) { z-index: 3; }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(4) { z-index: 4; }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-white {
             top: 4px; right: 4px; bottom: 4px; left: 4px;
             width: auto; height: auto;
             z-index: 5;
             filter: blur(2px);
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-border {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-border {
             top: 6px; right: 6px; bottom: 6px; left: 6px;
             width: auto; height: auto;
             z-index: 6;
@@ -2067,7 +1986,7 @@
             from { transform: translate(-50%, -50%) rotate(70deg); }
             to { transform: translate(-50%, -50%) rotate(430deg); }
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-glow::before {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-glow::before {
             content: '';
             position: absolute;
             left: 50%; top: 50%;
@@ -2086,7 +2005,7 @@
             animation: title-sbm-glow-spin 5.5s linear infinite;
             will-change: transform;
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg::before {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-darkBorderBg::before {
             content: '';
             position: absolute;
             left: 50%; top: 50%;
@@ -2103,9 +2022,9 @@
             animation: title-sbm-dark-spin 5.5s linear infinite;
             will-change: transform;
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(3)::before { animation-delay: -0.12s; }
-        #title-preview-card.title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(4)::before { animation-delay: -0.24s; }
-        #title-preview-card.title-theme-preset2 .title-sbm-white::before {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(3)::before { animation-delay: -0.12s; }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-stack > .title-sbm-darkBorderBg:nth-child(4)::before { animation-delay: -0.24s; }
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-white::before {
             content: '';
             position: absolute;
             left: 50%; top: 50%;
@@ -2123,7 +2042,7 @@
             animation: title-sbm-white-spin 5.5s linear infinite;
             will-change: transform;
         }
-        #title-preview-card.title-theme-preset2 .title-sbm-border::before {
+        :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-border::before {
             content: '';
             position: absolute;
             left: 50%; top: 50%;
@@ -2142,33 +2061,33 @@
             will-change: transform;
         }
         @media (hover: hover) and (pointer: fine) {
-            #title-preview-card.title-theme-preset2:hover .title-sbm-glow::before,
-            #title-preview-card.title-theme-preset2:hover .title-sbm-darkBorderBg::before,
-            #title-preview-card.title-theme-preset2:hover .title-sbm-white::before,
-            #title-preview-card.title-theme-preset2:hover .title-sbm-border::before {
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2:hover .title-sbm-glow::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2:hover .title-sbm-darkBorderBg::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2:hover .title-sbm-white::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2:hover .title-sbm-border::before {
                 animation-duration: 2.4s;
             }
         }
         @media (hover: none), (pointer: coarse) {
-            #title-preview-card.title-theme-preset2 .title-sbm-glow { filter: blur(22px); opacity: 0.38; }
-            #title-preview-card.title-theme-preset2 .title-sbm-glow::before,
-            #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg::before,
-            #title-preview-card.title-theme-preset2 .title-sbm-white::before,
-            #title-preview-card.title-theme-preset2 .title-sbm-border::before {
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-glow { filter: blur(22px); opacity: 0.38; }
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-glow::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-darkBorderBg::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-white::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-border::before {
                 animation-duration: 5.5s;
             }
         }
         @media (prefers-reduced-motion: reduce) {
-            #title-preview-card.title-theme-preset2 .title-sbm-glow::before,
-            #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg::before,
-            #title-preview-card.title-theme-preset2 .title-sbm-white::before,
-            #title-preview-card.title-theme-preset2 .title-sbm-border::before {
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-glow::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-darkBorderBg::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-white::before,
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-border::before {
                 animation: none !important;
             }
-            #title-preview-card.title-theme-preset2 .title-sbm-glow::before { transform: translate(-50%, -50%) rotate(240deg); }
-            #title-preview-card.title-theme-preset2 .title-sbm-darkBorderBg::before { transform: translate(-50%, -50%) rotate(262deg); }
-            #title-preview-card.title-theme-preset2 .title-sbm-white::before { transform: translate(-50%, -50%) rotate(263deg); }
-            #title-preview-card.title-theme-preset2 .title-sbm-border::before { transform: translate(-50%, -50%) rotate(250deg); }
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-glow::before { transform: translate(-50%, -50%) rotate(240deg); }
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-darkBorderBg::before { transform: translate(-50%, -50%) rotate(262deg); }
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-white::before { transform: translate(-50%, -50%) rotate(263deg); }
+            :is(.stock-card, .chart-modal, #title-preview-card).title-theme-preset2 .title-sbm-border::before { transform: translate(-50%, -50%) rotate(250deg); }
         }
         #title-preview-card .title-preview-card-body {
             position: relative;
@@ -2192,6 +2111,68 @@
                 radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.1) 0%, transparent 44%),
                 #010201;
             background-size: 14px 14px, 14px 14px, auto, auto, auto;
+        }
+        .stock-card.title-theme-preset2 > .title-sbm-body {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr 1fr 1.2fr;
+            grid-template-areas: "info price chart trade";
+            align-items: center;
+            gap: 10px;
+            padding: 20px;
+            box-sizing: border-box;
+            min-height: 100%;
+            position: relative;
+            z-index: 7;
+            margin: 5px;
+            border-radius: 11px;
+            background:
+                linear-gradient(to right, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
+                radial-gradient(circle at 14% 12%, rgba(64, 47, 181, 0.18) 0%, transparent 40%),
+                radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.1) 0%, transparent 44%),
+                #010201;
+            background-size: 14px 14px, 14px 14px, auto, auto, auto;
+        }
+        @media (max-width: 600px) {
+            .stock-card.title-theme-preset2 > .title-sbm-body {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto;
+                grid-template-areas:
+                    "info  price"
+                    "chart chart"
+                    "trade trade";
+            }
+        }
+        .chart-modal.title-theme-preset2 > .title-sbm-body {
+            position: relative;
+            z-index: 7;
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            margin: 5px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-sizing: border-box;
+            background:
+                linear-gradient(to right, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(15, 15, 16, 0.65) 1px, transparent 1px),
+                radial-gradient(circle at 14% 12%, rgba(64, 47, 181, 0.18) 0%, transparent 40%),
+                radial-gradient(circle at 86% 82%, rgba(207, 48, 170, 0.1) 0%, transparent 44%),
+                #010201;
+            background-size: 14px 14px, 14px 14px, auto, auto, auto;
+        }
+        .stock-card.title-theme-preset2 > .title-sbm-body > .title-particle-canvas,
+        .chart-modal.title-theme-preset2 > .title-sbm-body > .title-particle-canvas {
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            z-index: 1;
+        }
+        .stock-card.title-theme-preset2 > .title-sbm-body > :not(.title-particle-canvas),
+        .chart-modal.title-theme-preset2 > .title-sbm-body > :not(.title-particle-canvas) {
+            position: relative;
+            z-index: 2;
         }
         #title-preview-card .title-preview-card-body > .title-particle-canvas {
             position: absolute;
@@ -2218,8 +2199,6 @@
         }
         .stock-card.title-theme-preset1 > *:not(.title-particle-canvas),
         .chart-modal.title-theme-preset1 > *:not(.title-particle-canvas),
-        .stock-card.title-theme-preset2 > *:not(.title-particle-canvas),
-        .chart-modal.title-theme-preset2 > *:not(.title-particle-canvas),
         .title-preview-card.title-theme-preset1 > *:not(.title-particle-canvas),
         .title-preview-card.title-theme-preset2 > *:not(.title-particle-canvas) {
             position: relative;
@@ -4022,6 +4001,44 @@ function stripTitleThemeClasses(el) {
     el.classList.remove('title-theme-preset1', 'title-theme-preset2');
 }
 
+/** 미리보기는 HTML에 스택 고정 — 종목 카드·차트 모달만 동적 삽입/제거 */
+function removeTitleSbmChrome(el) {
+    if (!el || el.id === 'title-preview-card') return;
+    const body = el.querySelector(':scope > .title-sbm-body');
+    if (body) {
+        while (body.firstChild) el.insertBefore(body.firstChild, body);
+        body.remove();
+    }
+    el.querySelector(':scope > .title-sbm-stack')?.remove();
+}
+
+function ensureTitleSbmChrome(el) {
+    if (!el || el.id === 'title-preview-card') return;
+    if (!el.classList.contains('title-theme-preset2')) return;
+    const hadStack = el.querySelector(':scope > .title-sbm-stack');
+    const hadBody = el.querySelector(':scope > .title-sbm-body');
+    if (hadStack && hadBody) return;
+    if (hadStack && !hadBody) hadStack.remove();
+    const stack = document.createElement('div');
+    stack.className = 'title-sbm-stack';
+    stack.setAttribute('aria-hidden', 'true');
+    stack.innerHTML = '<div class="title-sbm-glow"></div><div class="title-sbm-darkBorderBg"></div><div class="title-sbm-darkBorderBg"></div><div class="title-sbm-darkBorderBg"></div><div class="title-sbm-white"></div><div class="title-sbm-border"></div>';
+    el.insertBefore(stack, el.firstChild);
+    const body = document.createElement('div');
+    body.className = 'title-sbm-body';
+    let n = stack.nextSibling;
+    while (n) {
+        const next = n.nextSibling;
+        if (n.nodeType === 1 && n.classList && n.classList.contains('circuit-freeze-overlay')) {
+            n = next;
+            continue;
+        }
+        body.appendChild(n);
+        n = next;
+    }
+    el.appendChild(body);
+}
+
 const TITLE_PARTICLE_COLORS_GOLD = Object.freeze([
     [232, 201, 122], [201, 168, 76], [255, 225, 140], [168, 125, 42],
 ]);
@@ -4174,6 +4191,10 @@ function startTitleParticleMobileTwinkle(sys, el) {
 function titleParticleCanvasHost(el) {
     if (el && el.id === 'title-preview-card') {
         const b = el.querySelector('.title-preview-card-body');
+        if (b) return b;
+    }
+    if (el && (el.classList.contains('stock-card') || el.classList.contains('chart-modal'))) {
+        const b = el.querySelector(':scope > .title-sbm-body');
         if (b) return b;
     }
     return el;
@@ -4379,6 +4400,7 @@ function applyTitleDecorationToCard(card, stockId) {
     const badge = card.querySelector('.stock-title-badge');
     if (!titleRec) {
         if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+        removeTitleSbmChrome(card);
         stripTitleThemeClasses(card);
         unbindTitleParticleSystem(card);
         return;
@@ -4391,6 +4413,8 @@ function applyTitleDecorationToCard(card, stockId) {
     const same = card.classList.contains(nextClass);
     stripTitleThemeClasses(card);
     card.classList.add(nextClass);
+    if (nextClass === 'title-theme-preset2') ensureTitleSbmChrome(card);
+    else removeTitleSbmChrome(card);
     if (!same) {
         unbindTitleParticleSystem(card);
         bindTitleParticleSystem(card);
@@ -4407,6 +4431,7 @@ function applyTitleDecorationToChartModal(stockId) {
     if (!titleRec) {
         badge.style.display = 'none';
         badge.textContent = '';
+        removeTitleSbmChrome(modal);
         stripTitleThemeClasses(modal);
         unbindTitleParticleSystem(modal);
         return;
@@ -4417,6 +4442,8 @@ function applyTitleDecorationToChartModal(stockId) {
     const same = modal.classList.contains(nextClass);
     stripTitleThemeClasses(modal);
     modal.classList.add(nextClass);
+    if (nextClass === 'title-theme-preset2') ensureTitleSbmChrome(modal);
+    else removeTitleSbmChrome(modal);
     if (!same) {
         unbindTitleParticleSystem(modal);
         bindTitleParticleSystem(modal);
@@ -7251,6 +7278,7 @@ function closeChartModal() {
     }
     const modal = document.querySelector('#chart-modal-overlay .chart-modal');
     if (modal) {
+        removeTitleSbmChrome(modal);
         stripTitleThemeClasses(modal);
         unbindTitleParticleSystem(modal);
     }
