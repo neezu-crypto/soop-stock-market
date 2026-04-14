@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOOP STOCK OBS CARD</title>
+  <style>
+    :root {
+      --bg: rgba(15, 23, 42, 0.8);
+      --panel: rgba(30, 41, 59, 0.88);
+      --text: #f8fafc;
+      --sub: #cbd5e1;
+      --up: #ef4444;
+      --down: #3b82f6;
+      --bd: rgba(148, 163, 184, 0.35);
+      --accent: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: transparent;
+    }
+    .stage {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+    }
+    .card {
+      width: min(980px, 96vw);
+      background: linear-gradient(160deg, var(--panel), rgba(15, 23, 42, 0.92));
+      border: 1px solid var(--bd);
+      border-radius: 16px;
+      box-shadow: 0 10px 28px rgba(2, 6, 23, 0.35);
+      padding: 16px 18px;
+      display: grid;
+      grid-template-columns: 1.5fr 1fr 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+    .name-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .name {
+      font-size: 26px;
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .meta {
+      color: var(--sub);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+    .price-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .price {
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .price.up { color: var(--up); }
+    .price.down { color: var(--down); }
+    .chg {
+      font-size: 18px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--bd);
+      background: rgba(15, 23, 42, 0.35);
+    }
+    .chg.up { color: #fecaca; }
+    .chg.down { color: #bfdbfe; }
+    .spark-wrap { height: 78px; position: relative; }
+    #spark {
+      width: 100%;
+      height: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      background: linear-gradient(180deg, rgba(15,23,42,0.4), rgba(15,23,42,0.7));
+    }
+    .status {
+      position: fixed;
+      left: 10px;
+      bottom: 8px;
+      color: #e2e8f0;
+      font-size: 12px;
+      background: rgba(2, 6, 23, 0.58);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-radius: 8px;
+      padding: 6px 9px;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="card">
+      <div class="name-wrap">
+        <div id="name" class="name">SOOP STOCK</div>
+        <div id="meta" class="meta">연결 중...</div>
+      </div>
+      <div class="price-wrap">
+        <div id="price" class="price">-</div>
+        <div id="chg" class="chg">-</div>
+      </div>
+      <div class="spark-wrap"><canvas id="spark"></canvas></div>
+    </div>
+  </div>
+  <div id="status" class="status">OBS 전용 카드 준비 중...</div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import { getDatabase, ref, onValue, off, get } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
+      authDomain: "soop-stock-market.firebaseapp.com",
+      databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
+      projectId: "soop-stock-market",
+      appId: "1:997788925900:web:cb613d438efec019a3a769"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+    try { await signInAnonymously(auth); } catch (_) { /* anonymous disabled일 수 있음 */ }
+
+    const q = new URL(location.href).searchParams;
+    const token = (q.get('t') || '').trim();
+    const statusEl = document.getElementById('status');
+    const nameEl = document.getElementById('name');
+    const metaEl = document.getElementById('meta');
+    const priceEl = document.getElementById('price');
+    const chgEl = document.getElementById('chg');
+    const spark = document.getElementById('spark');
+    const ctx = spark.getContext('2d');
+    let prices = [];
+    let unsubRow = null;
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    function resizeSpark() {
+      const r = spark.getBoundingClientRect();
+      spark.width = Math.max(2, Math.floor(r.width * devicePixelRatio));
+      spark.height = Math.max(2, Math.floor(r.height * devicePixelRatio));
+      drawSpark();
+    }
+
+    function drawSpark() {
+      if (!ctx) return;
+      const w = spark.width, h = spark.height;
+      ctx.clearRect(0, 0, w, h);
+      if (!prices.length) return;
+      const min = Math.min(...prices), max = Math.max(...prices);
+      const span = Math.max(1, max - min);
+      ctx.lineWidth = Math.max(2, w / 260);
+      const up = prices[prices.length - 1] >= prices[0];
+      ctx.strokeStyle = up ? '#ef4444' : '#3b82f6';
+      ctx.beginPath();
+      prices.forEach((p, i) => {
+        const x = (i / Math.max(1, prices.length - 1)) * (w - 12) + 6;
+        const y = h - 8 - ((p - min) / span) * (h - 16);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    function fmtChange(n) {
+      const v = Number(n);
+      if (!Number.isFinite(v)) return '0.00%';
+      const s = v.toFixed(2);
+      return `${v >= 0 ? '+' : ''}${s}%`;
+    }
+
+    function pushPrice(v) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return;
+      prices.push(n);
+      if (prices.length > 70) prices.shift();
+      drawSpark();
+    }
+
+    async function bindStock(stockId, market) {
+      if (unsubRow) { try { unsubRow(); } catch (_) {} unsubRow = null; }
+      if (!stockId) return;
+      const root = market === 'coin' ? 'coins' : 'stocks';
+      const rowRef = ref(db, `${root}/${stockId}`);
+      unsubRow = onValue(rowRef, (snap) => {
+        if (!snap.exists()) {
+          setStatus('종목 데이터 없음');
+          return;
+        }
+        const r = snap.val() || {};
+        const name = String(r.name || stockId);
+        const price = Number(r.price || 0);
+        const ch = Number(r.change || 0);
+        nameEl.textContent = name;
+        metaEl.textContent = `${market === 'coin' ? '코인' : '주식'} · ${stockId}`;
+        priceEl.textContent = `${Math.floor(price).toLocaleString()}원`;
+        priceEl.className = `price ${ch >= 0 ? 'up' : 'down'}`;
+        chgEl.textContent = fmtChange(ch);
+        chgEl.className = `chg ${ch >= 0 ? 'up' : 'down'}`;
+        pushPrice(price);
+        setStatus('실시간 연결됨');
+      }, () => setStatus('읽기 권한 오류 (URL 또는 규칙 확인)'));
+    }
+
+    if (!token) {
+      setStatus('유효하지 않은 URL');
+      metaEl.textContent = '토큰이 없습니다.';
+    } else {
+      const linkRef = ref(db, `publicStreamCardLinks/${token}`);
+      onValue(linkRef, async (snap) => {
+        if (!snap.exists()) {
+          setStatus('만료되었거나 비활성 URL');
+          return;
+        }
+        const v = snap.val() || {};
+        if (v.active === false) {
+          setStatus('비활성 URL');
+          return;
+        }
+        await bindStock(String(v.stockId || ''), String(v.market || 'stock'));
+      }, () => setStatus('링크 조회 실패'));
+    }
+
+    addEventListener('resize', resizeSpark);
+    resizeSpark();
+  </script>
+</body>
+</html>

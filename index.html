@@ -1619,6 +1619,13 @@
             color:#07101d; font-weight:900; letter-spacing:.02em;
             box-shadow: inset 0 1px 0 rgba(255,240,200,.45), 0 6px 14px rgba(201,168,76,.22);
         }
+        .chart-modal-trade .modal-obslink {
+            background: linear-gradient(135deg, #22d3ee 0%, #2563eb 55%, #4f46e5 100%);
+            color: #ecfeff;
+            font-weight: 900;
+            letter-spacing: .02em;
+            box-shadow: inset 0 1px 0 rgba(186, 230, 253, .35), 0 6px 14px rgba(37, 99, 235, .25);
+        }
         .chart-modal-trade button:hover { filter: brightness(1.15); transform: translateY(-1px); }
 
         .stock-title-badge {
@@ -1808,7 +1815,8 @@
         .chart-modal.title-theme-preset1 .modal-sell,
         .chart-modal.title-theme-preset1 .modal-maxsell,
         .chart-modal.title-theme-preset1 .modal-halfsell,
-        .chart-modal.title-theme-preset1 .modal-titlebuy {
+        .chart-modal.title-theme-preset1 .modal-titlebuy,
+        .chart-modal.title-theme-preset1 .modal-obslink {
             background: linear-gradient(135deg, #c9a84c, #a87d2a);
             color: #000000 !important;
             border: 1px solid #8f7a3f;
@@ -1887,7 +1895,8 @@
         .chart-modal.title-theme-preset2 .modal-sell,
         .chart-modal.title-theme-preset2 .modal-maxsell,
         .chart-modal.title-theme-preset2 .modal-halfsell,
-        .chart-modal.title-theme-preset2 .modal-titlebuy {
+        .chart-modal.title-theme-preset2 .modal-titlebuy,
+        .chart-modal.title-theme-preset2 .modal-obslink {
             background: linear-gradient(135deg, #5b3ea8 0%, #402fb5 42%, #9d1f7a 100%);
             color: #f8fafc !important;
             border: 1px solid rgba(167, 139, 250, 0.55);
@@ -2004,7 +2013,8 @@
         .chart-modal.title-theme-preset3 .modal-sell,
         .chart-modal.title-theme-preset3 .modal-maxsell,
         .chart-modal.title-theme-preset3 .modal-halfsell,
-        .chart-modal.title-theme-preset3 .modal-titlebuy {
+        .chart-modal.title-theme-preset3 .modal-titlebuy,
+        .chart-modal.title-theme-preset3 .modal-obslink {
             background: linear-gradient(135deg, var(--cute-pk4), var(--cute-lv4));
             color: #fff !important;
             border: 1.5px solid var(--cute-lv2);
@@ -3334,6 +3344,7 @@
             <button class="modal-halfsell" data-trade-type="sell" type="button" title="보유의 약 50% 매도 — MAX와 동일하게 8% 추가 수수료·전량매도 임팩트 계수 적용" onclick="handleModalHalfSellButtonClick(event)">50%</button>
             <button class="modal-sell" data-trade-type="sell" type="button" title="탭: 1회 매도 · 3초 이상 누르면 자동매도(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'sell')">매도</button>
             <button class="modal-titlebuy" type="button" title="종목 칭호 구매/미리보기" onclick="openTitlePurchaseModal()">칭호</button>
+            <button class="modal-obslink" type="button" title="OBS 브라우저 소스 URL 복사" onclick="openObsSourceGuideModal()">OBS</button>
         </div>
 
         <!-- 차트 모달 하단 광고 배너 -->
@@ -3431,6 +3442,25 @@
             <button type="button" onclick="closeTitlePurchaseModal()" style="flex:1; min-width:96px; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button type="button" onclick="submitTitlePurchaseRequest()" style="flex:1; min-width:96px; background:#8b5cf6; color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">구매 신청</button>
             <button type="button" id="title-admin-apply-btn" onclick="adminApplyTitleForMe()" style="display:none; flex:1; min-width:96px; background:#0ea5e9; color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">관리자 테스트 적용</button>
+        </div>
+    </div>
+</div>
+
+<div id="obs-source-guide-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>🎥 OBS 브라우저 소스</h2></div>
+        <p style="font-size:13px; color:var(--text-sub); line-height:1.6; margin:0 0 12px 0;">
+            현재 차트로 열려 있는 종목 1개를 방송용 카드로 표시하는 URL을 복사합니다.
+        </p>
+        <ul class="promo-info-list" style="margin-bottom:12px;">
+            <li><b>1계정 1URL</b>만 발급/사용됩니다. (종목만 교체)</li>
+            <li>OBS에서 <b>브라우저 소스</b>로 추가하면 됩니다.</li>
+            <li style="color:#fca5a5;"><b>URL은 절대 노출/공유하지 마세요.</b></li>
+        </ul>
+        <div id="obs-source-guide-msg" style="font-size:12px; color:var(--text-sub); margin-bottom:12px; min-height:18px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button type="button" onclick="closeObsSourceGuideModal()" style="flex:1; background:var(--border); color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">닫기</button>
+            <button type="button" id="obs-source-copy-btn" onclick="copyObsSourceUrlForCurrentChart()" style="flex:1; background:linear-gradient(135deg,#22d3ee,#2563eb); color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">URL 복사하기</button>
         </div>
     </div>
 </div>
@@ -10487,6 +10517,92 @@ window.closeTitlePurchaseModal = function() {
     const previewCard = document.getElementById('title-preview-card');
     if (previewCard) unbindTitleParticleSystem(previewCard);
     document.getElementById('title-purchase-modal')?.classList.remove('active');
+};
+
+window.openObsSourceGuideModal = function() {
+    if (!chartModalStockId) return;
+    const msg = document.getElementById('obs-source-guide-msg');
+    const btn = document.getElementById('obs-source-copy-btn');
+    if (msg) { msg.style.color = 'var(--text-sub)'; msg.textContent = 'URL은 화면에 표시되지 않고, 복사 버튼으로만 전달됩니다.'; }
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    document.getElementById('obs-source-guide-modal')?.classList.add('active');
+};
+
+window.closeObsSourceGuideModal = function() {
+    document.getElementById('obs-source-guide-modal')?.classList.remove('active');
+};
+
+function buildObsStockCardSourceUrl(token) {
+    const base = new URL('./obs-stock-card.html', window.location.href);
+    base.searchParams.set('t', token);
+    return base.toString();
+}
+
+function randomObsShareToken() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let out = '';
+    for (let i = 0; i < 40; i++) out += chars[(Math.random() * chars.length) | 0];
+    return out;
+}
+
+async function getOrCreateObsShareToken(uid) {
+    const uidRef = ref(db, `streamCardLinksByUid/${uid}`);
+    const snap = await get(uidRef);
+    if (snap.exists()) {
+        const v = snap.val() || {};
+        const t = String(v.token || '').trim();
+        if (t) return t;
+    }
+    const token = randomObsShareToken();
+    await set(uidRef, {
+        uid,
+        token,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        active: true
+    });
+    return token;
+}
+
+window.copyObsSourceUrlForCurrentChart = async function() {
+    const msg = document.getElementById('obs-source-guide-msg');
+    const btn = document.getElementById('obs-source-copy-btn');
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+        if (msg) { msg.style.color = '#ef4444'; msg.textContent = '로그인 후 사용해주세요.'; }
+        return;
+    }
+    if (!chartModalStockId) {
+        if (msg) { msg.style.color = '#ef4444'; msg.textContent = '차트에서 종목을 먼저 열어주세요.'; }
+        return;
+    }
+    try {
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.7'; }
+        if (msg) { msg.style.color = 'var(--text-sub)'; msg.textContent = '발급/갱신 중...'; }
+        const token = await getOrCreateObsShareToken(uid);
+        const now = Date.now();
+        const market = chartModalMarket === 'coin' ? 'coin' : 'stock';
+        await update(ref(db), {
+            [`streamCardLinksByUid/${uid}/updatedAt`]: now,
+            [`streamCardLinksByUid/${uid}/active`]: true,
+            [`streamCardLinksByUid/${uid}/stockId`]: chartModalStockId,
+            [`streamCardLinksByUid/${uid}/market`]: market,
+            [`publicStreamCardLinks/${token}`]: {
+                uid,
+                stockId: chartModalStockId,
+                market,
+                active: true,
+                updatedAt: now
+            }
+        });
+        const url = buildObsStockCardSourceUrl(token);
+        await navigator.clipboard.writeText(url);
+        if (msg) { msg.style.color = '#22c55e'; msg.textContent = '✅ URL이 클립보드에 복사되었습니다. 방송 화면에 노출하지 마세요.'; }
+    } catch (e) {
+        if (msg) { msg.style.color = '#ef4444'; msg.textContent = '복사 실패: ' + (e?.message || e); }
+    } finally {
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
 };
 
 window.submitTitlePurchaseRequest = async function() {
