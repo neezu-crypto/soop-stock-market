@@ -364,6 +364,15 @@ function resolveSpreadForTrade(sellConfig, isCoin, invertPrice, stockSpread, coi
   return stockSpread;
 }
 
+const INVERSE_DROP_IMPACT_MULT_DEFAULT = 1.28;
+const INVERSE_RISE_IMPACT_MULT_DEFAULT = 0.78;
+
+function pickInverseImpactMult(val, def) {
+  if (val === undefined || val === null || val === "") return def;
+  const n = Number(val);
+  return Number.isFinite(n) && n > 0 ? n : def;
+}
+
 /** 메인 앱 `window.trade`와 동일한 가격·임팩트 계산 — prevPrice는 트랜잭션 내 현재가 */
 function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCoin, invertPrice) {
   const priceSide = invertPrice ? (side === "buy" ? "sell" : "buy") : side;
@@ -389,6 +398,13 @@ function computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCo
   }
   if (priceSide === "sell") {
     impact *= isCoin ? coinSellImpactMultiplier : stockSellImpactMultiplier;
+  }
+  if (invertPrice) {
+    if (priceSide === "sell") {
+      impact *= pickInverseImpactMult(sellConfig?.inverseDropImpactMultiplier, INVERSE_DROP_IMPACT_MULT_DEFAULT);
+    } else {
+      impact *= pickInverseImpactMult(sellConfig?.inverseRiseImpactMultiplier, INVERSE_RISE_IMPACT_MULT_DEFAULT);
+    }
   }
   if (!Number.isFinite(impact) || impact < 0) impact = 0;
   let rawNewPrice;

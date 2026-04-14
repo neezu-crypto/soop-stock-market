@@ -9445,6 +9445,23 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         let impact = impactCoef * dampingFactor * Math.log2(1 + q) * sellPressure;
         if (coinQ) impact *= Number.isFinite(coinMul) && coinMul > 0 ? coinMul : 1.85;
         if (side === 'sell') impact *= coinQ ? coinSellImpactMultiplier : stockSellImpactMultiplier;
+        if (invMode) {
+            if (side === 'sell') {
+                const raw = sc.inverseDropImpactMultiplier;
+                const m =
+                    raw !== undefined && raw !== null && raw !== ''
+                        ? Number(raw)
+                        : 1.28;
+                if (Number.isFinite(m) && m > 0) impact *= m;
+            } else {
+                const raw = sc.inverseRiseImpactMultiplier;
+                const m =
+                    raw !== undefined && raw !== null && raw !== ''
+                        ? Number(raw)
+                        : 0.78;
+                if (Number.isFinite(m) && m > 0) impact *= m;
+            }
+        }
         if (!Number.isFinite(impact) || impact < 0) impact = 0;
         const rawNewPrice = side === 'buy' ? currentPrice * (1 + impact) : currentPrice * (1 - impact);
         const newPrice = Math.max(1, Math.round(rawNewPrice));

@@ -881,6 +881,18 @@
                             style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
                         <div style="font-size:10px; color:#475569; margin-top:3px;">미저장 시 inverseSpread → coinSpread 순</div>
                     </div>
+                    <div>
+                        <div style="font-size:11px; color:#a78bfa; margin-bottom:6px;">인버스 임팩트 (하락↑)</div>
+                        <input type="number" id="sell-inverse-drop-impact-mult" value="1.28" min="0.1" max="5" step="0.01"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;"><code>inverseDropImpactMultiplier</code> · 인버스 매수→시세 하락에 곱함</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:#a78bfa; margin-bottom:6px;">인버스 임팩트 (상승↓)</div>
+                        <input type="number" id="sell-inverse-rise-impact-mult" value="0.78" min="0.1" max="5" step="0.01"
+                            style="width:100%; background:#1e293b; border:1px solid #475569; color:#f8fafc; padding:8px 10px; border-radius:8px; font-size:13px; outline:none; box-sizing:border-box;">
+                        <div style="font-size:10px; color:#475569; margin-top:3px;"><code>inverseRiseImpactMultiplier</code> · 인버스 매도→시세 상승에 곱함</div>
+                    </div>
                     <div style="grid-column:1/-1;">
                         <div style="font-size:11px; color:#f472b6; font-weight:700; margin-bottom:6px;">전량매도 추가 임팩트 변동계수</div>
                         <div style="font-size:10px; color:#64748b; margin-bottom:6px;">
@@ -6074,6 +6086,12 @@
             } else if (d.coinSpread !== undefined) {
                 document.getElementById('sell-inverse-coin-spread').value = d.coinSpread;
             }
+            if (d.inverseDropImpactMultiplier !== undefined && d.inverseDropImpactMultiplier !== null) {
+                document.getElementById('sell-inverse-drop-impact-mult').value = d.inverseDropImpactMultiplier;
+            }
+            if (d.inverseRiseImpactMultiplier !== undefined && d.inverseRiseImpactMultiplier !== null) {
+                document.getElementById('sell-inverse-rise-impact-mult').value = d.inverseRiseImpactMultiplier;
+            }
             if (d.liquidationImpactMultiplier !== undefined) {
                 document.getElementById('sell-liquidation-impact-mult').value = d.liquidationImpactMultiplier;
             }
@@ -6339,6 +6357,8 @@
         const coinSpread = Number(document.getElementById('sell-coin-spread').value);
         const inverseSpread = Number(document.getElementById('sell-inverse-spread').value);
         const inverseCoinSpread = Number(document.getElementById('sell-inverse-coin-spread').value);
+        const inverseDropImpactMultiplier = Number(document.getElementById('sell-inverse-drop-impact-mult').value);
+        const inverseRiseImpactMultiplier = Number(document.getElementById('sell-inverse-rise-impact-mult').value);
         const liquidationImpactMultiplier = Number(document.getElementById('sell-liquidation-impact-mult').value);
         const liquidationSpreadMultiplier = Number(document.getElementById('sell-liquidation-spread-mult').value);
 
@@ -6360,12 +6380,20 @@
         if (!Number.isFinite(inverseCoinSpread) || inverseCoinSpread < 0 || inverseCoinSpread > 0.1) {
             alert('인버스 코인 spread는 0 이상 0.1 이하의 숫자여야 합니다.'); return;
         }
+        if (!Number.isFinite(inverseDropImpactMultiplier) || inverseDropImpactMultiplier < 0.1 || inverseDropImpactMultiplier > 5) {
+            alert('인버스 하락 임팩트 배수는 0.1 이상 5 이하의 숫자여야 합니다.'); return;
+        }
+        if (!Number.isFinite(inverseRiseImpactMultiplier) || inverseRiseImpactMultiplier < 0.1 || inverseRiseImpactMultiplier > 5) {
+            alert('인버스 상승 임팩트 배수는 0.1 이상 5 이하의 숫자여야 합니다.'); return;
+        }
         try {
             const snap = await get(ref(db, 'siteConfig/sellConfig'));
             const current = snap.exists() ? snap.val() : {};
             await set(ref(db, 'siteConfig/sellConfig'), {
                 ...current,
                 basePrice, scalePrice, impact, spread, fee, inverseFee, coinSpread, inverseSpread, inverseCoinSpread,
+                inverseDropImpactMultiplier: Math.round(inverseDropImpactMultiplier * 1000) / 1000,
+                inverseRiseImpactMultiplier: Math.round(inverseRiseImpactMultiplier * 1000) / 1000,
                 liquidationImpactMultiplier: Math.round(liquidationImpactMultiplier * 1000) / 1000,
                 liquidationSpreadMultiplier: Math.round(liquidationSpreadMultiplier * 1000) / 1000,
                 updatedAt: Date.now()
