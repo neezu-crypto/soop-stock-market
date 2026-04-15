@@ -142,6 +142,8 @@ function getTradeCooldownMsFromConfig(mh, dateKst) {
 
 /** soop-stocks-ranking-live.html sortByPriceDesc 와 동일 필터·정렬 + 동가 시 id 안정 정렬 */
 const MARKET_RANK_SORT_VERSION = 1;
+const MARKET_TOP_RANK_LIMIT = 100;
+const MARKET_RANK_LIVE_REFRESH_MIN_GAP_MS = 3000;
 
 function buildPriceRankByIdFromMarketSnapshot(val) {
   if (!val || typeof val !== "object") return {};
@@ -165,6 +167,37 @@ function buildPriceRankByIdFromMarketSnapshot(val) {
     rankById[s.id] = i + 1;
   });
   return rankById;
+}
+
+/** 실시간 Top 랭킹 페이지용 경량 payload (id,name,price,change,volume,rank) */
+function buildTopPriceRowsFromMarketSnapshot(val, { limit = MARKET_TOP_RANK_LIMIT, isCoin = false } = {}) {
+  if (!val || typeof val !== "object") return [];
+  const rows = Object.entries(val).map(([id, raw]) => {
+    if (!raw || typeof raw !== "object") return { id, price: NaN, name: "" };
+    return { id, ...raw };
+  });
+  const filtered = rows.filter((s) => {
+    const p = Number(s.price);
+    const label = String(s.name || "").trim() || s.id;
+    return Boolean(label) && Number.isFinite(p) && p > 0;
+  });
+  filtered.sort((a, b) => {
+    const ap = Number(a.price) || 0;
+    const bp = Number(b.price) || 0;
+    if (bp !== ap) return bp - ap;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  const decimalPlaces = isCoin ? 4 : 2;
+  return filtered.slice(0, limit).map((s, i) =>
+    stripUndefinedShallow({
+      rank: i + 1,
+      id: s.id,
+      name: String(s.name || "").trim() || s.id,
+      price: Math.max(0, Math.floor(Number(s.price) || 0)),
+      change: Number.isFinite(Number(s.change)) ? Number(s.change).toFixed(decimalPlaces) : (0).toFixed(decimalPlaces),
+      volume: Math.max(0, Math.floor(Number(s.volume) || 0)),
+    })
+  );
 }
 
 /** 거래량 내림차순 상위 5종목 — 동량 시 id 문자열 순 */
@@ -2281,8 +2314,8 @@ exports.onMarketHoursWriteSyncDatabaseRules = onValueWritten(
 );
 
 /**
- * marketRank 갱신 — 스케줄은 장 중에만, 관리자 수동은 장 마감 여부 무시.
- * @returns {Promise<{skipped?:boolean,reason?:string,updatedAt?:number,stockRankCount?:number,coinRankCount?:number,stockVolTop5?:number,coinVolTop5?:number}>}
+ * marketRank 갱신 — 스케줄/실시간 트리거에서 공용 사용.
+ * @returns {Promise<{skipped?:boolean,reason?:string,updatedAt?:number,stockRankCount?:number,coinRankCount?:number,stockVolTop5?:number,coinVolTop5?:number,stockTop100?:number,coinTop100?:number}>}
  */
 async function runMarketRankAggregation(db, { skipIfMarketClosed }) {
   const mhSnap = await db.ref("siteConfig/marketHours").get();
@@ -2303,14 +2336,25 @@ async function runMarketRankAggregation(db, { skipIfMarketClosed }) {
   const coinRank = buildPriceRankByIdFromMarketSnapshot(coinsVal);
   const stockVolTop5 = buildVolumeTop5FromMarketSnapshot(stocksVal);
   const coinVolTop5 = buildVolumeTop5FromMarketSnapshot(coinsVal);
+  const stockTop100 = buildTopPriceRowsFromMarketSnapshot(stocksVal, {
+    limit: MARKET_TOP_RANK_LIMIT,
+    isCoin: false,
+  });
+  const coinTop100 = buildTopPriceRowsFromMarketSnapshot(coinsVal, {
+    limit: MARKET_TOP_RANK_LIMIT,
+    isCoin: true,
+  });
   const updatedAt = Date.now();
   await db.ref().update({
     "marketRank/stocks/byPrice": stockRank,
     "marketRank/coins/byPrice": coinRank,
     "marketRank/stocks/byVolumeTop5": stockVolTop5,
     "marketRank/coins/byVolumeTop5": coinVolTop5,
+    "marketRank/top100/stocks": stockTop100,
+    "marketRank/top100/coins": coinTop100,
     "marketRank/meta/updatedAt": updatedAt,
     "marketRank/meta/sortKey": `byPrice_v${MARKET_RANK_SORT_VERSION}`,
+    "marketRank/meta/topLimit": MARKET_TOP_RANK_LIMIT,
   });
   const out = {
     skipped: false,
@@ -2319,11 +2363,41 @@ async function runMarketRankAggregation(db, { skipIfMarketClosed }) {
     coinRankCount: Object.keys(coinRank).length,
     stockVolTop5: stockVolTop5.length,
     coinVolTop5: coinVolTop5.length,
+    stockTop100: stockTop100.length,
+    coinTop100: coinTop100.length,
   };
   console.log(
-    `[runMarketRankAggregation] ok stocks=${out.stockRankCount} coins=${out.coinRankCount} volTop5 stock=${out.stockVolTop5} coin=${out.coinVolTop5}`
+    `[runMarketRankAggregation] ok stocks=${out.stockRankCount} coins=${out.coinRankCount} top100 stock=${out.stockTop100} coin=${out.coinTop100} volTop5 stock=${out.stockVolTop5} coin=${out.coinVolTop5}`
   );
   return out;
+}
+
+/**
+ * 잦은 종목 가격 변경에서 전체 재집계를 직접 매번 수행하면 오히려 낭비가 커져,
+ * 최소 간격 락(기본 3초)으로 실시간 업데이트 빈도를 제한한다.
+ */
+async function tryAcquireMarketRankRefreshLock(db, nowMs, holdMs = MARKET_RANK_LIVE_REFRESH_MIN_GAP_MS) {
+  const ref = db.ref("marketRank/meta/liveRefreshLockUntil");
+  const tx = await ref.transaction((cur) => {
+    const curUntil = Number(cur || 0);
+    if (Number.isFinite(curUntil) && curUntil > nowMs) return;
+    return nowMs + holdMs;
+  });
+  return Boolean(tx?.committed);
+}
+
+async function maybeRunMarketRankLiveRefresh(sourceTag) {
+  const db = admin.database();
+  const now = Date.now();
+  try {
+    const locked = await tryAcquireMarketRankRefreshLock(db, now);
+    if (!locked) return;
+    const r = await runMarketRankAggregation(db, { skipIfMarketClosed: true });
+    if (r.skipped) return;
+    await db.ref("marketRank/meta/liveUpdatedAt").set(Date.now());
+  } catch (e) {
+    console.error(`[maybeRunMarketRankLiveRefresh:${sourceTag}]`, e?.message || e);
+  }
 }
 
 /** 관리자만 — marketRank 즉시 재집계 (장 마감 중에도 실행 가능) */
@@ -2364,6 +2438,24 @@ exports.refreshMarketPriceRanks = onSchedule(
       console.error("[refreshMarketPriceRanks]", e?.message || e);
       throw e;
     }
+  }
+);
+
+/**
+ * 실시간 체감용: 가격 변경 이벤트에서 marketRank/top100 갱신.
+ * 전체 집계를 3초 최소 간격으로 제한해 쓰기 폭주를 방지한다.
+ */
+exports.refreshMarketRanksOnStockPriceWrite = onValueWritten(
+  "/stocks/{stockId}/price",
+  async () => {
+    await maybeRunMarketRankLiveRefresh("stock_price_write");
+  }
+);
+
+exports.refreshMarketRanksOnCoinPriceWrite = onValueWritten(
+  "/coins/{stockId}/price",
+  async () => {
+    await maybeRunMarketRankLiveRefresh("coin_price_write");
   }
 );
 

@@ -651,6 +651,10 @@
                 <span class="inbox-label">👑 랭킹</span>
                 <span class="inbox-count" data-inbox-count="ranking-req">…</span>
             </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="live-ranking-req" title="실시간 Top100 열람권 신청 검수로 이동">
+                <span class="inbox-label">📊 Top100</span>
+                <span class="inbox-count" data-inbox-count="live-ranking-req">…</span>
+            </button>
             <button type="button" class="admin-inbox-chip" data-admin-scroll="title-sponsor" title="종목 칭호 신청 검수로 이동">
                 <span class="inbox-label">🏷️ 칭호</span>
                 <span class="inbox-count" data-inbox-count="title-sponsor">…</span>
@@ -1179,6 +1183,8 @@
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px;">
             <label style="color:#94a3b8;">자산 랭킹 열람 약정 (개)</label>
             <input type="number" id="pricing-asset-ranking" min="1" max="999" value="30" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">실시간 Top100 열람권 약정 (개)</label>
+            <input type="number" id="pricing-live-ranking-top100" min="1" max="999" value="30" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
             <label style="color:#94a3b8;">방송국 배너 (개/일)</label>
             <input type="number" id="pricing-broadcast-per-day" min="1" max="999" value="20" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
             <label style="color:#94a3b8;">차트 하단 배너 (개/일)</label>
@@ -2054,6 +2060,26 @@
         </div>
     </div>
 
+    <!-- 📊 실시간 Top100 열람권 신청 검수 -->
+    <div id="admin-accordion-live-ranking-access" class="container admin-accordion-anchor" style="display:block; border-color:#0ea5e9;">
+        <div class="accordion-header">
+            <h1>📊 실시간 Top100 열람권 신청 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            사용자 페이지의 <b>라이브 / 직접 열람 안내</b>에서 신청된 건입니다. 후원 확인 후 <b>수락</b>하면 <b>7일</b> 동안 Top100 페이지 직접 열람이 활성화됩니다.<br>
+            <span style="color:#38bdf8;">Firebase: <b>liveRankingTop100Requests/{uid}</b> · 승인 시 <b>users/{uid}/entitlements/liveRankingTop100ExpiresAt</b> 저장</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+            <span class="realtime-bar"><span class="live-dot"></span>실시간 연동</span>
+        </div>
+        <div id="live-ranking-top100-access-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        </div>
+        </div>
+    </div>
+
     <div id="admin-accordion-title-sponsor" class="container admin-accordion-anchor" style="display:block; border-color:#8b5cf6;">
         <div class="accordion-header"><h1>🏷️ 종목 칭호 신청 검수</h1><span class="accordion-arrow">▼</span></div>
         <div class="accordion-body">
@@ -2279,12 +2305,12 @@
         return v && String(v.status || '').trim().toLowerCase() === 'pending';
     }
 
-    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null, 'title-sponsor': null };
+    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null, 'live-ranking-req': null, 'title-sponsor': null };
 
     function paintAdminRequestInbox() {
         const box = document.getElementById('admin-request-inbox');
         if (!box) return;
-        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req', 'title-sponsor'].forEach((k) => {
+        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req', 'live-ranking-req', 'title-sponsor'].forEach((k) => {
             const el = box.querySelector(`[data-inbox-count="${k}"]`);
             const chip = el && el.closest('.admin-inbox-chip');
             const v = adminInboxCounts[k];
@@ -2672,6 +2698,7 @@
             'chart-ad': 'admin-accordion-chart-ad',
             relay: 'admin-accordion-relay',
             'ranking-req': 'admin-accordion-ranking-access',
+            'live-ranking-req': 'admin-accordion-live-ranking-access',
             'title-sponsor': 'admin-accordion-title-sponsor',
         };
         const id = idMap[key];
@@ -2988,12 +3015,13 @@
     };
 
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
-    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, asset: null };
+    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, liveRankingAccess: null, asset: null };
     let prevListingKeys = null;
     let prevAdKeys = null;
     let prevChartKeys = null;
     let prevRelayKeys = null;
     let prevRankingAccessKeys = null;
+    let prevLiveRankingAccessKeys = null;
     let prevAssetKeys = null;
 
     function playAdminRequestBeep() {
@@ -3041,6 +3069,7 @@
         prevChartKeys = null;
         prevRelayKeys = null;
         prevRankingAccessKeys = null;
+        prevLiveRankingAccessKeys = null;
         prevAssetKeys = null;
     }
 
@@ -3291,6 +3320,69 @@
         });
     }
 
+    const LIVE_RANKING_TOP100_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+
+    function getLiveRankingTop100ExpiresAtMs(req) {
+        if (!req || String(req.status || '').toLowerCase() !== 'approved') return null;
+        const explicit = Number(req.accessExpiresAt || 0);
+        if (Number.isFinite(explicit) && explicit > 0) return explicit;
+        const approvedAt = Number(req.approvedAt || 0);
+        if (Number.isFinite(approvedAt) && approvedAt > 0) return approvedAt + LIVE_RANKING_TOP100_DURATION_MS;
+        return null;
+    }
+
+    function renderLiveRankingTop100RequestsList(data, highlightIds) {
+        const listEl = document.getElementById('live-ranking-top100-access-list');
+        if (!listEl) return;
+        const entries = Object.entries(data || {}).sort((a, b) => (b?.[1]?.createdAt || 0) - (a?.[1]?.createdAt || 0));
+        if (entries.length === 0) {
+            listEl.innerHTML = '<div style="color:#64748b; font-size:13px;">신청 내역이 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = '';
+        entries.forEach(([uid, req]) => {
+            const st = String(req?.status || '').toLowerCase();
+            const date = req?.createdAt ? new Date(req.createdAt).toLocaleString('ko-KR') : '-';
+            const statusColor = st === 'approved' ? '#22c55e' : st === 'expired' ? '#64748b' : st === 'rejected' ? '#ef4444' : '#f59e0b';
+            const statusText = st === 'approved' ? '✅ 승인됨' : st === 'expired' ? '⬛ 만료됨' : st === 'rejected' ? '❌ 거절' : '⏳ 대기중';
+            const costNum = typeof req?.cost === 'number' ? req.cost : 30;
+            const expMs = getLiveRankingTop100ExpiresAtMs(req);
+            const isHi = highlightIds && highlightIds.has(uid);
+            const card = document.createElement('div');
+            card.className = 'request-card' + (st === 'pending' ? ' pending' : '') + (isHi ? ' just-arrived' : '');
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div>
+                        <span style="font-weight:700; color:#f8fafc; font-size:15px;">${escapeHtml(req?.nickname || '(닉네임 없음)')}${isHi ? '<span class="req-new-badge">NEW</span>' : ''}</span>
+                        <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req?.soopId || '-')}</span>
+                    </div>
+                    <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                </div>
+                <div style="font-size:11px; color:#64748b; margin-bottom:6px;">별풍선 약정: <b>${costNum}</b>개 · 기간: <b>7일</b></div>
+                <div style="font-size:11px; color:#475569; margin-bottom:10px;">UID: ${escapeHtml(uid)} · ${date}</div>
+                ${st === 'approved' && expMs ? `<div style="font-size:11px; color:${Date.now() >= expMs ? '#f59e0b' : '#94a3b8'}; margin-bottom:8px;">열람 만료 시각(7일): ${new Date(expMs).toLocaleString('ko-KR')}</div>` : ''}
+                <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+                    <a href="https://www.sooplive.co.kr/station/${escapeHtml(req?.soopId || '')}" target="_blank"
+                        style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
+                    ${st === 'pending' ? `<button type="button" class="btn-live-ranking-approve"
+                        style="background:#22c55e; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">수락</button>
+                    <button type="button" class="btn-live-ranking-reject"
+                        style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>` : ''}
+                    ${st === 'approved' ? `<button type="button" class="btn-live-ranking-expire"
+                        style="background:#475569; color:white; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">만료</button>` : ''}
+                    <button type="button" class="btn-live-ranking-delete"
+                        style="background:#334155; color:#94a3b8; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">삭제</button>
+                </div>
+            `;
+            listEl.appendChild(card);
+            card.querySelector('.btn-live-ranking-approve')?.addEventListener('click', () => window.approveLiveRankingTop100Access(uid));
+            card.querySelector('.btn-live-ranking-reject')?.addEventListener('click', () => window.rejectLiveRankingTop100Access(uid));
+            card.querySelector('.btn-live-ranking-expire')?.addEventListener('click', () => window.expireLiveRankingTop100Access(uid));
+            card.querySelector('.btn-live-ranking-delete')?.addEventListener('click', () => window.deleteLiveRankingTop100Access(uid));
+            if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
+        });
+    }
+
     function startRealtimeRequestListeners() {
         stopRealtimeRequestListeners();
         resetAdminInboxCounts();
@@ -3430,6 +3522,43 @@
                     el.innerHTML = `<div style="color:#ef4444;">assetRankingRequests 읽기 실패: ${escapeHtml(err?.message || 'permission')}. Rules에 부모 <b>assetRankingRequests/.read</b>(관리자) 배포 여부를 확인하세요.</div>`;
                 }
                 setAdminInboxCount('ranking-req', 0);
+            }
+        );
+
+        requestRealtimeUnsubs.liveRankingAccess = onValue(
+            adminRecentRequestsQuery('liveRankingTop100Requests'),
+            (snap) => {
+                try {
+                    const data = snap.val() || {};
+                    const keys = Object.keys(data);
+                    let added = [];
+                    if (prevLiveRankingAccessKeys !== null) {
+                        added = keys.filter((k) => !prevLiveRankingAccessKeys.has(k));
+                    }
+                    prevLiveRankingAccessKeys = new Set(keys);
+                    const hi = new Set(added);
+                    if (added.length) {
+                        added.forEach((id) => {
+                            const r = data[id];
+                            if (r && String(r.status || '').toLowerCase() === 'pending') {
+                                notifyAdminNewRequest('새 실시간 Top100 열람권 신청', `${r.nickname || ''} @${r.soopId || ''}`);
+                            }
+                        });
+                    }
+                    renderLiveRankingTop100RequestsList(data, hi);
+                    setAdminInboxCount('live-ranking-req', countPendingStandard(data));
+                } catch (err) {
+                    const el = document.getElementById('live-ranking-top100-access-list');
+                    if (el) el.innerHTML = `<div style="color:#ef4444;">실시간 연동 오류: ${escapeHtml(err.message)}</div>`;
+                    setAdminInboxCount('live-ranking-req', 0);
+                }
+            },
+            (err) => {
+                const el = document.getElementById('live-ranking-top100-access-list');
+                if (el) {
+                    el.innerHTML = `<div style="color:#ef4444;">liveRankingTop100Requests 읽기 실패: ${escapeHtml(err?.message || 'permission')}.</div>`;
+                }
+                setAdminInboxCount('live-ranking-req', 0);
             }
         );
 
@@ -4200,6 +4329,7 @@
     function mergePaidPricingAdmin(raw) {
         const d = {
             assetRankingBalloons: 30,
+            liveRankingTop100Balloons: 30,
             broadcastBannerPerDay: 20,
             chartBannerPerDay: 80,
             relayRegularPerHour: 15,
@@ -4215,6 +4345,7 @@
         };
         return {
             assetRankingBalloons: clamp(o.assetRankingBalloons, d.assetRankingBalloons),
+            liveRankingTop100Balloons: clamp(o.liveRankingTop100Balloons, d.liveRankingTop100Balloons),
             broadcastBannerPerDay: clamp(o.broadcastBannerPerDay, d.broadcastBannerPerDay),
             chartBannerPerDay: clamp(o.chartBannerPerDay, d.chartBannerPerDay),
             relayRegularPerHour: clamp(o.relayRegularPerHour, d.relayRegularPerHour),
@@ -4230,6 +4361,7 @@
             if (el) el.value = String(val);
         };
         set('pricing-asset-ranking', p.assetRankingBalloons);
+        set('pricing-live-ranking-top100', p.liveRankingTop100Balloons);
         set('pricing-broadcast-per-day', p.broadcastBannerPerDay);
         set('pricing-chart-per-day', p.chartBannerPerDay);
         set('pricing-relay-regular-h', p.relayRegularPerHour);
@@ -4251,6 +4383,7 @@
         const st = document.getElementById('pricing-admin-status');
         const p = mergePaidPricingAdmin({
             assetRankingBalloons: document.getElementById('pricing-asset-ranking')?.value,
+            liveRankingTop100Balloons: document.getElementById('pricing-live-ranking-top100')?.value,
             broadcastBannerPerDay: document.getElementById('pricing-broadcast-per-day')?.value,
             chartBannerPerDay: document.getElementById('pricing-chart-per-day')?.value,
             relayRegularPerHour: document.getElementById('pricing-relay-regular-h')?.value,
@@ -8305,6 +8438,61 @@
         } catch(e) {
             statusEl.style.color = '#ef4444';
             statusEl.textContent = '오류: ' + e.message;
+        }
+    };
+
+    // ── 실시간 Top100 열람권 신청 검수 (liveRankingTop100Requests) ─────
+    window.approveLiveRankingTop100Access = async function(uid) {
+        if (!isAdmin()) return;
+        try {
+            const approvedAt = Date.now();
+            const expiresAt = approvedAt + LIVE_RANKING_TOP100_DURATION_MS;
+            await update(ref(db), {
+                [`liveRankingTop100Requests/${uid}/status`]: 'approved',
+                [`liveRankingTop100Requests/${uid}/approvedAt`]: approvedAt,
+                [`liveRankingTop100Requests/${uid}/accessExpiresAt`]: expiresAt,
+                [`users/${uid}/entitlements/liveRankingTop100ExpiresAt`]: expiresAt
+            });
+            alert('✅ 승인 완료! (Top100 직접 열람 7일)');
+        } catch (e) {
+            alert('승인 실패: ' + e.message);
+        }
+    };
+
+    window.rejectLiveRankingTop100Access = async function(uid) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await update(ref(db, `liveRankingTop100Requests/${uid}`), {
+                status: 'rejected',
+                rejectedAt: Date.now()
+            });
+        } catch (e) {
+            alert('거절 실패: ' + e.message);
+        }
+    };
+
+    window.expireLiveRankingTop100Access = async function(uid) {
+        if (!isAdmin()) return;
+        if (!confirm('이 열람 권한을 즉시 만료 처리하시겠습니까?')) return;
+        try {
+            await update(ref(db), {
+                [`liveRankingTop100Requests/${uid}/status`]: 'expired',
+                [`liveRankingTop100Requests/${uid}/expiredAt`]: Date.now(),
+                [`users/${uid}/entitlements/liveRankingTop100ExpiresAt`]: 0
+            });
+        } catch (e) {
+            alert('만료 처리 실패: ' + e.message);
+        }
+    };
+
+    window.deleteLiveRankingTop100Access = async function(uid) {
+        if (!isAdmin()) return;
+        if (!confirm('이 신청을 삭제하시겠습니까?')) return;
+        try {
+            await set(ref(db, `liveRankingTop100Requests/${uid}`), null);
+        } catch (e) {
+            alert('삭제 실패: ' + e.message);
         }
     };
 

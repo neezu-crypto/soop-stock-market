@@ -3312,6 +3312,60 @@
     </div>
 </div>
 
+<!-- ── 실시간 랭킹 라이브·직접 열람 안내 모달 ── -->
+<div id="live-ranking-access-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header"><h2>📊 실시간 랭킹 열람 안내</h2></div>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:14px;">
+            <div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.28); border-radius:10px; padding:12px;">
+                <div style="font-size:13px; font-weight:800; color:var(--primary); margin-bottom:6px;">① 기존 안내 · 방송에서 무료 확인</div>
+                <div style="font-size:12px; color:var(--text-sub); line-height:1.65;">
+                    개발자 SOOP 라이브에서 주가·코인 변동을 실시간 해설로 확인할 수 있습니다.
+                </div>
+            </div>
+            <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.28); border-radius:10px; padding:12px;">
+                <div style="font-size:13px; font-weight:800; color:#f59e0b; margin-bottom:6px;">② 직접 열람권 구매(검수형)</div>
+                <div style="font-size:12px; color:var(--text-sub); line-height:1.65;">
+                    별풍선 <b><span id="p-live-ranking-top100">30</span>개</b> 후원 약정 후 신청하면,<br>
+                    승인 시 <b>Top100 페이지</b>를 <b>7일</b> 동안 직접 열람할 수 있습니다.
+                </div>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="closeLiveRankingAccessModal()" style="flex:1; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button onclick="goToLiveStreamFromRankingModal()" style="flex:1.3; background:linear-gradient(135deg,#38bdf8,#0ea5e9); color:#001018; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">📺 라이브 보러가기</button>
+            <button onclick="openLiveRankingPurchaseModal()" style="flex:1.5; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">💳 열람권 구매하기</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── 실시간 Top100 열람권 신청 모달 ── -->
+<div id="live-ranking-purchase-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header"><h2>💳 실시간 Top100 열람권 신청</h2></div>
+        <div style="font-size:13px; color:var(--text-sub); line-height:1.7; margin-bottom:12px; padding:10px 12px; background:rgba(245,158,11,0.08); border-radius:8px; border:1px dashed rgba(245,158,11,0.35);">
+            별풍선 <b><span id="p-live-ranking-top100-apply">30</span>개</b> 후원 약정 후 신청해 주세요.<br>
+            관리자 승인 시 실시간 Top100 열람권이 <b>7일</b> 동안 활성화됩니다.
+        </div>
+        <div id="live-ranking-purchase-form" style="display:flex; flex-direction:column; gap:10px; margin-bottom:14px;">
+            <input id="live-ranking-purchase-nickname" type="text" placeholder="닉네임 (방송에서 사용하는 이름)"
+                style="background:var(--bg-color); border:1px solid var(--border); color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;">
+            <input id="live-ranking-purchase-soop-id" type="text" placeholder="SOOP 아이디"
+                style="background:var(--bg-color); border:1px solid var(--border); color:white; padding:12px; border-radius:10px; font-size:14px; outline:none;">
+            <div id="live-ranking-purchase-status" style="min-height:20px; font-size:13px; text-align:center;"></div>
+            <div class="privacy-agree">
+                <input type="checkbox" id="live-ranking-purchase-privacy-agree">
+                <label for="live-ranking-purchase-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 열람권 검수 목적으로 수집됩니다.</label>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="closeLiveRankingPurchaseModal()" style="flex:1; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
+            <button onclick="openStarBalloonGiftForLiveRankingTop100()" style="flex:1.2; background:#334155; color:#f8fafc; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">🎈 후원창 열기</button>
+            <button onclick="submitLiveRankingTop100AccessRequest()" style="flex:1.4; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">신청하기</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── 상장 신청 모달 ── -->
 <div id="listing-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
@@ -3804,10 +3858,10 @@
                 <p class="live-ranking-banner__desc">주가·코인 순위와 변동은 방송에서 개발자가 직접 안내합니다. SOOP 라이브로 함께 확인해 보세요.</p>
             </div>
         </div>
-        <a class="live-ranking-banner__cta" href="https://play.sooplive.com/skftodwocks2" target="_blank" rel="noopener noreferrer">
+        <button type="button" class="live-ranking-banner__cta" onclick="openLiveRankingAccessModal()">
             <span class="live-ranking-banner__cta-icon" aria-hidden="true">📺</span>
-            <span>라이브 보러가기</span>
-        </a>
+            <span>라이브 / 직접 열람 안내</span>
+        </button>
     </div>
 
 	<!-- 공지 안내 영역 -->
@@ -3965,6 +4019,7 @@ const fns  = getFunctions(app, "us-central1");
 /** 관리자 `siteConfig/pricing` — 메인 화면 유료 단가 실시간 반영 */
 const PAID_PRICING_DEFAULTS = Object.freeze({
     assetRankingBalloons: 30,
+    liveRankingTop100Balloons: 30,
     broadcastBannerPerDay: 20,
     chartBannerPerDay: 80,
     relayRegularPerHour: 15,
@@ -3984,6 +4039,7 @@ function mergePaidPricingClient(raw) {
     };
     return {
         assetRankingBalloons: clamp(o.assetRankingBalloons, d.assetRankingBalloons),
+        liveRankingTop100Balloons: clamp(o.liveRankingTop100Balloons, d.liveRankingTop100Balloons),
         broadcastBannerPerDay: clamp(o.broadcastBannerPerDay, d.broadcastBannerPerDay),
         chartBannerPerDay: clamp(o.chartBannerPerDay, d.chartBannerPerDay),
         relayRegularPerHour: clamp(o.relayRegularPerHour, d.relayRegularPerHour),
@@ -4002,6 +4058,8 @@ function applyPaidPricingToUserUi() {
     setText('p-asset-ranking', p.assetRankingBalloons);
     setText('p-asset-ranking-expired', p.assetRankingBalloons);
     setText('p-asset-ranking-rejected', p.assetRankingBalloons);
+    setText('p-live-ranking-top100', p.liveRankingTop100Balloons);
+    setText('p-live-ranking-top100-apply', p.liveRankingTop100Balloons);
     setText('p-broadcast-day', p.broadcastBannerPerDay);
     setText('p-chart-day', p.chartBannerPerDay);
     setText('p-relay-off', p.relayOffPeakPerHour);
@@ -10574,6 +10632,82 @@ window.openStarBalloonGiftForRanking = function() {
         window.open(`https://m.sooplive.com/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`, '_blank');
     } else {
         window.open(`https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
+    }
+};
+
+window.openLiveRankingAccessModal = function() {
+    prepareMobileModalLayer();
+    document.getElementById('live-ranking-access-modal')?.classList.add('active');
+};
+
+window.closeLiveRankingAccessModal = function() {
+    document.getElementById('live-ranking-access-modal')?.classList.remove('active');
+};
+
+window.goToLiveStreamFromRankingModal = function() {
+    window.open('https://play.sooplive.com/skftodwocks2', '_blank');
+    closeLiveRankingAccessModal();
+};
+
+window.openLiveRankingPurchaseModal = function() {
+    prepareMobileModalLayer();
+    closeLiveRankingAccessModal();
+    const nickEl = document.getElementById('live-ranking-purchase-nickname');
+    const soopEl = document.getElementById('live-ranking-purchase-soop-id');
+    const agreeEl = document.getElementById('live-ranking-purchase-privacy-agree');
+    const statusEl = document.getElementById('live-ranking-purchase-status');
+    if (nickEl) nickEl.value = '';
+    if (soopEl) soopEl.value = '';
+    if (agreeEl) agreeEl.checked = false;
+    if (statusEl) { statusEl.textContent = ''; statusEl.style.color = 'var(--text-sub)'; }
+    document.getElementById('live-ranking-purchase-modal')?.classList.add('active');
+};
+
+window.closeLiveRankingPurchaseModal = function() {
+    document.getElementById('live-ranking-purchase-modal')?.classList.remove('active');
+};
+
+window.openStarBalloonGiftForLiveRankingTop100 = function() {
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    const r = Math.random();
+    if (isMobile) {
+        window.open(`https://m.sooplive.com/item/a/starballoongift?szBjId=skftodwocks2&r=${r}`, '_blank');
+    } else {
+        window.open(`https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station`, '_blank', 'width=542,height=517,toolbar=no,menubar=no,scrollbars=yes,resizable=yes');
+    }
+};
+
+window.submitLiveRankingTop100AccessRequest = async function() {
+    const nickname = document.getElementById('live-ranking-purchase-nickname')?.value.trim() || '';
+    const soopId   = document.getElementById('live-ranking-purchase-soop-id')?.value.trim() || '';
+    const agree    = document.getElementById('live-ranking-purchase-privacy-agree')?.checked;
+    const statusEl = document.getElementById('live-ranking-purchase-status');
+
+    if (!agree) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '개인정보 처리방침에 동의해주세요.'; return; }
+    if (!nickname) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '닉네임을 입력해주세요.'; return; }
+    if (!soopId) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = 'SOOP 아이디를 입력해주세요.'; return; }
+    if (!/^[a-zA-Z0-9_]+$/.test(soopId)) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = 'SOOP 아이디는 영문/숫자/언더바만 사용 가능합니다.'; return; }
+    if (!userUID) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '로그인이 필요합니다.'; return; }
+
+    statusEl.style.color = 'var(--text-sub)';
+    statusEl.textContent = '신청 중...';
+    try {
+        const cost = livePaidPricing.liveRankingTop100Balloons;
+        await set(ref(db, `liveRankingTop100Requests/${userUID}`), {
+            nickname,
+            soopId,
+            uid: userUID,
+            status: 'pending',
+            createdAt: Date.now(),
+            cost,
+            durationDays: 7
+        });
+        statusEl.style.color = '#22c55e';
+        statusEl.textContent = `✅ 신청 완료! 별풍선 ${cost}개 후원창을 엽니다. 승인 후 Top100 직접 열람이 가능합니다.`;
+        openStarBalloonGiftForLiveRankingTop100();
+    } catch (e) {
+        statusEl.style.color = 'var(--up-color)';
+        statusEl.textContent = '신청 실패: ' + e.message;
     }
 };
 

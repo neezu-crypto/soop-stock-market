@@ -142,7 +142,7 @@
 <div id="login-section">
     <div class="login-box">
         <div style="font-size:22px; font-weight:800; color:#38bdf8;">📊 실시간 주가 / 코인 랭킹</div>
-        <p style="color:#94a3b8; font-size:14px;">관리자 계정으로 로그인하세요.</p>
+        <p style="color:#94a3b8; font-size:14px;">관리자 또는 열람권이 승인된 계정으로 로그인하세요.</p>
         <button class="btn-google" onclick="login()">
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20">
             Google로 로그인
@@ -221,7 +221,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -237,14 +237,17 @@
     const provider = new GoogleAuthProvider();
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
 
-    let stocksUnsub = null;
-    let coinsUnsub  = null;
+    let stockTopUnsub = null;
+    let coinTopUnsub  = null;
+    let metaUnsub = null;
+    let rankingActive = false;
+    let rankingPausedForHidden = false;
 
-    /** 코인은 RTDB change가 소수 4자리까지 저장될 수 있어 주식(2자리)과 구분 */
+    /** Top100 경량 노드(`marketRank/top100/*`) 전용 렌더러 */
     function buildRankingRows(items, priceUnit, isCoin) {
         const dec = isCoin ? 4 : 2;
         return items.map((s, i) => {
-            const rank     = i + 1;
+            const rank     = Number(s.rank) || (i + 1);
             const rawCh    = parseFloat(s.change);
             const change   = Number.isFinite(rawCh) ? rawCh : 0;
             const changeCls = change > 0 ? 'price-up' : change < 0 ? 'price-down' : 'price-flat';
@@ -261,23 +264,46 @@
         }).join('');
     }
 
-    function sortByPriceDesc(entries) {
-        return entries
-            .map(([id, s]) => ({ id, ...s }))
-            .filter((s) => s.price && (s.name || s.id))
-            .sort((a, b) => (b.price || 0) - (a.price || 0))
-            .slice(0, 100);
+    function touchTime(explicitMs = null) {
+        const updateEl = document.getElementById('update-time');
+        const date = explicitMs ? new Date(explicitMs) : new Date();
+        updateEl.textContent = `갱신: ${date.toLocaleTimeString('ko-KR')}`;
     }
 
-    onAuthStateChanged(auth, (user) => {
-        if (user && user.email === ADMIN_EMAIL) {
+    function setStatusText(txt) {
+        const statusEl = document.getElementById('status-text');
+        if (statusEl) statusEl.textContent = txt;
+    }
+
+    function stopSubscriptionsOnly() {
+        if (stockTopUnsub) { stockTopUnsub(); stockTopUnsub = null; }
+        if (coinTopUnsub) { coinTopUnsub(); coinTopUnsub = null; }
+        if (metaUnsub) { metaUnsub(); metaUnsub = null; }
+        rankingActive = false;
+    }
+
+    async function canAccessLiveRanking(user) {
+        if (!user?.uid) return false;
+        if (String(user.email || '').toLowerCase() === String(ADMIN_EMAIL).toLowerCase()) return true;
+        try {
+            const entSnap = await get(ref(db, `users/${user.uid}/entitlements/liveRankingTop100ExpiresAt`));
+            const expiresAt = Number(entSnap.val() || 0);
+            return Number.isFinite(expiresAt) && expiresAt > Date.now();
+        } catch (_) {
+            return false;
+        }
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+        const allowed = await canAccessLiveRanking(user);
+        if (allowed) {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('main-section').style.display  = 'flex';
-        } else {
-            document.getElementById('login-section').style.display = 'flex';
-            document.getElementById('main-section').style.display  = 'none';
-            stopRanking();
+            return;
         }
+        document.getElementById('login-section').style.display = 'flex';
+        document.getElementById('main-section').style.display  = 'none';
+        stopRanking();
     });
 
     window.login = async function() {
@@ -290,67 +316,85 @@
     const loadingRow = '<tr><td colspan="5" class="status-empty">불러오는 중...</td></tr>';
 
     window.startRanking = function() {
-        if (stocksUnsub || coinsUnsub) return;
+        if (rankingActive) return;
+        rankingPausedForHidden = false;
         const tbodyS   = document.getElementById('ranking-tbody-stock');
         const tbodyC   = document.getElementById('ranking-tbody-coin');
-        const statusEl = document.getElementById('status-text');
         const badge    = document.getElementById('live-badge');
-        const updateEl = document.getElementById('update-time');
         const countEl  = document.getElementById('stock-count');
         const countCoin = document.getElementById('coin-count');
 
         tbodyS.innerHTML = loadingRow;
         tbodyC.innerHTML = loadingRow;
-        statusEl.textContent = '구독 중...';
+        setStatusText('구독 중...');
         badge.style.display  = 'flex';
+        rankingActive = true;
 
-        const touchTime = () => {
-            updateEl.textContent = `갱신: ${new Date().toLocaleTimeString('ko-KR')}`;
-        };
-
-        stocksUnsub = onValue(ref(db, 'stocks/'), (snap) => {
+        stockTopUnsub = onValue(ref(db, 'marketRank/top100/stocks'), (snap) => {
             if (!snap.exists()) {
                 tbodyS.innerHTML = emptyRow;
+                countEl.textContent = '주식 0종목';
             } else {
-                const stocks = sortByPriceDesc(Object.entries(snap.val()));
+                const stocks = Array.isArray(snap.val()) ? snap.val() : [];
                 countEl.textContent = `주식 ${stocks.length}종목`;
                 tbodyS.innerHTML = stocks.length ? buildRankingRows(stocks, '원', false) : emptyRow;
             }
             touchTime();
-            statusEl.textContent = '실시간 구독 중';
+            setStatusText('실시간 구독 중');
         });
 
-        coinsUnsub = onValue(ref(db, 'coins/'), (snap) => {
+        coinTopUnsub = onValue(ref(db, 'marketRank/top100/coins'), (snap) => {
             if (!snap.exists()) {
                 tbodyC.innerHTML = emptyRow;
+                countCoin.textContent = '코인 0종목';
             } else {
-                const coins = sortByPriceDesc(Object.entries(snap.val()));
+                const coins = Array.isArray(snap.val()) ? snap.val() : [];
                 countCoin.textContent = `코인 ${coins.length}종목`;
                 tbodyC.innerHTML = coins.length ? buildRankingRows(coins, '원', true) : emptyRow;
             }
             touchTime();
-            statusEl.textContent = '실시간 구독 중';
+            setStatusText('실시간 구독 중');
+        });
+
+        metaUnsub = onValue(ref(db, 'marketRank/meta/updatedAt'), (snap) => {
+            const ts = Number(snap.val());
+            if (Number.isFinite(ts) && ts > 0) touchTime(ts);
         });
     };
 
     window.stopRanking = function() {
-        if (stocksUnsub) { stocksUnsub(); stocksUnsub = null; }
-        if (coinsUnsub) { coinsUnsub(); coinsUnsub = null; }
+        stopSubscriptionsOnly();
+        rankingPausedForHidden = false;
         const badge     = document.getElementById('live-badge');
-        const statusEl  = document.getElementById('status-text');
         const tbodyS    = document.getElementById('ranking-tbody-stock');
         const tbodyC    = document.getElementById('ranking-tbody-coin');
         const countEl   = document.getElementById('stock-count');
         const countCoin = document.getElementById('coin-count');
         const updateEl  = document.getElementById('update-time');
         if (badge) badge.style.display = 'none';
-        if (statusEl) statusEl.textContent = '구독 중단됨';
+        setStatusText('구독 중단됨');
         if (tbodyS) tbodyS.innerHTML = stoppedRow;
         if (tbodyC) tbodyC.innerHTML = stoppedRow;
         if (countEl) countEl.textContent = '-';
         if (countCoin) countCoin.textContent = '-';
         if (updateEl) updateEl.textContent = '-';
     };
+
+    document.addEventListener('visibilitychange', () => {
+        const badge = document.getElementById('live-badge');
+        if (document.visibilityState === 'hidden') {
+            if (!rankingActive) return;
+            stopSubscriptionsOnly();
+            stopAutoScrollTimer();
+            rankingPausedForHidden = true;
+            setStatusText('백그라운드 절전 모드');
+            if (badge) badge.style.display = 'none';
+            return;
+        }
+        if (!rankingPausedForHidden) return;
+        rankingPausedForHidden = false;
+        window.startRanking();
+    });
 
     // ── 자동 스크롤 ──────────────────────────────────────────
     let autoScrollEnabled  = true;
