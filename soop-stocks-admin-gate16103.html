@@ -7718,22 +7718,45 @@
     }
 
     async function purgeUserActivityLogs(silent = false) {
-        if (!isAdmin()) return;
-        if (!silent && !confirm('tradeHistory(유저 활동로그) 전체 데이터를 삭제하시겠습니까?')) return;
+        if (!isAdmin()) return { totalPurged: 0, chunks: 0 };
+        if (!silent && !confirm('tradeHistory(유저 활동로그) 전체 데이터를 삭제하시겠습니까?')) {
+            return { totalPurged: 0, chunks: 0 };
+        }
+        let totalPurged = 0;
+        let chunks = 0;
         try {
-            const { data } = await adminPurgeUserActivityLogsFn({});
-            if (!silent) {
-                const n = Number(data?.purged) || 0;
-                showAdminToast(`유저 활동로그 ${n.toLocaleString()}건 삭제됨`);
+            for (;;) {
+                const { data } = await adminPurgeUserActivityLogsFn({ maxPerInvocation: 20000 });
+                const p = Number(data?.purged) || 0;
+                totalPurged += p;
+                chunks += 1;
+                if (data?.hasMore !== true) break;
+                if (chunks > 5000) {
+                    throw new Error('활동로그 삭제 청크 상한 초과 — 잠시 후 다시 실행하세요.');
+                }
             }
-            return;
+            if (!silent) {
+                showAdminToast(`유저 활동로그 ${totalPurged.toLocaleString()}건 삭제됨`);
+            }
+            try {
+                await set(ref(db, `adminActivityLogs/userActivityPurge/${Date.now()}`), {
+                    type: 'userActivityPurge',
+                    adminEmail: auth.currentUser?.email || ADMIN_EMAIL,
+                    createdAt: Date.now(),
+                    via: 'adminPurgeUserActivityLogs',
+                    purged: totalPurged,
+                    chunks,
+                });
+            } catch (_) { /* noop */ }
+            return { totalPurged, chunks, viaFallback: false };
         } catch (callableErr) {
-            // 함수 미배포/일시 장애 시에만 기존 RTDB 직접 삭제로 폴백
             const code = String(callableErr?.code || '');
             const msg = String(callableErr?.message || '').toLowerCase();
             const canFallback =
                 code === 'functions/not-found' ||
                 code === 'functions/unavailable' ||
+                code === 'functions/deadline-exceeded' ||
+                /deadline/.test(msg) ||
                 ((code === 'functions/internal' || code === 'internal') && (msg === 'internal' || !msg.trim()));
             if (!canFallback) throw callableErr;
         }
@@ -7748,6 +7771,7 @@
                 purged: n,
             });
         } catch (_) { /* noop */ }
+        return { totalPurged: n, chunks: 1, viaFallback: true };
     }
 
     /** assetRequests/ 하위 노드 전부 삭제 (일일 루틴·관리자 도구용) */
@@ -7882,7 +7906,12 @@
                         await pruneAllCandles(true);
                     } else if (it.type === 'userActivityPurge') {
                         if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 🧾 유저 활동로그 데이터 삭제 실행</div>`;
-                        await purgeUserActivityLogs(true);
+                        const pr = await purgeUserActivityLogs(true);
+                        if (runLogEl) {
+                            const fb = pr?.viaFallback ? ' · 클라이언트 폴백' : '';
+                            const n = pr?.totalPurged ?? 0;
+                            runLogEl.innerHTML += `<div style="color:#86efac;">   → 삭제 ${Number(n).toLocaleString()}건${fb}</div>`;
+                        }
                     } else if (it.type === 'rankingVolumeReset') {
                         if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 📊 실시간 랭킹 거래량만 초기화 실행</div>`;
                         const vr = await executeResetAllVolumesForRanking();

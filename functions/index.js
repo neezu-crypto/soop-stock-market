@@ -1951,16 +1951,26 @@ exports.adminStockSplit = onCall(
 /**
  * tradeHistory 하위를 한 번에 set(null) 하면 RTDB WRITE_TOO_BIG 에 걸릴 수 있어
  * 키 단위로 나눠 multi-path update 로 삭제한다.
+ * maxPurged 가 있으면 그 개수만큼만 지우고 hasMore: true 로 남은 데이터가 있을 수 있음(데드라인 방지).
  */
-async function purgeTradeHistoryBatched(db, initialBatchSize = 60) {
+async function purgeTradeHistoryBatched(db, opts = {}) {
+  const initialBatchSize = opts.initialBatchSize != null ? opts.initialBatchSize : 60;
+  const maxPurged =
+    opts.maxPurged != null && Number.isFinite(Number(opts.maxPurged))
+      ? Math.max(1, Math.floor(Number(opts.maxPurged)))
+      : null;
   let batchSize = Math.max(5, Math.floor(Number(initialBatchSize) || 60));
   let purged = 0;
   for (;;) {
     const snap = await db.ref("tradeHistory").orderByKey().limitToFirst(batchSize).get();
-    if (!snap.exists()) break;
+    if (!snap.exists()) {
+      return { purged, hasMore: false };
+    }
     const val = snap.val();
     const keys = val && typeof val === "object" ? Object.keys(val) : [];
-    if (keys.length === 0) break;
+    if (keys.length === 0) {
+      return { purged, hasMore: false };
+    }
     const updates = {};
     for (const k of keys) {
       updates[`tradeHistory/${k}`] = null;
@@ -1980,38 +1990,40 @@ async function purgeTradeHistoryBatched(db, initialBatchSize = 60) {
       if (msg.includes("WRITE_TOO_BIG") && keys.length === 1) {
         await db.ref(`tradeHistory/${keys[0]}`).remove();
         purged += 1;
+        if (maxPurged != null && purged >= maxPurged) {
+          const rest = await db.ref("tradeHistory").orderByKey().limitToFirst(1).get();
+          return { purged, hasMore: rest.exists() };
+        }
         continue;
       }
       throw e;
     }
     purged += keys.length;
-    if (keys.length < batchSize) break;
+    if (maxPurged != null && purged >= maxPurged) {
+      const rest = await db.ref("tradeHistory").orderByKey().limitToFirst(1).get();
+      return { purged, hasMore: rest.exists() };
+    }
+    if (keys.length < batchSize) {
+      return { purged, hasMore: false };
+    }
   }
-  return purged;
 }
 
-/** 관리자 전용: tradeHistory(유저 활동로그) 전체 삭제 */
+/** 관리자 전용: tradeHistory(유저 활동로그) 삭제 — 기본적으로 한 번에 maxPerInvocation 건만(클라이언트가 hasMore 동안 반복) */
 exports.adminPurgeUserActivityLogs = onCall(
-  { cors: true, timeoutSeconds: 300, memory: "512MiB" },
+  { cors: true, timeoutSeconds: 540, memory: "512MiB" },
   async (request) => {
     if (!isAdminAuth(request.auth)) {
       throw new HttpsError("permission-denied", "Admin only.");
     }
+    const rawMax = Number(request.data?.maxPerInvocation);
+    const maxPerInvocation = Number.isFinite(rawMax)
+      ? Math.min(100000, Math.max(500, Math.floor(rawMax)))
+      : 20000;
     const db = admin.database();
-    const purged = await purgeTradeHistoryBatched(db);
+    const { purged, hasMore } = await purgeTradeHistoryBatched(db, { maxPurged: maxPerInvocation });
     const ts = Date.now();
-    try {
-      await db.ref(`adminActivityLogs/userActivityPurge/${ts}`).set({
-        type: "userActivityPurge",
-        adminEmail: String(request.auth?.token?.email || ADMIN_EMAIL),
-        createdAt: ts,
-        via: "adminPurgeUserActivityLogs",
-        purged,
-      });
-    } catch (e) {
-      console.warn("[adminPurgeUserActivityLogs] adminActivityLogs:", e?.message || e);
-    }
-    return { ok: true, purged, at: ts };
+    return { ok: true, purged, hasMore, maxPerInvocation, at: ts };
   }
 );
 
