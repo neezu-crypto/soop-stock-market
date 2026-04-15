@@ -9113,7 +9113,7 @@ setInterval(() => {
     } catch (_) { /* noop */ }
 }, 1000);
 
-/** database.rules.json users/$uid/stocks/$stockId · cash 범위와 맞춤 (최대 자산 5조) */
+/** 클라이언트 정규화 상한 — RTDB users/.../cash·stocks 는 서버 전용 쓰기(규칙·Functions) */
 const USER_CASH_MAX = 5000000000000;
 const USER_STOCK_AVG_MAX = 5000000000000;
 /** 종목당 보유 수량 상한 없음(실수 방지로 JS 안전 정수까지만 클라이언트에서 정규화) */
