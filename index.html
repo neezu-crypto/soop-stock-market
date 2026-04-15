@@ -166,6 +166,21 @@
             outline: 2px solid var(--primary);
             outline-offset: 2px;
         }
+        @media (max-width: 768px) {
+            .main-hero-bar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+            .inverse-mode-box {
+                align-items: flex-start;
+                align-self: stretch;
+            }
+            .inverse-mode-box__hint {
+                max-width: none;
+                text-align: left;
+            }
+        }
         #inverse-mode-info-modal.inverse-modal-overlay {
             position: fixed;
             inset: 0;
