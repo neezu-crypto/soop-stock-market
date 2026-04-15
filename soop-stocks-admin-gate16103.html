@@ -1185,6 +1185,8 @@
             <input type="number" id="pricing-asset-ranking" min="1" max="999" value="30" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
             <label style="color:#94a3b8;">실시간 Top100 열람권 약정 (개)</label>
             <input type="number" id="pricing-live-ranking-top100" min="1" max="999" value="30" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
+            <label style="color:#94a3b8;">실시간 Top100 열람권 기간 (일)</label>
+            <input type="number" id="pricing-live-ranking-top100-days" min="1" max="365" value="7" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
             <label style="color:#94a3b8;">방송국 배너 (개/일)</label>
             <input type="number" id="pricing-broadcast-per-day" min="1" max="999" value="20" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px;">
             <label style="color:#94a3b8;">차트 하단 배너 (개/일)</label>
@@ -3320,14 +3322,20 @@
         });
     }
 
-    const LIVE_RANKING_TOP100_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+    const LIVE_RANKING_TOP100_DEFAULT_DAYS = 7;
+
+    function getLiveRankingTop100DurationDays(req) {
+        const n = Number(req?.durationDays);
+        if (Number.isFinite(n) && n > 0) return Math.min(365, Math.floor(n));
+        return LIVE_RANKING_TOP100_DEFAULT_DAYS;
+    }
 
     function getLiveRankingTop100ExpiresAtMs(req) {
         if (!req || String(req.status || '').toLowerCase() !== 'approved') return null;
         const explicit = Number(req.accessExpiresAt || 0);
         if (Number.isFinite(explicit) && explicit > 0) return explicit;
         const approvedAt = Number(req.approvedAt || 0);
-        if (Number.isFinite(approvedAt) && approvedAt > 0) return approvedAt + LIVE_RANKING_TOP100_DURATION_MS;
+        if (Number.isFinite(approvedAt) && approvedAt > 0) return approvedAt + (getLiveRankingTop100DurationDays(req) * 24 * 60 * 60 * 1000);
         return null;
     }
 
@@ -3346,6 +3354,7 @@
             const statusColor = st === 'approved' ? '#22c55e' : st === 'expired' ? '#64748b' : st === 'rejected' ? '#ef4444' : '#f59e0b';
             const statusText = st === 'approved' ? '✅ 승인됨' : st === 'expired' ? '⬛ 만료됨' : st === 'rejected' ? '❌ 거절' : '⏳ 대기중';
             const costNum = typeof req?.cost === 'number' ? req.cost : 30;
+            const durationDays = getLiveRankingTop100DurationDays(req);
             const expMs = getLiveRankingTop100ExpiresAtMs(req);
             const isHi = highlightIds && highlightIds.has(uid);
             const card = document.createElement('div');
@@ -3358,9 +3367,9 @@
                     </div>
                     <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
                 </div>
-                <div style="font-size:11px; color:#64748b; margin-bottom:6px;">별풍선 약정: <b>${costNum}</b>개 · 기간: <b>7일</b></div>
+                <div style="font-size:11px; color:#64748b; margin-bottom:6px;">별풍선 약정: <b>${costNum}</b>개 · 기간: <b>${durationDays}일</b></div>
                 <div style="font-size:11px; color:#475569; margin-bottom:10px;">UID: ${escapeHtml(uid)} · ${date}</div>
-                ${st === 'approved' && expMs ? `<div style="font-size:11px; color:${Date.now() >= expMs ? '#f59e0b' : '#94a3b8'}; margin-bottom:8px;">열람 만료 시각(7일): ${new Date(expMs).toLocaleString('ko-KR')}</div>` : ''}
+                ${st === 'approved' && expMs ? `<div style="font-size:11px; color:${Date.now() >= expMs ? '#f59e0b' : '#94a3b8'}; margin-bottom:8px;">열람 만료 시각(${durationDays}일): ${new Date(expMs).toLocaleString('ko-KR')}</div>` : ''}
                 <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
                     <a href="https://www.sooplive.co.kr/station/${escapeHtml(req?.soopId || '')}" target="_blank"
                         style="font-size:11px; color:#38bdf8; text-decoration:none; padding:6px 10px; border:1px solid #334155; border-radius:6px;">🔗 방송국</a>
@@ -4330,6 +4339,7 @@
         const d = {
             assetRankingBalloons: 30,
             liveRankingTop100Balloons: 30,
+            liveRankingTop100DurationDays: 7,
             broadcastBannerPerDay: 20,
             chartBannerPerDay: 80,
             relayRegularPerHour: 15,
@@ -4343,9 +4353,14 @@
             const n = Math.floor(Number(v));
             return Number.isFinite(n) && n > 0 ? Math.min(999, n) : fb;
         };
+        const clampDays = (v, fb) => {
+            const n = Math.floor(Number(v));
+            return Number.isFinite(n) && n > 0 ? Math.min(365, n) : fb;
+        };
         return {
             assetRankingBalloons: clamp(o.assetRankingBalloons, d.assetRankingBalloons),
             liveRankingTop100Balloons: clamp(o.liveRankingTop100Balloons, d.liveRankingTop100Balloons),
+            liveRankingTop100DurationDays: clampDays(o.liveRankingTop100DurationDays, d.liveRankingTop100DurationDays),
             broadcastBannerPerDay: clamp(o.broadcastBannerPerDay, d.broadcastBannerPerDay),
             chartBannerPerDay: clamp(o.chartBannerPerDay, d.chartBannerPerDay),
             relayRegularPerHour: clamp(o.relayRegularPerHour, d.relayRegularPerHour),
@@ -4362,6 +4377,7 @@
         };
         set('pricing-asset-ranking', p.assetRankingBalloons);
         set('pricing-live-ranking-top100', p.liveRankingTop100Balloons);
+        set('pricing-live-ranking-top100-days', p.liveRankingTop100DurationDays);
         set('pricing-broadcast-per-day', p.broadcastBannerPerDay);
         set('pricing-chart-per-day', p.chartBannerPerDay);
         set('pricing-relay-regular-h', p.relayRegularPerHour);
@@ -4384,6 +4400,7 @@
         const p = mergePaidPricingAdmin({
             assetRankingBalloons: document.getElementById('pricing-asset-ranking')?.value,
             liveRankingTop100Balloons: document.getElementById('pricing-live-ranking-top100')?.value,
+            liveRankingTop100DurationDays: document.getElementById('pricing-live-ranking-top100-days')?.value,
             broadcastBannerPerDay: document.getElementById('pricing-broadcast-per-day')?.value,
             chartBannerPerDay: document.getElementById('pricing-chart-per-day')?.value,
             relayRegularPerHour: document.getElementById('pricing-relay-regular-h')?.value,
@@ -8445,15 +8462,19 @@
     window.approveLiveRankingTop100Access = async function(uid) {
         if (!isAdmin()) return;
         try {
+            const reqSnap = await get(ref(db, `liveRankingTop100Requests/${uid}`));
+            const req = reqSnap.exists() ? (reqSnap.val() || {}) : {};
+            const durationDays = getLiveRankingTop100DurationDays(req);
             const approvedAt = Date.now();
-            const expiresAt = approvedAt + LIVE_RANKING_TOP100_DURATION_MS;
+            const expiresAt = approvedAt + (durationDays * 24 * 60 * 60 * 1000);
             await update(ref(db), {
                 [`liveRankingTop100Requests/${uid}/status`]: 'approved',
                 [`liveRankingTop100Requests/${uid}/approvedAt`]: approvedAt,
                 [`liveRankingTop100Requests/${uid}/accessExpiresAt`]: expiresAt,
+                [`liveRankingTop100Requests/${uid}/durationDays`]: durationDays,
                 [`users/${uid}/entitlements/liveRankingTop100ExpiresAt`]: expiresAt
             });
-            alert('✅ 승인 완료! (Top100 직접 열람 7일)');
+            alert(`✅ 승인 완료! (Top100 직접 열람 ${durationDays}일)`);
         } catch (e) {
             alert('승인 실패: ' + e.message);
         }

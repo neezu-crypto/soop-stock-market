@@ -3327,7 +3327,7 @@
                 <div style="font-size:13px; font-weight:800; color:#f59e0b; margin-bottom:6px;">② 직접 열람권 구매(검수형)</div>
                 <div style="font-size:12px; color:var(--text-sub); line-height:1.65;">
                     별풍선 <b><span id="p-live-ranking-top100">30</span>개</b> 후원 약정 후 신청하면,<br>
-                    승인 시 <b>Top100 페이지</b>를 <b>7일</b> 동안 직접 열람할 수 있습니다.
+                    승인 시 <b>Top100 페이지</b>를 <b><span id="p-live-ranking-top100-days">7</span>일</b> 동안 직접 열람할 수 있습니다.
                 </div>
             </div>
         </div>
@@ -3345,7 +3345,7 @@
         <div class="promo-modal-header"><h2>💳 실시간 Top100 열람권 신청</h2></div>
         <div style="font-size:13px; color:var(--text-sub); line-height:1.7; margin-bottom:12px; padding:10px 12px; background:rgba(245,158,11,0.08); border-radius:8px; border:1px dashed rgba(245,158,11,0.35);">
             별풍선 <b><span id="p-live-ranking-top100-apply">30</span>개</b> 후원 약정 후 신청해 주세요.<br>
-            관리자 승인 시 실시간 Top100 열람권이 <b>7일</b> 동안 활성화됩니다.
+            관리자 승인 시 실시간 Top100 열람권이 <b><span id="p-live-ranking-top100-apply-days">7</span>일</b> 동안 활성화됩니다.
         </div>
         <div id="live-ranking-purchase-form" style="display:flex; flex-direction:column; gap:10px; margin-bottom:14px;">
             <input id="live-ranking-purchase-nickname" type="text" placeholder="닉네임 (방송에서 사용하는 이름)"
@@ -4020,6 +4020,7 @@ const fns  = getFunctions(app, "us-central1");
 const PAID_PRICING_DEFAULTS = Object.freeze({
     assetRankingBalloons: 30,
     liveRankingTop100Balloons: 30,
+    liveRankingTop100DurationDays: 7,
     broadcastBannerPerDay: 20,
     chartBannerPerDay: 80,
     relayRegularPerHour: 15,
@@ -4037,9 +4038,14 @@ function mergePaidPricingClient(raw) {
         const n = Math.floor(Number(v));
         return Number.isFinite(n) && n > 0 ? Math.min(999, n) : fb;
     };
+    const clampDays = (v, fb) => {
+        const n = Math.floor(Number(v));
+        return Number.isFinite(n) && n > 0 ? Math.min(365, n) : fb;
+    };
     return {
         assetRankingBalloons: clamp(o.assetRankingBalloons, d.assetRankingBalloons),
         liveRankingTop100Balloons: clamp(o.liveRankingTop100Balloons, d.liveRankingTop100Balloons),
+        liveRankingTop100DurationDays: clampDays(o.liveRankingTop100DurationDays, d.liveRankingTop100DurationDays),
         broadcastBannerPerDay: clamp(o.broadcastBannerPerDay, d.broadcastBannerPerDay),
         chartBannerPerDay: clamp(o.chartBannerPerDay, d.chartBannerPerDay),
         relayRegularPerHour: clamp(o.relayRegularPerHour, d.relayRegularPerHour),
@@ -4060,6 +4066,8 @@ function applyPaidPricingToUserUi() {
     setText('p-asset-ranking-rejected', p.assetRankingBalloons);
     setText('p-live-ranking-top100', p.liveRankingTop100Balloons);
     setText('p-live-ranking-top100-apply', p.liveRankingTop100Balloons);
+    setText('p-live-ranking-top100-days', p.liveRankingTop100DurationDays);
+    setText('p-live-ranking-top100-apply-days', p.liveRankingTop100DurationDays);
     setText('p-broadcast-day', p.broadcastBannerPerDay);
     setText('p-chart-day', p.chartBannerPerDay);
     setText('p-relay-off', p.relayOffPeakPerHour);
@@ -10693,6 +10701,7 @@ window.submitLiveRankingTop100AccessRequest = async function() {
     statusEl.textContent = '신청 중...';
     try {
         const cost = livePaidPricing.liveRankingTop100Balloons;
+        const durationDays = Math.max(1, Math.floor(Number(livePaidPricing.liveRankingTop100DurationDays) || 7));
         await set(ref(db, `liveRankingTop100Requests/${userUID}`), {
             nickname,
             soopId,
@@ -10700,10 +10709,10 @@ window.submitLiveRankingTop100AccessRequest = async function() {
             status: 'pending',
             createdAt: Date.now(),
             cost,
-            durationDays: 7
+            durationDays
         });
         statusEl.style.color = '#22c55e';
-        statusEl.textContent = `✅ 신청 완료! 별풍선 ${cost}개 후원창을 엽니다. 승인 후 Top100 직접 열람이 가능합니다.`;
+        statusEl.textContent = `✅ 신청 완료! 별풍선 ${cost}개 후원창을 엽니다. 승인 후 ${durationDays}일 동안 Top100 직접 열람이 가능합니다.`;
         openStarBalloonGiftForLiveRankingTop100();
     } catch (e) {
         statusEl.style.color = 'var(--up-color)';
