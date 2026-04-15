@@ -39,6 +39,34 @@
         .btn-start  { background: #22c55e; color: white; padding: 8px 16px; font-size: 13px; }
         .btn-stop   { background: #ef4444; color: white; padding: 8px 16px; font-size: 13px; }
         .btn-back   { background: #334155; color: #94a3b8; padding: 8px 14px; font-size: 12px; }
+        .rank-market-toggle-wrap {
+            padding: 10px 24px 8px;
+            border-bottom: 1px solid #1e293b;
+            background: #0f172a;
+            display: none;
+            flex-shrink: 0;
+        }
+        .rank-market-toggle {
+            display: inline-flex;
+            gap: 4px;
+            background: #111c32;
+            border: 1px solid #334155;
+            border-radius: 999px;
+            padding: 4px;
+        }
+        .rank-market-btn {
+            background: transparent;
+            color: #94a3b8;
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: 12px;
+            font-weight: 800;
+            min-width: 74px;
+        }
+        .rank-market-btn.active {
+            background: #38bdf8;
+            color: #0f172a;
+        }
 
         /* ── 랭킹 테이블 (좌우 5:5) ── */
         .dual-rank-scroll {
@@ -112,6 +140,99 @@
             .rank-col { padding: 0; }
         }
 
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+                padding: 12px 14px;
+            }
+            .header-title {
+                font-size: 16px;
+            }
+            .header-right {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 6px 10px;
+                font-size: 11px;
+            }
+            .header-right #update-time {
+                grid-column: 1 / -1;
+            }
+            .header-right .auto-scroll-badge {
+                grid-column: 1 / -1;
+                justify-self: start;
+            }
+            .control-bar {
+                padding: 8px 12px;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .control-left {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 6px;
+            }
+            .control-left button {
+                width: 100%;
+                padding: 9px 8px;
+                font-size: 12px;
+            }
+            .control-right {
+                font-size: 11px;
+                line-height: 1.45;
+            }
+            .rank-market-toggle-wrap {
+                display: block;
+                padding: 8px 12px;
+            }
+            .rank-market-toggle {
+                width: 100%;
+            }
+            .rank-market-btn {
+                flex: 1;
+            }
+            .dual-rank-scroll {
+                padding: 0 10px 16px;
+            }
+            .rank-col {
+                padding: 0;
+            }
+            .rank-col-title {
+                font-size: 12px;
+                padding: 8px 0 2px;
+            }
+            table {
+                margin-top: 6px;
+                font-size: 12px;
+            }
+            thead th,
+            tbody td {
+                padding: 9px 8px;
+            }
+            .stock-name,
+            .price {
+                font-size: 13px;
+            }
+            .change,
+            .volume,
+            .rank-no {
+                font-size: 11px;
+            }
+            .rank-col.is-hidden-mobile {
+                display: none;
+            }
+            .rank-col.is-mobile-active {
+                display: block;
+                border-bottom: none !important;
+                margin-bottom: 0 !important;
+                padding-bottom: 0 !important;
+            }
+        }
+
         /* ── 로그인 화면 ── */
         #login-section {
             flex: 1; display: flex; flex-direction: column;
@@ -178,10 +299,16 @@
         </div>
         <div class="control-right" id="status-text">구독 시작 버튼을 눌러주세요</div>
     </div>
+    <div class="rank-market-toggle-wrap">
+        <div class="rank-market-toggle" role="tablist" aria-label="랭킹 시장 전환">
+            <button type="button" class="rank-market-btn active" id="rank-market-stock-btn" onclick="setRankMarketView('stock')">📈 주식</button>
+            <button type="button" class="rank-market-btn" id="rank-market-coin-btn" onclick="setRankMarketView('coin')">🪙 코인</button>
+        </div>
+    </div>
 
     <div class="dual-rank-scroll" id="dual-rank-scroll">
         <div class="dual-rank-row">
-            <div class="rank-col">
+            <div class="rank-col" id="stock-rank-col">
                 <div class="rank-col-title">실시간 주가 랭킹</div>
                 <table>
                     <thead>
@@ -198,7 +325,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="rank-col">
+            <div class="rank-col" id="coin-rank-col">
                 <div class="rank-col-title">실시간 코인 랭킹</div>
                 <table>
                     <thead>
@@ -242,6 +369,38 @@
     let metaUnsub = null;
     let rankingActive = false;
     let rankingPausedForHidden = false;
+    let rankMarketView = 'stock';
+
+    function isCompactMobileView() {
+        return window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function applyRankMarketView() {
+        const stockCol = document.getElementById('stock-rank-col');
+        const coinCol = document.getElementById('coin-rank-col');
+        const stockBtn = document.getElementById('rank-market-stock-btn');
+        const coinBtn = document.getElementById('rank-market-coin-btn');
+        if (!stockCol || !coinCol || !stockBtn || !coinBtn) return;
+
+        stockBtn.classList.toggle('active', rankMarketView === 'stock');
+        coinBtn.classList.toggle('active', rankMarketView === 'coin');
+
+        if (!isCompactMobileView()) {
+            stockCol.classList.remove('is-hidden-mobile', 'is-mobile-active');
+            coinCol.classList.remove('is-hidden-mobile', 'is-mobile-active');
+            return;
+        }
+        const showStock = rankMarketView === 'stock';
+        stockCol.classList.toggle('is-hidden-mobile', !showStock);
+        stockCol.classList.toggle('is-mobile-active', showStock);
+        coinCol.classList.toggle('is-hidden-mobile', showStock);
+        coinCol.classList.toggle('is-mobile-active', !showStock);
+    }
+
+    window.setRankMarketView = function(view) {
+        rankMarketView = view === 'coin' ? 'coin' : 'stock';
+        applyRankMarketView();
+    };
 
     /** Top100 경량 노드(`marketRank/top100/*`) 전용 렌더러 */
     function buildRankingRows(items, priceUnit, isCoin) {
@@ -490,6 +649,8 @@
 
     // 페이지 로드 시 초기화
     updateAutoScrollBadge();
+    applyRankMarketView();
+    window.addEventListener('resize', applyRankMarketView);
 </script>
 </body>
 </html>
