@@ -3334,7 +3334,7 @@
         <div style="display:flex; gap:10px;">
             <button onclick="closeLiveRankingAccessModal()" style="flex:1; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button onclick="goToLiveStreamFromRankingModal()" style="flex:1.3; background:linear-gradient(135deg,#38bdf8,#0ea5e9); color:#001018; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">📺 라이브 보러가기</button>
-            <button onclick="openLiveRankingPurchaseModal()" style="flex:1.5; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">💳 열람권 구매하기</button>
+            <button id="btn-live-ranking-primary-action" onclick="handleLiveRankingPrimaryAction()" style="flex:1.5; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">💳 열람권 구매하기</button>
         </div>
     </div>
 </div>
@@ -5524,6 +5524,8 @@ let searchResults    = {};    // 검색 결과 캐시 { stockId: stockData }
 let searchUnsub      = null;  // 현재 검색 종목 구독 해제 함수
 let subscribeStatusUnsub = null; // subscribeRequests/{uid} 레거시 실시간 (자산 랭킹 병합용)
 let rankingAssetReqUnsub = null; // assetRankingRequests/{uid}
+let liveRankingTop100ReqUnsub = null; // liveRankingTop100Requests/{uid}
+let liveRankingTop100ReqCache = null;
 let rankingAccessNewCache = null;
 let rankingAccessLegacyCache = null;
 let rankingAccessExpiryTimer = null;
@@ -7640,6 +7642,7 @@ onAuthStateChanged(auth, async (user) => {
             }
             userUID = user.uid;
             previousAuthUid = user.uid;
+            try { startLiveRankingTop100AccessWatch(user.uid); } catch (_) { /* noop */ }
             try {
                 const rankBtn = document.getElementById('tab-btn-ranking');
                 if (rankBtn) {
@@ -7707,6 +7710,7 @@ onAuthStateChanged(auth, async (user) => {
         } else {
             try { teardownCoinImpactMultiplierListener(); } catch (_) { /* noop */ }
             try { stopAssetRequestStatusWatch(); } catch (_) { /* noop */ }
+            try { stopLiveRankingTop100AccessWatch(); } catch (_) { /* noop */ }
             previousAuthUid = null;
             teardownUserDataListeners();
             try { stopAllStocksSubscriptions(); } catch (_) { /* noop */ }
@@ -10015,6 +10019,57 @@ function stopRankingAccessWatch() {
     }
 }
 
+function getLiveRankingTop100ExpiresAtMs(req) {
+    if (!req || String(req.status || '').toLowerCase() !== 'approved') return null;
+    const explicit = Number(req.accessExpiresAt || 0);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    const approvedAt = Number(req.approvedAt || 0);
+    const durationDays = Math.max(1, Math.floor(Number(req.durationDays) || 7));
+    if (Number.isFinite(approvedAt) && approvedAt > 0) return approvedAt + (durationDays * 24 * 60 * 60 * 1000);
+    return null;
+}
+
+function isLiveRankingTop100AccessActive(req) {
+    const exp = getLiveRankingTop100ExpiresAtMs(req);
+    return exp != null && exp > Date.now();
+}
+
+function updateLiveRankingPrimaryActionButton() {
+    const btn = document.getElementById('btn-live-ranking-primary-action');
+    if (!btn) return;
+    const active = isLiveRankingTop100AccessActive(liveRankingTop100ReqCache);
+    if (active) {
+        btn.textContent = '📊 랭킹페이지 열기';
+        btn.style.background = 'linear-gradient(135deg,#38bdf8,#0ea5e9)';
+        btn.style.color = '#001018';
+        return;
+    }
+    btn.textContent = '💳 열람권 구매하기';
+    btn.style.background = 'linear-gradient(135deg,#f59e0b,#f97316)';
+    btn.style.color = 'white';
+}
+
+function startLiveRankingTop100AccessWatch(uid) {
+    if (!uid || !db) return;
+    if (liveRankingTop100ReqUnsub) return;
+    liveRankingTop100ReqUnsub = onValue(ref(db, `liveRankingTop100Requests/${uid}`), (snap) => {
+        liveRankingTop100ReqCache = snap.exists() ? snap.val() : null;
+        updateLiveRankingPrimaryActionButton();
+    }, () => {
+        liveRankingTop100ReqCache = null;
+        updateLiveRankingPrimaryActionButton();
+    });
+}
+
+function stopLiveRankingTop100AccessWatch() {
+    if (liveRankingTop100ReqUnsub) {
+        liveRankingTop100ReqUnsub();
+        liveRankingTop100ReqUnsub = null;
+    }
+    liveRankingTop100ReqCache = null;
+    updateLiveRankingPrimaryActionButton();
+}
+
 // ── 자산 랭킹 로드 ──────────────────────────────────────────
 async function loadAssetRanking() {
     const listEl    = document.getElementById('asset-ranking-list');
@@ -10645,6 +10700,7 @@ window.openStarBalloonGiftForRanking = function() {
 
 window.openLiveRankingAccessModal = function() {
     prepareMobileModalLayer();
+    updateLiveRankingPrimaryActionButton();
     document.getElementById('live-ranking-access-modal')?.classList.add('active');
 };
 
@@ -10655,6 +10711,19 @@ window.closeLiveRankingAccessModal = function() {
 window.goToLiveStreamFromRankingModal = function() {
     window.open('https://play.sooplive.com/skftodwocks2', '_blank');
     closeLiveRankingAccessModal();
+};
+
+window.openLiveRankingTop100Page = function() {
+    window.open('soop-stocks-ranking-live.html', '_blank');
+};
+
+window.handleLiveRankingPrimaryAction = function() {
+    if (isLiveRankingTop100AccessActive(liveRankingTop100ReqCache)) {
+        openLiveRankingTop100Page();
+        closeLiveRankingAccessModal();
+        return;
+    }
+    openLiveRankingPurchaseModal();
 };
 
 window.openLiveRankingPurchaseModal = function() {
