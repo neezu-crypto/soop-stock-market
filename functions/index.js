@@ -1340,6 +1340,218 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   };
 });
 
+/**
+ * 관리자: 유저 잔고 없이 종목/코인 시세만 `computeTradePrices` + RTDB 반영 (trade 와 동일한 시세 트랜잭션·캔들).
+ * dryRun 시에는 DB 미갱신, prevPrice만으로 또는 stockId 조회로 시뮬레이션.
+ */
+exports.adminInstrumentImpact = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
+  const auth = req.auth;
+  if (!auth?.uid || !isAdminAuth(auth)) {
+    throw new HttpsError("permission-denied", "Admin only.");
+  }
+
+  const stockIdRaw = String(req.data?.stockId || "").trim();
+  const side = String(req.data?.side || "")
+    .trim()
+    .toLowerCase();
+  const qty = clampInt(req.data?.qty, 1, 100);
+  const market = String(req.data?.market || "stock").trim().toLowerCase();
+  const isCoin = market === "coin";
+  const inverseModeReq = Boolean(req.data?.inverseMode);
+  const dryRun = Boolean(req.data?.dryRun);
+  const invertPrice = inverseModeReq;
+
+  if (side !== "buy" && side !== "sell") {
+    throw new HttpsError("invalid-argument", "side must be buy|sell.");
+  }
+  if (!qty) {
+    throw new HttpsError("invalid-argument", "qty must be 1..100.");
+  }
+  if (market !== "stock" && market !== "coin") {
+    throw new HttpsError("invalid-argument", "market must be stock|coin.");
+  }
+
+  const db = admin.database();
+  const cfgSnap = await db.ref("siteConfig").get();
+  const siteConfig = cfgSnap.exists() ? cfgSnap.val() : {};
+  const sellConfig = siteConfig.sellConfig || {};
+  const marketParams = siteConfig.marketParams || {};
+
+  if (dryRun) {
+    const prevOverride = req.data?.prevPrice;
+    let prevPrice;
+    if (prevOverride != null && prevOverride !== "") {
+      const p = Number(prevOverride);
+      if (!Number.isFinite(p) || p <= 0) {
+        throw new HttpsError("invalid-argument", "prevPrice must be a positive number.");
+      }
+      prevPrice = p;
+    } else {
+      if (!stockIdRaw) {
+        throw new HttpsError("invalid-argument", "dryRun requires prevPrice or stockId.");
+      }
+      const stockPath = isCoin ? "coins" : "stocks";
+      const snap = await db.ref(`${stockPath}/${stockIdRaw}`).get();
+      if (!snap.exists()) {
+        throw new HttpsError("not-found", "종목을 찾을 수 없습니다.");
+      }
+      const row = normalizeStockRow(snap.val());
+      if (!row) {
+        throw new HttpsError("failed-precondition", "종목 데이터 형식이 올바르지 않습니다.");
+      }
+      prevPrice = Number(row.price);
+      if (!Number.isFinite(prevPrice) || prevPrice <= 0) prevPrice = isCoin ? 100000000 : 10000;
+    }
+    const out = computeTradePrices(side, prevPrice, qty, sellConfig, marketParams, isCoin, invertPrice);
+    const liqRaw = Number(sellConfig.liquidationImpactMultiplier);
+    const liqMult = Number.isFinite(liqRaw) && liqRaw >= 0 ? liqRaw : 1;
+    const impactLiq = out.impact * liqMult;
+    const newPriceLiquidation = Math.max(1, Math.round(prevPrice * (1 - impactLiq)));
+    const basePrice = Math.max(1, finiteOr(sellConfig.basePrice, 10000));
+    const scalePrice = Math.max(1, finiteOr(sellConfig.scalePrice, 90000));
+    const impactCoef = finiteOr(sellConfig.impact, 0.0005);
+    const impactRefPriceWon = Math.max(1, finiteOr(marketParams?.impactRefPrice, 100000));
+    const sellPressure =
+      side === "sell" && !isCoin ? 1 + Math.max(0, prevPrice - basePrice) / scalePrice : 1;
+    const dampingFactor = isCoin ? 1 : Math.min(1, impactRefPriceWon / Math.max(1, prevPrice));
+    const effectiveImpactCoef = impactCoef * dampingFactor;
+    return {
+      ok: true,
+      dryRun: true,
+      prevPrice,
+      newPrice: out.newPrice,
+      tradePrice: out.tradePrice,
+      rawNewPrice: out.rawNewPrice,
+      impact: out.impact,
+      changeStr: out.changeStr,
+      liquidationImpactMultiplier: liqMult,
+      newPriceLiquidation,
+      impactLiquidation: impactLiq,
+      sellPressure,
+      dampingFactor,
+      effectiveImpactCoef
+    };
+  }
+
+  const stockId = stockIdRaw;
+  if (!stockId) {
+    throw new HttpsError("invalid-argument", "stockId required.");
+  }
+
+  const stockPath = isCoin ? "coins" : "stocks";
+  const candleRoot = isCoin ? "coinCandles" : "candlesticks";
+  const instrumentRef = db.ref(`${stockPath}/${stockId}`);
+
+  const preStockSnap = await instrumentRef.get();
+  if (!preStockSnap.exists()) {
+    throw new HttpsError("not-found", "종목을 찾을 수 없습니다.");
+  }
+  const rawPreVal = preStockSnap.val();
+  const preRowForHint = normalizeStockRow(rawPreVal);
+  if (!preRowForHint) {
+    throw new HttpsError("failed-precondition", "종목 데이터 형식이 올바르지 않습니다.");
+  }
+
+  let lastImpact = 0;
+  let lastTradePrice = 0;
+  let lastNewPrice = 0;
+  let lastPrevPrice = 0;
+
+  let stockTx = { committed: false };
+  for (let attempt = 0; attempt < 15; attempt++) {
+    stockTx = await instrumentRef.transaction((cur) => {
+      try {
+        let effectiveCur = cur;
+        if (effectiveCur == null && rawPreVal != null) {
+          effectiveCur = rawPreVal;
+        }
+
+        const row = normalizeStockRow(effectiveCur);
+        if (!row) {
+          return undefined;
+        }
+
+        let prevPrice = Number(row.price);
+        if (!Number.isFinite(prevPrice) || prevPrice <= 0) prevPrice = isCoin ? 100000000 : 10000;
+
+        const { newPrice, tradePrice, impact, changeStr } = computeTradePrices(
+          side,
+          prevPrice,
+          qty,
+          sellConfig,
+          marketParams,
+          isCoin,
+          invertPrice
+        );
+        lastImpact = impact;
+        lastTradePrice = tradePrice;
+        lastNewPrice = newPrice;
+        lastPrevPrice = prevPrice;
+
+        const { history: _h, ...rest } = row;
+        const addBuy = side === "buy" ? qty : 0;
+        const addSell = side === "sell" ? qty : 0;
+        const baseVol = Number(row.volume);
+        const baseBuy = Number(row.buyVol);
+        const baseSell = Number(row.sellVol);
+        const merged = {
+          ...rest,
+          price: newPrice,
+          volume: (Number.isFinite(baseVol) ? baseVol : 0) + qty,
+          buyVol: (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
+          sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
+          change: changeStr
+        };
+        const out = jsonSanitizeForRtdb(stripUndefinedShallow(merged));
+        if (!out || typeof out !== "object" || !Number.isFinite(Number(out.price))) {
+          return undefined;
+        }
+        return out;
+      } catch (e) {
+        console.error("[adminInstrumentImpact] instrumentTx", stockId, e?.message || e);
+        return undefined;
+      }
+    });
+    if (stockTx.committed) break;
+    await new Promise((r) => setTimeout(r, 35 * (attempt + 1)));
+  }
+
+  if (!stockTx.committed) {
+    throw new HttpsError(
+      "failed-precondition",
+      isCoin ? "코인 시세 갱신에 실패했습니다." : "종목 시세 갱신에 실패했습니다."
+    );
+  }
+
+  const ts = Math.floor(Date.now() / 60000) * 60;
+  const candleRef = db.ref(`${candleRoot}/${stockId}/${ts}`);
+  await candleRef.transaction((cur) => {
+    if (!cur) {
+      return { o: lastTradePrice, h: lastTradePrice, l: lastTradePrice, c: lastTradePrice, v: qty, t: ts };
+    }
+    return {
+      ...cur,
+      h: Math.max(Number(cur.h || lastTradePrice), lastTradePrice),
+      l: Math.min(Number(cur.l || lastTradePrice), lastTradePrice),
+      c: lastTradePrice,
+      v: Number(cur.v || 0) + qty,
+      t: ts
+    };
+  });
+
+  return {
+    ok: true,
+    stockId,
+    side,
+    qty,
+    market: isCoin ? "coin" : "stock",
+    tradePrice: lastTradePrice,
+    newPrice: lastNewPrice,
+    impact: lastImpact,
+    prevPrice: lastPrevPrice
+  };
+});
+
 exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");

@@ -2100,6 +2100,7 @@
     const adminSyncCoinsFromStocksFn = httpsCallable(functions, 'adminSyncCoinsFromStocks');
     const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
+    const adminInstrumentImpactFn = httpsCallable(functions, 'adminInstrumentImpact');
 
     /**
      * Callable 미배포·리전 불일치·일시 다운 시 브라우저 RTDB 경로로 폴백.
@@ -4508,7 +4509,7 @@
     }
 
     /**
-     * 유저 잔고/보유 없이 주가만 index.html trade 와 동일한 임팩트 공식으로 변동 (stocks 노드만 갱신).
+     * 유저 잔고/보유 없이 시세만 갱신 — Cloud Function `adminInstrumentImpact`(내부적으로 `trade` 와 동일 `computeTradePrices` + 캔들).
      * @param {string} stockId
      * @param {'buy'|'sell'} type
      * @param {{ qty?: number, silent?: boolean, skipRender?: boolean }} [opts]
@@ -4553,70 +4554,19 @@
 
         const stockRef = ref(db, `stocks/${stockId}`);
         try {
-            const [cfgSnap, mpSnap, preSnap] = await Promise.all([
-                get(ref(db, 'siteConfig/sellConfig')),
-                get(ref(db, 'siteConfig/marketParams')),
-                get(stockRef)
-            ]);
-            const sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
-            const marketParamsCache = mpSnap.exists() ? mpSnap.val() : {};
-            const safeNum = (v, def) => {
-                const n = Number(v);
-                return Number.isFinite(n) ? n : def;
-            };
-            const basePrice  = Math.max(1, safeNum(sellConfigCache.basePrice  ?? 10000, 10000));
-            const scalePrice = Math.max(1, safeNum(sellConfigCache.scalePrice ?? 90000, 90000));
-            const impactCoef = safeNum(sellConfigCache.impact     ?? 0.0005, 0.0005);
-            const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice ?? 100000, 100000));
-
-            let currentPrice = Number(preSnap.exists() ? preSnap.val()?.price : NaN);
-            if (!Number.isFinite(currentPrice) || currentPrice <= 0) currentPrice = 10000;
-
-            let sellPressure = 1;
-            if (t === 'sell') {
-                sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
-            }
-            const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
-            const effectiveImpactCoef = impactCoef * dampingFactor;
-            const impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
-
-            const txResult = await runTransaction(stockRef, (currentStock) => {
-                if (currentStock == null) return currentStock;
-                const row = typeof currentStock === 'object' ? currentStock : {};
-                let prevPrice = Number(row?.price);
-                if (!Number.isFinite(prevPrice) || prevPrice <= 0) {
-                    prevPrice = Math.max(1, Number(currentPrice) || 10000);
-                }
-                let newPrice;
-                const rawNewPrice = t === 'buy' ? prevPrice * (1 + impact) : prevPrice * (1 - impact);
-                newPrice = Math.round(rawNewPrice);
-                const addBuy  = t === 'buy' ? qty : 0;
-                const addSell = t === 'sell' ? qty : 0;
-                const changeVal = prevPrice > 0 ? (((rawNewPrice - prevPrice) / prevPrice) * 100) : 0;
-                const baseVol = Number(row.volume);
-                const baseBuy = Number(row.buyVol);
-                const baseSell = Number(row.sellVol);
-                const nextStock = {
-                    ...row,
-                    price:   newPrice,
-                    volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
-                    buyVol:  (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
-                    sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
-                    change:  changeVal.toFixed(2)
-                };
-                const sanitized = {};
-                Object.keys(nextStock).forEach((k) => {
-                    const v = nextStock[k];
-                    if (v !== undefined) sanitized[k] = v;
-                });
-                return sanitized;
+            const { data: d } = await adminInstrumentImpactFn({
+                stockId,
+                side: t,
+                qty,
+                market: 'stock',
+                inverseMode: false
             });
-
-            if (!txResult.committed) {
-                if (!silent) showAdminToast('거래가 반영되지 않았습니다. (트랜잭션 미커밋)', 'error');
-                return { ok: false, error: 'not_committed' };
+            if (!d?.ok) {
+                if (!silent) showAdminToast('거래가 반영되지 않았습니다.', 'error');
+                return { ok: false, error: 'failed' };
             }
-            const nv = txResult.snapshot.val();
+            const snap = await get(stockRef);
+            const nv = snap.exists() ? snap.val() : null;
             if (nv && allStocksData[stockId]) {
                 Object.assign(allStocksData[stockId], nv);
             }
@@ -4645,7 +4595,7 @@
     };
 
     /**
-     * coins/ 노드만 갱신 — 메인 앱 코인 체결과 동일하게 coinImpactMultiplier 적용 (유저 잔고 없음).
+     * coins/ 노드만 갱신 — `adminInstrumentImpact` (코인 시장).
      */
     window.adminExecuteCoinTrade = async function (stockId, type, opts) {
         opts = opts || {};
@@ -4671,71 +4621,19 @@
         }
 
         try {
-            const [cfgSnap, mpSnap, preSnap] = await Promise.all([
-                get(ref(db, 'siteConfig/sellConfig')),
-                get(ref(db, 'siteConfig/marketParams')),
-                get(coinRef)
-            ]);
-            const sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
-            const marketParamsCache = mpSnap.exists() ? mpSnap.val() : {};
-            const safeNum = (v, def) => {
-                const n = Number(v);
-                return Number.isFinite(n) ? n : def;
-            };
-            const basePrice  = Math.max(1, safeNum(sellConfigCache.basePrice  ?? 10000, 10000));
-            const scalePrice = Math.max(1, safeNum(sellConfigCache.scalePrice ?? 90000, 90000));
-            const impactCoef = safeNum(sellConfigCache.impact     ?? 0.0005, 0.0005);
-            const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice ?? 100000, 100000));
-            const coinMult = safeNum(marketParamsCache?.coinImpactMultiplier ?? 1.85, 1.85);
-
-            let currentPrice = Number(preSnap.exists() ? preSnap.val()?.price : NaN);
-            if (!Number.isFinite(currentPrice) || currentPrice <= 0) currentPrice = 100000000;
-
-            let sellPressure = 1;
-            if (t === 'sell') {
-                sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
-            }
-            const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
-            const effectiveImpactCoef = impactCoef * dampingFactor;
-            let impact = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure * coinMult;
-
-            const txResult = await runTransaction(coinRef, (currentStock) => {
-                if (currentStock == null) return currentStock;
-                const row = typeof currentStock === 'object' ? currentStock : {};
-                let prevPrice = Number(row?.price);
-                if (!Number.isFinite(prevPrice) || prevPrice <= 0) {
-                    prevPrice = Math.max(1, Number(currentPrice) || 100000000);
-                }
-                let newPrice;
-                const rawNewPrice = t === 'buy' ? prevPrice * (1 + impact) : prevPrice * (1 - impact);
-                newPrice = Math.round(rawNewPrice);
-                const addBuy  = t === 'buy' ? qty : 0;
-                const addSell = t === 'sell' ? qty : 0;
-                const changeVal = prevPrice > 0 ? (((rawNewPrice - prevPrice) / prevPrice) * 100) : 0;
-                const baseVol = Number(row.volume);
-                const baseBuy = Number(row.buyVol);
-                const baseSell = Number(row.sellVol);
-                const nextStock = {
-                    ...row,
-                    price:   newPrice,
-                    volume:  (Number.isFinite(baseVol) ? baseVol : 0) + qty,
-                    buyVol:  (Number.isFinite(baseBuy) ? baseBuy : 0) + addBuy,
-                    sellVol: (Number.isFinite(baseSell) ? baseSell : 0) + addSell,
-                    change:  changeVal.toFixed(4)
-                };
-                const sanitized = {};
-                Object.keys(nextStock).forEach((k) => {
-                    const v = nextStock[k];
-                    if (v !== undefined) sanitized[k] = v;
-                });
-                return sanitized;
+            const { data: d } = await adminInstrumentImpactFn({
+                stockId,
+                side: t,
+                qty,
+                market: 'coin',
+                inverseMode: false
             });
-
-            if (!txResult.committed) {
-                if (!silent) showAdminToast('코인 거래 미반영 (트랜잭션)', 'error');
-                return { ok: false, error: 'not_committed' };
+            if (!d?.ok) {
+                if (!silent) showAdminToast('코인 거래가 반영되지 않았습니다.', 'error');
+                return { ok: false, error: 'failed' };
             }
-            const nv = txResult.snapshot.val();
+            const snap = await get(coinRef);
+            const nv = snap.exists() ? snap.val() : null;
             if (allStocksData[stockId] && nv) {
                 /* 이름 동기화용 캐시가 있으면 보조 */
             }
@@ -6410,7 +6308,7 @@
         }
     };
 
-    /** index.html `trade` / `adminExecuteTrade` 와 동일 수식 — 설정은 RTDB 실시간 값 사용 */
+    /** `adminInstrumentImpact`(dryRun) — 서버 `computeTradePrices` + 전량 계수 */
     window.runSimulator = async function() {
         const price    = Number(document.getElementById('sim-price').value);
         const qty      = Number(document.getElementById('sim-qty').value);
@@ -6421,51 +6319,46 @@
         resultEl.textContent = '불러오는 중…';
         resultEl.style.color = '#94a3b8';
         try {
-            const [cfgSnap, mpSnap] = await Promise.all([
-                get(ref(db, 'siteConfig/sellConfig')),
-                get(ref(db, 'siteConfig/marketParams'))
-            ]);
-            const sellConfigCache = cfgSnap.exists() ? cfgSnap.val() : {};
-            const marketParamsCache = mpSnap.exists() ? mpSnap.val() : {};
-            const safeNum = (v, def) => {
-                const n = Number(v);
-                return Number.isFinite(n) ? n : def;
-            };
-            const basePrice  = Math.max(1, safeNum(sellConfigCache.basePrice  ?? 10000, 10000));
-            const scalePrice = Math.max(1, safeNum(sellConfigCache.scalePrice ?? 90000, 90000));
-            const impactCoef = safeNum(sellConfigCache.impact     ?? 0.0005, 0.0005);
-            const impactRefPriceWon = Math.max(1, safeNum(marketParamsCache?.impactRefPrice ?? 100000, 100000));
-            const liqMulRaw = Number(sellConfigCache.liquidationImpactMultiplier);
-            const liquidationImpactMult =
-                Number.isFinite(liqMulRaw) && liqMulRaw >= 0 ? liqMulRaw : 1;
-
-            const currentPrice = price;
-            const sellPressure = 1 + (Math.max(0, currentPrice - basePrice) / scalePrice);
-            const dampingFactor = Math.min(1, impactRefPriceWon / Math.max(1, currentPrice));
-            const effectiveImpactCoef = impactCoef * dampingFactor;
-            const impactVal = effectiveImpactCoef * Math.log2(1 + qty) * sellPressure;
-            const impactValLiquidation = impactVal * liquidationImpactMult;
-
-            const newPriceAfterSell = Math.round(currentPrice * (1 - impactVal));
-            const newPriceLiquidation = Math.round(currentPrice * (1 - impactValLiquidation));
+            const { data: d } = await adminInstrumentImpactFn({
+                dryRun: true,
+                prevPrice: price,
+                qty,
+                side: 'sell',
+                market: 'stock',
+                inverseMode: false
+            });
+            if (!d?.ok || !d.dryRun) {
+                resultEl.textContent = '시뮬레이션에 실패했습니다.';
+                resultEl.style.color = '#fca5a5';
+                return;
+            }
+            const currentPrice = d.prevPrice;
+            const sellPressure = d.sellPressure;
+            const dampingFactor = d.dampingFactor;
+            const effectiveImpactCoef = d.effectiveImpactCoef;
+            const impactVal = d.impact;
+            const newPriceAfterSell = d.newPrice;
+            const liquidationImpactMult = d.liquidationImpactMultiplier;
+            const impactValLiquidation = d.impactLiquidation;
+            const newPriceLiquidation = d.newPriceLiquidation;
             const dropAmt = currentPrice - newPriceAfterSell;
             const dropAmtLiq = currentPrice - newPriceLiquidation;
 
-        resultEl.style.color = '#f8fafc';
-        resultEl.innerHTML = `
+            resultEl.style.color = '#f8fafc';
+            resultEl.innerHTML = `
             <div style="display:grid; grid-template-columns:auto 1fr; gap:4px 12px; line-height:1.8; font-size:13px;">
-                <span style="color:#64748b; font-size:11px; grid-column:1/-1;">※ siteConfig/sellConfig · marketParams 저장값 기준 (메인 앱 거래와 동일)</span>
-                <span style="color:#94a3b8;">sellPressure</span><span style="color:#ef4444; font-weight:700;">${sellPressure.toFixed(4)}배</span>
-                <span style="color:#94a3b8;">effectiveImpactCoef</span><span style="color:#a78bfa; font-weight:700;">${effectiveImpactCoef.toFixed(8)}</span>
+                <span style="color:#64748b; font-size:11px; grid-column:1/-1;">※ Cloud Function adminInstrumentImpact(dryRun) — RTDB siteConfig 기준</span>
+                <span style="color:#94a3b8;">sellPressure</span><span style="color:#ef4444; font-weight:700;">${Number(sellPressure).toFixed(4)}배</span>
+                <span style="color:#94a3b8;">effectiveImpactCoef</span><span style="color:#a78bfa; font-weight:700;">${Number(effectiveImpactCoef).toFixed(8)}</span>
                 <span style="color:#94a3b8;">impact (비율)</span><span style="color:#fca5a5;">${(impactVal * 100).toFixed(4)}%</span>
-                <span style="color:#94a3b8;">감쇄(damping)</span><span style="color:#f59e0b; font-weight:700;">${dampingFactor.toFixed(4)}</span>
+                <span style="color:#94a3b8;">감쇄(damping)</span><span style="color:#f59e0b; font-weight:700;">${Number(dampingFactor).toFixed(4)}</span>
                 <span style="color:#94a3b8;">예상 하락액</span><span style="color:#ef4444; font-weight:700;">▼ ${dropAmt.toLocaleString()}원</span>
                 <span style="color:#94a3b8;">매도 후 예상가</span><span style="color:#f8fafc; font-weight:700;">${newPriceAfterSell.toLocaleString()}원</span>
                 <span style="color:#f472b8;">전량매도 계수</span><span style="color:#f472b8; font-weight:700;">×${liquidationImpactMult}</span>
                 <span style="color:#f472b8;">전량매도 impact</span><span style="color:#fca5a5;">${(impactValLiquidation * 100).toFixed(4)}%</span>
                 <span style="color:#f472b8;">전량매도 예상 하락</span><span style="color:#ef4444; font-weight:700;">▼ ${dropAmtLiq.toLocaleString()}원</span>
                 <span style="color:#f472b8;">전량매도 후 예상가</span><span style="color:#f8fafc; font-weight:700;">${newPriceLiquidation.toLocaleString()}원</span>
-                <span style="color:#94a3b8;">(검증)</span><span style="color:#64748b;">round(가격×(1−impact))와 동일 · CF는 매도 임팩트 배수·코인배수도 곱함</span>
+                <span style="color:#94a3b8;">(검증)</span><span style="color:#64748b;">trade 와 동일 computeTradePrices · 전량은 impact×전량매도계수</span>
             </div>
         `;
         } catch (e) {
