@@ -1699,11 +1699,18 @@
             <button class="btn-primary" style="background: #64748b;" onclick="deleteStocks()">일괄 삭제 실행</button>
         </div>
         <div class="info-box" style="margin-top:14px; border-color:#a78bfa; color:#ddd6fe;">
-            <b>🎯 단일 종목 상장폐지/재상장</b> — 주식 기준으로 종목 1개를 선택해
+            <b>🎯 단일 종목 상장폐지/재상장</b> — <b>주식·코인</b> 탭에서 시세 <b>낮은 순</b>으로 정렬된 <b>최대 10개</b> 중 종목 1개를 선택해
             <b>stocks·coins를 완전 삭제</b>하고, 필요 시 <b>같은 ID로 시가 재상장</b>합니다.<br>
             <span style="color:#c4b5fd;">재상장 시 주식 10,000원 / 코인 100,000,000원으로 초기화되며 기존 유저 보유 수량은 제거됩니다.</span>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <button type="button" id="single-delist-tab-stock" onclick="switchSingleDelistMarketTab('stock')"
+                style="flex:1; min-width:120px; background:#38bdf8; color:#0f172a; border:none; padding:10px 12px; border-radius:8px; font-weight:800; font-size:12px; cursor:pointer;">📈 주식 (저가 10)</button>
+            <button type="button" id="single-delist-tab-coin" onclick="switchSingleDelistMarketTab('coin')"
+                style="flex:1; min-width:120px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px 12px; border-radius:8px; font-weight:800; font-size:12px; cursor:pointer;">🪙 코인 (저가 10)</button>
+        </div>
+        <div style="font-size:11px; color:#64748b; margin-top:4px; margin-bottom:6px;">탭별로 시세 오름차순(낮은 가격 먼저)으로 최대 10개만 표시됩니다.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:4px;">
             <select id="single-delist-select" style="flex:1; min-width:260px; background:#0f172a; border:1px solid #475569; color:#f8fafc; padding:10px 12px; border-radius:8px;">
                 <option value="">종목을 선택하세요 (이름 · ID)</option>
             </select>
@@ -3809,24 +3816,58 @@
     let coinsTop10Sort = 'desc';
     let pendingListingQuickAddName = '';
     let lastDelistedInstrumentMeta = null;
+    /** 단일 상장폐지 셀렉트: 주식 / 코인 탭 */
+    let singleDelistMarketTab = 'stock';
+
+    function styleSingleDelistMarketTabs() {
+        const sBtn = document.getElementById('single-delist-tab-stock');
+        const cBtn = document.getElementById('single-delist-tab-coin');
+        const stockOn = singleDelistMarketTab === 'stock';
+        if (sBtn) {
+            sBtn.style.background = stockOn ? '#38bdf8' : '#1e293b';
+            sBtn.style.color = stockOn ? '#0f172a' : '#94a3b8';
+            sBtn.style.border = stockOn ? 'none' : '1px solid #334155';
+        }
+        if (cBtn) {
+            cBtn.style.background = !stockOn ? '#38bdf8' : '#1e293b';
+            cBtn.style.color = !stockOn ? '#0f172a' : '#94a3b8';
+            cBtn.style.border = !stockOn ? 'none' : '1px solid #334155';
+        }
+    }
+
+    window.switchSingleDelistMarketTab = function (tab) {
+        if (!isAdmin()) return;
+        singleDelistMarketTab = tab === 'coin' ? 'coin' : 'stock';
+        styleSingleDelistMarketTabs();
+        renderSingleDelistOptions();
+    };
 
     function renderSingleDelistOptions() {
         const sel = document.getElementById('single-delist-select');
         if (!sel) return;
         const prev = sel.value;
-        const rows = Object.entries(allStocksData || {})
+        const src = singleDelistMarketTab === 'coin' ? (allCoinsData || {}) : (allStocksData || {});
+        const rows = Object.entries(src)
             .map(([id, s]) => ({
                 id,
                 name: String(s?.name || '').trim() || id,
                 price: Number(s?.price) || 0,
             }))
-            .sort((a, b) => b.price - a.price);
-        const options = ['<option value="">종목을 선택하세요 (이름 · ID)</option>'];
+            .sort((a, b) => (a.price - b.price) || String(a.id).localeCompare(String(b.id)))
+            .slice(0, 10);
+        const tabLabel = singleDelistMarketTab === 'coin' ? '코인' : '주식';
+        const options = [
+            `<option value="">${tabLabel} — 저가순 최대 10개 중 선택 (이름 · ID · 시세)</option>`,
+        ];
         rows.forEach((r) => {
-            options.push(`<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)} · ${escapeHtml(r.id)}</option>`);
+            const p = Math.floor(Number(r.price) || 0);
+            options.push(
+                `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)} · ${escapeHtml(r.id)} · ${p.toLocaleString()}원</option>`
+            );
         });
         sel.innerHTML = options.join('');
-        if (prev && allStocksData && Object.prototype.hasOwnProperty.call(allStocksData, prev)) {
+        styleSingleDelistMarketTabs();
+        if (prev && rows.some((r) => r.id === prev)) {
             sel.value = prev;
         }
     }
@@ -3858,6 +3899,9 @@
             const count = Object.keys(allCoinsData).length;
             if (statusEl) statusEl.innerText = `${count}개 코인 로드됨`;
             renderCoinsTop10List();
+            try {
+                renderSingleDelistOptions();
+            } catch (_) { /* noop */ }
         } catch (e) {
             if (statusEl) statusEl.innerText = '로드 실패';
         }
@@ -5503,11 +5547,15 @@
             return;
         }
         const stock = allStocksData?.[id];
-        if (!stock) {
-            if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '선택 종목이 현재 stocks/에 없습니다. 새로고침 후 다시 시도해주세요.'; }
+        const coin = allCoinsData?.[id];
+        if (!stock && !coin) {
+            if (statusEl) {
+                statusEl.style.color = '#f87171';
+                statusEl.textContent = '선택 종목이 현재 stocks/·coins/에 없습니다. 새로고침 후 다시 시도해주세요.';
+            }
             return;
         }
-        const name = String(stock?.name || '').trim() || id;
+        const name = String(stock?.name || coin?.name || '').trim() || id;
         if (!confirm(`선택 종목을 상장폐지할까요?\n\n이름: ${name}\nID: ${id}\n\nstocks/coins + 검색 인덱스 + 유저 보유(stocks/coins)가 삭제됩니다.`)) return;
         try {
             if (statusEl) { statusEl.style.color = '#94a3b8'; statusEl.textContent = '상장폐지 처리 중...'; }
@@ -5542,7 +5590,7 @@
             return;
         }
         const name = selectedId
-            ? String(allStocksData?.[id]?.name || '').trim()
+            ? String(allStocksData?.[id]?.name || allCoinsData?.[id]?.name || '').trim()
             : String(lastDelistedInstrumentMeta?.name || '').trim();
         if (!name) {
             if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '종목명이 확인되지 않습니다. 상장폐지 직후 재상장하거나 목록에서 다시 선택해주세요.'; }
