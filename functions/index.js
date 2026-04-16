@@ -1682,6 +1682,154 @@ exports.purchaseAndPublishAssetRanking = onCall(
   }
 );
 
+exports.purchaseAndPublishLiveRankingTop100 = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    const functionName = "purchaseAndPublishLiveRankingTop100";
+    try {
+      if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+      const uid = request.auth.uid;
+
+      const nicknameRaw = String(request.data?.nickname || "").trim();
+      const soopIdRaw = String(request.data?.soopId || "").trim();
+      const soopId = soopIdRaw;
+      const clientRequestId = String(request.data?.clientRequestId || "").trim();
+
+      if (!nicknameRaw || nicknameRaw.length > 80) throw new HttpsError("invalid-argument", "invalid nickname.");
+      if (!soopId || soopId.length > 50 || !/^[a-zA-Z0-9_]+$/.test(soopId)) throw new HttpsError("invalid-argument", "invalid soopId.");
+      if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+
+      const db = admin.database();
+      const cfgSnap = await db.ref("siteConfig").get();
+      const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+      const pointCost = Math.max(1, Math.floor(Number(pricing.liveRankingTop100 || 0)));
+      const durationDays = Math.max(1, Math.floor(Number(pricing.liveRankingTop100DurationDays || 7)));
+
+      const now = nowMs();
+      const accessExpiresAt = now + durationDays * 24 * 60 * 60 * 1000;
+
+      const opRef = db.ref(`pointOps/${uid}/liveRankingTop100/${clientRequestId}`);
+      const opSnap = await opRef.get();
+      if (opSnap.exists() && String(opSnap.val()?.status || "").toLowerCase() === "done") {
+        return { ok: true, status: "done", ...opSnap.val() };
+      }
+
+      const reqRef = db.ref(`liveRankingTop100Requests/${uid}`);
+      const reqSnap = await reqRef.get();
+      const curReq = reqSnap.exists() ? (reqSnap.val() || {}) : {};
+      const curStatus = String(curReq.status || "").toLowerCase();
+      const curAccessExpiresAt = Number(curReq.accessExpiresAt || 0);
+
+      // 이미 승인·유효 기간이면 중복 결제 없이 그대로 사용
+      if (curStatus === "approved" && Number.isFinite(curAccessExpiresAt) && curAccessExpiresAt > now) {
+        const walletSnap = await db.ref(`users/${uid}/wallet`).get();
+        const balanceAfter = Math.max(0, Math.floor(Number(walletSnap.val()?.points || 0)));
+        return {
+          ok: true,
+          status: "done",
+          alreadyActive: true,
+          pointCost: 0,
+          balanceAfter,
+          liveRankingTop100Request: curReq,
+        };
+      }
+
+      // 레거시 pending 요청이 있으면, 추가 차감 없이 승인·entitlements만 승격
+      if (curStatus === "pending") {
+        const walletSnap = await db.ref(`users/${uid}/wallet`).get();
+        const balanceAfter = Math.max(0, Math.floor(Number(walletSnap.val()?.points || 0)));
+        await db.ref().update({
+          [`liveRankingTop100Requests/${uid}/status`]: "approved",
+          [`liveRankingTop100Requests/${uid}/approvedAt`]: now,
+          [`liveRankingTop100Requests/${uid}/accessExpiresAt`]: accessExpiresAt,
+          [`liveRankingTop100Requests/${uid}/durationDays`]: durationDays,
+          [`liveRankingTop100Requests/${uid}/cost`]: curReq.cost ?? pointCost,
+          [`liveRankingTop100Requests/${uid}/pointCost`]: curReq.pointCost ?? pointCost,
+          [`liveRankingTop100Requests/${uid}/paymentStatus`]: curReq.paymentStatus ?? "paid",
+          [`liveRankingTop100Requests/${uid}/updatedAt`]: now,
+          [`users/${uid}/entitlements/liveRankingTop100ExpiresAt`]: accessExpiresAt,
+        });
+        await opRef.set({
+          status: "done",
+          uid,
+          clientRequestId,
+          pointCost: 0,
+          balanceAfter,
+          accessExpiresAt,
+          activatedFromPending: true,
+          updatedAt: now,
+        });
+        return {
+          ok: true,
+          status: "done",
+          activatedFromPending: true,
+          accessExpiresAt,
+          pointCost: 0,
+          balanceAfter,
+          durationDays,
+        };
+      }
+
+      // 새로 포인트 차감 후 열람권 부여
+      const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
+      const ledgerTxnId = await appendPointLedger(db, uid, {
+        type: "purchase_live_ranking_top100",
+        amount: -pointCost,
+        balanceAfter,
+        requestType: "liveRankingTop100",
+        requestId: clientRequestId,
+        requestPath: `pointOps/${uid}/liveRankingTop100/${clientRequestId}`,
+        note: "purchase live ranking top100 access",
+        createdBy: "user",
+      });
+
+      await db.ref().update({
+        [`liveRankingTop100Requests/${uid}`]: {
+          uid,
+          nickname: nicknameRaw,
+          soopId,
+          status: "approved",
+          approvedAt: now,
+          accessExpiresAt,
+          durationDays,
+          createdAt: curReq.createdAt ?? now,
+          updatedAt: now,
+          cost: pointCost,
+          pointCost,
+          paymentStatus: "paid",
+          pointTxnId: String(ledgerTxnId || ""),
+        },
+        [`users/${uid}/entitlements/liveRankingTop100ExpiresAt`]: accessExpiresAt,
+      });
+
+      const payload = {
+        ok: true,
+        status: "done",
+        clientRequestId,
+        uid,
+        nickname: nicknameRaw,
+        soopId,
+        pointCost,
+        balanceAfter,
+        accessExpiresAt,
+        durationDays,
+        ledgerTxnId,
+        doneAt: now,
+      };
+
+      await opRef.set(payload);
+      return payload;
+    } catch (err) {
+      logCallableFailure(functionName, request, err, {
+        nickname: toLogSafeValue(request.data?.nickname),
+        soopId: toLogSafeValue(request.data?.soopId),
+        clientRequestId: toLogSafeValue(request.data?.clientRequestId),
+      });
+      throw err;
+    }
+  }
+);
+
 exports.transferStarPointsGift = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },
   async (request) => {

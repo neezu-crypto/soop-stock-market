@@ -3333,10 +3333,10 @@
                 </div>
             </div>
             <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.28); border-radius:10px; padding:12px;">
-                <div style="font-size:13px; font-weight:800; color:#f59e0b; margin-bottom:6px;">② 직접 열람권 구매(검수형)</div>
+                <div style="font-size:13px; font-weight:800; color:#f59e0b; margin-bottom:6px;">② 직접 열람권 구매(별포인트)</div>
                 <div style="font-size:12px; color:var(--text-sub); line-height:1.65;">
-                    별풍선 <b><span id="p-live-ranking-top100">30</span>개</b> 후원 약정 후 신청하면,<br>
-                    승인 시 <b>Top100 페이지</b>를 <b><span id="p-live-ranking-top100-days">7</span>일</b> 동안 직접 열람할 수 있습니다.
+                    별포인트 <b><span id="p-live-ranking-top100">30</span>P</b>를 사용하면,<br>
+                    <b>Top100 페이지</b>를 <b><span id="p-live-ranking-top100-days">7</span>일</b> 동안 바로 직접 열람할 수 있습니다.
                 </div>
             </div>
         </div>
@@ -3351,10 +3351,10 @@
 <!-- ── 실시간 Top100 열람권 신청 모달 ── -->
 <div id="live-ranking-purchase-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
-        <div class="promo-modal-header"><h2>💳 실시간 Top100 열람권 신청</h2></div>
+        <div class="promo-modal-header"><h2>💳 실시간 Top100 열람권</h2></div>
         <div style="font-size:13px; color:var(--text-sub); line-height:1.7; margin-bottom:12px; padding:10px 12px; background:rgba(245,158,11,0.08); border-radius:8px; border:1px dashed rgba(245,158,11,0.35);">
-            별풍선 <b><span id="p-live-ranking-top100-apply">30</span>개</b> 후원 약정 후 신청해 주세요.<br>
-            관리자 승인 시 실시간 Top100 열람권이 <b><span id="p-live-ranking-top100-apply-days">7</span>일</b> 동안 활성화됩니다.
+            별포인트 <b><span id="p-live-ranking-top100-apply">30</span>P</b>를 사용해 열람권을 구매할 수 있습니다.<br>
+            구매 즉시 실시간 Top100 열람권이 <b><span id="p-live-ranking-top100-apply-days">7</span>일</b> 동안 활성화됩니다.
         </div>
         <div id="live-ranking-purchase-form" style="display:flex; flex-direction:column; gap:10px; margin-bottom:14px;">
             <input id="live-ranking-purchase-nickname" type="text" placeholder="닉네임 (방송에서 사용하는 이름)"
@@ -3364,13 +3364,13 @@
             <div id="live-ranking-purchase-status" style="min-height:20px; font-size:13px; text-align:center;"></div>
             <div class="privacy-agree">
                 <input type="checkbox" id="live-ranking-purchase-privacy-agree">
-                <label for="live-ranking-purchase-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 열람권 검수 목적으로 수집됩니다.</label>
+                <label for="live-ranking-purchase-privacy-agree">(필수) <a href="#" onclick="openPrivacyModal();return false;">개인정보 처리방침</a>에 동의합니다. 닉네임, SOOP 아이디가 열람권 부여 목적으로 수집됩니다.</label>
             </div>
         </div>
         <div style="display:flex; gap:10px;">
             <button onclick="closeLiveRankingPurchaseModal()" style="flex:1; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
             <button onclick="openStarBalloonGiftForLiveRankingTop100()" style="flex:1.2; background:#334155; color:#f8fafc; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">🎈 후원창 열기</button>
-            <button onclick="submitLiveRankingTop100AccessRequest()" style="flex:1.4; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">신청하기</button>
+            <button onclick="submitLiveRankingTop100AccessRequest()" style="flex:1.4; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:800; font-size:14px;">열람권 받기</button>
         </div>
     </div>
 </div>
@@ -4043,6 +4043,7 @@ const purchaseAndPublishChartBannerFn = httpsCallable(fns, 'purchaseAndPublishCh
 const purchaseAndPublishRelayFn = httpsCallable(fns, 'purchaseAndPublishRelay');
 const purchaseAndPublishTitleSponsorFn = httpsCallable(fns, 'purchaseAndPublishTitleSponsor');
 const purchaseAndPublishAssetRankingFn = httpsCallable(fns, 'purchaseAndPublishAssetRanking');
+const purchaseAndPublishLiveRankingTop100Fn = httpsCallable(fns, 'purchaseAndPublishLiveRankingTop100');
 let myStarPoints = 0;
 
 function renderStarPointsUi() {
@@ -10926,22 +10927,33 @@ window.submitLiveRankingTop100AccessRequest = async function() {
     if (!userUID) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '로그인이 필요합니다.'; return; }
 
     statusEl.style.color = 'var(--text-sub)';
-    statusEl.textContent = '신청 중...';
+    statusEl.textContent = '열람권 발급 중...';
     try {
-        const durationDays = Math.max(1, Math.floor(Number(livePaidPricing.liveRankingTop100DurationDays) || 7));
-        const { spent, balanceAfter } = await consumePointsAndCreateRequest('liveRankingTop100', {
+        const clientRequestId = `liveRankingTop100_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+        const { data } = await purchaseAndPublishLiveRankingTop100Fn({
             nickname,
             soopId,
+            clientRequestId,
         });
+        const spent = Math.max(0, Math.floor(Number(data?.pointCost || 0)));
+        const balanceAfter = Math.max(0, Math.floor(Number(data?.balanceAfter || 0)));
+        const durationDays = Math.max(
+            1,
+            Math.floor(
+                Number(data?.durationDays || livePaidPricing.liveRankingTop100DurationDays || 7)
+            )
+        );
+        myStarPoints = balanceAfter;
+        renderStarPointsUi();
         statusEl.style.color = '#22c55e';
-        statusEl.textContent = `✅ 신청 완료! ${spent.toLocaleString()}P 차감됨 · 잔액 ${balanceAfter.toLocaleString()}P · 승인 후 ${durationDays}일 동안 Top100 직접 열람이 가능합니다.`;
+        statusEl.textContent = `✅ 즉시 활성화! ${spent.toLocaleString()}P 차감 · 잔액 ${balanceAfter.toLocaleString()}P · ${durationDays}일 동안 Top100 직접 열람이 가능합니다.`;
     } catch (e) {
         statusEl.style.color = 'var(--up-color)';
         const msg = String(e?.message || e || '');
         if (/insufficient-points|포인트/i.test(msg)) {
             statusEl.textContent = '포인트가 부족합니다. 별포인트를 먼저 충전해주세요.';
         } else {
-            statusEl.textContent = '신청 실패: ' + msg;
+            statusEl.textContent = '발급 실패: ' + msg;
         }
     }
 };
