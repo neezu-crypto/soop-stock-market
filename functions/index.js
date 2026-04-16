@@ -842,6 +842,399 @@ exports.adminRebuildSingleInstrument = onCall(
   }
 );
 
+function toPositiveInt(v, fallback = 0, max = 9_999_999) {
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(max, n);
+}
+
+function getPricingPoints(siteConfig = {}) {
+  const pricing = siteConfig && typeof siteConfig === "object" ? siteConfig.pricing || {} : {};
+  const titleCfg = siteConfig && typeof siteConfig === "object" ? siteConfig.titleSponsorConfig || {} : {};
+  return {
+    assetRanking: toPositiveInt(pricing.assetRankingBalloons, 30, 999_999),
+    liveRankingTop100: toPositiveInt(pricing.liveRankingTop100Balloons, 30, 999_999),
+    liveRankingTop100DurationDays: toPositiveInt(pricing.liveRankingTop100DurationDays, 7, 365),
+    relayRegularPerHour: toPositiveInt(pricing.relayRegularPerHour, 15, 999_999),
+    relayOffPeakPerHour: toPositiveInt(pricing.relayOffPeakPerHour, 10, 999_999),
+    broadcastBannerPerDay: toPositiveInt(pricing.broadcastBannerPerDay, 20, 999_999),
+    chartBannerPerDay: toPositiveInt(pricing.chartBannerPerDay, 80, 999_999),
+    titleSponsorUnitCost: toPositiveInt(titleCfg.unitCost, 50, 999_999),
+  };
+}
+
+function nowMs() {
+  return Date.now();
+}
+
+async function appendPointLedger(db, uid, row) {
+  const refPush = db.ref(`pointLedger/${uid}`).push();
+  const payload = {
+    uid,
+    type: String(row?.type || ""),
+    amount: Math.floor(Number(row?.amount) || 0),
+    balanceAfter: Math.floor(Number(row?.balanceAfter) || 0),
+    requestType: String(row?.requestType || ""),
+    requestId: String(row?.requestId || ""),
+    requestPath: String(row?.requestPath || ""),
+    note: String(row?.note || ""),
+    createdAt: nowMs(),
+    createdBy: String(row?.createdBy || "system"),
+  };
+  await refPush.set(payload);
+  return refPush.key;
+}
+
+exports.createPointChargeRequest = onCall(
+  { cors: true, timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    const uid = request.auth.uid;
+    const nickname = String(request.data?.nickname || "").trim();
+    const soopId = String(request.data?.soopId || "").trim();
+    if (!nickname) throw new HttpsError("invalid-argument", "nickname required.");
+    if (!soopId) throw new HttpsError("invalid-argument", "soopId required.");
+    if (!/^[a-zA-Z0-9_]+$/.test(soopId)) throw new HttpsError("invalid-argument", "invalid soopId.");
+
+    const db = admin.database();
+    const reqId = `charge_${uid}_${nowMs()}`;
+    const row = {
+      uid,
+      nickname,
+      soopId,
+      // 사용자 입력(후원갯수)을 받지 않는 정책.
+      // 실제 적립 수량은 admin 승인 단계에서 pointsToGrant로 확정/적립됩니다.
+      balloons: 0,
+      points: 0,
+      status: "pending",
+      createdAt: nowMs(),
+    };
+    await db.ref(`pointChargeRequests/${reqId}`).set(row);
+    return { ok: true, reqId };
+  }
+);
+
+exports.adminApprovePointCharge = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) throw new HttpsError("permission-denied", "Admin only.");
+    const reqId = String(request.data?.reqId || "").trim();
+    if (!reqId) throw new HttpsError("invalid-argument", "reqId required.");
+    const db = admin.database();
+    const reqRef = db.ref(`pointChargeRequests/${reqId}`);
+    const snap = await reqRef.get();
+    if (!snap.exists()) throw new HttpsError("not-found", "request not found.");
+    const row = snap.val() || {};
+    if (String(row.status || "") !== "pending") {
+      throw new HttpsError("failed-precondition", "already resolved.");
+    }
+    const uid = String(row.uid || "");
+    const pointsToGrant = toPositiveInt(request.data?.pointsToGrant, 0, 999_999);
+    const pointsFromRow = toPositiveInt(row.points ?? row.balloons, 0, 999_999);
+    const points = pointsToGrant > 0 ? pointsToGrant : pointsFromRow;
+    if (!uid || points <= 0) throw new HttpsError("failed-precondition", "invalid request payload (points).");
+    const walletRef = db.ref(`users/${uid}/wallet`);
+    const tx = await walletRef.transaction((cur) => {
+      const base = cur && typeof cur === "object" ? cur : {};
+      const current = Math.max(0, Math.floor(Number(base.points || 0)));
+      return {
+        ...base,
+        points: current + points,
+        updatedAt: nowMs(),
+      };
+    });
+    if (!tx.committed) throw new HttpsError("aborted", "wallet update failed.");
+    const after = Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
+    const txnId = await appendPointLedger(db, uid, {
+      type: "charge",
+      amount: points,
+      balanceAfter: after,
+      requestType: "pointChargeRequests",
+      requestId: reqId,
+      requestPath: `pointChargeRequests/${reqId}`,
+      note: "admin approve charge",
+      createdBy: String(request.auth?.token?.email || ADMIN_EMAIL),
+    });
+    await reqRef.update({
+      status: "approved",
+      approvedAt: nowMs(),
+      approvedBy: String(request.auth?.token?.email || ADMIN_EMAIL),
+      // admin 승인 확정값 저장 (기존 스키마 호환용 balloons/points 포함)
+      balloons: points,
+      points,
+      pointsGranted: points,
+      ledgerTxnId: txnId,
+    });
+    return { ok: true, reqId, uid, pointsGranted: points, balanceAfter: after };
+  }
+);
+
+exports.adminRejectPointCharge = onCall(
+  { cors: true, timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) throw new HttpsError("permission-denied", "Admin only.");
+    const reqId = String(request.data?.reqId || "").trim();
+    if (!reqId) throw new HttpsError("invalid-argument", "reqId required.");
+    const db = admin.database();
+    const reqRef = db.ref(`pointChargeRequests/${reqId}`);
+    const snap = await reqRef.get();
+    if (!snap.exists()) throw new HttpsError("not-found", "request not found.");
+    const row = snap.val() || {};
+    if (String(row.status || "") !== "pending") throw new HttpsError("failed-precondition", "already resolved.");
+    await reqRef.update({
+      status: "rejected",
+      rejectedAt: nowMs(),
+      rejectedBy: String(request.auth?.token?.email || ADMIN_EMAIL),
+    });
+    return { ok: true, reqId };
+  }
+);
+
+exports.consumePointsForProduct = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    const uid = request.auth.uid;
+    const productType = String(request.data?.productType || "").trim();
+    const payload = request.data?.payload && typeof request.data.payload === "object" ? request.data.payload : {};
+    const now = nowMs();
+    const db = admin.database();
+    const cfgSnap = await db.ref("siteConfig").get();
+    const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+
+    let requestPath = "";
+    let writePayload = null;
+    let pointCost = 0;
+
+    if (productType === "liveRankingTop100") {
+      const nickname = String(payload.nickname || "").trim();
+      const soopId = String(payload.soopId || "").trim();
+      if (!nickname || !soopId) throw new HttpsError("invalid-argument", "nickname/soopId required.");
+      pointCost = pricing.liveRankingTop100;
+      const durationDays = pricing.liveRankingTop100DurationDays;
+      requestPath = `liveRankingTop100Requests/${uid}`;
+      writePayload = {
+        nickname,
+        soopId,
+        uid,
+        status: "pending",
+        createdAt: now,
+        cost: pointCost,
+        pointCost,
+        paymentStatus: "paid",
+        pointTxnId: "",
+        durationDays,
+      };
+    } else if (productType === "assetRanking") {
+      const nickname = String(payload.nickname || "").trim();
+      const soopId = String(payload.soopId || "").trim();
+      if (!nickname || !soopId) throw new HttpsError("invalid-argument", "nickname/soopId required.");
+      pointCost = pricing.assetRanking;
+      requestPath = `assetRankingRequests/${uid}`;
+      writePayload = {
+        nickname,
+        soopId,
+        uid,
+        status: "pending",
+        createdAt: now,
+        cost: pointCost,
+        pointCost,
+        paymentStatus: "paid",
+        pointTxnId: "",
+      };
+    } else if (productType === "relay") {
+      const nickname = String(payload.nickname || "").trim();
+      const soopId = String(payload.soopId || "").trim();
+      const hours = toPositiveInt(payload.hours, 0, 24);
+      if (!nickname || !soopId || hours < 1 || hours > 24) throw new HttpsError("invalid-argument", "invalid relay payload.");
+      const offPeak = Number(payload.offPeakHours || 0);
+      const regular = Number(payload.regularHours || 0);
+      pointCost = Math.max(1, Math.floor((offPeak * pricing.relayOffPeakPerHour) + (regular * pricing.relayRegularPerHour)));
+      const reqId = `relay_${uid}_${now}`;
+      requestPath = `relayRequests/${reqId}`;
+      writePayload = {
+        nickname,
+        soopId,
+        hours,
+        uid,
+        status: "pending",
+        createdAt: now,
+        cost: pointCost,
+        pointCost,
+        paymentStatus: "paid",
+        pointTxnId: "",
+      };
+    } else if (productType === "promoBanner") {
+      const nickname = String(payload.nickname || "").trim();
+      const soopId = String(payload.soopId || "").trim();
+      const days = toPositiveInt(payload.days, 0, 30);
+      if (!nickname || !soopId || days < 1 || days > 30) throw new HttpsError("invalid-argument", "invalid promo payload.");
+      pointCost = days * pricing.broadcastBannerPerDay;
+      const reqId = `${soopId}_${now}`;
+      requestPath = `adRequests/${reqId}`;
+      writePayload = {
+        nickname,
+        soopId,
+        days,
+        imgUrl: String(payload.imgUrl || ""),
+        link: String(payload.link || ""),
+        uid,
+        status: "pending",
+        createdAt: now,
+        cost: pointCost,
+        pointCost,
+        paymentStatus: "paid",
+        pointTxnId: "",
+      };
+    } else if (productType === "chartBanner") {
+      const nickname = String(payload.nickname || "").trim();
+      const imgUrl = String(payload.imgUrl || "").trim();
+      const link = String(payload.link || "").trim();
+      const days = toPositiveInt(payload.days, 0, 99);
+      if (!nickname || !imgUrl || !link || days < 1 || days > 99) throw new HttpsError("invalid-argument", "invalid chart payload.");
+      pointCost = days * pricing.chartBannerPerDay;
+      const reqId = `chart_${uid}_${now}`;
+      requestPath = `chartAdRequests/${reqId}`;
+      writePayload = {
+        nickname,
+        imgUrl,
+        link,
+        days,
+        uid,
+        status: "pending",
+        createdAt: now,
+        cost: pointCost,
+        pointCost,
+        paymentStatus: "paid",
+        pointTxnId: "",
+      };
+    } else if (productType === "titleSponsor") {
+      const stockId = String(payload.stockId || "").trim();
+      const stockName = String(payload.stockName || "").trim();
+      const market = String(payload.market || "stock").trim();
+      const title = String(payload.title || "").trim();
+      const theme = String(payload.theme || "preset1").trim();
+      if (!stockId || !title) throw new HttpsError("invalid-argument", "invalid title payload.");
+      pointCost = pricing.titleSponsorUnitCost;
+      const reqId = `title_${uid}_${now}`;
+      requestPath = `titleRequests/${reqId}`;
+      writePayload = {
+        uid,
+        stockId,
+        stockName,
+        market,
+        title,
+        theme,
+        status: "pending",
+        cost: pointCost,
+        pointCost,
+        paymentStatus: "paid",
+        pointTxnId: "",
+        durationMs: Number(payload.durationMs || 5 * 24 * 60 * 60 * 1000),
+        createdAt: now,
+        updatedAt: now,
+      };
+    } else {
+      throw new HttpsError("invalid-argument", "unsupported productType.");
+    }
+
+    const reqRef = db.ref(requestPath);
+    const reqSnap = await reqRef.get();
+    if (reqSnap.exists()) {
+      const st = String(reqSnap.val()?.status || "");
+      if (st === "pending" || st === "approved") {
+        throw new HttpsError("failed-precondition", "already requested.");
+      }
+    }
+
+    const walletRef = db.ref(`users/${uid}/wallet`);
+    const tx = await walletRef.transaction((cur) => {
+      const base = cur && typeof cur === "object" ? cur : {};
+      const points = Math.max(0, Math.floor(Number(base.points || 0)));
+      if (points < pointCost) return;
+      return {
+        ...base,
+        points: points - pointCost,
+        updatedAt: nowMs(),
+      };
+    });
+    if (!tx.committed) throw new HttpsError("failed-precondition", "insufficient-points");
+    const after = Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
+    const txnId = await appendPointLedger(db, uid, {
+      type: "consume",
+      amount: -pointCost,
+      balanceAfter: after,
+      requestType: productType,
+      requestId: requestPath.split("/").pop() || "",
+      requestPath,
+      note: "consume points for paid product",
+      createdBy: uid,
+    });
+    writePayload.pointTxnId = txnId;
+    writePayload.pointDebitedAt = now;
+    await reqRef.set(writePayload);
+    return { ok: true, productType, pointCost, balanceAfter: after, requestPath, txnId };
+  }
+);
+
+exports.adminRejectPaidRequestWithRefund = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) throw new HttpsError("permission-denied", "Admin only.");
+    const requestPath = String(request.data?.requestPath || "").trim();
+    const rejectStatus = String(request.data?.status || "rejected").trim();
+    if (!requestPath || !requestPath.includes("/")) throw new HttpsError("invalid-argument", "requestPath required.");
+    const db = admin.database();
+    const reqRef = db.ref(requestPath);
+    const snap = await reqRef.get();
+    if (!snap.exists()) throw new HttpsError("not-found", "request not found.");
+    const row = snap.val() || {};
+    const uid = String(row.uid || "");
+    if (!uid) throw new HttpsError("failed-precondition", "uid missing.");
+    const prevStatus = String(row.status || "");
+    if (prevStatus !== "pending") throw new HttpsError("failed-precondition", "not pending.");
+    const pointCost = Math.max(0, Math.floor(Number((row.pointCost ?? row.cost) || 0)));
+    const paymentStatus = String(row.paymentStatus || "");
+
+    let refunded = 0;
+    let balanceAfter = null;
+    if (pointCost > 0 && paymentStatus === "paid") {
+      const walletRef = db.ref(`users/${uid}/wallet`);
+      const tx = await walletRef.transaction((cur) => {
+        const base = cur && typeof cur === "object" ? cur : {};
+        const points = Math.max(0, Math.floor(Number(base.points || 0)));
+        return {
+          ...base,
+          points: points + pointCost,
+          updatedAt: nowMs(),
+        };
+      });
+      if (!tx.committed) throw new HttpsError("aborted", "wallet refund failed.");
+      balanceAfter = Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
+      refunded = pointCost;
+      await appendPointLedger(db, uid, {
+        type: "refund",
+        amount: pointCost,
+        balanceAfter,
+        requestType: requestPath.split("/")[0],
+        requestId: requestPath.split("/")[1] || "",
+        requestPath,
+        note: "admin reject refund",
+        createdBy: String(request.auth?.token?.email || ADMIN_EMAIL),
+      });
+    }
+    await reqRef.update({
+      status: rejectStatus,
+      rejectedAt: nowMs(),
+      rejectedBy: String(request.auth?.token?.email || ADMIN_EMAIL),
+      paymentStatus: refunded > 0 ? "refunded" : paymentStatus || "none",
+      refundedPoints: refunded,
+      refundedAt: refunded > 0 ? nowMs() : null,
+    });
+    return { ok: true, requestPath, refundedPoints: refunded, balanceAfter };
+  }
+);
+
 /** 관리자: stocks 기준으로 coins 미존재 종목 생성(시가 1억원) */
 exports.adminSyncCoinsFromStocks = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },

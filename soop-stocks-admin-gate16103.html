@@ -1210,6 +1210,24 @@
         </div>
     </div>
 
+    <!-- ✨ 별포인트 충전 검수 -->
+    <div id="admin-accordion-point-charge" class="container admin-accordion-anchor" style="display:block; border-color:#f59e0b;">
+        <div class="accordion-header">
+            <h1>✨ 별포인트 충전 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box" style="border-color:#f59e0b; color:#fde68a;">
+            사용자 후원 후 충전 요청을 승인하면 별포인트가 지갑에 적립됩니다. (1 별풍선 = 1 별포인트)
+        </div>
+        <div id="point-charge-list" style="display:flex; flex-direction:column; gap:10px;">
+            <div style="padding:12px; color:#64748b; text-align:center;">불러오는 중...</div>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 🕐 시장 운영 시간 관리 -->
     <div class="container" style="display:block; border-color: #f59e0b;">
         <div class="accordion-header">
@@ -2140,6 +2158,9 @@
     const adminBulkDeleteStocksFn = httpsCallable(functions, 'adminBulkDeleteStocks');
     const adminSyncCoinsFromStocksFn = httpsCallable(functions, 'adminSyncCoinsFromStocks');
     const adminRebuildSingleInstrumentFn = httpsCallable(functions, 'adminRebuildSingleInstrument');
+    const adminApprovePointChargeFn = httpsCallable(functions, 'adminApprovePointCharge');
+    const adminRejectPointChargeFn = httpsCallable(functions, 'adminRejectPointCharge');
+    const adminRejectPaidRequestWithRefundFn = httpsCallable(functions, 'adminRejectPaidRequestWithRefund');
     const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
     const adminInstrumentImpactFn = httpsCallable(functions, 'adminInstrumentImpact');
@@ -2571,7 +2592,7 @@
     window.rejectTitleSponsorRequest = async function(reqId) {
         if (!isAdmin()) return;
         try {
-            await update(ref(db, `titleRequests/${reqId}`), { status: 'rejected', updatedAt: Date.now(), rejectedBy: ADMIN_EMAIL });
+            await adminRejectPaidRequestWithRefundFn({ requestPath: `titleRequests/${reqId}`, status: 'rejected' });
         } catch (e) {
             alert('거절 실패: ' + (e?.message || e));
         }
@@ -3031,11 +3052,12 @@
     };
 
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
-    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, liveRankingAccess: null, asset: null };
+    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, liveRankingAccess: null, asset: null, pointCharge: null };
     let prevListingKeys = null;
     let prevAdKeys = null;
     let prevChartKeys = null;
     let prevRelayKeys = null;
+    let prevPointChargeKeys = null;
     let prevRankingAccessKeys = null;
     let prevLiveRankingAccessKeys = null;
     let prevAssetKeys = null;
@@ -3073,7 +3095,7 @@
     }
 
     function stopRealtimeRequestListeners() {
-        ['listing', 'ad', 'chart', 'relay', 'rankingAccess', 'asset'].forEach((k) => {
+        ['listing', 'ad', 'chart', 'relay', 'rankingAccess', 'asset', 'pointCharge', 'liveRankingAccess'].forEach((k) => {
             const u = requestRealtimeUnsubs[k];
             if (u) {
                 u();
@@ -3084,6 +3106,7 @@
         prevAdKeys = null;
         prevChartKeys = null;
         prevRelayKeys = null;
+        prevPointChargeKeys = null;
         prevRankingAccessKeys = null;
         prevLiveRankingAccessKeys = null;
         prevAssetKeys = null;
@@ -3406,10 +3429,76 @@
         });
     }
 
+    function renderPointChargeRequestsList(data, highlightIds) {
+        const listEl = document.getElementById('point-charge-list');
+        if (!listEl) return;
+        const entries = Object.entries(data || {})
+            .sort((a, b) => (Number(b?.[1]?.createdAt || 0) - Number(a?.[1]?.createdAt || 0)));
+        if (entries.length === 0) {
+            listEl.innerHTML = '<div style="padding:12px; color:#64748b; text-align:center;">충전 신청 내역이 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = '';
+        entries.forEach(([reqId, req]) => {
+            const st = String(req?.status || '').toLowerCase();
+            const statusColor = st === 'approved' ? '#22c55e' : st === 'rejected' ? '#ef4444' : '#f59e0b';
+            const statusText = st === 'approved' ? '승인' : st === 'rejected' ? '거절' : '대기';
+            const isHi = highlightIds && highlightIds.has(reqId);
+            const reqAmount = Number(req?.balloons ?? req?.points ?? 0);
+            const reqAmountText = reqAmount > 0 ? `${reqAmount.toLocaleString()}P` : '미확정';
+            const card = document.createElement('div');
+            card.className = 'request-card' + (st === 'pending' ? ' pending' : '') + (isHi ? ' just-arrived' : '');
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div>
+                        <span style="font-weight:700; color:#f8fafc;">${escapeHtml(req?.nickname || '-')}</span>${isHi ? '<span class="req-new-badge">NEW</span>' : ''}
+                        <span style="font-size:12px; color:#64748b; margin-left:8px;">@${escapeHtml(req?.soopId || '-')}</span>
+                    </div>
+                    <span style="font-size:12px; font-weight:700; color:${statusColor};">${statusText}</span>
+                </div>
+                <div style="font-size:12px; color:#94a3b8; margin-bottom:10px;">요청: ${escapeHtml(reqAmountText)} · UID: ${escapeHtml(req?.uid || '-')}</div>
+                <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; align-items:center;">
+                    ${st === 'pending' ? `
+                        <input type="number" class="point-charge-approve-points" min="1" max="999999" step="1"
+                            value="${reqAmount > 0 ? reqAmount : ''}" placeholder="승인 별풍선 수량"
+                            style="width:170px; background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:8px; font-size:12px;">
+                        <button type="button" class="btn-point-charge-approve"
+                            style="background:#22c55e; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">승인</button>
+                        <button type="button" class="btn-point-charge-reject"
+                            style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:700; font-size:12px;">거절</button>
+                    ` : ''}
+                </div>`;
+            listEl.appendChild(card);
+            const approveBtn = card.querySelector('.btn-point-charge-approve');
+            const pointsInput = card.querySelector('.point-charge-approve-points');
+            approveBtn?.addEventListener('click', () => {
+                const pointsToGrant = Math.floor(Number(pointsInput?.value || 0));
+                if (!Number.isFinite(pointsToGrant) || pointsToGrant < 1) {
+                    alert('승인 포인트(별풍선 수량)을 입력해주세요.');
+                    return;
+                }
+                window.approvePointChargeRequest(reqId, pointsToGrant);
+            });
+            card.querySelector('.btn-point-charge-reject')?.addEventListener('click', () => window.rejectPointChargeRequest(reqId));
+            if (isHi) setTimeout(() => card.classList.remove('just-arrived'), 8000);
+        });
+    }
+
     function startRealtimeRequestListeners() {
         stopRealtimeRequestListeners();
         resetAdminInboxCounts();
         maybeRequestNotifPermission();
+
+        requestRealtimeUnsubs.pointCharge = onValue(adminRecentRequestsQuery('pointChargeRequests'), (snap) => {
+            const data = snap.val() || {};
+            const keys = Object.keys(data);
+            let added = [];
+            if (prevPointChargeKeys !== null) {
+                added = keys.filter((k) => !prevPointChargeKeys.has(k));
+            }
+            prevPointChargeKeys = new Set(keys);
+            renderPointChargeRequestsList(data, new Set(added));
+        });
 
         requestRealtimeUnsubs.ad = onValue(adminRecentRequestsQuery('adRequests'), (snap) => {
             try {
@@ -6149,10 +6238,7 @@
         if (!isAdmin()) return;
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
-            await update(ref(db, `adRequests/${reqId}`), {
-                status:     'rejected',
-                rejectedAt: Date.now()
-            });
+            await adminRejectPaidRequestWithRefundFn({ requestPath: `adRequests/${reqId}`, status: 'rejected' });
         } catch(e) {
             alert('거절 실패: ' + e.message);
         }
@@ -6194,7 +6280,7 @@
         if (!isAdmin()) return;
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
-            await update(ref(db, `chartAdRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
+            await adminRejectPaidRequestWithRefundFn({ requestPath: `chartAdRequests/${reqId}`, status: 'rejected' });
         } catch(e) {
             alert('거절 실패: ' + e.message);
         }
@@ -6884,7 +6970,7 @@
         if (!isAdmin()) return;
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
-            await update(ref(db, `relayRequests/${reqId}`), { status: 'rejected', rejectedAt: Date.now() });
+            await adminRejectPaidRequestWithRefundFn({ requestPath: `relayRequests/${reqId}`, status: 'rejected' });
         } catch(e) {
             alert('거절 실패: ' + e.message);
         }
@@ -8518,6 +8604,27 @@
         } catch(e) { alert('삭제 실패: ' + e.message); }
     };
 
+    window.approvePointChargeRequest = async function(reqId, pointsToGrant) {
+        if (!isAdmin()) return;
+        const p = pointsToGrant != null ? String(pointsToGrant) : '';
+        if (!confirm(`이 충전 요청을 승인하시겠습니까?${p ? ` (${p}P)` : ''}`)) return;
+        try {
+            await adminApprovePointChargeFn({ reqId, pointsToGrant });
+        } catch (e) {
+            alert('충전 승인 실패: ' + (e?.message || e));
+        }
+    };
+
+    window.rejectPointChargeRequest = async function(reqId) {
+        if (!isAdmin()) return;
+        if (!confirm('이 충전 요청을 거절하시겠습니까?')) return;
+        try {
+            await adminRejectPointChargeFn({ reqId });
+        } catch (e) {
+            alert('충전 거절 실패: ' + (e?.message || e));
+        }
+    };
+
     // ── 유저 자산 랭킹 열람 신청 검수 (assetRankingRequests) ─────
 
     window.approveAssetRankingAccess = async function(uid) {
@@ -8537,7 +8644,7 @@
         if (!isAdmin()) return;
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
-            await update(ref(db, `assetRankingRequests/${uid}`), { status: 'rejected', rejectedAt: Date.now() });
+            await adminRejectPaidRequestWithRefundFn({ requestPath: `assetRankingRequests/${uid}`, status: 'rejected' });
         } catch(e) { alert('거절 실패: ' + e.message); }
     };
 
@@ -8624,10 +8731,7 @@
         if (!isAdmin()) return;
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
-            await update(ref(db, `liveRankingTop100Requests/${uid}`), {
-                status: 'rejected',
-                rejectedAt: Date.now()
-            });
+            await adminRejectPaidRequestWithRefundFn({ requestPath: `liveRankingTop100Requests/${uid}`, status: 'rejected' });
         } catch (e) {
             alert('거절 실패: ' + e.message);
         }
