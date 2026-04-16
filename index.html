@@ -10849,6 +10849,16 @@ window.openStarBalloonGiftForPointCharge = function() {
 
 window.openPointChargeModal = function() {
     prepareMobileModalLayer?.();
+    if (!isGoogleAuthenticatedUser(auth.currentUser)) {
+        alert(
+            '별포인트 충전은 Google 계정으로 로그인한 뒤에만 이용할 수 있습니다.\n\n' +
+                '확인을 누르면 메인 화면의 구글 로그인 버튼과 동일한 방식으로 로그인(연동) 창이 열립니다.'
+        );
+        try {
+            invokeGoogleLoginSameAsMainScreenButton();
+        } catch (_) { /* noop */ }
+        return;
+    }
     const uid = auth.currentUser?.uid;
     if (!uid) {
         alert('로그인이 필요합니다.');
@@ -10912,6 +10922,16 @@ window.submitPointGiftRequest = async function() {
 };
 
 window.submitPointChargeRequest = async function() {
+    if (!isGoogleAuthenticatedUser(auth.currentUser)) {
+        alert(
+            '별포인트 충전은 Google 계정으로 로그인한 뒤에만 이용할 수 있습니다.\n\n' +
+                '확인을 누르면 메인 화면의 구글 로그인 버튼과 동일한 방식으로 로그인(연동) 창이 열립니다.'
+        );
+        try {
+            invokeGoogleLoginSameAsMainScreenButton();
+        } catch (_) { /* noop */ }
+        return;
+    }
     const nickname = document.getElementById('point-charge-nickname')?.value.trim() || '';
     const soopId = document.getElementById('point-charge-soop-id')?.value.trim() || '';
     const agree = document.getElementById('point-charge-privacy-agree')?.checked;
