@@ -906,53 +906,66 @@ function logCallableFailure(functionName, request, err, extra = {}) {
 
 async function deductPointsOrThrow(db, uid, pointCost) {
   const walletRef = db.ref(`users/${uid}/wallet`);
-  const beforeSnap = await walletRef.get();
-  const beforeVal = beforeSnap.exists() ? (beforeSnap.val() || {}) : {};
-  const beforeRaw = beforeVal.points;
-  const beforeParsed =
-    typeof beforeRaw === "number"
-      ? beforeRaw
-      : Number(String(beforeRaw ?? "0").replace(/[^0-9.-]/g, ""));
-  const beforePoints = Math.max(0, Math.floor(Number.isFinite(beforeParsed) ? beforeParsed : 0));
+  const MAX_ATTEMPTS = 3;
 
-  if (beforePoints < pointCost) {
-    const err = new HttpsError("failed-precondition", "insufficient points.");
-    err.details = {
-      reason: "INSUFFICIENT_POINTS",
-      beforeRaw: toLogSafeValue(beforeRaw),
-      beforePoints,
-      pointCost,
-    };
-    throw err;
-  }
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const beforeSnap = await walletRef.get();
+    const beforeVal = beforeSnap.exists() ? (beforeSnap.val() || {}) : {};
+    const beforeValForTx = beforeVal;
+    const beforeRaw = beforeVal.points;
+    const beforeParsed =
+      typeof beforeRaw === "number"
+        ? beforeRaw
+        : Number(String(beforeRaw ?? "0").replace(/[^0-9.-]/g, ""));
+    const beforePoints = Math.max(0, Math.floor(Number.isFinite(beforeParsed) ? beforeParsed : 0));
 
-  let evalLogged = false;
-  const tx = await walletRef.transaction((cur) => {
-    const base = cur && typeof cur === "object" ? cur : {};
-    const raw = base.points;
-    const parsed =
-      typeof raw === "number"
-        ? raw
-        : Number(String(raw ?? "0").replace(/[^0-9.-]/g, ""));
-    const points = Math.max(0, Math.floor(Number.isFinite(parsed) ? parsed : 0));
-
-    if (!evalLogged) {
-      evalLogged = true;
-      console.error("[wallet] deduct transaction eval", {
-        uid,
+    if (beforePoints < pointCost) {
+      const err = new HttpsError("failed-precondition", "insufficient points.");
+      err.details = {
+        reason: "INSUFFICIENT_POINTS",
+        beforeRaw: toLogSafeValue(beforeRaw),
+        beforePoints,
         pointCost,
-        curExists: cur != null,
-        raw: toLogSafeValue(raw),
-        parsed: toLogSafeValue(parsed),
-        points,
-      });
+      };
+      throw err;
     }
 
-    if (points < pointCost) return;
-    return { ...base, points: points - pointCost, updatedAt: nowMs() };
-  });
+    let evalLogged = false;
+    const tx = await walletRef.transaction((cur) => {
+      // RTDB transaction callback이 `cur=null`로 들어오는 케이스가 있어(경합/일시적 뷰),
+      // 이 함수 앞단에서 이미 읽은 wallet 값을 fallback으로 사용합니다.
+      const base =
+        cur && typeof cur === "object"
+          ? cur
+          : (beforeValForTx && typeof beforeValForTx === "object" ? beforeValForTx : {});
+      const raw = base.points;
+      const parsed =
+        typeof raw === "number"
+          ? raw
+          : Number(String(raw ?? "0").replace(/[^0-9.-]/g, ""));
+      const points = Math.max(0, Math.floor(Number.isFinite(parsed) ? parsed : 0));
 
-  if (!tx.committed) {
+      if (!evalLogged) {
+        evalLogged = true;
+        console.error("[wallet] deduct transaction eval", {
+          uid,
+          pointCost,
+          attempt,
+          curExists: cur != null,
+          raw: toLogSafeValue(raw),
+          parsed: toLogSafeValue(parsed),
+          points,
+        });
+      }
+
+      if (points < pointCost) return;
+      return { ...base, points: points - pointCost, updatedAt: nowMs() };
+    });
+
+    if (tx.committed) {
+      return Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
+    }
+
     const afterSnap = await walletRef.get();
     const afterVal = afterSnap.exists() ? (afterSnap.val() || {}) : {};
     const afterRaw = afterVal.points;
@@ -961,9 +974,11 @@ async function deductPointsOrThrow(db, uid, pointCost) {
         ? afterRaw
         : Number(String(afterRaw ?? "0").replace(/[^0-9.-]/g, ""));
     const afterPoints = Math.max(0, Math.floor(Number.isFinite(afterParsed) ? afterParsed : 0));
+
     console.error("[wallet] deduct transaction aborted", {
       uid,
       pointCost,
+      attempt,
       beforeRaw: toLogSafeValue(beforeRaw),
       beforePoints,
       afterRaw: toLogSafeValue(afterRaw),
@@ -971,11 +986,27 @@ async function deductPointsOrThrow(db, uid, pointCost) {
       txSnapshotRaw: toLogSafeValue(tx.snapshot?.val()?.points),
     });
 
-    const reason = afterPoints < pointCost ? "INSUFFICIENT_POINTS_AFTER_RECHECK" : "WALLET_TRANSACTION_ABORTED";
-    const message = afterPoints < pointCost ? "insufficient points." : "wallet transaction aborted.";
-    const err = new HttpsError("failed-precondition", message);
+    if (afterPoints < pointCost) {
+      const err = new HttpsError("failed-precondition", "insufficient points.");
+      err.details = {
+        reason: "INSUFFICIENT_POINTS_AFTER_RECHECK",
+        beforeRaw: toLogSafeValue(beforeRaw),
+        beforePoints,
+        afterRaw: toLogSafeValue(afterRaw),
+        afterPoints,
+        pointCost,
+      };
+      throw err;
+    }
+
+    // 잔액이 충분한데도 commit이 안 된 케이스: transient abort/경합으로 보고 재시도
+    if (attempt < MAX_ATTEMPTS) {
+      continue;
+    }
+
+    const err = new HttpsError("failed-precondition", "wallet transaction aborted.");
     err.details = {
-      reason,
+      reason: "WALLET_TRANSACTION_ABORTED",
       beforeRaw: toLogSafeValue(beforeRaw),
       beforePoints,
       afterRaw: toLogSafeValue(afterRaw),
@@ -984,7 +1015,9 @@ async function deductPointsOrThrow(db, uid, pointCost) {
     };
     throw err;
   }
-  return Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
+
+  // 논리상 여기에 도달하면 안 됨
+  throw new HttpsError("aborted", "deductPointsOrThrow failed unexpectedly.");
 }
 
 async function appendPointLedger(db, uid, row) {
