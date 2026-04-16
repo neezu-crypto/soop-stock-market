@@ -906,6 +906,26 @@ function logCallableFailure(functionName, request, err, extra = {}) {
 
 async function deductPointsOrThrow(db, uid, pointCost) {
   const walletRef = db.ref(`users/${uid}/wallet`);
+  const beforeSnap = await walletRef.get();
+  const beforeVal = beforeSnap.exists() ? (beforeSnap.val() || {}) : {};
+  const beforeRaw = beforeVal.points;
+  const beforeParsed =
+    typeof beforeRaw === "number"
+      ? beforeRaw
+      : Number(String(beforeRaw ?? "0").replace(/[^0-9.-]/g, ""));
+  const beforePoints = Math.max(0, Math.floor(Number.isFinite(beforeParsed) ? beforeParsed : 0));
+
+  if (beforePoints < pointCost) {
+    const err = new HttpsError("failed-precondition", "insufficient points.");
+    err.details = {
+      reason: "INSUFFICIENT_POINTS",
+      beforeRaw: toLogSafeValue(beforeRaw),
+      beforePoints,
+      pointCost,
+    };
+    throw err;
+  }
+
   const tx = await walletRef.transaction((cur) => {
     const base = cur && typeof cur === "object" ? cur : {};
     const raw = base.points;
@@ -917,7 +937,38 @@ async function deductPointsOrThrow(db, uid, pointCost) {
     if (points < pointCost) return;
     return { ...base, points: points - pointCost, updatedAt: nowMs() };
   });
-  if (!tx.committed) throw new HttpsError("failed-precondition", "insufficient points.");
+
+  if (!tx.committed) {
+    const afterSnap = await walletRef.get();
+    const afterVal = afterSnap.exists() ? (afterSnap.val() || {}) : {};
+    const afterRaw = afterVal.points;
+    const afterParsed =
+      typeof afterRaw === "number"
+        ? afterRaw
+        : Number(String(afterRaw ?? "0").replace(/[^0-9.-]/g, ""));
+    const afterPoints = Math.max(0, Math.floor(Number.isFinite(afterParsed) ? afterParsed : 0));
+    console.error("[wallet] deduct transaction aborted", {
+      uid,
+      pointCost,
+      beforeRaw: toLogSafeValue(beforeRaw),
+      beforePoints,
+      afterRaw: toLogSafeValue(afterRaw),
+      afterPoints,
+    });
+
+    const reason = afterPoints < pointCost ? "INSUFFICIENT_POINTS_AFTER_RECHECK" : "WALLET_TRANSACTION_ABORTED";
+    const message = afterPoints < pointCost ? "insufficient points." : "wallet transaction aborted.";
+    const err = new HttpsError("failed-precondition", message);
+    err.details = {
+      reason,
+      beforeRaw: toLogSafeValue(beforeRaw),
+      beforePoints,
+      afterRaw: toLogSafeValue(afterRaw),
+      afterPoints,
+      pointCost,
+    };
+    throw err;
+  }
   return Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
 }
 
