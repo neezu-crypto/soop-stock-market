@@ -1928,7 +1928,8 @@
             </div>
             <div class="daily-routine-preset-hint">
                 현재 편집 중인 루틴은 아래 목록에 반영되며, 자동 실행 시각·ON 여부와 함께 Firebase <code style="font-size:10px;">siteConfig/dailyAuto</code>에 저장됩니다.<br>
-                프리셋만 별도로 <code style="font-size:10px;">siteConfig/dailyAutoPresets</code>에 보관되며, 불러오면 아래 목록이 교체되고 곧바로 dailyAuto에도 반영됩니다.
+                프리셋만 별도로 <code style="font-size:10px;">siteConfig/dailyAutoPresets</code>에 보관되며, 불러오면 아래 목록이 교체되고 곧바로 dailyAuto에도 반영됩니다.<br>
+                <span style="color:#94a3b8;">서버 스케줄(<code style="font-size:10px;">dailyAutoRunner</code>)이 <b>KST 매시 정각</b>에만 깨어나, 그 시점에 오늘 예정 시각이 이미 지났으면 루틴을 1회 실행합니다(최대 약 1시간 지연 가능). 이 페이지를 켜 두지 않아도 됩니다. 로그: <code style="font-size:10px;">adminActivityLogs/dailyAutoRuns/</code> · 락: <code style="font-size:10px;">siteConfig/_functions/dailyAutoRunner/claims/</code></span>
             </div>
         </div>
         <div class="daily-routine-add-row">

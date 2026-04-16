@@ -76,6 +76,34 @@ function getKstHourMinute() {
   };
 }
 
+/** KST 기준 YYYY-MM-DD (스케줄·일일 락용) */
+function kstYmdString(d = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const mo = parts.find((p) => p.type === "month")?.value ?? "01";
+  const da = parts.find((p) => p.type === "day")?.value ?? "01";
+  return `${y}-${mo}-${da}`;
+}
+
+/** KST 당일 `ymd` + 시·분 → UTC epoch ms (한국 DST 없음, `+09:00` 고정). */
+function kstLocalDateTimeToUtcMs(ymd, hour, minute) {
+  const [y, mo, d] = String(ymd || "")
+    .trim()
+    .split("-")
+    .map((x) => parseInt(x, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return NaN;
+  const hh = String(Math.min(23, Math.max(0, hour))).padStart(2, "0");
+  const mm = String(Math.min(59, Math.max(0, minute))).padStart(2, "0");
+  const iso = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}T${hh}:${mm}:00+09:00`;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : NaN;
+}
+
 /** getHours/getMinutes 만 쓰는 기존 코드와 호환 (실제 Date 아님) */
 function nowKstDate() {
   const { h, m } = getKstHourMinute();
@@ -3272,6 +3300,138 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
 });
 
 /**
+ * 액면분할: Admin SDK로 stocks + 전 users 스캔·갱신 (callable·일일 스케줄 공용)
+ * kind: "threshold" | "top100"
+ * @param {{ kind: string, ratioN: number, thresholdWon: number }} params
+ */
+async function executeAdminStockSplitCore(db, { kind, ratioN, thresholdWon }) {
+  const splitTs = Date.now();
+  await db.ref("siteConfig/maintenance").set(true);
+  try {
+    const stocksSnap = await db.ref("stocks").once("value");
+    const stocksData = stocksSnap.val() || {};
+
+    let splittable = [];
+    if (kind === "top100") {
+      const top100Ids = new Set(
+        Object.entries(stocksData)
+          .sort(([, a], [, b]) => (Number(b?.price) || 0) - (Number(a?.price) || 0))
+          .slice(0, 100)
+          .map(([id]) => id)
+      );
+      splittable = [...top100Ids];
+    } else {
+      Object.entries(stocksData).forEach(([id, s]) => {
+        const price = Number(s?.price) || 0;
+        if (price >= thresholdWon && price >= ratioN) splittable.push(id);
+      });
+    }
+
+    if (splittable.length === 0) {
+      await db.ref("siteConfig/maintenance").set(false);
+      return {
+        ok: true,
+        skipped: true,
+        reason: "no_splittable",
+        kind,
+        stocksUpdated: 0,
+        userHoldingPathsUpdated: 0,
+        events: [],
+      };
+    }
+
+    const targetSet = new Set(splittable);
+    const events = [];
+
+    splittable.forEach((id) => {
+      const s = stocksData[id];
+      const oldPrice = Number(s?.price) || 0;
+      const newPrice = Math.max(1, Math.floor(oldPrice / ratioN));
+      events.push({
+        stockId: id,
+        stockName: (s && s.name) || id,
+        thresholdWon: kind === "threshold" ? thresholdWon : 0,
+        ratioN,
+        oldPrice,
+        newPrice,
+      });
+    });
+
+    const PAR = 20;
+    for (let i = 0; i < splittable.length; i += PAR) {
+      const slice = splittable.slice(i, i + PAR);
+      await Promise.all(
+        slice.map((id) => {
+          const s = stocksData[id];
+          const oldPrice = Number(s?.price) || 0;
+          const newPrice = Math.max(1, Math.floor(oldPrice / ratioN));
+          const history = (s?.history || [s?.price]).map((p) =>
+            Math.max(1, Math.floor((Number(p) || 0) / ratioN))
+          );
+          return db.ref(`stocks/${id}`).update({
+            price: newPrice,
+            history,
+            change: s?.change != null ? s.change : 0,
+            lastSplitTimestamp: splitTs,
+          });
+        })
+      );
+    }
+
+    const usersSnap = await db.ref("users").once("value");
+    const usersData = usersSnap.val() || {};
+
+    const holdingUpdates = {};
+    Object.entries(usersData).forEach(([uid, user]) => {
+      if (!user?.stocks || typeof user.stocks !== "object") return;
+      Object.entries(user.stocks).forEach(([stockId, info]) => {
+        if (!targetSet.has(stockId) || !info) return;
+        const q = Math.floor(Number(info.qty) || 0);
+        if (q <= 0) return;
+        const newQty = Math.floor(q * ratioN);
+        const newAvg = Math.max(1, Math.floor((Number(info.avg) || 0) / ratioN));
+        holdingUpdates[`users/${uid}/stocks/${stockId}`] = { qty: newQty, avg: newAvg };
+      });
+    });
+
+    const chunks = chunkObject(holdingUpdates, 400);
+    for (const chunk of chunks) {
+      await db.ref().update(chunk);
+    }
+
+    try {
+      await db.ref(`adminActivityLogs/dailyAutoSplit/${Date.now()}`).set({
+        type: "dailyAutoSplit",
+        adminEmail: ADMIN_EMAIL,
+        kind,
+        thresholdWon: kind === "threshold" ? thresholdWon : null,
+        ratioN,
+        events,
+        userHoldingPathsUpdated: Object.keys(holdingUpdates).length,
+        createdAt: splitTs,
+        via: "adminStockSplit",
+      });
+    } catch (logErr) {
+      console.warn("[adminStockSplit] adminActivityLogs:", logErr?.message || logErr);
+    }
+
+    await db.ref("siteConfig/maintenance").set(false);
+
+    return {
+      ok: true,
+      skipped: false,
+      kind,
+      stocksUpdated: splittable.length,
+      userHoldingPathsUpdated: Object.keys(holdingUpdates).length,
+      events,
+    };
+  } catch (e) {
+    await db.ref("siteConfig/maintenance").set(false).catch(() => {});
+    throw e;
+  }
+}
+
+/**
  * 액면분할: Admin SDK로 stocks + 전 users 스캔·갱신 (클라이언트 users/ 대량 읽기 실패 시 대안)
  * kind: "threshold" | "top100"
  */
@@ -3298,131 +3458,9 @@ exports.adminStockSplit = onCall(
     }
 
     const db = admin.database();
-    const splitTs = Date.now();
-
-    await db.ref("siteConfig/maintenance").set(true);
-
     try {
-      const stocksSnap = await db.ref("stocks").once("value");
-      const stocksData = stocksSnap.val() || {};
-
-      let splittable = [];
-      if (kind === "top100") {
-        const top100Ids = new Set(
-          Object.entries(stocksData)
-            .sort(([, a], [, b]) => (Number(b?.price) || 0) - (Number(a?.price) || 0))
-            .slice(0, 100)
-            .map(([id]) => id)
-        );
-        splittable = [...top100Ids];
-      } else {
-        Object.entries(stocksData).forEach(([id, s]) => {
-          const price = Number(s?.price) || 0;
-          if (price >= thresholdWon && price >= ratioN) splittable.push(id);
-        });
-      }
-
-      if (splittable.length === 0) {
-        await db.ref("siteConfig/maintenance").set(false);
-        return {
-          ok: true,
-          skipped: true,
-          reason: "no_splittable",
-          kind,
-          stocksUpdated: 0,
-          userHoldingPathsUpdated: 0,
-          events: [],
-        };
-      }
-
-      const targetSet = new Set(splittable);
-      const events = [];
-
-      splittable.forEach((id) => {
-        const s = stocksData[id];
-        const oldPrice = Number(s?.price) || 0;
-        const newPrice = Math.max(1, Math.floor(oldPrice / ratioN));
-        events.push({
-          stockId: id,
-          stockName: (s && s.name) || id,
-          thresholdWon: kind === "threshold" ? thresholdWon : 0,
-          ratioN,
-          oldPrice,
-          newPrice,
-        });
-      });
-
-      const PAR = 20;
-      for (let i = 0; i < splittable.length; i += PAR) {
-        const slice = splittable.slice(i, i + PAR);
-        await Promise.all(
-          slice.map((id) => {
-            const s = stocksData[id];
-            const oldPrice = Number(s?.price) || 0;
-            const newPrice = Math.max(1, Math.floor(oldPrice / ratioN));
-            const history = (s?.history || [s?.price]).map((p) =>
-              Math.max(1, Math.floor((Number(p) || 0) / ratioN))
-            );
-            return db.ref(`stocks/${id}`).update({
-              price: newPrice,
-              history,
-              change: s?.change != null ? s.change : 0,
-              lastSplitTimestamp: splitTs,
-            });
-          })
-        );
-      }
-
-      const usersSnap = await db.ref("users").once("value");
-      const usersData = usersSnap.val() || {};
-
-      const holdingUpdates = {};
-      Object.entries(usersData).forEach(([uid, user]) => {
-        if (!user?.stocks || typeof user.stocks !== "object") return;
-        Object.entries(user.stocks).forEach(([stockId, info]) => {
-          if (!targetSet.has(stockId) || !info) return;
-          const q = Math.floor(Number(info.qty) || 0);
-          // 액면분할 보유 반영: 롱(양수)만 수량·평단 조정. 숏(음수)는 스킵.
-          if (q <= 0) return;
-          const newQty = Math.floor(q * ratioN);
-          const newAvg = Math.max(1, Math.floor((Number(info.avg) || 0) / ratioN));
-          holdingUpdates[`users/${uid}/stocks/${stockId}`] = { qty: newQty, avg: newAvg };
-        });
-      });
-
-      const chunks = chunkObject(holdingUpdates, 400);
-      for (const chunk of chunks) {
-        await db.ref().update(chunk);
-      }
-
-      try {
-        await db.ref(`adminActivityLogs/dailyAutoSplit/${Date.now()}`).set({
-          type: "dailyAutoSplit",
-          adminEmail: ADMIN_EMAIL,
-          kind,
-          thresholdWon: kind === "threshold" ? thresholdWon : null,
-          ratioN,
-          events,
-          userHoldingPathsUpdated: Object.keys(holdingUpdates).length,
-          createdAt: splitTs,
-          via: "adminStockSplit",
-        });
-      } catch (logErr) {
-        console.warn("[adminStockSplit] adminActivityLogs:", logErr?.message || logErr);
-      }
-
-      await db.ref("siteConfig/maintenance").set(false);
-
-      return {
-        ok: true,
-        skipped: false,
-        kind,
-        stocksUpdated: splittable.length,
-        userHoldingPathsUpdated: Object.keys(holdingUpdates).length,
-        events,
-      };
+      return await executeAdminStockSplitCore(db, { kind, ratioN, thresholdWon });
     } catch (e) {
-      await db.ref("siteConfig/maintenance").set(false).catch(() => {});
       console.error("[adminStockSplit]", e);
       throw new HttpsError("internal", e?.message || String(e));
     }
@@ -3949,6 +3987,526 @@ exports.refreshMarketRanksOnCoinPriceWrite = onValueWritten(
   "/coins/{stockId}/price",
   async () => {
     await maybeRunMarketRankLiveRefresh("coin_price_write");
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// siteConfig/dailyAuto — Cloud Scheduler 서버 실행 (관리자 페이지 미오픈)
+// 관리자 UI와 동일 루틴 타입·KST 시각(hour/minute) 기준
+// ═══════════════════════════════════════════════════════════════════════════
+
+function clampInt(v, lo, hi, fallback) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(hi, Math.max(lo, n));
+}
+
+function clampDailyRoutineTimeStrServer(raw, fallback) {
+  const fb = String(fallback || "20:00").trim();
+  const s = String(raw || "").trim();
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(s);
+  if (!m) return fb;
+  const h = parseInt(m[1], 10);
+  const mi = parseInt(m[2], 10);
+  if (!Number.isFinite(h) || h < 0 || h > 23) return fb;
+  if (!Number.isFinite(mi) || mi < 0 || mi > 59) return fb;
+  return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
+}
+
+function clampDailyAutoSplitThresholdManwonServer(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return 100;
+  return Math.max(0, n);
+}
+
+function clampDailyAutoSplitRatioNServer(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isInteger(n) || n <= 1) return 10;
+  return Math.min(100, Math.max(2, n));
+}
+
+function normalizeDailyRoutineItemServer(raw) {
+  const type = String(raw?.type || "").trim();
+  if (type === "autoSplit") {
+    return {
+      type: "autoSplit",
+      thresholdManwon: clampDailyAutoSplitThresholdManwonServer(raw?.thresholdManwon),
+      ratioN: clampDailyAutoSplitRatioNServer(raw?.ratioN),
+    };
+  }
+  if (type === "ranking") return { type: "ranking" };
+  if (type === "candlePrune") return { type: "candlePrune" };
+  if (type === "stockHolders") return { type: "stockHolders" };
+  if (type === "userActivityPurge") return { type: "userActivityPurge" };
+  if (type === "rankingVolumeReset") return { type: "rankingVolumeReset" };
+  if (type === "clearAssetRequests") return { type: "clearAssetRequests" };
+  if (type === "clearAdRequests") return { type: "clearAdRequests" };
+  if (type === "regularHoursSet") {
+    let ro = clampDailyRoutineTimeStrServer(raw?.regularOpen, "20:00");
+    let rc = clampDailyRoutineTimeStrServer(raw?.regularClose, "00:00");
+    if (ro === rc) {
+      rc = "00:01";
+      if (ro === rc) rc = "23:59";
+    }
+    return { type: "regularHoursSet", regularOpen: ro, regularClose: rc };
+  }
+  if (type === "maintenanceMode") {
+    return { type: "maintenanceMode", maintenanceOn: raw?.maintenanceOn === true };
+  }
+  if (type === "circuitBreakerClear") return { type: "circuitBreakerClear" };
+  if (type === "marketRankRefresh") return { type: "marketRankRefresh" };
+  return null;
+}
+
+async function tryClaimDailyAutoDayRun(db, ymd) {
+  const ref = db.ref(`siteConfig/_functions/dailyAutoRunner/claims/${ymd}`);
+  const tx = await ref.transaction((cur) => {
+    if (cur && cur.completed === true) return undefined;
+    if (cur && cur.running === true) {
+      const st = Number(cur.startedAt || 0);
+      if (Date.now() - st < 50 * 60 * 1000) return undefined;
+    }
+    return {
+      running: true,
+      completed: false,
+      startedAt: Date.now(),
+      source: "dailyAutoRunner",
+    };
+  });
+  return Boolean(tx?.committed);
+}
+
+async function finalizeDailyAutoDayClaim(db, ymd, patch) {
+  await db
+    .ref(`siteConfig/_functions/dailyAutoRunner/claims/${ymd}`)
+    .update({
+      running: false,
+      finishedAt: Date.now(),
+      ...patch,
+    })
+    .catch(() => {});
+}
+
+async function runDailyAssetRankingServer(db) {
+  const usersSnap = await db.ref("users").once("value");
+  if (!usersSnap.exists()) {
+    return { ok: true, skipped: true, reason: "no_users" };
+  }
+  const users = usersSnap.val() || {};
+  const [stocksSnap, coinsSnap] = await Promise.all([
+    db.ref("stocks").once("value"),
+    db.ref("coins").once("value"),
+  ]);
+  const stocks = stocksSnap.exists() ? stocksSnap.val() || {} : {};
+  const coins = coinsSnap.exists() ? coinsSnap.val() || {} : {};
+
+  const assetList = Object.entries(users).map(([uid, u]) => {
+    let cashRaw = Number(u?.cash);
+    if (
+      (!Number.isFinite(cashRaw) || cashRaw < 0) &&
+      u?.summary &&
+      typeof u.summary === "object"
+    ) {
+      cashRaw = Number(u.summary.cash);
+    }
+    let total = Math.floor(Number.isFinite(cashRaw) && cashRaw >= 0 ? cashRaw : 0);
+    if (u.stocks && typeof u.stocks === "object") {
+      Object.entries(u.stocks).forEach(([stockId, s]) => {
+        const qty = Number(s?.qty);
+        if (!Number.isFinite(qty) || qty <= 0) return;
+        const price = Number(stocks[stockId]?.price);
+        const p = Number.isFinite(price) && price >= 0 ? price : 0;
+        const add = Math.floor(p * qty);
+        if (Number.isFinite(add)) total += add;
+      });
+    }
+    if (u.coins && typeof u.coins === "object") {
+      Object.entries(u.coins).forEach(([coinId, s]) => {
+        const qty = Number(s?.qty);
+        if (!Number.isFinite(qty) || qty <= 0) return;
+        const price = Number(coins[coinId]?.price);
+        const p = Number.isFinite(price) && price >= 0 ? price : 0;
+        const add = Math.floor(p * qty);
+        if (Number.isFinite(add)) total += add;
+      });
+    }
+    return { uid, totalAsset: total };
+  });
+
+  assetList.sort((a, b) => b.totalAsset - a.totalAsset);
+  const top100 = assetList.slice(0, 100).map((item, i) => ({
+    rank: i + 1,
+    totalAsset: item.totalAsset,
+  }));
+  const now = Date.now();
+  await db.ref("assetRanking").set({
+    updatedAt: now,
+    totalUsers: assetList.length,
+    items: top100,
+  });
+  return { ok: true, totalUsers: assetList.length, top: top100.length };
+}
+
+async function runDailyStockHolderTop3Server(db) {
+  const [usersSnap, stocksSnap, coinsSnap] = await Promise.all([
+    db.ref("users").once("value"),
+    db.ref("stocks").once("value"),
+    db.ref("coins").once("value"),
+  ]);
+  if (!usersSnap.exists()) {
+    return { ok: true, skipped: true, reason: "no_users" };
+  }
+  const users = usersSnap.val() || {};
+  const stocks = stocksSnap.exists() ? stocksSnap.val() || {} : {};
+  const coins = coinsSnap.exists() ? coinsSnap.val() || {} : {};
+  const stockIds = Object.keys(stocks);
+  const coinIds = Object.keys(coins);
+
+  const byStock = {};
+  stockIds.forEach((id) => {
+    byStock[id] = [];
+  });
+  const byCoin = {};
+  coinIds.forEach((id) => {
+    byCoin[id] = [];
+  });
+
+  Object.values(users).forEach((u) => {
+    if (u?.stocks && typeof u.stocks === "object") {
+      Object.entries(u.stocks).forEach(([stockId, s]) => {
+        const qty = Math.floor(Number(s?.qty) || 0);
+        if (qty <= 0) return;
+        if (!byStock[stockId]) byStock[stockId] = [];
+        byStock[stockId].push(qty);
+      });
+    }
+    if (u?.coins && typeof u.coins === "object") {
+      Object.entries(u.coins).forEach(([coinId, s]) => {
+        const qty = Math.floor(Number(s?.qty) || 0);
+        if (qty <= 0) return;
+        if (!byCoin[coinId]) byCoin[coinId] = [];
+        byCoin[coinId].push(qty);
+      });
+    }
+  });
+
+  const now = Date.now();
+  const CHUNK = 150;
+
+  const stockKeys = Object.keys(byStock);
+  for (let i = 0; i < stockKeys.length; i += CHUNK) {
+    const slice = stockKeys.slice(i, i + CHUNK);
+    const updates = {};
+    for (const stockId of slice) {
+      const arr = (byStock[stockId] || []).sort((a, b) => b - a).slice(0, 3);
+      const holders = arr.map((qty, idx) => ({ rank: idx + 1, qty }));
+      updates[`stockHolderRanking/${stockId}/updatedAt`] = now;
+      updates[`stockHolderRanking/${stockId}/holders`] = holders;
+    }
+    await db.ref().update(updates);
+  }
+
+  const coinKeys = Object.keys(byCoin);
+  for (let i = 0; i < coinKeys.length; i += CHUNK) {
+    const slice = coinKeys.slice(i, i + CHUNK);
+    const updates = {};
+    for (const coinId of slice) {
+      const arr = (byCoin[coinId] || []).sort((a, b) => b - a).slice(0, 3);
+      const holders = arr.map((qty, idx) => ({ rank: idx + 1, qty }));
+      updates[`coinHolderRanking/${coinId}/updatedAt`] = now;
+      updates[`coinHolderRanking/${coinId}/holders`] = holders;
+    }
+    await db.ref().update(updates);
+  }
+
+  return { ok: true, stockKeys: stockKeys.length, coinKeys: coinKeys.length };
+}
+
+async function pruneCandleBranchServer(db, baseName) {
+  const snap = await db.ref(baseName).once("value");
+  if (!snap.exists()) {
+    return { baseName, deleted: 0, instruments: 0 };
+  }
+  const allRows = snap.val() || {};
+  const cutoff = (Math.floor(Date.now() / 60000) - 360) * 60;
+  let totalDeleted = 0;
+  let stockCount = 0;
+  for (const stockId of Object.keys(allRows)) {
+    const candles = allRows[stockId];
+    if (!candles || typeof candles !== "object") continue;
+    const toDelete = Object.keys(candles).filter((ts) => parseInt(ts, 10) < cutoff);
+    if (toDelete.length === 0) continue;
+    for (let i = 0; i < toDelete.length; i += 400) {
+      const slice = toDelete.slice(i, i + 400);
+      const updates = {};
+      for (const ts of slice) {
+        updates[`${baseName}/${stockId}/${ts}`] = null;
+      }
+      await db.ref().update(updates);
+      totalDeleted += slice.length;
+    }
+    stockCount += 1;
+  }
+  return { baseName, deleted: totalDeleted, instruments: stockCount };
+}
+
+async function runDailyPruneOldCandlesServer(db) {
+  const a = await pruneCandleBranchServer(db, "candlesticks");
+  const b = await pruneCandleBranchServer(db, "coinCandles");
+  return { ok: true, a, b, deleted: (a.deleted || 0) + (b.deleted || 0) };
+}
+
+async function runDailyPurgeUserTradeHistoryServer(db) {
+  let total = 0;
+  let rounds = 0;
+  const maxRounds = 250;
+  for (;;) {
+    rounds += 1;
+    if (rounds > maxRounds) {
+      return { ok: true, totalPurged: total, hasMore: true, rounds };
+    }
+    const { purged, hasMore } = await purgeTradeHistoryBatched(db, { maxPurged: 20000 });
+    total += purged;
+    if (!hasMore) break;
+  }
+  return { ok: true, totalPurged: total, hasMore: false, rounds };
+}
+
+async function runDailyResetRankingVolumesServer(db) {
+  const [sSnap, cSnap] = await Promise.all([
+    db.ref("stocks").once("value"),
+    db.ref("coins").once("value"),
+  ]);
+  const sData = sSnap.exists() ? sSnap.val() : null;
+  const cData = cSnap.exists() ? cSnap.val() : null;
+  const sUpdates = {};
+  const cUpdates = {};
+  if (sData) {
+    Object.keys(sData).forEach((id) => {
+      sUpdates[`${id}/volume`] = 0;
+      sUpdates[`${id}/buyVol`] = 0;
+      sUpdates[`${id}/sellVol`] = 0;
+    });
+  }
+  if (cData) {
+    Object.keys(cData).forEach((id) => {
+      cUpdates[`${id}/volume`] = 0;
+      cUpdates[`${id}/buyVol`] = 0;
+      cUpdates[`${id}/sellVol`] = 0;
+    });
+  }
+  if (Object.keys(sUpdates).length === 0 && Object.keys(cUpdates).length === 0) {
+    return { ok: false, reason: "empty" };
+  }
+  if (Object.keys(sUpdates).length) await db.ref("stocks").update(sUpdates);
+  if (Object.keys(cUpdates).length) await db.ref("coins").update(cUpdates);
+  const ns = sData ? Object.keys(sData).length : 0;
+  const nc = cData ? Object.keys(cData).length : 0;
+  return { ok: true, ns, nc };
+}
+
+async function clearRtdbChildrenServer(db, rootKey) {
+  const snap = await db.ref(rootKey).once("value");
+  if (!snap.exists()) return 0;
+  const val = snap.val();
+  const keys = val && typeof val === "object" && !Array.isArray(val) ? Object.keys(val) : [];
+  if (keys.length === 0) return 0;
+  const updates = {};
+  keys.forEach((k) => {
+    updates[`${rootKey}/${k}`] = null;
+  });
+  await db.ref().update(updates);
+  return keys.length;
+}
+
+async function runDailyClearCircuitFreezesServer(db) {
+  const n = await clearRtdbChildrenServer(db, "siteConfig/frozenStocks");
+  return { ok: true, cleared: n };
+}
+
+async function runDailyRegularHoursSetServer(db, ro, rc) {
+  const snap = await db.ref("siteConfig/marketHours").once("value");
+  const current = snap.exists() ? snap.val() || {} : {};
+  await db.ref("siteConfig/marketHours").set({
+    ...current,
+    regularOpen: ro,
+    regularClose: rc,
+  });
+  return { ok: true, regularOpen: ro, regularClose: rc };
+}
+
+async function runDailyOneRoutine(db, it) {
+  const t = it?.type;
+  if (t === "ranking") return { type: t, result: await runDailyAssetRankingServer(db) };
+  if (t === "stockHolders") return { type: t, result: await runDailyStockHolderTop3Server(db) };
+  if (t === "candlePrune") return { type: t, result: await runDailyPruneOldCandlesServer(db) };
+  if (t === "userActivityPurge") {
+    return { type: t, result: await runDailyPurgeUserTradeHistoryServer(db) };
+  }
+  if (t === "rankingVolumeReset") {
+    return { type: t, result: await runDailyResetRankingVolumesServer(db) };
+  }
+  if (t === "clearAssetRequests") {
+    const n = await clearRtdbChildrenServer(db, "assetRequests");
+    return { type: t, result: { ok: true, deleted: n } };
+  }
+  if (t === "clearAdRequests") {
+    const n = await clearRtdbChildrenServer(db, "adRequests");
+    return { type: t, result: { ok: true, deleted: n } };
+  }
+  if (t === "circuitBreakerClear") {
+    return { type: t, result: await runDailyClearCircuitFreezesServer(db) };
+  }
+  if (t === "marketRankRefresh") {
+    const r = await runMarketRankAggregation(db, { skipIfMarketClosed: false });
+    return { type: t, result: r };
+  }
+  if (t === "regularHoursSet") {
+    const ro = clampDailyRoutineTimeStrServer(it.regularOpen, "20:00");
+    const rc = clampDailyRoutineTimeStrServer(it.regularClose, "00:00");
+    if (ro === rc) throw new Error("regularHoursSet: open equals close");
+    return { type: t, result: await runDailyRegularHoursSetServer(db, ro, rc) };
+  }
+  if (t === "maintenanceMode") {
+    const on = it.maintenanceOn === true;
+    await db.ref("siteConfig/maintenance").set(on);
+    return { type: t, result: { ok: true, maintenance: on } };
+  }
+  if (t === "autoSplit") {
+    const splitThresholdManwon = clampDailyAutoSplitThresholdManwonServer(it.thresholdManwon);
+    const splitRatioN = clampDailyAutoSplitRatioNServer(it.ratioN);
+    const thresholdWon = splitThresholdManwon * 10000;
+    if (!Number.isInteger(splitRatioN) || splitRatioN <= 1 || thresholdWon <= 0) {
+      return { type: t, result: { ok: false, reason: "bad_params" } };
+    }
+    const r = await executeAdminStockSplitCore(db, {
+      kind: "threshold",
+      ratioN: splitRatioN,
+      thresholdWon,
+    });
+    return { type: t, result: r };
+  }
+  return { type: t || "unknown", result: { ok: false, reason: "unknown_type" } };
+}
+
+/**
+ * 매시 정각(KST): siteConfig/dailyAuto.enabled 이고 "오늘 예정 시각"이 지났을 때 1회 루틴 실행.
+ * (매분 폴링 대역비 절감 — 예: 04:37 예정이면 05:00 첫 틱에서 실행될 수 있음, 최대 약 1시간 지연)
+ * 중복 방지: siteConfig/_functions/dailyAutoRunner/claims/{KST날짜}
+ */
+exports.dailyAutoRunner = onSchedule(
+  {
+    schedule: "0 * * * *",
+    timeZone: "Asia/Seoul",
+    region: "asia-northeast3",
+    timeoutSeconds: 540,
+    memory: "1GiB",
+  },
+  async () => {
+    const db = admin.database();
+    const ymd = kstYmdString();
+    const { h, m } = getKstHourMinute();
+    const nowMs = Date.now();
+    try {
+      const cfgSnap = await db.ref("siteConfig/dailyAuto").once("value");
+      if (!cfgSnap.exists()) return;
+      const cfg = cfgSnap.val() || {};
+      if (!cfg.enabled) return;
+
+      const hour = clampInt(cfg.hour, 0, 23, 0);
+      const minute = clampInt(cfg.minute, 0, 59, 0);
+      const scheduledMs = kstLocalDateTimeToUtcMs(ymd, hour, minute);
+      if (!Number.isFinite(scheduledMs) || nowMs < scheduledMs) return;
+
+      const routinesRaw = Array.isArray(cfg.routines) ? cfg.routines : [];
+      const routines = routinesRaw.map(normalizeDailyRoutineItemServer).filter(Boolean);
+      if (routines.length === 0) {
+        console.log("[dailyAutoRunner] skip: no routines", { ymd, hour, minute });
+        return;
+      }
+
+      const claimed = await tryClaimDailyAutoDayRun(db, ymd);
+      if (!claimed) {
+        console.log("[dailyAutoRunner] skip: claim not acquired", { ymd });
+        return;
+      }
+
+      const runStarted = Date.now();
+      const itemResults = [];
+      let abortedError = null;
+
+      try {
+        for (let i = 0; i < routines.length; i++) {
+          const it = routines[i];
+          try {
+            const one = await runDailyOneRoutine(db, it);
+            itemResults.push({ index: i, ok: true, ...one });
+          } catch (stepErr) {
+            itemResults.push({
+              index: i,
+              ok: false,
+              type: it?.type,
+              error: String(stepErr?.message || stepErr),
+            });
+            abortedError = stepErr;
+            break;
+          }
+        }
+
+        const doneMs = Date.now();
+        const fullSuccess = !abortedError;
+        await db.ref("siteConfig/dailyAuto").update({
+          lastRunAt: doneMs,
+          updatedAt: doneMs,
+          lastServerRunAt: doneMs,
+          lastServerRunYmd: ymd,
+        });
+
+        const logPayload = {
+          type: "dailyAutoRun",
+          ymd,
+          scheduledHour: hour,
+          scheduledMinute: minute,
+          kstHour: h,
+          kstMinute: m,
+          startedAt: runStarted,
+          finishedAt: doneMs,
+          success: fullSuccess,
+          routines: routines.map((r) => r.type),
+          itemResults,
+          error: abortedError ? String(abortedError.message || abortedError) : null,
+        };
+        await db.ref(`adminActivityLogs/dailyAutoRuns/${doneMs}`).set(logPayload);
+
+        await finalizeDailyAutoDayClaim(db, ymd, {
+          // 실패해도 completed 로 막음 → 다음 정각에 액면분할 등 이중 실행 방지(수동으로 claim 삭제 시 재시도)
+          completed: true,
+          success: fullSuccess,
+          itemCount: routines.length,
+          lastError: abortedError ? String(abortedError.message || abortedError).slice(0, 2000) : null,
+        });
+      } catch (e) {
+        console.error("[dailyAutoRunner]", e?.message || e);
+        await finalizeDailyAutoDayClaim(db, ymd, {
+          completed: true,
+          success: false,
+          lastError: String(e?.message || e).slice(0, 2000),
+        });
+        try {
+          await db.ref(`adminActivityLogs/dailyAutoRuns/${Date.now()}`).set({
+            type: "dailyAutoRun",
+            ymd,
+            success: false,
+            error: String(e?.message || e),
+            finishedAt: Date.now(),
+          });
+        } catch (_) {
+          /* noop */
+        }
+      }
+    } catch (outer) {
+      console.error("[dailyAutoRunner] outer", outer?.message || outer);
+    }
   }
 );
 
