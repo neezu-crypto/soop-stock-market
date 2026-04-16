@@ -1585,6 +1585,70 @@
         </div>
     </div>
 
+    <!-- 🔗 액면병합(역분할) -->
+    <div class="container" style="display:block; border-color: #f59e0b;">
+        <div class="accordion-header">
+            <h1>🔗 액면병합 (역분할)</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box">
+            액면분할과 반대로, <b>주가를 배수만큼 올리고</b> 유저 보유 수량은 같은 배수로 <b>내림(÷)</b>합니다. 평단은 총매입이 맞도록 조정됩니다.<br>
+            <span style="color:#f59e0b;">롱(양수) 보유만 반영합니다. 숏(음수) 보유는 변경하지 않습니다.</span><br>
+            <span style="color:#38bdf8;">※ 대상: <b>주가 상위 100종목</b> 또는 <b>🔍 개별 종목 관리</b>와 같은 검색으로 좁힌 종목 목록(최대 300개)</span><br>
+            <span style="color:#fbbf24;">※ 병합 후 수량이 0주가 되는 보유는 노드가 삭제될 수 있습니다. (보유 &lt; 병합비율)</span><br>
+            <span style="color:#ef4444;">⚠️ 전체 유저 데이터를 수정하므로 신중하게 실행하세요.</span>
+        </div>
+        <div style="margin-bottom:12px; display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#e2e8f0; font-size:13px; font-weight:700;">
+                <input type="radio" name="revsplit-target-mode" value="top100" checked onchange="document.getElementById('revsplit-preview').style.display='none'">
+                주가 상위 100종목
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#e2e8f0; font-size:13px; font-weight:700;">
+                <input type="radio" name="revsplit-target-mode" value="search" onchange="document.getElementById('revsplit-preview').style.display='none'">
+                개별 종목 관리 검색 결과
+            </label>
+        </div>
+        <div style="font-size:12px; color:#94a3b8; margin-bottom:14px; line-height:1.55;">
+            「검색 결과」는 개별 종목 관리의 검색창과 동일하게 <b>종목명 부분 일치</b>로 필터되며, 그때 목록에 해당하는 종목이 역분할 대상입니다. (검색 결과가 300개를 넘으면 실행할 수 없습니다.)<br>
+            <button type="button" class="btn-success" style="margin-top:8px; padding:8px 12px; font-size:12px; font-weight:800;" onclick="focusAdminSearchForReverseSplit()">🔍 개별 종목 관리로 이동 · 검색창 포커스</button>
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <button type="button" onclick="selectReverseSplitRatio(2)"  id="revsplit-btn-2"      style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">1:2</button>
+            <button type="button" onclick="selectReverseSplitRatio(5)"  id="revsplit-btn-5"      style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">1:5</button>
+            <button type="button" onclick="selectReverseSplitRatio(10)" id="revsplit-btn-10"     style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">1:10</button>
+            <button type="button" onclick="selectReverseSplitRatio(0)"  id="revsplit-btn-custom" style="flex:1; min-width:60px; background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">직접입력</button>
+        </div>
+        <div id="revsplit-custom-wrap" style="display:none; margin-bottom:14px;">
+            <div class="batch-control" style="margin-top:0;">
+                <input type="number" id="revsplit-custom-ratio" placeholder="병합 비율 N (예: 3)" min="2" max="100"
+                    style="background:#0f172a; border:1px solid #475569; color:#f59e0b;">
+                <span style="color:#94a3b8; font-size:13px; white-space:nowrap;">주당 N주 → 1주</span>
+            </div>
+        </div>
+        <div id="revsplit-preview" style="display:none; background:#0f172a; border-radius:10px; padding:14px; margin-bottom:14px; border:1px solid #f59e0b;">
+            <div style="font-size:13px; color:#f59e0b; font-weight:700; margin-bottom:10px;">📊 병합 미리보기</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px;">
+                <div style="color:#94a3b8;">대표 종목 주가<br><span style="font-size:11px; color:#64748b;">(선택 목록 첫 종목)</span></div>
+                <div id="revsplit-preview-top1" style="color:#f8fafc; font-weight:700; text-align:right;">-</div>
+                <div style="color:#94a3b8;">→ 병합 후</div>
+                <div id="revsplit-preview-top1-after" style="color:#f59e0b; font-weight:700; text-align:right;">-</div>
+                <div style="color:#94a3b8; border-top:1px solid #334155; padding-top:8px;">보유 10주 유저</div>
+                <div id="revsplit-preview-qty" style="color:#f8fafc; font-weight:700; text-align:right; border-top:1px solid #334155; padding-top:8px;">-</div>
+                <div style="color:#94a3b8;">→ 병합 후</div>
+                <div id="revsplit-preview-qty-after" style="color:#f59e0b; font-weight:700; text-align:right;">-</div>
+            </div>
+        </div>
+        <div id="revsplit-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button type="button" class="btn-success" style="flex:1;" onclick="previewReverseSplit()">🔍 미리보기</button>
+            <button type="button" class="btn-primary" style="flex:2; margin-top:0; background:#f59e0b; color:#0f172a;" onclick="executeReverseSplit()">🔗 액면병합 실행</button>
+        </div>
+        </div>
+        </div>
+    </div>
+
     <!-- 🧹 데이터 무결성 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
         <div class="accordion-header">
@@ -2157,6 +2221,7 @@
     /** refreshMarketPriceRanks / adminRefreshMarketRanks 배포 리전과 동일 */
     const functionsAsiaN3 = getFunctions(app, 'asia-northeast3');
     const adminStockSplitFn = httpsCallable(functions, 'adminStockSplit');
+    const adminStockReverseSplitFn = httpsCallable(functions, 'adminStockReverseSplit');
     const adminPurgeUserActivityLogsFn = httpsCallable(functions, 'adminPurgeUserActivityLogs');
     const adminGrantAssetRequestFn = httpsCallable(functions, 'adminGrantAssetRequest');
     const adminBulkListStocksFn = httpsCallable(functions, 'adminBulkListStocks');
@@ -4585,12 +4650,61 @@
         return window.matchMedia('(max-width: 768px)').matches ? 232 : 198;
     }
 
-    function getAdminStockFilteredSorted() {
-        const searchVal = (document.getElementById('admin-search')?.value || '').toLowerCase();
+    function getAdminStockFilteredSortedFromQuery(query) {
+        const searchVal = String(query || '').toLowerCase();
         return Object.entries(allStocksData)
             .filter(([id, s]) => (s.name || '').toLowerCase().includes(searchVal))
             .sort((a, b) => (Number(b[1].price) || 0) - (Number(a[1].price) || 0));
     }
+
+    function getAdminStockFilteredSorted() {
+        return getAdminStockFilteredSortedFromQuery(document.getElementById('admin-search')?.value || '');
+    }
+
+    const ADMIN_REVSPLIT_MAX_IDS = 300;
+
+    /** 액면병합 대상: top100 또는 개별 종목 관리와 동일한 검색(#admin-search) 결과 */
+    function getReverseSplitTargetIds() {
+        const mode = document.querySelector('input[name="revsplit-target-mode"]:checked')?.value || 'top100';
+        if (mode === 'top100') {
+            const ids = Object.entries(allStocksData)
+                .sort(([, a], [, b]) => (Number(b?.price) || 0) - (Number(a?.price) || 0))
+                .slice(0, 100)
+                .map(([id]) => id);
+            if (ids.length === 0) return { error: '종목 데이터가 없습니다.' };
+            return { backendKind: 'top100', ids, desc: `주가 상위 ${ids.length}종목` };
+        }
+        const q = (document.getElementById('admin-search')?.value || '').trim();
+        if (!q) {
+            return {
+                error:
+                    '「검색 결과」 모드에서는 위쪽 🔍 개별 종목 관리의 검색창에 종목명을 입력한 뒤, 목록이 좁혀진 상태에서 실행해 주세요.',
+            };
+        }
+        const entries = getAdminStockFilteredSorted();
+        const ids = entries.map(([id]) => id).filter(Boolean);
+        if (ids.length === 0) {
+            return { error: '검색 조건에 맞는 종목이 없습니다. 검색어를 확인해 주세요.' };
+        }
+        if (ids.length > ADMIN_REVSPLIT_MAX_IDS) {
+            return {
+                error: `검색 결과가 ${ids.length}개입니다. ${ADMIN_REVSPLIT_MAX_IDS}개 이하가 되도록 검색을 더 좁혀 주세요.`,
+            };
+        }
+        return { backendKind: 'ids', ids, stockIds: ids, desc: `검색 결과 ${ids.length}종목 (「${q}」)` };
+    }
+
+    window.focusAdminSearchForReverseSplit = function () {
+        if (!isAdmin()) return;
+        openAndScrollAdminSectionById('admin-accordion-stock-manage');
+        const el = document.getElementById('admin-search');
+        if (el) {
+            el.focus();
+            try {
+                el.select();
+            } catch (_) { /* noop */ }
+        }
+    };
 
     function setListingQuickAddButtonVisible(visible, nickname) {
         const wrap = document.getElementById('listing-quick-add-wrap');
@@ -5620,6 +5734,210 @@
             try { await set(ref(db, 'siteConfig/maintenance'), false); } catch(_) {}
             statusEl.innerText = '❌ 실패: ' + e.message;
             alert('액면분할 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ── 액면병합(역분할) ─────────────────────────────────────
+    let reverseSplitRatio = 2;
+
+    window.selectReverseSplitRatio = function(ratio) {
+        if (!isAdmin()) return;
+        ['2', '5', '10', 'custom'].forEach((v) => {
+            const btn = document.getElementById(`revsplit-btn-${v}`);
+            if (btn) { btn.style.background = '#1e293b'; btn.style.color = '#94a3b8'; btn.style.border = '1px solid #334155'; }
+        });
+        const customWrap = document.getElementById('revsplit-custom-wrap');
+        if (ratio === 0) {
+            const btn = document.getElementById('revsplit-btn-custom');
+            btn.style.background = '#f59e0b'; btn.style.color = '#0f172a'; btn.style.border = 'none';
+            customWrap.style.display = 'block';
+            reverseSplitRatio = 0;
+        } else {
+            const btn = document.getElementById(`revsplit-btn-${ratio}`);
+            btn.style.background = '#f59e0b'; btn.style.color = '#0f172a'; btn.style.border = 'none';
+            customWrap.style.display = 'none';
+            reverseSplitRatio = ratio;
+        }
+        document.getElementById('revsplit-preview').style.display = 'none';
+    };
+
+    function getSelectedReverseSplitRatio() {
+        if (reverseSplitRatio === 0) {
+            const v = parseInt(document.getElementById('revsplit-custom-ratio').value, 10);
+            return Number.isNaN(v) || v < 2 ? null : v;
+        }
+        return reverseSplitRatio;
+    }
+
+    function scaleStockPriceUpLocal(oldPrice, ratioN) {
+        const p = Math.floor(Number(oldPrice) || 0);
+        const r = Math.floor(Number(ratioN) || 1);
+        const x = p * r;
+        if (!Number.isFinite(x)) return 1;
+        return Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, x));
+    }
+
+    window.previewReverseSplit = async function() {
+        if (!isAdmin()) return;
+        const ratio = getSelectedReverseSplitRatio();
+        const statusEl = document.getElementById('revsplit-status');
+        if (!ratio) return alert('병합 비율을 선택하거나 입력해주세요. (최소 2)');
+        const tgt = getReverseSplitTargetIds();
+        if (tgt.error) {
+            statusEl.innerText = tgt.error;
+            return;
+        }
+        statusEl.innerText = '미리보기 계산 중...';
+        try {
+            const firstId = tgt.ids[0];
+            const top1 = allStocksData[firstId];
+            if (!top1) {
+                statusEl.innerText = '선택 종목 데이터 없음 (종목 새로고침 후 다시 시도)';
+                return;
+            }
+            const p0 = top1.price || 0;
+            document.getElementById('revsplit-preview-top1').innerText = `${p0.toLocaleString()}원`;
+            document.getElementById('revsplit-preview-top1-after').innerText = `${scaleStockPriceUpLocal(p0, ratio).toLocaleString()}원`;
+            document.getElementById('revsplit-preview-qty').innerText = '10주 보유';
+            document.getElementById('revsplit-preview-qty-after').innerText = `${Math.floor(10 / ratio)}주 보유`;
+            document.getElementById('revsplit-preview').style.display = 'block';
+            statusEl.innerText = `${tgt.desc} — 1:${ratio} 병합 시 주가 ×${ratio}, 보유량 ÷${ratio} (내림)`;
+        } catch (e) {
+            statusEl.innerText = '조회 실패: ' + e.message;
+        }
+    };
+
+    window.executeReverseSplit = async function() {
+        if (!isAdmin()) return;
+        const ratio = getSelectedReverseSplitRatio();
+        const statusEl = document.getElementById('revsplit-status');
+        if (!ratio) return alert('병합 비율을 선택하거나 입력해주세요. (최소 2)');
+        const tgt = getReverseSplitTargetIds();
+        if (tgt.error) {
+            alert(tgt.error);
+            return;
+        }
+        if (!confirm(
+            `⚠️ 1:${ratio} 액면병합(역분할)을 실행하시겠습니까?\n\n` +
+                `· 대상: ${tgt.desc}\n` +
+                `· 해당 종목 주가 → ×${ratio}\n` +
+                `· 해당 종목 보유 유저 보유량 → ÷${ratio} (내림, 0주면 보유 삭제)\n` +
+                `· 해당 종목 보유 유저 평단 → 총매입 유지에 맞게 조정\n\n` +
+                `※ Cloud Functions로 처리될 때는 점검 모드를 자동으로 바꾸지 않습니다.\n` +
+                `※ Functions를 쓸 수 없어 브라우저(RTDDB) 폴백으로 갈 때만, 잠시 점검 모드를 켠 뒤 완료 시 해제합니다.\n\n` +
+                `이 작업은 되돌릴 수 없습니다.`
+        )) return;
+
+        statusEl.innerText = '서버(Cloud Functions) 액면병합 시도 중...';
+        try {
+            const splitPayload =
+                tgt.backendKind === 'top100'
+                    ? { kind: 'top100', ratioN: ratio }
+                    : { kind: 'ids', ratioN: ratio, stockIds: tgt.stockIds };
+            const { data } = await adminStockReverseSplitFn(splitPayload);
+            if (data && data.ok) {
+                if (data.skipped) {
+                    statusEl.innerText = data.reason === 'no_targets'
+                        ? '병합 대상 종목이 없습니다.'
+                        : '서버에서 스킵되었습니다.';
+                    await loadMaintenanceStatus();
+                    await loadStocksOnce();
+                    return;
+                }
+                statusEl.innerText =
+                    `✅ 1:${ratio} 액면병합 완료! (서버 처리: 종목 ${data.stocksUpdated}개, 보유 경로 ${data.userHoldingPathsUpdated}건)`;
+                await loadMaintenanceStatus();
+                await loadStocksOnce();
+                return;
+            }
+        } catch (serverErr) {
+            if (!shouldFallbackAdminStockSplit(serverErr)) {
+                try { await set(ref(db, 'siteConfig/maintenance'), false); } catch (_) {}
+                statusEl.innerText = '❌ 실패: ' + (serverErr.message || serverErr);
+                alert('액면병합 중 오류: ' + (serverErr.message || serverErr));
+                await loadMaintenanceStatus();
+                return;
+            }
+            statusEl.innerText = 'Functions 미배포/일시 중단 — 브라우저(RTDDB)로 진행합니다...';
+        }
+
+        try {
+            statusEl.innerText = '🔴 점검 모드 활성화 중...';
+            await set(ref(db, 'siteConfig/maintenance'), true);
+            await new Promise((r) => setTimeout(r, 2000));
+
+            statusEl.innerText = '종목·유저 데이터 일괄 반영 준비 중...';
+            const stocksSnap = await get(ref(db, 'stocks/'));
+            const stocksData = stocksSnap.val() || {};
+            const ts = Date.now();
+            const targetIds = new Set(tgt.ids);
+            const targetList = [...tgt.ids];
+
+            statusEl.innerText = `종목 주가 반영 중 (${targetList.length}개)...`;
+            const PAR = 20;
+            for (let i = 0; i < targetList.length; i += PAR) {
+                const slice = targetList.slice(i, i + PAR);
+                await Promise.all(
+                    slice.map((id) => {
+                        const s = stocksData[id];
+                        if (!s) return Promise.resolve();
+                        const newPrice = scaleStockPriceUpLocal(s.price || 0, ratio);
+                        const history = (s.history || [s.price]).map((p) => scaleStockPriceUpLocal(p, ratio));
+                        return update(ref(db, `stocks/${id}`), {
+                            price: newPrice,
+                            history,
+                            change: s.change != null ? s.change : 0,
+                            lastReverseSplitTimestamp: ts,
+                        });
+                    })
+                );
+            }
+
+            const usersSnap = await getUsersRootCached({ bypassCache: true });
+            const usersData = usersSnap.val() || {};
+            const userIds = Object.keys(usersData);
+            const holdingPairs = [];
+            userIds.forEach((uid) => {
+                const user = usersData[uid];
+                if (!user?.stocks) return;
+                Object.entries(user.stocks).forEach(([stockId, info]) => {
+                    if (!info || !targetIds.has(stockId)) return;
+                    const q = Math.floor(Number(info.qty) || 0);
+                    if (q <= 0) return;
+                    const newQty = Math.floor(q / ratio);
+                    const path = `users/${uid}/stocks/${stockId}`;
+                    if (newQty < 1) {
+                        holdingPairs.push({ path, remove: true });
+                        return;
+                    }
+                    const oldAvg = Math.floor(Number(info.avg) || 0);
+                    const newAvg = Math.max(1, Math.floor((q * Math.max(1, oldAvg)) / newQty));
+                    holdingPairs.push({ path, qty: newQty, avg: newAvg });
+                });
+            });
+
+            statusEl.innerText = `유저 보유 반영 중 (${holdingPairs.length}건)...`;
+            const HOLD_PATHS_PER_UPDATE = 400;
+            for (let i = 0; i < holdingPairs.length; i += HOLD_PATHS_PER_UPDATE) {
+                const batch = {};
+                holdingPairs.slice(i, i + HOLD_PATHS_PER_UPDATE).forEach((row) => {
+                    if (row.remove) batch[row.path] = null;
+                    else batch[row.path] = { qty: row.qty, avg: row.avg };
+                });
+                await update(ref(db), batch);
+            }
+            invalidateUsersRootCache();
+            statusEl.innerText = `종목·유저 반영 완료 (${userIds.length}명 스캔)`;
+
+            statusEl.innerText = '🟢 점검 모드 해제 중...';
+            await set(ref(db, 'siteConfig/maintenance'), false);
+            statusEl.innerText = `✅ 1:${ratio} 액면병합 완료! (종목 ${targetIds.size}개, 유저 ${userIds.length}명 처리)`;
+            await loadMaintenanceStatus();
+            await loadStocksOnce();
+        } catch (e) {
+            try { await set(ref(db, 'siteConfig/maintenance'), false); } catch (_) {}
+            statusEl.innerText = '❌ 실패: ' + e.message;
+            alert('액면병합 중 오류 발생: ' + e.message);
         }
     };
 

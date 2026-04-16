@@ -3463,6 +3463,205 @@ exports.adminStockSplit = onCall(
 );
 
 /**
+ * 액면병합(역분할): 주가 × ratioN, 보유량 ÷ ratioN(내림), 평단 × ratioN — 액면분할의 역연산(롱 양수 보유만).
+ * kind: "threshold" | "top100" | "ids" — threshold/top100 는 adminStockSplit 과 동일 규칙, ids 는 stockIds 만.
+ */
+async function executeAdminStockReverseSplitCore(db, { kind, ratioN, thresholdWon, stockIds }) {
+  const ts = Date.now();
+  try {
+    const stocksSnap = await db.ref("stocks").once("value");
+    const stocksData = stocksSnap.val() || {};
+
+    let targets = [];
+    if (kind === "top100") {
+      targets = Object.entries(stocksData)
+        .sort(([, a], [, b]) => (Number(b?.price) || 0) - (Number(a?.price) || 0))
+        .slice(0, 100)
+        .map(([id]) => id);
+    } else if (kind === "ids") {
+      const seen = new Set();
+      const raw = Array.isArray(stockIds) ? stockIds : [];
+      for (const id of raw) {
+        const sid = String(id == null ? "" : id).trim();
+        if (!sid || sid.length > 200 || seen.has(sid)) continue;
+        if (!stocksData[sid]) continue;
+        seen.add(sid);
+        targets.push(sid);
+      }
+    } else {
+      Object.entries(stocksData).forEach(([id, s]) => {
+        const price = Number(s?.price) || 0;
+        if (price >= thresholdWon && price >= ratioN) targets.push(id);
+      });
+    }
+
+    if (targets.length === 0) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: "no_targets",
+        kind,
+        stocksUpdated: 0,
+        userHoldingPathsUpdated: 0,
+        events: [],
+      };
+    }
+
+    const targetSet = new Set(targets);
+    const events = [];
+
+    const scalePriceUp = (oldPrice) => {
+      const p = Math.floor(Number(oldPrice) || 0);
+      const r = Math.floor(Number(ratioN) || 1);
+      const x = p * r;
+      if (!Number.isFinite(x)) return 1;
+      return Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, x));
+    };
+
+    targets.forEach((id) => {
+      const s = stocksData[id];
+      const oldPrice = Number(s?.price) || 0;
+      const newPrice = scalePriceUp(oldPrice);
+      events.push({
+        stockId: id,
+        stockName: (s && s.name) || id,
+        thresholdWon: kind === "threshold" ? thresholdWon : 0,
+        ratioN,
+        oldPrice,
+        newPrice,
+      });
+    });
+
+    const PAR = 20;
+    for (let i = 0; i < targets.length; i += PAR) {
+      const slice = targets.slice(i, i + PAR);
+      await Promise.all(
+        slice.map((id) => {
+          const s = stocksData[id];
+          const oldPrice = Number(s?.price) || 0;
+          const newPrice = scalePriceUp(oldPrice);
+          const history = (s?.history || [s?.price]).map((p) =>
+            scalePriceUp(Number(p) || 0)
+          );
+          return db.ref(`stocks/${id}`).update({
+            price: newPrice,
+            history,
+            change: s?.change != null ? s.change : 0,
+            lastReverseSplitTimestamp: ts,
+          });
+        })
+      );
+    }
+
+    const usersSnap = await db.ref("users").once("value");
+    const usersData = usersSnap.val() || {};
+
+    const holdingUpdates = {};
+    Object.entries(usersData).forEach(([uid, user]) => {
+      if (!user?.stocks || typeof user.stocks !== "object") return;
+      Object.entries(user.stocks).forEach(([stockId, info]) => {
+        if (!targetSet.has(stockId) || !info) return;
+        const q = Math.floor(Number(info.qty) || 0);
+        if (q <= 0) return;
+        const path = `users/${uid}/stocks/${stockId}`;
+        const newQty = Math.floor(q / ratioN);
+        if (newQty < 1) {
+          holdingUpdates[path] = null;
+          return;
+        }
+        const oldAvg = Math.floor(Number(info.avg) || 0);
+        const newAvg = Math.max(1, Math.floor((q * Math.max(1, oldAvg)) / newQty));
+        holdingUpdates[path] = { qty: newQty, avg: newAvg };
+      });
+    });
+
+    const chunks = chunkObject(holdingUpdates, 400);
+    for (const chunk of chunks) {
+      await db.ref().update(chunk);
+    }
+
+    try {
+      await db.ref(`adminActivityLogs/adminStockReverseSplit/${Date.now()}`).set({
+        type: "adminStockReverseSplit",
+        adminEmail: ADMIN_EMAIL,
+        kind,
+        thresholdWon: kind === "threshold" ? thresholdWon : null,
+        ratioN,
+        events,
+        userHoldingPathsUpdated: Object.keys(holdingUpdates).length,
+        createdAt: ts,
+        via: "adminStockReverseSplit",
+      });
+    } catch (logErr) {
+      console.warn("[adminStockReverseSplit] adminActivityLogs:", logErr?.message || logErr);
+    }
+
+    return {
+      ok: true,
+      skipped: false,
+      kind,
+      stocksUpdated: targets.length,
+      userHoldingPathsUpdated: Object.keys(holdingUpdates).length,
+      events,
+    };
+  } catch (e) {
+    throw e;
+  }
+}
+
+exports.adminStockReverseSplit = onCall(
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+
+    const kind = String(request.data?.kind || "threshold").toLowerCase();
+    const ratioN = Math.floor(Number(request.data?.ratioN));
+    if (!Number.isFinite(ratioN) || ratioN < 2) {
+      throw new HttpsError("invalid-argument", "ratioN must be an integer >= 2.");
+    }
+
+    const thresholdWon =
+      kind === "threshold" ? Math.floor(Number(request.data?.thresholdWon)) : NaN;
+    if (kind === "threshold" && (!Number.isFinite(thresholdWon) || thresholdWon < 1)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "thresholdWon is required for kind=threshold."
+      );
+    }
+
+    let stockIds = null;
+    if (kind === "ids") {
+      const raw = request.data?.stockIds;
+      if (!Array.isArray(raw) || raw.length === 0) {
+        throw new HttpsError(
+          "invalid-argument",
+          "stockIds (non-empty array) is required for kind=ids."
+        );
+      }
+      if (raw.length > 300) {
+        throw new HttpsError("invalid-argument", "stockIds must have at most 300 entries.");
+      }
+      stockIds = raw.map((x) => String(x == null ? "" : x).trim()).filter(Boolean);
+    }
+
+    const db = admin.database();
+    try {
+      return await executeAdminStockReverseSplitCore(db, {
+        kind,
+        ratioN,
+        thresholdWon,
+        stockIds,
+      });
+    } catch (e) {
+      console.error("[adminStockReverseSplit]", e);
+      throw new HttpsError("internal", e?.message || String(e));
+    }
+  }
+);
+
+/**
  * tradeHistory 하위를 한 번에 set(null) 하면 RTDB WRITE_TOO_BIG 에 걸릴 수 있어
  * 키 단위로 나눠 multi-path update 로 삭제한다.
  * maxPurged 가 있으면 그 개수만큼만 지우고 hasMore: true 로 남은 데이터가 있을 수 있음(데드라인 방지).
