@@ -867,6 +867,37 @@ function nowMs() {
   return Date.now();
 }
 
+function isValidHttpUrl(url, maxLen = 800) {
+  if (!url || typeof url !== "string") return false;
+  const s = url.trim();
+  if (s.length < 8 || s.length > maxLen) return false;
+  return /^https?:\/\//i.test(s);
+}
+
+function kstYmdFromNow(addDays = 0) {
+  const ms = nowMs() + (Math.max(0, Math.floor(Number(addDays) || 0)) * 86400000);
+  const d = new Date(ms);
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return fmt.format(d); // YYYY-MM-DD
+}
+
+async function deductPointsOrThrow(db, uid, pointCost) {
+  const walletRef = db.ref(`users/${uid}/wallet`);
+  const tx = await walletRef.transaction((cur) => {
+    const base = cur && typeof cur === "object" ? cur : {};
+    const points = Math.max(0, Math.floor(Number(base.points || 0)));
+    if (points < pointCost) return;
+    return { ...base, points: points - pointCost, updatedAt: nowMs() };
+  });
+  if (!tx.committed) throw new HttpsError("failed-precondition", "insufficient points.");
+  return Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
+}
+
 async function appendPointLedger(db, uid, row) {
   const refPush = db.ref(`pointLedger/${uid}`).push();
   const payload = {
@@ -987,6 +1018,147 @@ exports.adminRejectPointCharge = onCall(
       rejectedBy: String(request.auth?.token?.email || ADMIN_EMAIL),
     });
     return { ok: true, reqId };
+  }
+);
+
+exports.purchaseAndPublishPromoBanner = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    const uid = request.auth.uid;
+    const nickname = String(request.data?.nickname || "").trim();
+    const soopId = String(request.data?.soopId || "").trim();
+    const days = toPositiveInt(request.data?.days, 0, 30);
+    const imgUrl = String(request.data?.imgUrl || "").trim();
+    const link = String(request.data?.link || "").trim();
+    const clientRequestId = String(request.data?.clientRequestId || "").trim();
+
+    if (!nickname || nickname.length > 50) throw new HttpsError("invalid-argument", "invalid nickname.");
+    if (!soopId || soopId.length > 80 || !/^[a-zA-Z0-9_]+$/.test(soopId)) throw new HttpsError("invalid-argument", "invalid soopId.");
+    if (days < 1 || days > 30) throw new HttpsError("invalid-argument", "days must be 1~30.");
+    if (!isValidHttpUrl(imgUrl, 800)) throw new HttpsError("invalid-argument", "invalid imgUrl.");
+    if (!isValidHttpUrl(link, 800)) throw new HttpsError("invalid-argument", "invalid link.");
+    if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+
+    const db = admin.database();
+    const cfgSnap = await db.ref("siteConfig").get();
+    const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+    const pointCost = Math.max(1, days * pricing.broadcastBannerPerDay);
+
+    const opRef = db.ref(`pointOps/${uid}/promoBanner/${clientRequestId}`);
+    const opSnap = await opRef.get();
+    const st = String(opSnap.val()?.status || "");
+    if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
+    if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
+    await opRef.set({ status: "processing", uid, soopId, days, pointCost, createdAt: nowMs() });
+
+    const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
+    const ledgerTxnId = await appendPointLedger(db, uid, {
+      type: "purchase_promo_banner",
+      amount: -pointCost,
+      balanceAfter,
+      requestType: "promoBanner",
+      requestId: clientRequestId,
+      requestPath: `pointOps/${uid}/promoBanner/${clientRequestId}`,
+      note: `publish promo banner ${soopId} ${days}d`,
+      createdBy: "user",
+    });
+
+    const endDate = kstYmdFromNow(days - 1);
+    await db.ref(`stocksBanner/${soopId}`).update({
+      name: nickname,
+      bannerImg: imgUrl,
+      link,
+      bannerIsPaid: true,
+      bannerEndDate: endDate,
+      updatedAt: nowMs(),
+      updatedByUid: uid,
+    });
+    await db.ref("siteConfig/bannerCacheVersion").set(nowMs());
+
+    const payload = {
+      ok: true,
+      status: "done",
+      clientRequestId,
+      uid,
+      soopId,
+      days,
+      pointCost,
+      balanceAfter,
+      endDate,
+      ledgerTxnId,
+      doneAt: nowMs(),
+    };
+    await opRef.set(payload);
+    return payload;
+  }
+);
+
+exports.purchaseAndPublishChartBanner = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    const uid = request.auth.uid;
+    const nickname = String(request.data?.nickname || "").trim();
+    const days = toPositiveInt(request.data?.days, 0, 99);
+    const imgUrl = String(request.data?.imgUrl || "").trim();
+    const link = String(request.data?.link || "").trim();
+    const clientRequestId = String(request.data?.clientRequestId || "").trim();
+
+    if (!nickname || nickname.length > 50) throw new HttpsError("invalid-argument", "invalid nickname.");
+    if (days < 1 || days > 99) throw new HttpsError("invalid-argument", "days must be 1~99.");
+    if (!isValidHttpUrl(imgUrl, 800)) throw new HttpsError("invalid-argument", "invalid imgUrl.");
+    if (!isValidHttpUrl(link, 800)) throw new HttpsError("invalid-argument", "invalid link.");
+    if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+
+    const db = admin.database();
+    const cfgSnap = await db.ref("siteConfig").get();
+    const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+    const pointCost = Math.max(1, days * pricing.chartBannerPerDay);
+
+    const opRef = db.ref(`pointOps/${uid}/chartBanner/${clientRequestId}`);
+    const opSnap = await opRef.get();
+    const st = String(opSnap.val()?.status || "");
+    if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
+    if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
+    await opRef.set({ status: "processing", uid, days, pointCost, createdAt: nowMs() });
+
+    const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
+    const ledgerTxnId = await appendPointLedger(db, uid, {
+      type: "purchase_chart_banner",
+      amount: -pointCost,
+      balanceAfter,
+      requestType: "chartBanner",
+      requestId: clientRequestId,
+      requestPath: `pointOps/${uid}/chartBanner/${clientRequestId}`,
+      note: `publish chart banner ${days}d`,
+      createdBy: "user",
+    });
+
+    const endDate = kstYmdFromNow(days - 1);
+    await db.ref("chartBanner").set({
+      img: imgUrl,
+      link,
+      endDate,
+      sponsorName: nickname,
+      updatedAt: nowMs(),
+      updatedByUid: uid,
+    });
+
+    const payload = {
+      ok: true,
+      status: "done",
+      clientRequestId,
+      uid,
+      days,
+      pointCost,
+      balanceAfter,
+      endDate,
+      ledgerTxnId,
+      doneAt: nowMs(),
+    };
+    await opRef.set(payload);
+    return payload;
   }
 );
 
