@@ -3723,7 +3723,7 @@
             <li>📊 <b>노출:</b> 차트창을 여는 모든 유저에게 단독 노출</li>
             <li>🔗 <b>기능:</b> 클릭 시 원하는 링크로 즉시 이동</li>
             <li>🖼 <b>형식:</b> 이미지 · GIF 모두 지원</li>
-            <li>💰 <b>비용:</b> 1일 당 별풍선 <span id="p-chart-day">80</span>개</li>
+            <li>💰 <b>비용:</b> 1일 당 별포인트 <span id="p-chart-day">80</span>P</li>
         </ul>
 
         <!-- 신청 폼 -->
@@ -4130,7 +4130,7 @@ function applyPaidPricingToUserUi() {
     const chartCostEl = document.getElementById('chart-ad-cost');
     if (chartCostEl && chartDays > 0) {
         const t = chartDays * p.chartBannerPerDay;
-        chartCostEl.textContent = `총 별풍선 ${t.toLocaleString()}개`;
+        chartCostEl.textContent = `총 별포인트 ${t.toLocaleString()}P`;
         chartCostEl.style.color = 'var(--primary)';
     }
     try {
