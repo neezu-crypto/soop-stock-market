@@ -1700,7 +1700,7 @@
         </div>
         <div class="info-box" style="margin-top:14px; border-color:#a78bfa; color:#ddd6fe;">
             <b>🎯 단일 종목 상장폐지/재상장</b> — <b>주식·코인</b> 탭에서 시세 <b>낮은 순</b>으로 정렬된 <b>최대 10개</b> 중 종목 1개를 선택해
-            <b>stocks·coins를 완전 삭제</b>하고, 필요 시 <b>같은 ID로 시가 재상장</b>합니다.<br>
+            <b>선택한 탭의 시장만</b> 상장폐지합니다. (주식 탭 → 주식·유저 주식 보유만, 코인 탭 → 코인·유저 코인 보유만) 필요 시 <b>같은 ID로 시가 재상장</b>합니다.<br>
             <span style="color:#c4b5fd;">재상장 시 주식 10,000원 / 코인 100,000,000원으로 초기화되며 기존 유저 보유 수량은 제거됩니다.</span>
         </div>
         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
@@ -5546,24 +5546,42 @@
             if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '종목을 먼저 선택해주세요.'; }
             return;
         }
+        const market = singleDelistMarketTab === 'coin' ? 'coin' : 'stock';
         const stock = allStocksData?.[id];
         const coin = allCoinsData?.[id];
-        if (!stock && !coin) {
+        if (market === 'stock' && !stock) {
             if (statusEl) {
                 statusEl.style.color = '#f87171';
-                statusEl.textContent = '선택 종목이 현재 stocks/·coins/에 없습니다. 새로고침 후 다시 시도해주세요.';
+                statusEl.textContent = '선택 종목이 현재 stocks/에 없습니다. 새로고침 후 다시 시도해주세요.';
             }
             return;
         }
-        const name = String(stock?.name || coin?.name || '').trim() || id;
-        if (!confirm(`선택 종목을 상장폐지할까요?\n\n이름: ${name}\nID: ${id}\n\nstocks/coins + 검색 인덱스 + 유저 보유(stocks/coins)가 삭제됩니다.`)) return;
+        if (market === 'coin' && !coin) {
+            if (statusEl) {
+                statusEl.style.color = '#f87171';
+                statusEl.textContent = '선택 종목이 현재 coins/에 없습니다. 새로고침 후 다시 시도해주세요.';
+            }
+            return;
+        }
+        const name =
+            market === 'coin'
+                ? String(coin?.name || '').trim() || id
+                : String(stock?.name || '').trim() || id;
+        const marketLabel = market === 'coin' ? '코인' : '주식';
+        if (!confirm(
+            `선택한 「${marketLabel}」 시장만 상장폐지할까요?\n\n이름: ${name}\nID: ${id}\n\n` +
+                (market === 'stock'
+                    ? '· stocks/{id}, stockSearchIndex/{id}\n· 유저 보유 users/*/stocks/{id}\n만 삭제됩니다. (코인 데이터는 유지)'
+                    : '· coins/{id}, coinSearchIndex/{id}\n· 유저 보유 users/*/coins/{id}\n만 삭제됩니다. (주식 데이터는 유지)')
+        )) return;
         try {
             if (statusEl) { statusEl.style.color = '#94a3b8'; statusEl.textContent = '상장폐지 처리 중...'; }
             const { data } = await adminRebuildSingleInstrumentFn({
                 action: 'delist',
                 id,
                 name,
-                batchSize: 300
+                batchSize: 300,
+                market
             });
             lastDelistedInstrumentMeta = { id, name, deletedAt: Date.now() };
             await loadStocksOnce();

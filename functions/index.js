@@ -768,7 +768,7 @@ exports.adminBulkDeleteStocks = onCall(
 
 /**
  * 관리자 단일 종목 상장폐지/시가 재상장
- * - delist: stocks/coins/index 삭제 + users 보유(stocks/coins/{id})를 batchSize 단위로 분할 삭제
+ * - delist: market 에 따라 stocks·stockSearchIndex·유저 stocks 보유 만 / coins·coinSearchIndex·유저 coins 보유 만 삭제 (stock|coin). 생략 시 both(기존 동작).
  * - relist: 같은 ID로 주식 1만원/코인 1억원 초기 시세로 신규 생성
  */
 exports.adminRebuildSingleInstrument = onCall(
@@ -794,18 +794,33 @@ exports.adminRebuildSingleInstrument = onCall(
     const db = admin.database();
 
     if (action === "delist") {
+      const hasMarket =
+        request.data && Object.prototype.hasOwnProperty.call(request.data, "market");
+      let market = "both";
+      if (hasMarket) {
+        const mr = String(request.data.market || "").trim().toLowerCase();
+        if (mr === "stock" || mr === "coin" || mr === "both") market = mr;
+        else {
+          throw new HttpsError("invalid-argument", "market must be stock|coin|both.");
+        }
+      }
+
       const usersSnap = await db.ref("users").get();
       const users = usersSnap.exists() ? usersSnap.val() || {} : {};
       const holdingUpdates = {};
       let removedHoldingPaths = 0;
       Object.entries(users).forEach(([uid, u]) => {
-        if (u?.stocks && typeof u.stocks === "object" && Object.prototype.hasOwnProperty.call(u.stocks, id)) {
-          holdingUpdates[`users/${uid}/stocks/${id}`] = null;
-          removedHoldingPaths += 1;
+        if (market === "stock" || market === "both") {
+          if (u?.stocks && typeof u.stocks === "object" && Object.prototype.hasOwnProperty.call(u.stocks, id)) {
+            holdingUpdates[`users/${uid}/stocks/${id}`] = null;
+            removedHoldingPaths += 1;
+          }
         }
-        if (u?.coins && typeof u.coins === "object" && Object.prototype.hasOwnProperty.call(u.coins, id)) {
-          holdingUpdates[`users/${uid}/coins/${id}`] = null;
-          removedHoldingPaths += 1;
+        if (market === "coin" || market === "both") {
+          if (u?.coins && typeof u.coins === "object" && Object.prototype.hasOwnProperty.call(u.coins, id)) {
+            holdingUpdates[`users/${uid}/coins/${id}`] = null;
+            removedHoldingPaths += 1;
+          }
         }
       });
       const chunks = chunkObject(holdingUpdates, batchSize);
@@ -813,20 +828,25 @@ exports.adminRebuildSingleInstrument = onCall(
         await db.ref().update(chunk);
       }
 
-      await db.ref().update({
-        [`stocks/${id}`]: null,
-        [`coins/${id}`]: null,
-        [`stockSearchIndex/${id}`]: null,
-        [`coinSearchIndex/${id}`]: null,
-        "siteConfig/stockNameIndexVersion": now,
-        "siteConfig/coinNameIndexVersion": now,
-        "siteConfig/stockCacheVersion": now,
-      });
+      const rootUpd = {};
+      if (market === "stock" || market === "both") {
+        rootUpd[`stocks/${id}`] = null;
+        rootUpd[`stockSearchIndex/${id}`] = null;
+        rootUpd["siteConfig/stockNameIndexVersion"] = now;
+        rootUpd["siteConfig/stockCacheVersion"] = now;
+      }
+      if (market === "coin" || market === "both") {
+        rootUpd[`coins/${id}`] = null;
+        rootUpd[`coinSearchIndex/${id}`] = null;
+        rootUpd["siteConfig/coinNameIndexVersion"] = now;
+      }
+      await db.ref().update(rootUpd);
 
       return {
         ok: true,
         action,
         id,
+        market,
         removedHoldingPaths,
         holdingChunks: chunks.length,
         batchSize,
