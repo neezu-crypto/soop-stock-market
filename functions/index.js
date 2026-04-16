@@ -926,6 +926,7 @@ async function deductPointsOrThrow(db, uid, pointCost) {
     throw err;
   }
 
+  let evalLogged = false;
   const tx = await walletRef.transaction((cur) => {
     const base = cur && typeof cur === "object" ? cur : {};
     const raw = base.points;
@@ -934,6 +935,19 @@ async function deductPointsOrThrow(db, uid, pointCost) {
         ? raw
         : Number(String(raw ?? "0").replace(/[^0-9.-]/g, ""));
     const points = Math.max(0, Math.floor(Number.isFinite(parsed) ? parsed : 0));
+
+    if (!evalLogged) {
+      evalLogged = true;
+      console.error("[wallet] deduct transaction eval", {
+        uid,
+        pointCost,
+        curExists: cur != null,
+        raw: toLogSafeValue(raw),
+        parsed: toLogSafeValue(parsed),
+        points,
+      });
+    }
+
     if (points < pointCost) return;
     return { ...base, points: points - pointCost, updatedAt: nowMs() };
   });
@@ -954,6 +968,7 @@ async function deductPointsOrThrow(db, uid, pointCost) {
       beforePoints,
       afterRaw: toLogSafeValue(afterRaw),
       afterPoints,
+      txSnapshotRaw: toLogSafeValue(tx.snapshot?.val()?.points),
     });
 
     const reason = afterPoints < pointCost ? "INSUFFICIENT_POINTS_AFTER_RECHECK" : "WALLET_TRANSACTION_ABORTED";
