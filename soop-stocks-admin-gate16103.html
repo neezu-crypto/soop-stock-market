@@ -659,6 +659,10 @@
                 <span class="inbox-label">🏷️ 칭호</span>
                 <span class="inbox-count" data-inbox-count="title-sponsor">…</span>
             </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="point-charge" title="별포인트 충전 검수로 이동">
+                <span class="inbox-label">✨ 별포인트</span>
+                <span class="inbox-count" data-inbox-count="point-charge">…</span>
+            </button>
         </div>
     </div>
 
@@ -2342,12 +2346,12 @@
         return v && String(v.status || '').trim().toLowerCase() === 'pending';
     }
 
-    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null, 'live-ranking-req': null, 'title-sponsor': null };
+    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null, 'live-ranking-req': null, 'title-sponsor': null, 'point-charge': null };
 
     function paintAdminRequestInbox() {
         const box = document.getElementById('admin-request-inbox');
         if (!box) return;
-        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req', 'live-ranking-req', 'title-sponsor'].forEach((k) => {
+        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req', 'live-ranking-req', 'title-sponsor', 'point-charge'].forEach((k) => {
             const el = box.querySelector(`[data-inbox-count="${k}"]`);
             const chip = el && el.closest('.admin-inbox-chip');
             const v = adminInboxCounts[k];
@@ -2737,6 +2741,7 @@
             'ranking-req': 'admin-accordion-ranking-access',
             'live-ranking-req': 'admin-accordion-live-ranking-access',
             'title-sponsor': 'admin-accordion-title-sponsor',
+            'point-charge': 'admin-accordion-point-charge',
         };
         const id = idMap[key];
         const el = id ? document.getElementById(id) : null;
@@ -3498,6 +3503,7 @@
             }
             prevPointChargeKeys = new Set(keys);
             renderPointChargeRequestsList(data, new Set(added));
+            setAdminInboxCount('point-charge', countPendingStandard(data));
         });
 
         requestRealtimeUnsubs.ad = onValue(adminRecentRequestsQuery('adRequests'), (snap) => {
