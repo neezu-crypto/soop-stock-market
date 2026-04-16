@@ -886,11 +886,34 @@ function kstYmdFromNow(addDays = 0) {
   return fmt.format(d); // YYYY-MM-DD
 }
 
+function toLogSafeValue(v, maxLen = 200) {
+  if (v == null) return v;
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
+}
+
+function logCallableFailure(functionName, request, err, extra = {}) {
+  const payload = {
+    functionName,
+    uid: String(request?.auth?.uid || ""),
+    email: String(request?.auth?.token?.email || ""),
+    code: String(err?.code || err?.status || err?.name || "unknown"),
+    message: String(err?.message || err || ""),
+    extra,
+  };
+  console.error(`[callable:${functionName}] failure`, payload);
+}
+
 async function deductPointsOrThrow(db, uid, pointCost) {
   const walletRef = db.ref(`users/${uid}/wallet`);
   const tx = await walletRef.transaction((cur) => {
     const base = cur && typeof cur === "object" ? cur : {};
-    const points = Math.max(0, Math.floor(Number(base.points || 0)));
+    const raw = base.points;
+    const parsed =
+      typeof raw === "number"
+        ? raw
+        : Number(String(raw ?? "0").replace(/[^0-9.-]/g, ""));
+    const points = Math.max(0, Math.floor(Number.isFinite(parsed) ? parsed : 0));
     if (points < pointCost) return;
     return { ...base, points: points - pointCost, updatedAt: nowMs() };
   });
@@ -1024,241 +1047,267 @@ exports.adminRejectPointCharge = onCall(
 exports.purchaseAndPublishPromoBanner = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },
   async (request) => {
-    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
-    const uid = request.auth.uid;
-    const nickname = String(request.data?.nickname || "").trim();
-    const soopId = String(request.data?.soopId || "").trim();
-    const days = toPositiveInt(request.data?.days, 0, 30);
-    const imgUrl = String(request.data?.imgUrl || "").trim();
-    const link = String(request.data?.link || "").trim();
-    const clientRequestId = String(request.data?.clientRequestId || "").trim();
+    const functionName = "purchaseAndPublishPromoBanner";
+    try {
+      if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+      const uid = request.auth.uid;
+      const nickname = String(request.data?.nickname || "").trim();
+      const soopId = String(request.data?.soopId || "").trim();
+      const days = toPositiveInt(request.data?.days, 0, 30);
+      const imgUrl = String(request.data?.imgUrl || "").trim();
+      const link = String(request.data?.link || "").trim();
+      const clientRequestId = String(request.data?.clientRequestId || "").trim();
 
-    if (!nickname || nickname.length > 50) throw new HttpsError("invalid-argument", "invalid nickname.");
-    if (!soopId || soopId.length > 80 || !/^[a-zA-Z0-9_]+$/.test(soopId)) throw new HttpsError("invalid-argument", "invalid soopId.");
-    if (days < 1 || days > 30) throw new HttpsError("invalid-argument", "days must be 1~30.");
-    if (!isValidHttpUrl(imgUrl, 800)) throw new HttpsError("invalid-argument", "invalid imgUrl.");
-    if (!isValidHttpUrl(link, 800)) throw new HttpsError("invalid-argument", "invalid link.");
-    if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+      if (!nickname || nickname.length > 50) throw new HttpsError("invalid-argument", "invalid nickname.");
+      if (!soopId || soopId.length > 80 || !/^[a-zA-Z0-9_]+$/.test(soopId)) throw new HttpsError("invalid-argument", "invalid soopId.");
+      if (days < 1 || days > 30) throw new HttpsError("invalid-argument", "days must be 1~30.");
+      if (!isValidHttpUrl(imgUrl, 800)) throw new HttpsError("invalid-argument", "invalid imgUrl.");
+      if (!isValidHttpUrl(link, 800)) throw new HttpsError("invalid-argument", "invalid link.");
+      if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
 
-    const db = admin.database();
-    const cfgSnap = await db.ref("siteConfig").get();
-    const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
-    const pointCost = Math.max(1, days * pricing.broadcastBannerPerDay);
+      const db = admin.database();
+      const cfgSnap = await db.ref("siteConfig").get();
+      const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+      const pointCost = Math.max(1, days * pricing.broadcastBannerPerDay);
 
-    const opRef = db.ref(`pointOps/${uid}/promoBanner/${clientRequestId}`);
-    const opSnap = await opRef.get();
-    const st = String(opSnap.val()?.status || "");
-    if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
-    if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
-    await opRef.set({ status: "processing", uid, soopId, days, pointCost, createdAt: nowMs() });
+      const opRef = db.ref(`pointOps/${uid}/promoBanner/${clientRequestId}`);
+      const opSnap = await opRef.get();
+      const st = String(opSnap.val()?.status || "");
+      if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
+      if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
+      await opRef.set({ status: "processing", uid, soopId, days, pointCost, createdAt: nowMs() });
 
-    const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
-    const ledgerTxnId = await appendPointLedger(db, uid, {
-      type: "purchase_promo_banner",
-      amount: -pointCost,
-      balanceAfter,
-      requestType: "promoBanner",
-      requestId: clientRequestId,
-      requestPath: `pointOps/${uid}/promoBanner/${clientRequestId}`,
-      note: `publish promo banner ${soopId} ${days}d`,
-      createdBy: "user",
-    });
+      const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
+      const ledgerTxnId = await appendPointLedger(db, uid, {
+        type: "purchase_promo_banner",
+        amount: -pointCost,
+        balanceAfter,
+        requestType: "promoBanner",
+        requestId: clientRequestId,
+        requestPath: `pointOps/${uid}/promoBanner/${clientRequestId}`,
+        note: `publish promo banner ${soopId} ${days}d`,
+        createdBy: "user",
+      });
 
-    const endDate = kstYmdFromNow(days - 1);
-    await db.ref(`stocksBanner/${soopId}`).update({
-      name: nickname,
-      bannerImg: imgUrl,
-      link,
-      bannerIsPaid: true,
-      bannerEndDate: endDate,
-      updatedAt: nowMs(),
-      updatedByUid: uid,
-    });
-    await db.ref("siteConfig/bannerCacheVersion").set(nowMs());
+      const endDate = kstYmdFromNow(days - 1);
+      await db.ref(`stocksBanner/${soopId}`).update({
+        name: nickname,
+        bannerImg: imgUrl,
+        link,
+        bannerIsPaid: true,
+        bannerEndDate: endDate,
+        updatedAt: nowMs(),
+        updatedByUid: uid,
+      });
+      await db.ref("siteConfig/bannerCacheVersion").set(nowMs());
 
-    const payload = {
-      ok: true,
-      status: "done",
-      clientRequestId,
-      uid,
-      soopId,
-      days,
-      pointCost,
-      balanceAfter,
-      endDate,
-      ledgerTxnId,
-      doneAt: nowMs(),
-    };
-    await opRef.set(payload);
-    return payload;
+      const payload = {
+        ok: true,
+        status: "done",
+        clientRequestId,
+        uid,
+        soopId,
+        days,
+        pointCost,
+        balanceAfter,
+        endDate,
+        ledgerTxnId,
+        doneAt: nowMs(),
+      };
+      await opRef.set(payload);
+      return payload;
+    } catch (err) {
+      logCallableFailure(functionName, request, err, {
+        soopId: toLogSafeValue(request.data?.soopId),
+        days: request.data?.days,
+        imgUrl: toLogSafeValue(request.data?.imgUrl),
+        clientRequestId: toLogSafeValue(request.data?.clientRequestId),
+      });
+      throw err;
+    }
   }
 );
 
 exports.purchaseAndPublishChartBanner = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },
   async (request) => {
-    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
-    const uid = request.auth.uid;
-    const nickname = String(request.data?.nickname || "").trim();
-    const days = toPositiveInt(request.data?.days, 0, 99);
-    const imgUrl = String(request.data?.imgUrl || "").trim();
-    const link = String(request.data?.link || "").trim();
-    const clientRequestId = String(request.data?.clientRequestId || "").trim();
+    const functionName = "purchaseAndPublishChartBanner";
+    try {
+      if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+      const uid = request.auth.uid;
+      const nickname = String(request.data?.nickname || "").trim();
+      const days = toPositiveInt(request.data?.days, 0, 99);
+      const imgUrl = String(request.data?.imgUrl || "").trim();
+      const link = String(request.data?.link || "").trim();
+      const clientRequestId = String(request.data?.clientRequestId || "").trim();
 
-    if (!nickname || nickname.length > 50) throw new HttpsError("invalid-argument", "invalid nickname.");
-    if (days < 1 || days > 99) throw new HttpsError("invalid-argument", "days must be 1~99.");
-    if (!isValidHttpUrl(imgUrl, 800)) throw new HttpsError("invalid-argument", "invalid imgUrl.");
-    if (!isValidHttpUrl(link, 800)) throw new HttpsError("invalid-argument", "invalid link.");
-    if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+      if (!nickname || nickname.length > 50) throw new HttpsError("invalid-argument", "invalid nickname.");
+      if (days < 1 || days > 99) throw new HttpsError("invalid-argument", "days must be 1~99.");
+      if (!isValidHttpUrl(imgUrl, 800)) throw new HttpsError("invalid-argument", "invalid imgUrl.");
+      if (!isValidHttpUrl(link, 800)) throw new HttpsError("invalid-argument", "invalid link.");
+      if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
 
-    const db = admin.database();
-    const cfgSnap = await db.ref("siteConfig").get();
-    const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
-    const pointCost = Math.max(1, days * pricing.chartBannerPerDay);
+      const db = admin.database();
+      const cfgSnap = await db.ref("siteConfig").get();
+      const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+      const pointCost = Math.max(1, days * pricing.chartBannerPerDay);
 
-    const opRef = db.ref(`pointOps/${uid}/chartBanner/${clientRequestId}`);
-    const opSnap = await opRef.get();
-    const st = String(opSnap.val()?.status || "");
-    if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
-    if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
-    await opRef.set({ status: "processing", uid, days, pointCost, createdAt: nowMs() });
+      const opRef = db.ref(`pointOps/${uid}/chartBanner/${clientRequestId}`);
+      const opSnap = await opRef.get();
+      const st = String(opSnap.val()?.status || "");
+      if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
+      if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
+      await opRef.set({ status: "processing", uid, days, pointCost, createdAt: nowMs() });
 
-    const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
-    const ledgerTxnId = await appendPointLedger(db, uid, {
-      type: "purchase_chart_banner",
-      amount: -pointCost,
-      balanceAfter,
-      requestType: "chartBanner",
-      requestId: clientRequestId,
-      requestPath: `pointOps/${uid}/chartBanner/${clientRequestId}`,
-      note: `publish chart banner ${days}d`,
-      createdBy: "user",
-    });
+      const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
+      const ledgerTxnId = await appendPointLedger(db, uid, {
+        type: "purchase_chart_banner",
+        amount: -pointCost,
+        balanceAfter,
+        requestType: "chartBanner",
+        requestId: clientRequestId,
+        requestPath: `pointOps/${uid}/chartBanner/${clientRequestId}`,
+        note: `publish chart banner ${days}d`,
+        createdBy: "user",
+      });
 
-    const endDate = kstYmdFromNow(days - 1);
-    await db.ref("chartBanner").set({
-      img: imgUrl,
-      link,
-      endDate,
-      sponsorName: nickname,
-      updatedAt: nowMs(),
-      updatedByUid: uid,
-    });
+      const endDate = kstYmdFromNow(days - 1);
+      await db.ref("chartBanner").set({
+        img: imgUrl,
+        link,
+        endDate,
+        sponsorName: nickname,
+        updatedAt: nowMs(),
+        updatedByUid: uid,
+      });
 
-    const payload = {
-      ok: true,
-      status: "done",
-      clientRequestId,
-      uid,
-      days,
-      pointCost,
-      balanceAfter,
-      endDate,
-      ledgerTxnId,
-      doneAt: nowMs(),
-    };
-    await opRef.set(payload);
-    return payload;
+      const payload = {
+        ok: true,
+        status: "done",
+        clientRequestId,
+        uid,
+        days,
+        pointCost,
+        balanceAfter,
+        endDate,
+        ledgerTxnId,
+        doneAt: nowMs(),
+      };
+      await opRef.set(payload);
+      return payload;
+    } catch (err) {
+      logCallableFailure(functionName, request, err, {
+        days: request.data?.days,
+        imgUrl: toLogSafeValue(request.data?.imgUrl),
+        link: toLogSafeValue(request.data?.link),
+        clientRequestId: toLogSafeValue(request.data?.clientRequestId),
+      });
+      throw err;
+    }
   }
 );
 
 exports.purchaseAndPublishRelay = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },
   async (request) => {
-    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
-    const uid = request.auth.uid;
-    const nickname = String(request.data?.nickname || "").trim();
-    const soopId = String(request.data?.soopId || "").trim();
-    const hours = toPositiveInt(request.data?.hours, 0, 24);
-    const regularHours = Math.max(0, Number(request.data?.regularHours || 0));
-    const offPeakHours = Math.max(0, Number(request.data?.offPeakHours || 0));
-    const clientRequestId = String(request.data?.clientRequestId || "").trim();
+    const functionName = "purchaseAndPublishRelay";
+    try {
+      if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+      const uid = request.auth.uid;
+      const nickname = String(request.data?.nickname || "").trim();
+      const soopId = String(request.data?.soopId || "").trim();
+      const hours = toPositiveInt(request.data?.hours, 0, 24);
+      const regularHours = Math.max(0, Number(request.data?.regularHours || 0));
+      const offPeakHours = Math.max(0, Number(request.data?.offPeakHours || 0));
+      const clientRequestId = String(request.data?.clientRequestId || "").trim();
 
-    if (!nickname || nickname.length > 80) throw new HttpsError("invalid-argument", "invalid nickname.");
-    if (!soopId || soopId.length > 80 || !/^[a-zA-Z0-9_]+$/.test(soopId)) throw new HttpsError("invalid-argument", "invalid soopId.");
-    if (hours < 1 || hours > 24) throw new HttpsError("invalid-argument", "hours must be 1~24.");
-    if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+      if (!nickname || nickname.length > 80) throw new HttpsError("invalid-argument", "invalid nickname.");
+      if (!soopId || soopId.length > 80 || !/^[a-zA-Z0-9_]+$/.test(soopId)) throw new HttpsError("invalid-argument", "invalid soopId.");
+      if (hours < 1 || hours > 24) throw new HttpsError("invalid-argument", "hours must be 1~24.");
+      if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
 
-    const db = admin.database();
-    const cfgSnap = await db.ref("siteConfig").get();
-    const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+      const db = admin.database();
+      const cfgSnap = await db.ref("siteConfig").get();
+      const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+      const reg = Math.max(0, Math.min(hours, regularHours));
+      const off = Math.max(0, Math.min(hours, offPeakHours));
+      const pointCost = Math.max(1, Math.floor((off * pricing.relayOffPeakPerHour) + (reg * pricing.relayRegularPerHour)));
 
-    // 비용은 서버에서 다시 계산 (클라 조작 방지)
-    const reg = Math.max(0, Math.min(hours, regularHours));
-    const off = Math.max(0, Math.min(hours, offPeakHours));
-    const pointCost = Math.max(
-      1,
-      Math.floor((off * pricing.relayOffPeakPerHour) + (reg * pricing.relayRegularPerHour))
-    );
+      const opRef = db.ref(`pointOps/${uid}/relay/${clientRequestId}`);
+      const opSnap = await opRef.get();
+      const st = String(opSnap.val()?.status || "");
+      if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
+      if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
+      await opRef.set({ status: "processing", uid, soopId, hours, pointCost, createdAt: nowMs() });
 
-    const opRef = db.ref(`pointOps/${uid}/relay/${clientRequestId}`);
-    const opSnap = await opRef.get();
-    const st = String(opSnap.val()?.status || "");
-    if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
-    if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
-    await opRef.set({ status: "processing", uid, soopId, hours, pointCost, createdAt: nowMs() });
+      const allSnap = await db.ref("relayRequests").get();
+      const now = nowMs();
+      const allData = allSnap.exists() ? (allSnap.val() || {}) : {};
+      const activeCount = Object.values(allData).filter((v) => v && v.status === "approved" && Number(v.expireAt || 0) > now).length;
+      if (activeCount >= 3) {
+        await opRef.update({ status: "failed", failedAt: nowMs(), error: "SLOT_FULL" });
+        throw new HttpsError("failed-precondition", "relay slots full.");
+      }
 
-    // 슬롯(최대 3) 체크 — 승인+미만료 기준
-    const allSnap = await db.ref("relayRequests").get();
-    const now = nowMs();
-    const allData = allSnap.exists() ? (allSnap.val() || {}) : {};
-    const activeCount = Object.values(allData).filter(
-      (v) => v && v.status === "approved" && Number(v.expireAt || 0) > now
-    ).length;
-    if (activeCount >= 3) {
-      await opRef.update({ status: "failed", failedAt: nowMs(), error: "SLOT_FULL" });
-      throw new HttpsError("failed-precondition", "relay slots full.");
+      const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
+      const ledgerTxnId = await appendPointLedger(db, uid, {
+        type: "purchase_relay",
+        amount: -pointCost,
+        balanceAfter,
+        requestType: "relay",
+        requestId: clientRequestId,
+        requestPath: `pointOps/${uid}/relay/${clientRequestId}`,
+        note: `publish relay ${soopId} ${hours}h`,
+        createdBy: "user",
+      });
+
+      const approvedAt = nowMs();
+      const expireAt = approvedAt + (hours * 3600000);
+      const reqId = `relay_${uid}_${approvedAt}`;
+      await db.ref(`relayRequests/${reqId}`).set({
+        nickname,
+        soopId,
+        hours,
+        uid,
+        status: "approved",
+        createdAt: approvedAt,
+        approvedAt,
+        expireAt,
+        cost: pointCost,
+        pointCost,
+        paymentStatus: "paid",
+        pointTxnId: String(ledgerTxnId || ""),
+        regularHours: reg,
+        offPeakHours: off,
+      });
+
+      const payload = {
+        ok: true,
+        status: "done",
+        clientRequestId,
+        uid,
+        soopId,
+        hours,
+        pointCost,
+        balanceAfter,
+        relayRequestId: reqId,
+        approvedAt,
+        expireAt,
+        ledgerTxnId,
+        doneAt: nowMs(),
+      };
+      await opRef.set(payload);
+      return payload;
+    } catch (err) {
+      logCallableFailure(functionName, request, err, {
+        soopId: toLogSafeValue(request.data?.soopId),
+        hours: request.data?.hours,
+        regularHours: request.data?.regularHours,
+        offPeakHours: request.data?.offPeakHours,
+        clientRequestId: toLogSafeValue(request.data?.clientRequestId),
+      });
+      throw err;
     }
-
-    const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
-    const ledgerTxnId = await appendPointLedger(db, uid, {
-      type: "purchase_relay",
-      amount: -pointCost,
-      balanceAfter,
-      requestType: "relay",
-      requestId: clientRequestId,
-      requestPath: `pointOps/${uid}/relay/${clientRequestId}`,
-      note: `publish relay ${soopId} ${hours}h`,
-      createdBy: "user",
-    });
-
-    const approvedAt = nowMs();
-    const expireAt = approvedAt + (hours * 3600000);
-    const reqId = `relay_${uid}_${approvedAt}`;
-    await db.ref(`relayRequests/${reqId}`).set({
-      nickname,
-      soopId,
-      hours,
-      uid,
-      status: "approved",
-      createdAt: approvedAt,
-      approvedAt,
-      expireAt,
-      cost: pointCost,
-      pointCost,
-      paymentStatus: "paid",
-      pointTxnId: String(ledgerTxnId || ""),
-      regularHours: reg,
-      offPeakHours: off,
-    });
-
-    const payload = {
-      ok: true,
-      status: "done",
-      clientRequestId,
-      uid,
-      soopId,
-      hours,
-      pointCost,
-      balanceAfter,
-      relayRequestId: reqId,
-      approvedAt,
-      expireAt,
-      ledgerTxnId,
-      doneAt: nowMs(),
-    };
-    await opRef.set(payload);
-    return payload;
   }
 );
 

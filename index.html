@@ -11124,7 +11124,7 @@ window.submitChartAdRequest = async function() {
     } catch(e) {
         msgEl.style.color = 'var(--up-color)';
         const msg = String(e?.message || e || '');
-        msgEl.textContent = /insufficient-points|포인트/i.test(msg)
+        msgEl.textContent = /insufficient-points|insufficient points|포인트/i.test(msg)
             ? '포인트가 부족합니다. 별포인트를 먼저 충전해주세요.'
             : ('신청 실패: ' + msg);
     }
@@ -11468,7 +11468,7 @@ window.submitPromoRequest = async function() {
     } catch(e) {
         msgEl.style.color = 'var(--up-color)';
         const msg = String(e?.message || e || '');
-        msgEl.textContent = /insufficient-points|포인트/i.test(msg)
+        msgEl.textContent = /insufficient-points|insufficient points|포인트/i.test(msg)
             ? '포인트가 부족합니다. 별포인트를 먼저 충전해주세요.'
             : ('신청 실패: ' + msg);
     }
