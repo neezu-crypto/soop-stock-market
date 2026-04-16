@@ -738,6 +738,110 @@ exports.adminBulkDeleteStocks = onCall(
   }
 );
 
+/**
+ * 관리자 단일 종목 상장폐지/시가 재상장
+ * - delist: stocks/coins/index 삭제 + users 보유(stocks/coins/{id})를 batchSize 단위로 분할 삭제
+ * - relist: 같은 ID로 주식 1만원/코인 1억원 초기 시세로 신규 생성
+ */
+exports.adminRebuildSingleInstrument = onCall(
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const action = String(request.data?.action || "").trim().toLowerCase();
+    const id = String(request.data?.id || "").trim();
+    const rawName = String(request.data?.name || "").trim();
+    const now = Date.now();
+    const batchSizeRaw = Number(request.data?.batchSize);
+    const batchSize = Number.isFinite(batchSizeRaw)
+      ? Math.min(1000, Math.max(50, Math.floor(batchSizeRaw)))
+      : 300;
+
+    if (!id) throw new HttpsError("invalid-argument", "id is required.");
+    if (action !== "delist" && action !== "relist") {
+      throw new HttpsError("invalid-argument", "action must be delist|relist.");
+    }
+
+    const db = admin.database();
+
+    if (action === "delist") {
+      const usersSnap = await db.ref("users").get();
+      const users = usersSnap.exists() ? usersSnap.val() || {} : {};
+      const holdingUpdates = {};
+      let removedHoldingPaths = 0;
+      Object.entries(users).forEach(([uid, u]) => {
+        if (u?.stocks && typeof u.stocks === "object" && Object.prototype.hasOwnProperty.call(u.stocks, id)) {
+          holdingUpdates[`users/${uid}/stocks/${id}`] = null;
+          removedHoldingPaths += 1;
+        }
+        if (u?.coins && typeof u.coins === "object" && Object.prototype.hasOwnProperty.call(u.coins, id)) {
+          holdingUpdates[`users/${uid}/coins/${id}`] = null;
+          removedHoldingPaths += 1;
+        }
+      });
+      const chunks = chunkObject(holdingUpdates, batchSize);
+      for (const chunk of chunks) {
+        await db.ref().update(chunk);
+      }
+
+      await db.ref().update({
+        [`stocks/${id}`]: null,
+        [`coins/${id}`]: null,
+        [`stockSearchIndex/${id}`]: null,
+        [`coinSearchIndex/${id}`]: null,
+        "siteConfig/stockNameIndexVersion": now,
+        "siteConfig/coinNameIndexVersion": now,
+        "siteConfig/stockCacheVersion": now,
+      });
+
+      return {
+        ok: true,
+        action,
+        id,
+        removedHoldingPaths,
+        holdingChunks: chunks.length,
+        batchSize,
+        at: now,
+      };
+    }
+
+    const stockSnap = await db.ref(`stocks/${id}`).get();
+    const derivedName = rawName || String(stockSnap.exists() ? stockSnap.val()?.name || "" : "").trim() || id;
+    await db.ref().update({
+      [`stocks/${id}`]: {
+        name: derivedName,
+        price: 10000,
+        volume: 0,
+        totalShares: 1000000,
+        status: "active",
+        createdAt: now,
+        lastUpdate: now,
+        impactCoef: 0.0005,
+        history: [10000, 10000],
+        change: 0,
+        buyVol: 0,
+        sellVol: 0,
+      },
+      [`coins/${id}`]: {
+        name: derivedName,
+        price: 100000000,
+        volume: 0,
+        buyVol: 0,
+        sellVol: 0,
+        change: "0.00",
+      },
+      [`stockSearchIndex/${id}/name`]: derivedName,
+      [`coinSearchIndex/${id}/name`]: derivedName,
+      "siteConfig/stockNameIndexVersion": now,
+      "siteConfig/coinNameIndexVersion": now,
+      "siteConfig/stockCacheVersion": now,
+    });
+
+    return { ok: true, action, id, name: derivedName, at: now };
+  }
+);
+
 /** 관리자: stocks 기준으로 coins 미존재 종목 생성(시가 1억원) */
 exports.adminSyncCoinsFromStocks = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },

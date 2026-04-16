@@ -2139,6 +2139,7 @@
     const adminBulkListStocksFn = httpsCallable(functions, 'adminBulkListStocks');
     const adminBulkDeleteStocksFn = httpsCallable(functions, 'adminBulkDeleteStocks');
     const adminSyncCoinsFromStocksFn = httpsCallable(functions, 'adminSyncCoinsFromStocks');
+    const adminRebuildSingleInstrumentFn = httpsCallable(functions, 'adminRebuildSingleInstrument');
     const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
     const adminInstrumentImpactFn = httpsCallable(functions, 'adminInstrumentImpact');
@@ -3647,59 +3648,6 @@
     let coinsTop10Sort = 'desc';
     let pendingListingQuickAddName = '';
     let lastDelistedInstrumentMeta = null;
-
-    function defaultStockRowForRelist(name) {
-        const now = Date.now();
-        return {
-            name,
-            price: 10000,
-            volume: 0,
-            totalShares: 1000000,
-            status: 'active',
-            createdAt: now,
-            lastUpdate: now,
-            impactCoef: 0.0005,
-            history: [10000, 10000],
-            change: 0,
-            buyVol: 0,
-            sellVol: 0,
-        };
-    }
-
-    function defaultCoinRowForRelist(name) {
-        return {
-            name,
-            price: 100000000,
-            volume: 0,
-            buyVol: 0,
-            sellVol: 0,
-            change: '0.00',
-        };
-    }
-
-    async function clearUserHoldingsForInstrument(id) {
-        const usersSnap = await get(ref(db, 'users/'));
-        if (!usersSnap.exists()) return 0;
-        const users = usersSnap.val() || {};
-        const updates = {};
-        let removed = 0;
-        Object.entries(users).forEach(([uid, u]) => {
-            if (u?.stocks && typeof u.stocks === 'object' && Object.prototype.hasOwnProperty.call(u.stocks, id)) {
-                updates[`users/${uid}/stocks/${id}`] = null;
-                removed += 1;
-            }
-            if (u?.coins && typeof u.coins === 'object' && Object.prototype.hasOwnProperty.call(u.coins, id)) {
-                updates[`users/${uid}/coins/${id}`] = null;
-                removed += 1;
-            }
-        });
-        const entries = Object.entries(updates);
-        for (let i = 0; i < entries.length; i += 350) {
-            const chunk = Object.fromEntries(entries.slice(i, i + 350));
-            await update(ref(db), chunk);
-        }
-        return removed;
-    }
 
     function renderSingleDelistOptions() {
         const sel = document.getElementById('single-delist-select');
@@ -5353,20 +5301,20 @@
         if (!confirm(`선택 종목을 상장폐지할까요?\n\n이름: ${name}\nID: ${id}\n\nstocks/coins + 검색 인덱스 + 유저 보유(stocks/coins)가 삭제됩니다.`)) return;
         try {
             if (statusEl) { statusEl.style.color = '#94a3b8'; statusEl.textContent = '상장폐지 처리 중...'; }
-            const removedHoldingPaths = await clearUserHoldingsForInstrument(id);
-            await update(ref(db), {
-                [`stocks/${id}`]: null,
-                [`coins/${id}`]: null,
-                [`stockSearchIndex/${id}`]: null,
-                [`coinSearchIndex/${id}`]: null,
+            const { data } = await adminRebuildSingleInstrumentFn({
+                action: 'delist',
+                id,
+                name,
+                batchSize: 300
             });
             lastDelistedInstrumentMeta = { id, name, deletedAt: Date.now() };
-            await bumpSearchNameIndexVersions();
             await loadStocksOnce();
             try { await loadCoinsTop10Once(); } catch (_) { /* noop */ }
             if (statusEl) {
                 statusEl.style.color = '#86efac';
-                statusEl.textContent = `상장폐지 완료: ${name} (${id}) · 유저 보유 경로 ${removedHoldingPaths.toLocaleString()}건 삭제`;
+                const removed = Number(data?.removedHoldingPaths || 0);
+                const chunks = Number(data?.holdingChunks || 0);
+                statusEl.textContent = `상장폐지 완료: ${name} (${id}) · 유저 보유 경로 ${removed.toLocaleString()}건 삭제 (${chunks}청크)`;
             }
         } catch (e) {
             if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = `상장폐지 실패: ${e?.message || e}`; }
@@ -5393,15 +5341,11 @@
         if (!confirm(`종목을 시가로 재상장할까요?\n\n이름: ${name}\nID: ${id}\n\n주식 10,000원 / 코인 100,000,000원으로 신규 등록됩니다.`)) return;
         try {
             if (statusEl) { statusEl.style.color = '#94a3b8'; statusEl.textContent = '시가 재상장 처리 중...'; }
-            const stockRow = defaultStockRowForRelist(name);
-            const coinRow = defaultCoinRowForRelist(name);
-            await update(ref(db), {
-                [`stocks/${id}`]: stockRow,
-                [`coins/${id}`]: coinRow,
-                [`stockSearchIndex/${id}/name`]: name,
-                [`coinSearchIndex/${id}/name`]: name,
+            await adminRebuildSingleInstrumentFn({
+                action: 'relist',
+                id,
+                name
             });
-            await bumpSearchNameIndexVersions();
             await loadStocksOnce();
             try { await loadCoinsTop10Once(); } catch (_) { /* noop */ }
             if (statusEl) {
