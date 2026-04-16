@@ -1410,6 +1410,141 @@ exports.purchaseAndPublishRelay = onCall(
   }
 );
 
+exports.purchaseAndPublishTitleSponsor = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    const functionName = "purchaseAndPublishTitleSponsor";
+    try {
+      // index.html과 동일 규칙에 최대한 가깝게 서버에서도 검증합니다.
+      function sanitizeTitleName(raw) {
+        return String(raw || "").trim().replace(/\s+/g, " ").slice(0, 16);
+      }
+      function isTitleNameTooSpammy(name) {
+        if (/(.)\1{3,}/.test(name)) return true; // 동일 문자 반복(과도)
+        const only = name.replace(/\s+/g, "");
+        if (only.length >= 6 && /^(.{1,2})\1+$/.test(only)) return true; // 1~2글자 패턴 반복
+        return false;
+      }
+      function normalizeTitleThemeId(theme) {
+        const t = String(theme || "").trim().toLowerCase();
+        if (t === "preset2") return "preset2";
+        if (t === "preset3") return "preset3";
+        return "preset1";
+      }
+
+      if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+      const uid = request.auth.uid;
+
+      const stockId = String(request.data?.stockId || "").trim();
+      const stockName = String(request.data?.stockName || "").trim();
+      const titleRaw = request.data?.title;
+      const title = sanitizeTitleName(titleRaw);
+      const themeRaw = String(request.data?.theme || "preset1").trim();
+      const theme = normalizeTitleThemeId(themeRaw);
+
+      const clientRequestId = String(request.data?.clientRequestId || "").trim();
+
+      if (!stockId || stockId.length > 80 || /\s/.test(stockId)) throw new HttpsError("invalid-argument", "invalid stockId.");
+      if (!title || title.length < 2 || title.length > 16) throw new HttpsError("invalid-argument", "invalid title.");
+      if (isTitleNameTooSpammy(title)) throw new HttpsError("invalid-argument", "title is too spammy.");
+      if (!["preset1", "preset2", "preset3"].includes(theme)) throw new HttpsError("invalid-argument", "invalid theme.");
+      if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId))
+        throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+
+      const db = admin.database();
+      const cfgSnap = await db.ref("siteConfig").get();
+      const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+      const pointCost = pricing.titleSponsorUnitCost;
+      const durationMs = 5 * 24 * 60 * 60 * 1000; // default: 5 days
+
+      // 종목당 활성 1개 — 현재 만료가 지나지 않은 "approved+active"면 구매를 막습니다.
+      const stockSnap = await db.ref(`stockTitles/${stockId}`).get();
+      if (stockSnap.exists()) {
+        const cur = stockSnap.val() || {};
+        const active = cur.active !== false;
+        const approved = String(cur.status || "").toLowerCase() === "approved";
+        const expiresAt = Number(cur.expiresAt || 0);
+        if (active && approved && expiresAt > nowMs()) {
+          throw new HttpsError("failed-precondition", "title already active.");
+        }
+      }
+
+      const opRef = db.ref(`pointOps/${uid}/titleSponsor/${clientRequestId}`);
+      const opSnap = await opRef.get();
+      const st = String(opSnap.val()?.status || "");
+      if (opSnap.exists() && st === "done") return { ok: true, ...opSnap.val() };
+      if (opSnap.exists() && st === "processing") throw new HttpsError("failed-precondition", "already processing.");
+
+      await opRef.set({
+        status: "processing",
+        uid,
+        stockId,
+        title,
+        theme,
+        pointCost,
+        createdAt: nowMs(),
+      });
+
+      const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
+      const ledgerTxnId = await appendPointLedger(db, uid, {
+        type: "purchase_title_sponsor",
+        amount: -pointCost,
+        balanceAfter,
+        requestType: "titleSponsor",
+        requestId: clientRequestId,
+        requestPath: `pointOps/${uid}/titleSponsor/${clientRequestId}`,
+        note: `publish title sponsor ${stockId}`,
+        createdBy: "user",
+      });
+
+      const now = nowMs();
+      const expiresAt = now + durationMs;
+      await db.ref(`stockTitles/${stockId}`).set({
+        title,
+        theme,
+        status: "approved",
+        active: true,
+        uid,
+        stockId,
+        stockName: stockName || stockId,
+        approvedAt: now,
+        startedAt: now,
+        expiresAt,
+        durationMs,
+        requestId: clientRequestId,
+        updatedAt: now,
+        updatedByUid: uid,
+      });
+
+      const payload = {
+        ok: true,
+        status: "done",
+        clientRequestId,
+        uid,
+        stockId,
+        stockName: stockName || stockId,
+        title,
+        theme,
+        pointCost,
+        balanceAfter,
+        expiresAt,
+        durationMs,
+        ledgerTxnId,
+        doneAt: now,
+      };
+
+      await opRef.set(payload);
+      return payload;
+    } catch (err) {
+      logCallableFailure(functionName, request, err, {
+        stockId: toLogSafeValue(request.data?.stockId),
+        clientRequestId: toLogSafeValue(request.data?.clientRequestId),
+      });
+      throw err;
+    }
+  }
+);
+
 exports.transferStarPointsGift = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },
   async (request) => {

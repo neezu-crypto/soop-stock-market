@@ -3644,7 +3644,7 @@
     <div class="promo-modal-content" style="max-width:460px;">
         <div class="promo-modal-header"><h2>🏷️ 종목 칭호 구매</h2></div>
         <p style="font-size:12px; color:var(--text-sub); line-height:1.6; margin:0 0 10px 0;">
-            승인되면 이 종목의 카드·캔들 차트 칭호 디자인이 전체 유저에게 5일간 적용됩니다.
+            등록 즉시 이 종목의 카드·캔들 차트 칭호 디자인이 전체 유저에게 5일간 적용됩니다.
         </p>
         <div style="font-size:12px; color:var(--text-sub); margin-bottom:8px;">칭호 스킨 프리셋</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
@@ -3678,11 +3678,11 @@
         <label style="display:block; font-size:12px; color:var(--text-sub); margin-bottom:6px;">칭호명 (2~16자, 도배 방지)</label>
         <input type="text" id="title-purchase-input" maxlength="16" placeholder="예: 우주 대장" autocomplete="off"
             style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text-main); font-size:14px; margin-bottom:8px;">
-        <div id="title-purchase-cost" style="font-size:12px; color:#f59e0b; margin-bottom:8px;">별풍선 단가 불러오는 중...</div>
+        <div id="title-purchase-cost" style="font-size:12px; color:#f59e0b; margin-bottom:8px;">별포인트 단가 불러오는 중...</div>
         <div id="title-purchase-msg" style="font-size:12px; color:var(--text-sub); margin-bottom:12px; min-height:18px;"></div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <button type="button" onclick="closeTitlePurchaseModal()" style="flex:1; min-width:96px; background:var(--border); color:white; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">닫기</button>
-            <button type="button" onclick="submitTitlePurchaseRequest()" style="flex:1; min-width:96px; background:#8b5cf6; color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">구매 신청</button>
+            <button type="button" onclick="submitTitlePurchaseRequest()" style="flex:1; min-width:96px; background:#8b5cf6; color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">등록하기</button>
             <button type="button" id="title-admin-apply-btn" onclick="adminApplyTitleForMe()" style="display:none; flex:1; min-width:96px; background:#0ea5e9; color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; font-size:14px;">관리자 테스트 적용</button>
         </div>
     </div>
@@ -4041,6 +4041,7 @@ const transferStarPointsGiftFn = httpsCallable(fns, 'transferStarPointsGift');
 const purchaseAndPublishPromoBannerFn = httpsCallable(fns, 'purchaseAndPublishPromoBanner');
 const purchaseAndPublishChartBannerFn = httpsCallable(fns, 'purchaseAndPublishChartBanner');
 const purchaseAndPublishRelayFn = httpsCallable(fns, 'purchaseAndPublishRelay');
+const purchaseAndPublishTitleSponsorFn = httpsCallable(fns, 'purchaseAndPublishTitleSponsor');
 let myStarPoints = 0;
 
 function renderStarPointsUi() {
@@ -11203,8 +11204,11 @@ window.openTitlePurchaseModal = async function() {
         : stockRowForId(chartModalStockId);
     const stockName = s?.name || stockNameCache[chartModalStockId] || chartModalStockId;
     if (stockNameEl) stockNameEl.textContent = stockName;
-    if (msgEl) { msgEl.style.color = 'var(--text-sub)'; msgEl.textContent = '칭호를 입력하면 미리보기에 반영됩니다. (승인 시 전체 유저에게 5일간 적용)'; }
-    if (costEl) costEl.textContent = `별풍선 ${Number(titleSponsorUnitCost || 50).toLocaleString()}개 (관리자 설정, 1회 승인 시 5일 적용)`;
+    if (msgEl) {
+        msgEl.style.color = 'var(--text-sub)';
+        msgEl.textContent = '칭호를 입력하면 미리보기에 반영됩니다. (등록 즉시 전체 유저에게 5일간 적용)';
+    }
+    if (costEl) costEl.textContent = `별포인트 ${Number(titleSponsorUnitCost || 50).toLocaleString()}P (관리자 설정, 등록 즉시 5일 적용)`;
     syncTitlePreviewBadgeText();
     const isAdmin = (auth.currentUser?.email || '').toLowerCase() === 'skftodwocks2@gmail.com';
     const adminBtn = document.getElementById('title-admin-apply-btn');
@@ -11325,21 +11329,26 @@ window.submitTitlePurchaseRequest = async function() {
         }
         return;
     }
-    if (msgEl) { msgEl.style.color = 'var(--text-sub)'; msgEl.textContent = '신청 중...'; }
+    if (msgEl) { msgEl.style.color = 'var(--text-sub)'; msgEl.textContent = '등록 중...'; }
     try {
         const market = chartModalMarket === 'coin' ? 'coin' : 'stock';
         const stockName = stockNameForId(chartModalStockId);
-        const { spent, balanceAfter } = await consumePointsAndCreateRequest('titleSponsor', {
+        const clientRequestId = `titleSponsor_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+        const { data } = await purchaseAndPublishTitleSponsorFn({
             stockId: chartModalStockId,
             stockName,
             market,
             title,
             theme: normalizeTitleThemeId(selectedTitleThemePreset),
-            durationMs: TITLE_SPONSOR_DURATION_MS
+            clientRequestId
         });
+        const spent = Math.max(0, Math.floor(Number(data?.pointCost || 0)));
+        const balanceAfter = Math.max(0, Math.floor(Number(data?.balanceAfter || 0)));
+        myStarPoints = balanceAfter;
+        renderStarPointsUi();
         if (msgEl) {
             msgEl.style.color = '#22c55e';
-            msgEl.textContent = `✅ 신청 완료! 승인 시 전체 유저에게 5일간 적용됩니다. (${spent.toLocaleString()}P 차감 · 잔액 ${balanceAfter.toLocaleString()}P)`;
+            msgEl.textContent = `✅ 등록 완료! 즉시 적용됩니다. (${spent.toLocaleString()}P 차감 · 잔액 ${balanceAfter.toLocaleString()}P)`;
         }
     } catch (e) {
         if (msgEl) {
@@ -11347,7 +11356,7 @@ window.submitTitlePurchaseRequest = async function() {
             const msg = String(e?.message || e || '');
             msgEl.textContent = /insufficient-points|포인트/i.test(msg)
                 ? '포인트가 부족합니다. 별포인트를 먼저 충전해주세요.'
-                : ('신청 실패: ' + msg);
+                : ('등록 실패: ' + msg);
         }
     }
 };
