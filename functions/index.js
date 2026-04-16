@@ -769,7 +769,7 @@ exports.adminBulkDeleteStocks = onCall(
 /**
  * 관리자 단일 종목 상장폐지/시가 재상장
  * - delist: market 에 따라 stocks·stockSearchIndex·유저 stocks 보유 만 / coins·coinSearchIndex·유저 coins 보유 만 삭제 (stock|coin). 생략 시 both(기존 동작).
- * - relist: 같은 ID로 주식 1만원/코인 1억원 초기 시세로 신규 생성
+ * - relist: market 에 따라 주식만(1만원)·코인만(1억)·둘 다 시가로 신규/덮어쓰기. 생략 시 both.
  */
 exports.adminRebuildSingleInstrument = onCall(
   { cors: true, timeoutSeconds: 540, memory: "1GiB" },
@@ -854,10 +854,33 @@ exports.adminRebuildSingleInstrument = onCall(
       };
     }
 
+    const hasMarket =
+      request.data && Object.prototype.hasOwnProperty.call(request.data, "market");
+    let market = "both";
+    if (hasMarket) {
+      const mr = String(request.data.market || "").trim().toLowerCase();
+      if (mr === "stock" || mr === "coin" || mr === "both") market = mr;
+      else {
+        throw new HttpsError("invalid-argument", "market must be stock|coin|both.");
+      }
+    }
+
     const stockSnap = await db.ref(`stocks/${id}`).get();
-    const derivedName = rawName || String(stockSnap.exists() ? stockSnap.val()?.name || "" : "").trim() || id;
-    await db.ref().update({
-      [`stocks/${id}`]: {
+    const coinSnap = await db.ref(`coins/${id}`).get();
+    let derivedName = rawName;
+    if (!derivedName) {
+      if (market === "stock" || market === "both") {
+        derivedName = String(stockSnap.exists() ? stockSnap.val()?.name || "" : "").trim();
+      }
+      if (!derivedName && (market === "coin" || market === "both")) {
+        derivedName = String(coinSnap.exists() ? coinSnap.val()?.name || "" : "").trim();
+      }
+    }
+    if (!derivedName) derivedName = id;
+
+    const upd = {};
+    if (market === "stock" || market === "both") {
+      upd[`stocks/${id}`] = {
         name: derivedName,
         price: 10000,
         volume: 0,
@@ -870,23 +893,26 @@ exports.adminRebuildSingleInstrument = onCall(
         change: 0,
         buyVol: 0,
         sellVol: 0,
-      },
-      [`coins/${id}`]: {
+      };
+      upd[`stockSearchIndex/${id}/name`] = derivedName;
+      upd["siteConfig/stockNameIndexVersion"] = now;
+      upd["siteConfig/stockCacheVersion"] = now;
+    }
+    if (market === "coin" || market === "both") {
+      upd[`coins/${id}`] = {
         name: derivedName,
         price: 100000000,
         volume: 0,
         buyVol: 0,
         sellVol: 0,
         change: "0.00",
-      },
-      [`stockSearchIndex/${id}/name`]: derivedName,
-      [`coinSearchIndex/${id}/name`]: derivedName,
-      "siteConfig/stockNameIndexVersion": now,
-      "siteConfig/coinNameIndexVersion": now,
-      "siteConfig/stockCacheVersion": now,
-    });
+      };
+      upd[`coinSearchIndex/${id}/name`] = derivedName;
+      upd["siteConfig/coinNameIndexVersion"] = now;
+    }
+    await db.ref().update(upd);
 
-    return { ok: true, action, id, name: derivedName, at: now };
+    return { ok: true, action, id, name: derivedName, market, at: now };
   }
 );
 

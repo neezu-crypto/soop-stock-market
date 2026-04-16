@@ -1701,7 +1701,7 @@
         <div class="info-box" style="margin-top:14px; border-color:#a78bfa; color:#ddd6fe;">
             <b>🎯 단일 종목 상장폐지/재상장</b> — <b>주식·코인</b> 탭에서 시세 <b>낮은 순</b>으로 정렬된 <b>최대 10개</b> 중 종목 1개를 선택해
             <b>선택한 탭의 시장만</b> 상장폐지합니다. (주식 탭 → 주식·유저 주식 보유만, 코인 탭 → 코인·유저 코인 보유만) 필요 시 <b>같은 ID로 시가 재상장</b>합니다.<br>
-            <span style="color:#c4b5fd;">재상장 시 주식 10,000원 / 코인 100,000,000원으로 초기화되며 기존 유저 보유 수량은 제거됩니다.</span>
+            <span style="color:#c4b5fd;">시가 재상장은 <b>선택한 탭의 시장만</b> 시가로 복구합니다. (주식 탭 → 주식만 10,000원, 코인 탭 → 코인만 1억원) 폐지 직후 재상장 시에도 같은 시장만 적용됩니다. 예전에 양쪽 폐지한 경우에만 주식·코인 둘 다 재상장됩니다.</span>
         </div>
         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
             <button type="button" id="single-delist-tab-stock" onclick="switchSingleDelistMarketTab('stock')"
@@ -5583,7 +5583,7 @@
                 batchSize: 300,
                 market
             });
-            lastDelistedInstrumentMeta = { id, name, deletedAt: Date.now() };
+            lastDelistedInstrumentMeta = { id, name, deletedAt: Date.now(), market };
             await loadStocksOnce();
             try { await loadCoinsTop10Once(); } catch (_) { /* noop */ }
             if (statusEl) {
@@ -5607,20 +5607,38 @@
             if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '재상장할 종목이 없습니다. 먼저 종목을 선택하거나 상장폐지를 실행해주세요.'; }
             return;
         }
+        const market = (() => {
+            if (selectedId) return singleDelistMarketTab === 'coin' ? 'coin' : 'stock';
+            const m = lastDelistedInstrumentMeta?.market;
+            if (m === 'coin' || m === 'stock') return m;
+            return 'both';
+        })();
         const name = selectedId
-            ? String(allStocksData?.[id]?.name || allCoinsData?.[id]?.name || '').trim()
+            ? (singleDelistMarketTab === 'coin'
+                ? String(allCoinsData?.[id]?.name || allStocksData?.[id]?.name || '').trim()
+                : String(allStocksData?.[id]?.name || allCoinsData?.[id]?.name || '').trim())
             : String(lastDelistedInstrumentMeta?.name || '').trim();
         if (!name) {
             if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '종목명이 확인되지 않습니다. 상장폐지 직후 재상장하거나 목록에서 다시 선택해주세요.'; }
             return;
         }
-        if (!confirm(`종목을 시가로 재상장할까요?\n\n이름: ${name}\nID: ${id}\n\n주식 10,000원 / 코인 100,000,000원으로 신규 등록됩니다.`)) return;
+        const marketLabel = market === 'both' ? '주식·코인 모두' : (market === 'coin' ? '코인만' : '주식만');
+        const marketDetail =
+            market === 'stock'
+                ? '주식 시가 10,000원 + 검색 인덱스 (코인 데이터는 건드리지 않음)'
+                : market === 'coin'
+                    ? '코인 시가 100,000,000원 + 검색 인덱스 (주식 데이터는 건드리지 않음)'
+                    : '주식 10,000원 + 코인 100,000,000원 (예전 양쪽 폐지 등)';
+        if (!confirm(
+            `「${marketLabel}」 시가 재상장할까요?\n\n이름: ${name}\nID: ${id}\n\n${marketDetail}`
+        )) return;
         try {
             if (statusEl) { statusEl.style.color = '#94a3b8'; statusEl.textContent = '시가 재상장 처리 중...'; }
             await adminRebuildSingleInstrumentFn({
                 action: 'relist',
                 id,
-                name
+                name,
+                market
             });
             await loadStocksOnce();
             try { await loadCoinsTop10Once(); } catch (_) { /* noop */ }
