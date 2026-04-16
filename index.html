@@ -3692,7 +3692,7 @@
     <div class="promo-modal-content" style="max-width:420px;">
         <div class="promo-modal-header"><h2>🎥 OBS 브라우저 소스</h2></div>
         <p style="font-size:13px; color:var(--text-sub); line-height:1.6; margin:0 0 12px 0;">
-            현재 차트로 열려 있는 종목 1개를 방송용 카드로 표시하는 URL을 복사합니다.
+            현재 차트로 열려 있는 종목 1개를 방송용 카드로 표시하는 URL을 복사합니다. (<b>Google 계정</b> 로그인 시에만 이용 가능)
         </p>
         <ul class="promo-info-list" style="margin-bottom:12px;">
             <li><b>1계정 1URL</b>만 발급/사용됩니다. (종목만 교체)</li>
@@ -7505,6 +7505,20 @@ function updateAuthStatusUI(user) {
     if (!isAnonymous && googleLbl) {
         googleLbl.textContent = '✓ 구글 연동 중';
     }
+    try {
+        refreshChartModalTradeButtons();
+    } catch (_) { /* noop */ }
+}
+
+/** OBS 등 — Google provider 로그인(익명·게스트 제외) */
+function isGoogleAuthenticatedUser(user) {
+    if (!user || user.isAnonymous) return false;
+    try {
+        const list = user.providerData || [];
+        return list.some((p) => p && p.providerId === 'google.com');
+    } catch (_) {
+        return false;
+    }
 }
 
 function authPopupResolverArgs() {
@@ -7582,6 +7596,11 @@ window.loginWithGoogle = async function() {
         alertGoogleSignInError(err);
     }
 };
+
+/** 메인 화면 구글 로그인(`btn-google-login`, `wallet-google-login` 의 onclick="loginWithGoogle()")과 동일하게 전역 핸들러만 호출합니다. */
+function invokeGoogleLoginSameAsMainScreenButton() {
+    return window.loginWithGoogle();
+}
 
 // ── 5초 로딩 타임아웃 ────────────────────────────────────────
 setTimeout(() => {
@@ -7763,6 +7782,8 @@ onAuthStateChanged(auth, async (user) => {
                 logAuthTrailError('Caught in Login Flow (attachUserDataShardListeners)', err);
             }
         } else {
+            try { closeObsSourceGuideModal(); } catch (_) { /* noop */ }
+            try { refreshChartModalTradeButtons(); } catch (_) { /* noop */ }
             try { teardownCoinImpactMultiplierListener(); } catch (_) { /* noop */ }
             try { stopAssetRequestStatusWatch(); } catch (_) { /* noop */ }
             try { stopLiveRankingTop100AccessWatch(); } catch (_) { /* noop */ }
@@ -9086,6 +9107,16 @@ function refreshChartModalTradeButtons() {
     if (!id) return;
     const wrap = document.querySelector('.chart-modal-trade');
     if (!wrap) return;
+    const obsBtn = wrap.querySelector('.modal-obslink');
+    if (obsBtn) {
+        const allowObs = isGoogleAuthenticatedUser(auth.currentUser);
+        obsBtn.style.display = '';
+        obsBtn.disabled = false;
+        obsBtn.style.opacity = allowObs ? '' : '0.85';
+        obsBtn.title = allowObs
+            ? 'OBS 브라우저 소스 URL 복사'
+            : 'Google 계정으로 로그인하면 OBS URL을 발급할 수 있습니다. 클릭 시 안내 후 메인과 동일한 구글 로그인 창이 열립니다.';
+    }
     applyTradeCooldownStateToButtons(wrap.querySelector('.modal-buy'), wrap.querySelector('.modal-sell'), id, { context: 'modal' });
     const maxBtn = wrap.querySelector('.modal-maxsell');
     if (maxBtn) {
@@ -11238,6 +11269,16 @@ window.closeTitlePurchaseModal = function() {
 };
 
 window.openObsSourceGuideModal = function() {
+    if (!isGoogleAuthenticatedUser(auth.currentUser)) {
+        alert(
+            'OBS 브라우저 소스는 Google 계정으로 로그인한 뒤에만 사용할 수 있습니다.\n\n' +
+                '확인을 누르면 메인 화면의 구글 로그인 버튼과 동일한 방식으로 로그인(연동) 창이 열립니다.'
+        );
+        try {
+            invokeGoogleLoginSameAsMainScreenButton();
+        } catch (_) { /* noop */ }
+        return;
+    }
     if (!chartModalStockId) return;
     const msg = document.getElementById('obs-source-guide-msg');
     const btn = document.getElementById('obs-source-copy-btn');
@@ -11285,6 +11326,16 @@ async function getOrCreateObsShareToken(uid) {
 window.copyObsSourceUrlForCurrentChart = async function() {
     const msg = document.getElementById('obs-source-guide-msg');
     const btn = document.getElementById('obs-source-copy-btn');
+    if (!isGoogleAuthenticatedUser(auth.currentUser)) {
+        alert(
+            'OBS 브라우저 소스는 Google 계정으로 로그인한 뒤에만 사용할 수 있습니다.\n\n' +
+                '확인을 누르면 메인 화면의 구글 로그인 버튼과 동일한 방식으로 로그인(연동) 창이 열립니다.'
+        );
+        try {
+            invokeGoogleLoginSameAsMainScreenButton();
+        } catch (_) { /* noop */ }
+        return;
+    }
     const uid = auth.currentUser?.uid;
     if (!uid) {
         if (msg) { msg.style.color = '#ef4444'; msg.textContent = '로그인 후 사용해주세요.'; }
