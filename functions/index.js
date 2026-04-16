@@ -1545,6 +1545,143 @@ exports.purchaseAndPublishTitleSponsor = onCall(
   }
 );
 
+exports.purchaseAndPublishAssetRanking = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    const functionName = "purchaseAndPublishAssetRanking";
+    try {
+      if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+      const uid = request.auth.uid;
+
+      const nicknameRaw = String(request.data?.nickname || "").trim();
+      const soopIdRaw = String(request.data?.soopId || "").trim();
+      const soopId = soopIdRaw;
+      const clientRequestId = String(request.data?.clientRequestId || "").trim();
+
+      if (!nicknameRaw || nicknameRaw.length > 80) throw new HttpsError("invalid-argument", "invalid nickname.");
+      if (!soopId || soopId.length > 50 || !/^[a-zA-Z0-9_]+$/.test(soopId)) throw new HttpsError("invalid-argument", "invalid soopId.");
+      if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+
+      const db = admin.database();
+      const cfgSnap = await db.ref("siteConfig").get();
+      const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
+      const pointCost = Math.max(1, Math.floor(Number(pricing.assetRanking || 0)));
+
+      const RANKING_ACCESS_DURATION_MS = 12 * 60 * 60 * 1000;
+      const now = nowMs();
+      const accessExpiresAt = now + RANKING_ACCESS_DURATION_MS;
+
+      const opRef = db.ref(`pointOps/${uid}/assetRanking/${clientRequestId}`);
+      const opSnap = await opRef.get();
+      if (opSnap.exists() && String(opSnap.val()?.status || "").toLowerCase() === "done") {
+        return { ok: true, status: "done", ...opSnap.val() };
+      }
+
+      const reqRef = db.ref(`assetRankingRequests/${uid}`);
+      const reqSnap = await reqRef.get();
+      const curReq = reqSnap.exists() ? (reqSnap.val() || {}) : {};
+      const curStatus = String(curReq.status || "").toLowerCase();
+      const curAccessExpiresAt = Number(curReq.accessExpiresAt || 0);
+      const curApprovedAt = Number(curReq.approvedAt || 0);
+
+      // 이미 승인된 기간 내면 중복결제 방지: 승인 상태만 유지
+      if (curStatus === "approved") {
+        const exp = Number.isFinite(curAccessExpiresAt) && curAccessExpiresAt > 0 ? curAccessExpiresAt : curApprovedAt + RANKING_ACCESS_DURATION_MS;
+        if (exp > Date.now()) {
+          const walletSnap = await db.ref(`users/${uid}/wallet`).get();
+          const balanceAfter = Math.max(0, Math.floor(Number(walletSnap.val()?.points || 0)));
+          return {
+            ok: true,
+            status: "done",
+            alreadyActive: true,
+            pointCost: 0,
+            balanceAfter,
+            assetRankingRequest: curReq,
+          };
+        }
+      }
+
+      // 레거시 pending(기존 consumePointsForProduct 경로)라면 포인트는 이미 차감되었을 가능성이 높으므로,
+      // 재차감 없이 승인/만료 시각만 승격합니다.
+      if (curStatus === "pending") {
+        const walletSnap = await db.ref(`users/${uid}/wallet`).get();
+        const balanceAfter = Math.max(0, Math.floor(Number(walletSnap.val()?.points || 0)));
+        await reqRef.update({
+          status: "approved",
+          approvedAt: now,
+          accessExpiresAt,
+          // UI 호환 필드 유지
+          cost: curReq.cost ?? pointCost,
+          pointCost: curReq.pointCost ?? pointCost,
+          paymentStatus: curReq.paymentStatus ?? "paid",
+          updatedAt: now,
+        });
+        await opRef.set({ status: "done", uid, clientRequestId, pointCost: 0, updatedAt: now });
+        return {
+          ok: true,
+          status: "done",
+          activatedFromPending: true,
+          accessExpiresAt,
+          pointCost: 0,
+          balanceAfter,
+        };
+      }
+
+      // 승인/거절/만료 등 다른 상태라면, 새로 포인트 차감 후 승인 publish
+      const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
+
+      const ledgerTxnId = await appendPointLedger(db, uid, {
+        type: "purchase_asset_ranking",
+        amount: -pointCost,
+        balanceAfter,
+        requestType: "assetRanking",
+        requestId: clientRequestId,
+        requestPath: `pointOps/${uid}/assetRanking/${clientRequestId}`,
+        note: `publish asset ranking access`,
+        createdBy: "user",
+      });
+
+      await reqRef.set({
+        uid,
+        nickname: nicknameRaw,
+        soopId,
+        status: "approved",
+        approvedAt: now,
+        accessExpiresAt,
+        createdAt: curReq.createdAt ?? now,
+        updatedAt: now,
+        cost: pointCost,
+        pointCost,
+        paymentStatus: "paid",
+        pointTxnId: String(ledgerTxnId || ""),
+      });
+
+      await opRef.set({
+        status: "done",
+        uid,
+        clientRequestId,
+        nickname: nicknameRaw,
+        soopId,
+        pointCost,
+        balanceAfter,
+        accessExpiresAt,
+        assetRankingRequestPath: `assetRankingRequests/${uid}`,
+        ledgerTxnId,
+        doneAt: nowMs(),
+      });
+
+      return { ok: true, status: "done", clientRequestId, uid, pointCost, balanceAfter, accessExpiresAt, ledgerTxnId };
+    } catch (err) {
+      logCallableFailure(functionName, request, err, {
+        nickname: toLogSafeValue(request.data?.nickname),
+        soopId: toLogSafeValue(request.data?.soopId),
+        clientRequestId: toLogSafeValue(request.data?.clientRequestId),
+      });
+      throw err;
+    }
+  }
+);
+
 exports.transferStarPointsGift = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },
   async (request) => {
