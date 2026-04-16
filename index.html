@@ -3802,6 +3802,10 @@
                 style="margin-left:4px; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap;">
                 ✨ 별포인트 충전
             </button>
+            <button type="button" id="btn-open-point-gift" onclick="openPointGiftModal()"
+                style="margin-left:4px; background:linear-gradient(135deg,#22c55e,#10b981); color:white; border:none; padding:6px 12px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap;">
+                🎁 포인트 선물
+            </button>
             <div class="wallet-inline-sep" aria-hidden="true"></div>
             <div class="wallet-info">1회 최대 거래: <span id="wallet-max-trade" style="color:#f59e0b;">1억원</span></div>
             <div id="coin-market-wallet-ui" style="display:none; align-items:center; flex-wrap:wrap; gap:6px;">
@@ -4023,6 +4027,7 @@ const db   = getDatabase(app);
 const fns  = getFunctions(app, "us-central1");
 const consumePointsForProductFn = httpsCallable(fns, 'consumePointsForProduct');
 const createPointChargeRequestFn = httpsCallable(fns, 'createPointChargeRequest');
+const transferStarPointsGiftFn = httpsCallable(fns, 'transferStarPointsGift');
 let myStarPoints = 0;
 
 function renderStarPointsUi() {
@@ -10809,6 +10814,51 @@ window.closePointChargeModal = function() {
     document.getElementById('point-charge-modal')?.classList.remove('active');
 };
 
+window.openPointGiftModal = function() {
+    prepareMobileModalLayer?.();
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+        alert('로그인이 필요합니다.');
+        return;
+    }
+    document.getElementById('point-gift-to-uid').value = '';
+    document.getElementById('point-gift-points').value = '';
+    const statusEl = document.getElementById('point-gift-status');
+    if (statusEl) statusEl.textContent = '';
+    if (statusEl) statusEl.style.color = 'var(--text-sub)';
+    document.getElementById('point-gift-modal')?.classList.add('active');
+};
+
+window.closePointGiftModal = function() {
+    document.getElementById('point-gift-modal')?.classList.remove('active');
+};
+
+window.submitPointGiftRequest = async function() {
+    const toUid = document.getElementById('point-gift-to-uid')?.value.trim() || '';
+    const points = Math.floor(Number(document.getElementById('point-gift-points')?.value || 0));
+    const statusEl = document.getElementById('point-gift-status');
+    if (!statusEl) return;
+
+    if (!toUid) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '받는 유저 UID를 입력해주세요.'; return; }
+    if (!/^[A-Za-z0-9_-]{10,128}$/.test(toUid)) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = 'UID 형식이 올바르지 않습니다.'; return; }
+    if (!Number.isFinite(points) || points <= 0) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '선물 포인트는 1P 이상이어야 합니다.'; return; }
+    if (points > Math.floor(Number(myStarPoints || 0))) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '별포인트 잔액이 부족합니다.'; return; }
+
+    statusEl.style.color = 'var(--text-sub)';
+    statusEl.textContent = '전송 중...';
+
+    try {
+        const clientRequestId = `gift_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+        const res = await transferStarPointsGiftFn({ toUid, points, clientRequestId });
+        statusEl.style.color = '#22c55e';
+        statusEl.textContent = `✅ 선물 완료! ${points.toLocaleString()}P → ${toUid}`;
+        setTimeout(() => { window.closePointGiftModal(); }, 900);
+    } catch (e) {
+        statusEl.style.color = 'var(--up-color)';
+        statusEl.textContent = '선물 실패: ' + (e?.message || e);
+    }
+};
+
 window.submitPointChargeRequest = async function() {
     const nickname = document.getElementById('point-charge-nickname')?.value.trim() || '';
     const soopId = document.getElementById('point-charge-soop-id')?.value.trim() || '';
@@ -13460,6 +13510,31 @@ try { setupInverseModeUi(); } catch (_) { /* noop */ }
             <div style="display:flex; gap:8px;">
                 <button type="button" onclick="submitPointChargeRequest()" style="flex:1; background:linear-gradient(135deg,#f59e0b,#f97316); color:white; border:none; padding:12px; border-radius:10px; font-weight:800; cursor:pointer;">충전 신청</button>
                 <button type="button" onclick="closePointChargeModal()" style="flex:1; background:var(--border); color:var(--text-main); border:none; padding:12px; border-radius:10px; cursor:pointer;">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── 별포인트 선물 모달 ── -->
+<div id="point-gift-modal" class="promo-modal-overlay" onclick="if(event.target===this)closePointGiftModal()">
+    <div class="promo-modal-content" onclick="event.stopPropagation()">
+        <h3>🎁 별포인트 선물</h3>
+        <p style="font-size:12px; color:var(--text-sub); line-height:1.6;">
+            내 잔고에서 포인트가 차감된 뒤, 상대에게 즉시 적립됩니다. (위변조 방지를 위해 서버에서만 처리)
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+            <input id="point-gift-to-uid" type="text" placeholder="받는 유저 UID"
+                style="width:100%; background:var(--bg-color); border:1px solid var(--border); color:var(--text-main); padding:12px; border-radius:10px; box-sizing:border-box;">
+            <input id="point-gift-points" type="number" min="1" max="999999999" placeholder="선물 포인트(P)"
+                style="width:100%; background:var(--bg-color); border:1px solid var(--border); color:var(--text-main); padding:12px; border-radius:10px; box-sizing:border-box;">
+            <div id="point-gift-status" style="font-size:12px; color:var(--text-sub); min-height:18px;"></div>
+            <div style="display:flex; gap:8px;">
+                <button type="button" onclick="submitPointGiftRequest()" style="flex:1; background:linear-gradient(135deg,#22c55e,#10b981); color:white; border:none; padding:12px; border-radius:10px; font-weight:800; cursor:pointer;">
+                    선물하기
+                </button>
+                <button type="button" onclick="closePointGiftModal()" style="flex:1; background:var(--border); color:var(--text-main); border:none; padding:12px; border-radius:10px; cursor:pointer;">
+                    닫기
+                </button>
             </div>
         </div>
     </div>

@@ -990,6 +990,150 @@ exports.adminRejectPointCharge = onCall(
   }
 );
 
+exports.transferStarPointsGift = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    const fromUid = request.auth.uid;
+    const toUid = String(request.data?.toUid || "").trim();
+    const points = toPositiveInt(request.data?.points, 0, 999_999_999);
+    const clientRequestId = String(request.data?.clientRequestId || "").trim();
+
+    if (!toUid) throw new HttpsError("invalid-argument", "toUid required.");
+    if (!/^[A-Za-z0-9_-]{10,128}$/.test(toUid)) throw new HttpsError("invalid-argument", "invalid toUid.");
+    if (toUid === fromUid) throw new HttpsError("invalid-argument", "cannot gift to self.");
+    if (!Number.isFinite(points) || points <= 0) throw new HttpsError("invalid-argument", "points must be > 0.");
+    if (!clientRequestId) throw new HttpsError("invalid-argument", "clientRequestId required.");
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
+
+    const db = admin.database();
+    const giftRef = db.ref(`pointGiftRequests/${fromUid}/${clientRequestId}`);
+    const giftSnap = await giftRef.get();
+    const giftRow = giftSnap.exists() ? (giftSnap.val() || {}) : {};
+    if (String(giftRow.status || "").toLowerCase() === "done") {
+      return { ok: true, clientRequestId, ...giftRow };
+    }
+    if (String(giftRow.status || "").toLowerCase() === "processing") {
+      throw new HttpsError("failed-precondition", "gift transfer already processing.");
+    }
+
+    // 수신자 존재 확인 (없으면 유효하지 않은 요청)
+    const toUserSnap = await db.ref(`users/${toUid}`).get();
+    if (!toUserSnap.exists()) throw new HttpsError("not-found", "receiver user not found.");
+
+    // processing record
+    await giftRef.set({
+      fromUid,
+      toUid,
+      points,
+      status: "processing",
+      createdAt: nowMs(),
+    });
+
+    let fromAfter = 0;
+    let toAfter = 0;
+    let deducted = false;
+    let credited = false;
+    let outTxnId = null;
+    let inTxnId = null;
+    try {
+      const fromWalletRef = db.ref(`users/${fromUid}/wallet`);
+      const txOut = await fromWalletRef.transaction((cur) => {
+        const base = cur && typeof cur === "object" ? cur : {};
+        const current = Math.max(0, Math.floor(Number(base.points || 0)));
+        if (current < points) throw new Error("INSUFFICIENT_POINTS");
+        return {
+          ...base,
+          points: current - points,
+          updatedAt: nowMs(),
+        };
+      });
+      if (!txOut.committed) throw new Error("WALLET_DEDUCT_ABORTED");
+      fromAfter = Math.max(0, Math.floor(Number(txOut.snapshot.val()?.points || 0)));
+      deducted = true;
+
+      const toWalletRef = db.ref(`users/${toUid}/wallet`);
+      const txIn = await toWalletRef.transaction((cur) => {
+        const base = cur && typeof cur === "object" ? cur : {};
+        const current = Math.max(0, Math.floor(Number(base.points || 0)));
+        const next = current + points;
+        if (next > 999_999_999) throw new Error("RECIPIENT_POINTS_OVERFLOW");
+        return {
+          ...base,
+          points: next,
+          updatedAt: nowMs(),
+        };
+      });
+      if (!txIn.committed) throw new Error("WALLET_CREDIT_ABORTED");
+      credited = true;
+
+      toAfter = Math.max(0, Math.floor(Number(txIn.snapshot.val()?.points || 0)));
+
+      outTxnId = await appendPointLedger(db, fromUid, {
+        type: "gift_out",
+        amount: -points,
+        balanceAfter: fromAfter,
+        requestType: "pointGiftRequests",
+        requestId: clientRequestId,
+        requestPath: `pointGiftRequests/${fromUid}/${clientRequestId}`,
+        note: "star points gift",
+        createdBy: "user",
+      });
+      inTxnId = await appendPointLedger(db, toUid, {
+        type: "gift_in",
+        amount: points,
+        balanceAfter: toAfter,
+        requestType: "pointGiftRequests",
+        requestId: clientRequestId,
+        requestPath: `pointGiftRequests/${fromUid}/${clientRequestId}`,
+        note: "star points received",
+        createdBy: "user",
+      });
+
+      await giftRef.update({
+        status: "done",
+        doneAt: nowMs(),
+        outTxnId,
+        inTxnId,
+        fromAfter,
+        toAfter,
+      });
+
+      return { ok: true, clientRequestId, outTxnId, inTxnId, fromAfter, toAfter };
+    } catch (e) {
+      const msg = String(e?.message || e || "");
+      // ledger 기록(out/in)이 하나도 없을 때만 롤백을 시도합니다.
+      // ledger까지 들어간 상태를 되돌리면 원장과 지갑이 불일치할 수 있어서 방지합니다.
+      if (deducted && credited && !outTxnId && !inTxnId) {
+        try {
+          // 수신자 포인트 차감(= 롤백)
+          await db.ref(`users/${toUid}/wallet`).transaction((cur) => {
+            const base = cur && typeof cur === "object" ? cur : {};
+            const current = Math.max(0, Math.floor(Number(base.points || 0)));
+            if (current < points) throw new Error("ROLLBACK_RECIPIENT_UNDERFLOW");
+            return { ...base, points: current - points, updatedAt: nowMs() };
+          });
+          // 송신자 포인트 복구
+          await db.ref(`users/${fromUid}/wallet`).transaction((cur) => {
+            const base = cur && typeof cur === "object" ? cur : {};
+            const current = Math.max(0, Math.floor(Number(base.points || 0)));
+            return { ...base, points: current + points, updatedAt: nowMs() };
+          });
+        } catch (_) { /* noop */ }
+      }
+
+      await giftRef.update({
+        status: "failed",
+        failedAt: nowMs(),
+        error: msg.slice(0, 200),
+      });
+
+      if (/INSUFFICIENT_POINTS/i.test(msg)) throw new HttpsError("failed-precondition", "insufficient points.");
+      throw new HttpsError("aborted", msg || "gift failed.");
+    }
+  }
+);
+
 exports.consumePointsForProduct = onCall(
   { cors: true, timeoutSeconds: 120, memory: "512MiB" },
   async (request) => {
