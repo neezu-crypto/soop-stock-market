@@ -3306,7 +3306,6 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
  */
 async function executeAdminStockSplitCore(db, { kind, ratioN, thresholdWon }) {
   const splitTs = Date.now();
-  await db.ref("siteConfig/maintenance").set(true);
   try {
     const stocksSnap = await db.ref("stocks").once("value");
     const stocksData = stocksSnap.val() || {};
@@ -3328,7 +3327,6 @@ async function executeAdminStockSplitCore(db, { kind, ratioN, thresholdWon }) {
     }
 
     if (splittable.length === 0) {
-      await db.ref("siteConfig/maintenance").set(false);
       return {
         ok: true,
         skipped: true,
@@ -3415,8 +3413,6 @@ async function executeAdminStockSplitCore(db, { kind, ratioN, thresholdWon }) {
       console.warn("[adminStockSplit] adminActivityLogs:", logErr?.message || logErr);
     }
 
-    await db.ref("siteConfig/maintenance").set(false);
-
     return {
       ok: true,
       skipped: false,
@@ -3426,7 +3422,6 @@ async function executeAdminStockSplitCore(db, { kind, ratioN, thresholdWon }) {
       events,
     };
   } catch (e) {
-    await db.ref("siteConfig/maintenance").set(false).catch(() => {});
     throw e;
   }
 }

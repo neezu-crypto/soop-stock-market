@@ -5513,7 +5513,8 @@
             `· 주가 상위 100개 종목 주가 → 1/${ratio}\n` +
             `· 해당 종목 보유 유저 보유량 → ×${ratio}\n` +
             `· 해당 종목 보유 유저 평균단가 → 1/${ratio}\n\n` +
-            `※ 실행 중 자동으로 점검 모드가 켜지고\n  완료 후 자동으로 해제됩니다.\n\n` +
+            `※ Cloud Functions로 처리될 때는 점검 모드를 자동으로 바꾸지 않습니다.\n` +
+            `※ Functions를 쓸 수 없어 브라우저(RTDDB) 폴백으로 갈 때만, 잠시 점검 모드를 켠 뒤 완료 시 해제합니다.\n\n` +
             `이 작업은 되돌릴 수 없습니다.`
         )) return;
 
@@ -7447,6 +7448,7 @@
                         <input data-field="ratio" type="number" min="2" max="100" value="${ratio}" onblur="flushDailyAutoPersist()"
                             style="width:90px; background:#111827; border:1px solid #334155; color:#f8fafc; padding:6px; border-radius:6px; font-size:12px;">
                     </div>
+                    <div style="font-size:11px; color:#64748b; margin-top:6px;">Cloud Functions 액면분할은 <code style="font-size:10px;">siteConfig/maintenance</code>를 자동으로 켜거나 끄지 않습니다. (점검은 별도 루틴 항목 또는 점검 패널에서 설정)</div>
                 </div>
             `;
         }).join('');
@@ -7699,7 +7701,6 @@
                                 ? `<div style="color:#64748b;">기준가·분할 조건에 맞는 종목 없음 — 자동 분할 스킵 (서버)</div>`
                                 : `<div style="color:#64748b;">서버에서 자동 분할을 스킵했습니다.</div>`;
                     }
-                    await loadMaintenanceStatus();
                     await loadStocksOnce();
                     return;
                 }
@@ -7716,7 +7717,6 @@
                     `;
                     });
                 }
-                await loadMaintenanceStatus();
                 await loadStocksOnce();
                 return;
             }
@@ -7735,7 +7735,6 @@
                     </div>
                 `;
                 }
-                await loadMaintenanceStatus();
                 await loadStocksOnce();
                 return;
             }
@@ -7878,7 +7877,6 @@
                 `;
             }
         } finally {
-            await loadMaintenanceStatus();
             await loadStocksOnce();
         }
     }
