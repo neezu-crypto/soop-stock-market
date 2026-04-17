@@ -3140,7 +3140,7 @@
 <div id="power-save-overlay">
     <div class="power-save-icon">🌙</div>
     <div class="power-save-title">데이터 절전 모드 ON</div>
-    <div class="power-save-desc">터치하거나 움직이면 해제됩니다</div>
+    <div class="power-save-desc" id="power-save-desc">터치하거나 움직이면 해제됩니다</div>
 </div>
 
 <!-- ── 정기점검 · 장마감 오버레이 (기본 표시 → siteConfig 후 applyMarketState로 제어) ── -->
@@ -12521,7 +12521,22 @@ function stopAllStocksSubscriptions() {
 // isUserActive 는 상단 상태 블록(onAuthStateChanged 보다 위)에 선언 — 동기 콜백 TDZ 방지
 let activityTimer     = null;
 let favPollTimers     = {}; // 레거시 비정규장 종목별 폴링 타이머 — 정리용으로만 유지
-const POWER_SAVE_IDLE_MS = 300000; // 비활동 300초 후 절전 모드
+const POWER_SAVE_IDLE_GUEST_MS = 30000;   // 비로그인/익명 유저: 30초
+const POWER_SAVE_IDLE_GOOGLE_MS = 300000; // 구글 로그인 유저: 5분
+
+function getPowerSaveIdleMs() {
+    return isGoogleAuthenticatedUser(auth?.currentUser) ? POWER_SAVE_IDLE_GOOGLE_MS : POWER_SAVE_IDLE_GUEST_MS;
+}
+
+function refreshPowerSaveGuideText() {
+    const el = document.getElementById('power-save-desc');
+    if (!el) return;
+    if (isGoogleAuthenticatedUser(auth?.currentUser)) {
+        el.textContent = '터치하거나 움직이면 해제됩니다';
+    } else {
+        el.textContent = '터치하거나 움직이면 해제됩니다 · Google 로그인 시 대기시간이 5분으로 늘어납니다';
+    }
+}
 
 function hasActiveAutoTrade() {
     try { return !!autoTradeState && Object.keys(autoTradeState).length > 0; } catch (_) { return false; }
@@ -12539,6 +12554,8 @@ function stopAllAutoTrades(reason = 'background') {
 
 // 마우스·터치·키 입력 감지 시 호출 — 비활동 타이머 리셋 및 구독 재개
 function onUserActive() {
+    const idleMs = getPowerSaveIdleMs();
+    refreshPowerSaveGuideText();
     if (!isUserActive) {
         isUserActive = true;
         // 절전 모드 오버레이 숨김
@@ -12549,16 +12566,16 @@ function onUserActive() {
     const tick = () => {
         // 자동매수/매도 중에는 활동으로 간주 — 절전 모드 진입 금지
         if (hasActiveAutoTrade()) {
-            activityTimer = setTimeout(tick, POWER_SAVE_IDLE_MS);
+            activityTimer = setTimeout(tick, idleMs);
             return;
         }
         isUserActive = false;
-        pauseAllSubscriptions(); // 60초 비활동 → 중단
+        pauseAllSubscriptions(); // 비활동 임계치 도달 시 중단(게스트 30초/구글 5분)
     };
-    activityTimer = setTimeout(tick, POWER_SAVE_IDLE_MS);
+    activityTimer = setTimeout(tick, idleMs);
 }
 
-// 비활동 60초 후 주가·분봉 구독 전부 일시 중단
+// 비활동 임계치 후 주가·분봉 구독 전부 일시 중단
 function pauseAllSubscriptions() {
     // 실시간 구독 해제 (알림 설정 종목 예외)
     Object.keys(favoriteUnsubs).forEach(id => {
