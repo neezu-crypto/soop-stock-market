@@ -1909,18 +1909,34 @@ exports.transferStarPointsGift = onCall(
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
     const fromUid = request.auth.uid;
-    const toUid = String(request.data?.toUid || "").trim();
+    const toUidRaw = String(request.data?.toUid || "").trim();
+    const toGiftCode = String(request.data?.toGiftCode || "").trim();
     const points = toPositiveInt(request.data?.points, 0, 999_999_999);
     const clientRequestId = String(request.data?.clientRequestId || "").trim();
-
-    if (!toUid) throw new HttpsError("invalid-argument", "toUid required.");
-    if (!/^[A-Za-z0-9_-]{10,128}$/.test(toUid)) throw new HttpsError("invalid-argument", "invalid toUid.");
-    if (toUid === fromUid) throw new HttpsError("invalid-argument", "cannot gift to self.");
+    if (!toUidRaw && !toGiftCode) throw new HttpsError("invalid-argument", "toUid or toGiftCode required.");
     if (!Number.isFinite(points) || points <= 0) throw new HttpsError("invalid-argument", "points must be > 0.");
     if (!clientRequestId) throw new HttpsError("invalid-argument", "clientRequestId required.");
     if (!/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
 
     const db = admin.database();
+    let toUid = "";
+    let resolvedGiftCode = "";
+    if (toGiftCode) {
+      if (!/^\d{4}$/.test(toGiftCode)) throw new HttpsError("invalid-argument", "invalid toGiftCode.");
+      const mapSnap = await db.ref(`pointGiftCodeMap/${toGiftCode}`).get();
+      const mappedUid = String(mapSnap.exists() ? mapSnap.val() : "").trim();
+      if (!mappedUid) throw new HttpsError("not-found", "receiver gift code not found.");
+      toUid = mappedUid;
+      resolvedGiftCode = toGiftCode;
+    } else {
+      if (!/^[A-Za-z0-9_-]{10,128}$/.test(toUidRaw)) throw new HttpsError("invalid-argument", "invalid toUid.");
+      toUid = toUidRaw;
+      const codeSnap = await db.ref(`users/${toUid}/pointGiftCode`).get();
+      const codeVal = String(codeSnap.exists() ? codeSnap.val() : "").trim();
+      if (/^\d{4}$/.test(codeVal)) resolvedGiftCode = codeVal;
+    }
+    if (toUid === fromUid) throw new HttpsError("invalid-argument", "cannot gift to self.");
+
     const giftRef = db.ref(`pointGiftRequests/${fromUid}/${clientRequestId}`);
     const giftSnap = await giftRef.get();
     const giftRow = giftSnap.exists() ? (giftSnap.val() || {}) : {};
@@ -1939,6 +1955,7 @@ exports.transferStarPointsGift = onCall(
     await giftRef.set({
       fromUid,
       toUid,
+      toGiftCode: resolvedGiftCode || null,
       points,
       status: "processing",
       createdAt: nowMs(),
@@ -2007,13 +2024,14 @@ exports.transferStarPointsGift = onCall(
       await giftRef.update({
         status: "done",
         doneAt: nowMs(),
+        toGiftCode: resolvedGiftCode || null,
         outTxnId,
         inTxnId,
         fromAfter,
         toAfter,
       });
 
-      return { ok: true, clientRequestId, outTxnId, inTxnId, fromAfter, toAfter };
+      return { ok: true, clientRequestId, outTxnId, inTxnId, fromAfter, toAfter, toGiftCode: resolvedGiftCode || null };
     } catch (e) {
       const msg = String(e?.message || e || "");
       // ledger 기록(out/in)이 하나도 없을 때만 롤백을 시도합니다.
@@ -2045,6 +2063,39 @@ exports.transferStarPointsGift = onCall(
       if (/INSUFFICIENT_POINTS/i.test(msg)) throw new HttpsError("failed-precondition", "insufficient points.");
       throw new HttpsError("aborted", msg || "gift failed.");
     }
+  }
+);
+
+exports.getMyPointGiftCode = onCall(
+  { cors: true, timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    const uid = request.auth.uid;
+    const db = admin.database();
+
+    const existingSnap = await db.ref(`users/${uid}/pointGiftCode`).get();
+    const existingCode = String(existingSnap.exists() ? existingSnap.val() : "").trim();
+    if (/^\d{4}$/.test(existingCode)) {
+      const mapRef = db.ref(`pointGiftCodeMap/${existingCode}`);
+      const tx = await mapRef.transaction((cur) => {
+        if (!cur) return uid;
+        if (String(cur) === uid) return cur;
+        return;
+      });
+      if (tx.committed || String(tx.snapshot?.val() || "") === uid) {
+        return { ok: true, giftCode: existingCode };
+      }
+    }
+
+    for (let i = 0; i < 40; i++) {
+      const code = String(1000 + crypto.randomInt(9000));
+      const mapRef = db.ref(`pointGiftCodeMap/${code}`);
+      const tx = await mapRef.transaction((cur) => (cur ? undefined : uid));
+      if (!tx.committed) continue;
+      await db.ref(`users/${uid}/pointGiftCode`).set(code);
+      return { ok: true, giftCode: code };
+    }
+    throw new HttpsError("resource-exhausted", "no available gift code.");
   }
 );
 

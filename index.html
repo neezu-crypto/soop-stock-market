@@ -4250,6 +4250,7 @@ const fns  = getFunctions(app, "us-central1");
 const consumePointsForProductFn = httpsCallable(fns, 'consumePointsForProduct');
 const createPointChargeRequestFn = httpsCallable(fns, 'createPointChargeRequest');
 const transferStarPointsGiftFn = httpsCallable(fns, 'transferStarPointsGift');
+const getMyPointGiftCodeFn = httpsCallable(fns, 'getMyPointGiftCode');
 const purchaseAndPublishPromoBannerFn = httpsCallable(fns, 'purchaseAndPublishPromoBanner');
 const purchaseAndPublishChartBannerFn = httpsCallable(fns, 'purchaseAndPublishChartBanner');
 const purchaseAndPublishRelayFn = httpsCallable(fns, 'purchaseAndPublishRelay');
@@ -11483,7 +11484,19 @@ window.openPointGiftModal = function() {
     const statusEl = document.getElementById('point-gift-status');
     if (statusEl) statusEl.textContent = '';
     if (statusEl) statusEl.style.color = 'var(--text-sub)';
+    const myCodeEl = document.getElementById('point-gift-my-code');
+    if (myCodeEl) myCodeEl.textContent = '내 고유코드: 불러오는 중...';
     document.getElementById('point-gift-modal')?.classList.add('active');
+    getMyPointGiftCodeFn({})
+        .then((res) => {
+            const code = String(res?.data?.giftCode || '').trim();
+            if (!myCodeEl) return;
+            if (/^\d{4}$/.test(code)) myCodeEl.textContent = `내 고유코드: ${code}`;
+            else myCodeEl.textContent = '내 고유코드: 발급 실패';
+        })
+        .catch(() => {
+            if (myCodeEl) myCodeEl.textContent = '내 고유코드: 발급 실패';
+        });
 };
 
 window.closePointGiftModal = function() {
@@ -11491,13 +11504,13 @@ window.closePointGiftModal = function() {
 };
 
 window.submitPointGiftRequest = async function() {
-    const toUid = document.getElementById('point-gift-to-uid')?.value.trim() || '';
+    const toGiftCode = document.getElementById('point-gift-to-uid')?.value.trim() || '';
     const points = Math.floor(Number(document.getElementById('point-gift-points')?.value || 0));
     const statusEl = document.getElementById('point-gift-status');
     if (!statusEl) return;
 
-    if (!toUid) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '받는 유저 UID를 입력해주세요.'; return; }
-    if (!/^[A-Za-z0-9_-]{10,128}$/.test(toUid)) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = 'UID 형식이 올바르지 않습니다.'; return; }
+    if (!toGiftCode) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '받는 유저 고유코드 4자리를 입력해주세요.'; return; }
+    if (!/^\d{4}$/.test(toGiftCode)) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '고유코드는 숫자 4자리여야 합니다.'; return; }
     if (!Number.isFinite(points) || points <= 0) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '선물 포인트는 1P 이상이어야 합니다.'; return; }
     if (points > Math.floor(Number(myStarPoints || 0))) { statusEl.style.color = 'var(--up-color)'; statusEl.textContent = '별포인트 잔액이 부족합니다.'; return; }
 
@@ -11506,9 +11519,9 @@ window.submitPointGiftRequest = async function() {
 
     try {
         const clientRequestId = `gift_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-        const res = await transferStarPointsGiftFn({ toUid, points, clientRequestId });
+        await transferStarPointsGiftFn({ toGiftCode, points, clientRequestId });
         statusEl.style.color = '#22c55e';
-        statusEl.textContent = `✅ 선물 완료! ${points.toLocaleString()}P → ${toUid}`;
+        statusEl.textContent = `✅ 선물 완료! ${points.toLocaleString()}P → ${toGiftCode}`;
         setTimeout(() => { window.closePointGiftModal(); }, 900);
     } catch (e) {
         statusEl.style.color = 'var(--up-color)';
@@ -14353,8 +14366,9 @@ try { setupMobileImmersiveScroll(); } catch (_) { /* noop */ }
         <p style="font-size:12px; color:var(--text-sub); line-height:1.6;">
             내 잔고에서 포인트가 차감된 뒤, 상대에게 즉시 적립됩니다. (위변조 방지를 위해 서버에서만 처리)
         </p>
+        <div id="point-gift-my-code" style="margin-top:8px; font-size:12px; color:#a5b4fc; font-weight:700;">내 고유코드: -</div>
         <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
-            <input id="point-gift-to-uid" type="text" placeholder="받는 유저 UID"
+            <input id="point-gift-to-uid" type="text" inputmode="numeric" maxlength="4" placeholder="받는 유저 고유코드 4자리"
                 style="width:100%; background:var(--bg-color); border:1px solid var(--border); color:var(--text-main); padding:12px; border-radius:10px; box-sizing:border-box;">
             <input id="point-gift-points" type="number" min="1" max="999999999" placeholder="선물 포인트(P)"
                 style="width:100%; background:var(--bg-color); border:1px solid var(--border); color:var(--text-main); padding:12px; border-radius:10px; box-sizing:border-box;">
