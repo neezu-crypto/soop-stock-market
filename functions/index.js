@@ -4326,6 +4326,28 @@ exports.adminRefreshMarketRanks = onCall(
   }
 );
 
+exports.adminRunAssetRanking = onCall(
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    return await runDailyAssetRankingServer(db);
+  }
+);
+
+exports.adminRunStockHolderTop3 = onCall(
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    return await runDailyStockHolderTop3Server(db);
+  }
+);
+
 /**
  * 주가/코인 시가총액 랭킹과 동일 기준(byPrice) 순위를 marketRank 에 기록.
  * 비용 절감: 15분마다만 실행, KST 기준 장 마감 시 stocks/coins 전체 읽기 생략.

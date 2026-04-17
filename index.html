@@ -4412,6 +4412,23 @@ function consumeGoogleRedirectIntent() {
     }
 }
 
+let fullStocksFetchInFlight = null;
+let fullStocksFetchAt = 0;
+const FULL_STOCKS_FETCH_COOLDOWN_MS = 5000;
+function fetchStocksRootOnceDedup() {
+    const now = Date.now();
+    if (fullStocksFetchInFlight) return fullStocksFetchInFlight;
+    if (now - fullStocksFetchAt < FULL_STOCKS_FETCH_COOLDOWN_MS) return Promise.resolve();
+    fullStocksFetchAt = now;
+    fullStocksFetchInFlight = get(ref(db, 'stocks/'))
+        .then(processStocksSnap)
+        .catch(() => {})
+        .finally(() => {
+            fullStocksFetchInFlight = null;
+        });
+    return fullStocksFetchInFlight;
+}
+
 getRedirectResult(auth)
     .then((result) => {
         if (!result?.user) return;
@@ -4420,7 +4437,7 @@ getRedirectResult(auth)
         if (intent === 'admin_hotkey') {
             if (result.user.email === 'skftodwocks2@gmail.com') {
                 try { applyMarketState(); } catch (_) { /* noop */ }
-                get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+                void fetchStocksRootOnceDedup();
             } else {
                 alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
                 signInAnonymously(auth).catch((e) => console.warn('[Auth] signInAnonymously', e));
@@ -13323,6 +13340,17 @@ async function loadStockNameCache() {
     }
 }
 
+let stockNameCacheLoadPromise = null;
+async function ensureStockNameCacheLoaded() {
+    if (Object.keys(stockNameCache || {}).length > 0) return;
+    if (!stockNameCacheLoadPromise) {
+        stockNameCacheLoadPromise = loadStockNameCache().finally(() => {
+            stockNameCacheLoadPromise = null;
+        });
+    }
+    await stockNameCacheLoadPromise;
+}
+
 // 검색 비동기 작업 취소용 — 새 검색·주식/코인 탭 전환 시 이전 fetch/UI 갱신 무시
 let searchRequestGen = 0;
 /** 짧은 검색어 매칭 폭주 시 DOM·가격 조회 상한 (fetchSearchQuotes ids 스케일과 맞춤) */
@@ -13545,7 +13573,7 @@ async function handleSearch(query) {
 
     try {
         if (Object.keys(stockNameCache).length === 0) {
-            await loadStockNameCache();
+            await ensureStockNameCacheLoaded();
         }
         if (myGen !== searchRequestGen) return;
 
@@ -13971,7 +13999,7 @@ document.addEventListener('keydown', (e) => {
         // 이미 관리자로 로그인된 상태면 바로 마감 안내창 해제
         if (currentUser?.email === 'skftodwocks2@gmail.com') {
             applyMarketState();
-            get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+            void fetchStocksRootOnceDedup();
             return;
         }
 
@@ -13980,7 +14008,7 @@ document.addEventListener('keydown', (e) => {
         const adminAfterGoogle = (result) => {
             if (result.user.email === 'skftodwocks2@gmail.com') {
                 applyMarketState();
-                get(ref(db, 'stocks/')).then(processStocksSnap).catch(() => {});
+                void fetchStocksRootOnceDedup();
             } else {
                 alert('❌ 관리자 계정이 아닙니다. 익명 로그인으로 전환합니다.');
                 signInAnonymously(auth).catch((e) => console.warn('[Auth] signInAnonymously', e));

@@ -2251,6 +2251,8 @@
     const adminSyncChallengeMarketsFromMainFn = httpsCallable(functions, 'adminSyncChallengeMarketsFromMain');
     const adminRunChallengeDailyResetFn = httpsCallable(functions, 'adminRunChallengeDailyReset');
     const adminReviewChallengeSupporterRequestFn = httpsCallable(functions, 'adminReviewChallengeSupporterRequest');
+    const adminRunAssetRankingFn = httpsCallable(functions, 'adminRunAssetRanking');
+    const adminRunStockHolderTop3Fn = httpsCallable(functions, 'adminRunStockHolderTop3');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
     const adminInstrumentImpactFn = httpsCallable(functions, 'adminInstrumentImpact');
 
@@ -2310,6 +2312,35 @@
         }
         const snap = await get(ref(db, 'users/'));
         usersRootCache = { snap, at: now };
+        return snap;
+    }
+
+    /** stocks/coins 루트 스냅샷 — 관리자 연속 작업 시 중복 다운로드 완화 */
+    const MARKET_ROOT_CACHE_TTL_MS = 25000;
+    let stocksRootCache = { snap: null, at: 0 };
+    let coinsRootCache = { snap: null, at: 0 };
+    function invalidateMarketRootCache() {
+        stocksRootCache = { snap: null, at: 0 };
+        coinsRootCache = { snap: null, at: 0 };
+    }
+    async function getStocksRootCached(opts) {
+        const bypass = opts && opts.bypassCache;
+        const now = Date.now();
+        if (!bypass && stocksRootCache.snap && now - stocksRootCache.at < MARKET_ROOT_CACHE_TTL_MS) {
+            return stocksRootCache.snap;
+        }
+        const snap = await get(ref(db, 'stocks/'));
+        stocksRootCache = { snap, at: now };
+        return snap;
+    }
+    async function getCoinsRootCached(opts) {
+        const bypass = opts && opts.bypassCache;
+        const now = Date.now();
+        if (!bypass && coinsRootCache.snap && now - coinsRootCache.at < MARKET_ROOT_CACHE_TTL_MS) {
+            return coinsRootCache.snap;
+        }
+        const snap = await get(ref(db, 'coins/'));
+        coinsRootCache = { snap, at: now };
         return snap;
     }
 
@@ -2838,6 +2869,7 @@
             body.classList.add('open');
             if (arrow) arrow.classList.add('open');
         }
+        if (isAdmin()) startRealtimeRequestListeners();
         requestAnimationFrame(() => {
             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
@@ -3687,6 +3719,22 @@
         stopRealtimeRequestListeners();
         resetAdminInboxCounts();
         maybeRequestNotifPermission();
+        const requestAccordionIds = [
+            'admin-accordion-challenge-supporter',
+            'admin-accordion-point-charge',
+            'admin-accordion-ad',
+            'admin-accordion-chart-ad',
+            'admin-accordion-relay',
+            'admin-accordion-listing',
+            'admin-accordion-asset',
+            'admin-accordion-ranking-access',
+            'admin-accordion-live-ranking-access'
+        ];
+        const hasOpenRequestPane = requestAccordionIds.some((id) => {
+            const box = document.getElementById(id);
+            return !!box?.querySelector('.accordion-body.open');
+        });
+        if (!hasOpenRequestPane) return;
 
         requestRealtimeUnsubs.challengeSupporter = onValue(adminRecentRequestsQuery('challengeSupporterRequests'), (snap) => {
             const data = snap.val() || {};
@@ -3931,6 +3979,18 @@
         );
     }
 
+    let adminRequestListenersPausedByHidden = false;
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            stopRealtimeRequestListeners();
+            adminRequestListenersPausedByHidden = true;
+            return;
+        }
+        if (!adminRequestListenersPausedByHidden) return;
+        adminRequestListenersPausedByHidden = false;
+        if (isAdmin()) startRealtimeRequestListeners();
+    });
+
     // 사용자 페이지 배너 캐시 무효화 — bannerCacheVersion 증가
     async function invalidateStaticCache() {
         try {
@@ -3962,7 +4022,7 @@
         const statusEl = document.getElementById('stocks-load-status');
         if (statusEl) statusEl.innerText = '로딩 중...';
         try {
-            const snap = await get(ref(db, 'stocks/'));
+            const snap = await getStocksRootCached();
             allStocksData = snap.val() || {};
             const count = Object.keys(allStocksData).length;
             if (statusEl) statusEl.innerText = `${count}개 종목 로드됨`;
@@ -3978,7 +4038,7 @@
         const statusEl = document.getElementById('coins-top10-status');
         if (statusEl) statusEl.innerText = '로딩 중...';
         try {
-            const snap = await get(ref(db, 'coins/'));
+            const snap = await getCoinsRootCached();
             allCoinsData = snap.val() || {};
             const count = Object.keys(allCoinsData).length;
             if (statusEl) statusEl.innerText = `${count}개 코인 로드됨`;
@@ -5209,7 +5269,7 @@
         const burstMode = styleEl && styleEl.value === 'burst';
         const burstQty = Math.max(1, Math.min(100, Math.floor(Number(document.getElementById('coin-liquidity-burst-qty')?.value) || 20)));
         try {
-            const snap = await get(ref(db, 'coins/'));
+            const snap = await getCoinsRootCached();
             if (!snap.exists()) {
                 if (st && !fromAuto) { st.textContent = 'coins/ 데이터 없음'; st.style.color = '#f87171'; }
                 return;
@@ -5420,7 +5480,7 @@
         const searchName = document.getElementById('edit-search-name').value.trim();
         if (!searchName) return alert("닉네임을 입력해주세요.");
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
+            const snapshot = await getStocksRootCached();
             const data = snapshot.val();
             if (!data) return alert("데이터가 없습니다.");
             let targetId = null, targetData = null;
@@ -5521,7 +5581,7 @@
     window.cleanupDuplicateStocks = async function() {
         if (!isAdmin()) return;
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
+            const snapshot = await getStocksRootCached();
             const data = snapshot.val();
             if (!data) return alert("데이터가 없습니다.");
             const deleteUpdates = {};
@@ -5655,7 +5715,7 @@
         if (!ratio) return alert('분할 비율을 선택하거나 입력해주세요. (최소 2)');
         statusEl.innerText = '데이터 조회 중...';
         try {
-            const snap = await get(ref(db, 'stocks/'));
+            const snap = await getStocksRootCached();
             const data = snap.val() || {};
             const top1 = Object.values(data).sort((a, b) => (b.price || 0) - (a.price || 0))[0];
             if (!top1) { statusEl.innerText = '종목 데이터 없음'; return; }
@@ -5718,7 +5778,7 @@
             await new Promise(r => setTimeout(r, 2000));
 
             statusEl.innerText = '종목·유저 데이터 일괄 반영 준비 중...';
-            const stocksSnap = await get(ref(db, 'stocks/'));
+            const stocksSnap = await getStocksRootCached();
             const stocksData = stocksSnap.val() || {};
             const top100Ids = new Set(
                 Object.entries(stocksData)
@@ -5918,7 +5978,7 @@
             await new Promise((r) => setTimeout(r, 2000));
 
             statusEl.innerText = '종목·유저 데이터 일괄 반영 준비 중...';
-            const stocksSnap = await get(ref(db, 'stocks/'));
+            const stocksSnap = await getStocksRootCached();
             const stocksData = stocksSnap.val() || {};
             const ts = Date.now();
             const targetIds = new Set(tgt.ids);
@@ -5998,7 +6058,7 @@
         const percent = parseFloat(document.getElementById('percent-input').value);
         if (isNaN(percent)) return alert("숫자를 입력해주세요.");
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
+            const snapshot = await getStocksRootCached();
             const data = snapshot.val();
             if (!data) return;
             const top100 = Object.entries(data)
@@ -6026,7 +6086,7 @@
         if (!isAdmin()) return;
         if (!confirm('⚠️ 모든 종목의 주가를 10,000원으로 초기화합니다.\n\n이 작업은 되돌릴 수 없습니다.\n계속하시겠습니까?')) return;
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
+            const snapshot = await getStocksRootCached();
             const data = snapshot.val();
             if (!data) return alert('종목 데이터가 없습니다.');
  
@@ -6045,8 +6105,8 @@
     /** 실시간 랭킹용: stocks/·coins/ 의 volume·buyVol·sellVol 만 0 (주가 유지) */
     async function executeResetAllVolumesForRanking() {
         const [sSnap, cSnap] = await Promise.all([
-            get(ref(db, 'stocks/')),
-            get(ref(db, 'coins/'))
+            getStocksRootCached(),
+            getCoinsRootCached()
         ]);
         const sData = sSnap.exists() ? sSnap.val() : null;
         const cData = cSnap.exists() ? cSnap.val() : null;
@@ -6148,7 +6208,7 @@
         const INITIAL_COIN_PRICE = 100000000;
         if (statusEl) statusEl.textContent = '코인 데이터 조회 중...';
         try {
-            const coinsSnap = await get(ref(db, 'coins/'));
+            const coinsSnap = await getCoinsRootCached();
             if (!coinsSnap.exists()) {
                 if (statusEl) statusEl.textContent = 'coins/ 데이터가 없습니다.';
                 return;
@@ -6477,7 +6537,7 @@
         const modeLabel = bannerMode === 'paid' ? `유료 (${daysInput}일 · 종료일: ${endDateStr})` : `무료 (${daysInput}일 · 종료일: ${endDateStr})`;
         if (!confirm(`${targetNickname} 종목에 ${modeLabel} 배너를 등록하시겠습니까?`)) return;
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
+            const snapshot = await getStocksRootCached();
             const data = snapshot.val();
             if (!data) return alert("데이터가 없습니다.");
             let targetId = null;
@@ -6510,7 +6570,7 @@
         statusEl.style.color = '#f59e0b';
         statusEl.innerText   = '⏳ 데이터 읽는 중...';
         try {
-            const snap = await get(ref(db, 'stocks/'));
+            const snap = await getStocksRootCached();
             if (!snap.exists()) { statusEl.innerText = '❌ stocks/ 데이터 없음'; return; }
             const data    = snap.val();
             const updates = {};
@@ -6559,7 +6619,7 @@
         }
 
         // stocks/ 에서 닉네임으로 종목 ID 자동 검색
-        const stocksSnap = await get(ref(db, 'stocks/'));
+        const stocksSnap = await getStocksRootCached();
         if (!stocksSnap.exists()) { alert('종목 데이터를 불러올 수 없습니다.'); return; }
 
         let stockId = null;
@@ -6830,7 +6890,7 @@
     };
 
     function startCoinImpactAutoFromRestore() {
-        const interval = Math.max(5, Number(document.getElementById('coin-impact-auto-interval')?.value) || 30);
+        const interval = Math.max(60, Number(document.getElementById('coin-impact-auto-interval')?.value) || 60);
         startCoinImpactAutoCore(interval);
     }
 
@@ -6839,6 +6899,7 @@
         const statusEl = document.getElementById('coin-impact-auto-status');
         const chip = document.getElementById('coin-impact-auto-chip');
 
+        let lastAppliedImpact = null;
         const tick = async () => {
             const min = Number(document.getElementById('coin-impact-auto-min')?.value);
             const max = Number(document.getElementById('coin-impact-auto-max')?.value);
@@ -6853,12 +6914,14 @@
                 return;
             }
             const v = randInRange(lo, hi, 4);
+            if (lastAppliedImpact !== null && Math.abs(lastAppliedImpact - v) < 0.0001) return;
             try {
                 await update(ref(db, 'siteConfig/marketParams'), {
                     coinImpactMultiplier: v,
                     coinImpactMultiplierUpdatedAt: Date.now(),
                     updatedAt: Date.now()
                 });
+                lastAppliedImpact = v;
                 const multInput = document.getElementById('coin-impact-multiplier');
                 if (multInput) multInput.value = String(v);
                 updateCoinImpactRtdbStatusUI(v);
@@ -6901,7 +6964,7 @@
         if (!isAdmin()) return;
         const toggleEl = document.getElementById('coin-impact-auto-toggle');
         if (enabled) {
-            const interval = Math.max(5, Number(document.getElementById('coin-impact-auto-interval')?.value) || 30);
+            const interval = Math.max(60, Number(document.getElementById('coin-impact-auto-interval')?.value) || 60);
             const min = Number(document.getElementById('coin-impact-auto-min')?.value);
             const max = Number(document.getElementById('coin-impact-auto-max')?.value);
             const lo = Math.min(min, max);
@@ -7095,8 +7158,8 @@
         if (!isAdmin()) return;
         if (enabled) {
             const interval = Number(document.getElementById('auto-interval').value) || 60;
-            if (interval < 10) {
-                alert('변동 주기는 최소 10초 이상이어야 합니다.');
+            if (interval < 60) {
+                alert('변동 주기는 최소 60초 이상이어야 합니다.');
                 document.getElementById('auto-mode-toggle').checked = false;
                 return;
             }
@@ -7173,8 +7236,10 @@
 
     function startAutoMode(interval, ranges) {
         stopAutoMode();
+        const safeInterval = Math.max(60, Number(interval) || 60);
         const statusEl = document.getElementById('auto-mode-status');
 
+        let lastPayloadHash = '';
         const tick = async () => {
             const updates = {};
             const labels  = [];
@@ -7184,10 +7249,20 @@
             if (ranges.spread?.on)     { const v = randInRange(ranges.spread.min,     ranges.spread.max,     4); updates.spread      = v; labels.push(`spread=${v}`);                   document.getElementById('sell-spread').value      = v; }
             if (ranges.fee?.on)        { const v = randInRange(ranges.fee.min,        ranges.fee.max,        4); updates.fee         = v; labels.push(`fee=${v}`);                      document.getElementById('sell-fee').value         = v; }
 
+            const payloadHash = JSON.stringify(updates);
+            if (payloadHash === lastPayloadHash) {
+                if (statusEl) {
+                    const now = new Date().toLocaleTimeString('ko-KR');
+                    statusEl.style.color = '#94a3b8';
+                    statusEl.textContent = `ℹ️ ${now} → 변동 없음(쓰기 생략)`;
+                }
+                return;
+            }
             try {
                 const snap = await get(ref(db, 'siteConfig/sellConfig'));
                 const current = snap.exists() ? snap.val() : {};
                 await set(ref(db, 'siteConfig/sellConfig'), { ...current, ...updates, updatedAt: Date.now() });
+                lastPayloadHash = payloadHash;
                 const now = new Date().toLocaleTimeString('ko-KR');
                 statusEl.style.color = '#22c55e';
                 statusEl.textContent = `✅ ${now} → ${labels.join(' / ')}`;
@@ -7198,13 +7273,13 @@
         };
 
         tick();
-        autoModeTimer = setInterval(tick, interval * 1000);
+        autoModeTimer = setInterval(tick, safeInterval * 1000);
 
         // 카운트다운
-        let countdown = interval;
+        let countdown = safeInterval;
         const countdownTimer = setInterval(() => {
             countdown--;
-            if (countdown <= 0) countdown = interval;
+            if (countdown <= 0) countdown = safeInterval;
             if (!document.getElementById('auto-mode-toggle').checked) { clearInterval(countdownTimer); return; }
             const base = document.getElementById('auto-mode-status').textContent.split(' |')[0];
             document.getElementById('auto-mode-status').textContent = `${base} | 다음: ${countdown}초`;
@@ -8119,7 +8194,7 @@
         let splittableIds = [];
 
         try {
-            const stocksSnap = await get(ref(db, 'stocks/'));
+            const stocksSnap = await getStocksRootCached();
             const stocksData = stocksSnap.val() || {};
 
             const candidates = Object.entries(stocksData)
@@ -8631,86 +8706,21 @@
         logEl.innerHTML    = '';
 
         try {
-            // 1. 전체 유저 데이터 읽기 (부모 users/.read 는 관리자 이메일만 — database.rules.json)
-            logEl.innerHTML += '<div>유저 데이터 읽는 중...</div>';
-            const usersSnap = await getUsersRootCached({ bypassCache: true });
-            if (!usersSnap.exists()) {
-                logEl.innerHTML += '<div style="color:#ef4444;">유저 데이터 없음</div>';
-                chipEl.className   = 'status-chip expired';
-                chipEl.textContent = '데이터 없음';
+            logEl.innerHTML += '<div>서버 집계 실행 중...</div>';
+            const { data } = await adminRunAssetRankingFn({});
+            if (!data?.ok) throw new Error('집계 응답 오류');
+            if (data?.skipped) {
+                chipEl.className = 'status-chip expired';
+                chipEl.textContent = '건너뜀';
+                logEl.innerHTML += `<div style="color:#f59e0b;">⚠️ 건너뜀: ${escapeHtml(data.reason || 'unknown')}</div>`;
                 return;
             }
-            const users = usersSnap.val();
-
-            // 2. 주식·코인 시세 (자산 = 현금 + 주식평가 + 코인평가 — 메인 앱과 동일 스케일)
-            logEl.innerHTML += '<div>주식·코인 시세 읽는 중...</div>';
-            const [stocksSnap, coinsSnap] = await Promise.all([
-                get(ref(db, 'stocks/')),
-                get(ref(db, 'coins/')),
-            ]);
-            const stocks = stocksSnap.exists() ? stocksSnap.val() : {};
-            const coins = coinsSnap.exists() ? coinsSnap.val() : {};
-
-            // 3. 유저별 자산 계산
-            logEl.innerHTML += '<div>자산 계산 중...</div>';
-            const assetList = Object.entries(users).map(([uid, u]) => {
-                let cashRaw = Number(u?.cash);
-                if (
-                    (!Number.isFinite(cashRaw) || cashRaw < 0) &&
-                    u?.summary &&
-                    typeof u.summary === 'object'
-                ) {
-                    cashRaw = Number(u.summary.cash);
-                }
-                let total = Math.floor(Number.isFinite(cashRaw) && cashRaw >= 0 ? cashRaw : 0);
-                if (u.stocks && typeof u.stocks === 'object') {
-                    Object.entries(u.stocks).forEach(([stockId, s]) => {
-                        const qty = Number(s?.qty);
-                        if (!Number.isFinite(qty) || qty <= 0) return;
-                        const price = Number(stocks[stockId]?.price);
-                        const p = Number.isFinite(price) && price >= 0 ? price : 0;
-                        const add = Math.floor(p * qty);
-                        if (Number.isFinite(add)) total += add;
-                    });
-                }
-                if (u.coins && typeof u.coins === 'object') {
-                    Object.entries(u.coins).forEach(([coinId, s]) => {
-                        const qty = Number(s?.qty);
-                        if (!Number.isFinite(qty) || qty <= 0) return;
-                        const price = Number(coins[coinId]?.price);
-                        const p = Number.isFinite(price) && price >= 0 ? price : 0;
-                        const add = Math.floor(p * qty);
-                        if (Number.isFinite(add)) total += add;
-                    });
-                }
-                return { uid, totalAsset: total };
-            });
-
-            // 4. 정렬 후 TOP 100
-            assetList.sort((a, b) => b.totalAsset - a.totalAsset);
-            const top100 = assetList.slice(0, 100).map((item, i) => ({
-                rank: i + 1,
-                totalAsset: item.totalAsset
-            }));
-
-            // 5. Firebase 저장 (UID 제외, 순위+자산만)
             const now = Date.now();
-            await set(ref(db, 'assetRanking/'), {
-                updatedAt:  now,
-                totalUsers: assetList.length,
-                items:      top100
-            });
-
             const nowStr = new Date(now).toLocaleString('ko-KR');
             chipEl.className   = 'status-chip active';
             chipEl.textContent = '완료';
             lastEl.textContent = nowStr;
-            logEl.innerHTML += `<div style="color:#22c55e;">✅ 완료 — 총 ${assetList.length}명 집계, TOP ${top100.length} 저장 (${nowStr})</div>`;
-            if (top100.length > 0) {
-                const topVal = top100[0].totalAsset;
-                const tailVal = top100[top100.length - 1].totalAsset;
-                logEl.innerHTML += `<div style="color:#94a3b8;">1위: ${topVal.toLocaleString()}원 · 노출 구간 최저: ${tailVal.toLocaleString()}원</div>`;
-            }
+            logEl.innerHTML += `<div style="color:#22c55e;">✅ 완료 — 총 ${Number(data.totalUsers || 0).toLocaleString()}명 집계, TOP ${Number(data.top || 0).toLocaleString()} 저장 (${nowStr})</div>`;
             logEl.scrollTop = logEl.scrollHeight;
 
             const chainEl = document.getElementById('asset-rank-chain-stock-holders');
@@ -8725,7 +8735,7 @@
             chipEl.textContent = '오류';
             logEl.innerHTML += `<div style="color:#ef4444;">❌ 오류: ${escapeHtml(e.message || String(e))}</div>`;
             if (e && (e.code === 'PERMISSION_DENIED' || String(e.message || '').includes('permission'))) {
-                logEl.innerHTML += '<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정(등록 이메일)으로 로그인했는지, <b>users/</b> 일괄 읽기 규칙이 배포됐는지 확인하세요.</div>';
+                logEl.innerHTML += '<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정(등록 이메일) 로그인과 Functions 배포 상태를 확인하세요.</div>';
             }
         }
     };
@@ -8878,88 +8888,24 @@
         };
 
         try {
-            appendLog('<div>유저·주식·코인 읽는 중...</div>');
-            const [usersSnap, stocksSnap, coinsSnap] = await Promise.all([
-                getUsersRootCached({ bypassCache: true }),
-                get(ref(db, 'stocks/')),
-                get(ref(db, 'coins/'))
-            ]);
-            if (!usersSnap.exists()) {
-                appendLog('<div style="color:#ef4444;">유저 데이터 없음</div>');
+            appendLog('<div>서버 집계 실행 중...</div>');
+            const { data } = await adminRunStockHolderTop3Fn({});
+            if (!data?.ok) throw new Error('집계 응답 오류');
+            if (data?.skipped) {
                 if (chipEl) {
-                    chipEl.className   = 'status-chip expired';
-                    chipEl.textContent = '데이터 없음';
+                    chipEl.className = 'status-chip expired';
+                    chipEl.textContent = '건너뜀';
                 }
+                appendLog(`<div style="color:#f59e0b;">⚠️ 건너뜀: ${escapeHtml(data.reason || 'unknown')}</div>`);
                 return;
             }
-            const users = usersSnap.val();
-            const stocks = stocksSnap.exists() ? stocksSnap.val() : {};
-            const coins = coinsSnap.exists() ? coinsSnap.val() : {};
-            const stockIds = Object.keys(stocks);
-            const coinIds = Object.keys(coins);
-
-            const byStock = {};
-            stockIds.forEach((id) => { byStock[id] = []; });
-            const byCoin = {};
-            coinIds.forEach((id) => { byCoin[id] = []; });
-
-            Object.values(users).forEach((u) => {
-                if (u?.stocks && typeof u.stocks === 'object') {
-                    Object.entries(u.stocks).forEach(([stockId, s]) => {
-                        const qty = Math.floor(Number(s?.qty) || 0);
-                        if (qty <= 0) return;
-                        if (!byStock[stockId]) byStock[stockId] = [];
-                        byStock[stockId].push(qty);
-                    });
-                }
-                if (u?.coins && typeof u.coins === 'object') {
-                    Object.entries(u.coins).forEach(([coinId, s]) => {
-                        const qty = Math.floor(Number(s?.qty) || 0);
-                        if (qty <= 0) return;
-                        if (!byCoin[coinId]) byCoin[coinId] = [];
-                        byCoin[coinId].push(qty);
-                    });
-                }
-            });
-
-            appendLog(`<div>주식 ${stockIds.length}개 · 코인 ${coinIds.length}개 · 쓰기 청크 처리 중...</div>`);
-
-            const now = Date.now();
-            const CHUNK = 150;
-
-            const stockKeys = Object.keys(byStock);
-            for (let i = 0; i < stockKeys.length; i += CHUNK) {
-                const slice = stockKeys.slice(i, i + CHUNK);
-                const updates = {};
-                for (const stockId of slice) {
-                    const arr = (byStock[stockId] || []).sort((a, b) => b - a).slice(0, 3);
-                    const holders = arr.map((qty, idx) => ({ rank: idx + 1, qty }));
-                    updates[`stockHolderRanking/${stockId}/updatedAt`] = now;
-                    updates[`stockHolderRanking/${stockId}/holders`] = holders;
-                }
-                await update(ref(db), updates);
-            }
-
-            const coinKeys = Object.keys(byCoin);
-            for (let i = 0; i < coinKeys.length; i += CHUNK) {
-                const slice = coinKeys.slice(i, i + CHUNK);
-                const updates = {};
-                for (const coinId of slice) {
-                    const arr = (byCoin[coinId] || []).sort((a, b) => b - a).slice(0, 3);
-                    const holders = arr.map((qty, idx) => ({ rank: idx + 1, qty }));
-                    updates[`coinHolderRanking/${coinId}/updatedAt`] = now;
-                    updates[`coinHolderRanking/${coinId}/holders`] = holders;
-                }
-                await update(ref(db), updates);
-            }
-
-            const nowStr = new Date(now).toLocaleString('ko-KR');
+            const nowStr = new Date().toLocaleString('ko-KR');
             if (chipEl) {
                 chipEl.className   = 'status-chip active';
                 chipEl.textContent = '완료';
             }
             if (lastEl) lastEl.textContent = nowStr;
-            appendLog(`<div style="color:#22c55e;">✅ 완료 — 주식 ${stockKeys.length}개 · 코인 ${coinKeys.length}개 (${nowStr})</div>`);
+            appendLog(`<div style="color:#22c55e;">✅ 완료 — 주식 ${Number(data.stockKeys || 0).toLocaleString()}개 · 코인 ${Number(data.coinKeys || 0).toLocaleString()}개 (${nowStr})</div>`);
 
         } catch (e) {
             if (chipEl) {
@@ -8968,7 +8914,7 @@
             }
             appendLog(`<div style="color:#ef4444;">❌ 오류: ${escapeHtml(e.message || String(e))}</div>`);
             if (e && (e.code === 'PERMISSION_DENIED' || String(e.message || '').includes('permission'))) {
-                appendLog('<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정으로 로그인했는지, <b>stockHolderRanking</b>·<b>coinHolderRanking</b> 쓰기 규칙이 배포됐는지 확인하세요.</div>');
+                appendLog('<div style="color:#f59e0b; margin-top:6px;">권한 거부 시: 관리자 계정 로그인과 Functions 배포 상태를 확인하세요.</div>');
             }
         }
     };
@@ -9170,6 +9116,7 @@
             const isOpen = body.classList.contains('open');
             body.classList.toggle('open', !isOpen);
             arrow.classList.toggle('open', !isOpen);
+            if (isAdmin()) startRealtimeRequestListeners();
         });
     });
 
