@@ -2962,6 +2962,60 @@ exports.leaveChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   return { ok: true };
 });
 
+exports.adminForceFinalizeChallengeRoom = onCall({ cors: true, timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
+  if (!isAdminAuth(request.auth)) throw new HttpsError("permission-denied", "Admin only.");
+  const roomId = String(request.data?.roomId || "").trim();
+  if (!roomId) throw new HttpsError("invalid-argument", "roomId required.");
+  const db = admin.database();
+  const rs = await db.ref(`challengeRooms/${roomId}`).get();
+  if (!rs.exists()) return { ok: true, gone: true };
+  const r = rs.val() || {};
+  await applyChallengeRoomFinalize(db, roomId, r);
+  return { ok: true };
+});
+
+/** 매매 시작 전(로비) 방만 — RTDB 노드 삭제 + 참가자 challengeRoomId 제거 */
+exports.adminCancelChallengeRoomLobby = onCall({ cors: true, timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
+  if (!isAdminAuth(request.auth)) throw new HttpsError("permission-denied", "Admin only.");
+  const roomId = String(request.data?.roomId || "").trim();
+  if (!roomId) throw new HttpsError("invalid-argument", "roomId required.");
+  const db = admin.database();
+  const rs = await db.ref(`challengeRooms/${roomId}`).get();
+  if (!rs.exists()) return { ok: true, gone: true };
+  const r = rs.val() || {};
+  if (r.finalized === true) {
+    throw new HttpsError("failed-precondition", "이미 종료된 방입니다. 기록 삭제를 사용하세요.");
+  }
+  if (r.liveStarted === true) {
+    throw new HttpsError("failed-precondition", "매매가 시작된 방은 로비 취소할 수 없습니다. 강제 종료(정산)를 사용하세요.");
+  }
+  const members = r.members && typeof r.members === "object" ? r.members : {};
+  const uids = Object.keys(members);
+  const patch = {};
+  uids.forEach((u) => {
+    patch[`users/${u}/challengeRoomId`] = null;
+  });
+  patch[`challengeRooms/${roomId}`] = null;
+  await db.ref().update(patch);
+  return { ok: true, clearedMembers: uids.length };
+});
+
+/** 종료된 방의 RTDB 기록만 제거 (참가자 포인터는 finalize 시 이미 정리됨) */
+exports.adminDeleteChallengeRoomRecord = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  if (!isAdminAuth(request.auth)) throw new HttpsError("permission-denied", "Admin only.");
+  const roomId = String(request.data?.roomId || "").trim();
+  if (!roomId) throw new HttpsError("invalid-argument", "roomId required.");
+  const db = admin.database();
+  const rs = await db.ref(`challengeRooms/${roomId}`).get();
+  if (!rs.exists()) return { ok: true, gone: true };
+  const r = rs.val() || {};
+  if (r.finalized !== true) {
+    throw new HttpsError("failed-precondition", "종료(finalized)된 방만 기록을 삭제할 수 있습니다.");
+  }
+  await db.ref(`challengeRooms/${roomId}`).remove();
+  return { ok: true };
+});
+
 exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
