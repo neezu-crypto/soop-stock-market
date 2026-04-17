@@ -2096,7 +2096,8 @@
         <div class="accordion-sep">
         <div class="info-box">
             최근 10분 매매 기록(<code>tradeHistory</code>) 기준으로 매매 주기가 빠른 유저 TOP10을 자동 탐색합니다.<br>
-            현재 장 상태 기준 임계치(정규장 1초 미만 / 비정규장 30초 미만)를 넘는 계정을 자동 제재할 수 있습니다.
+            현재 장 상태 기준 임계치(정규장 1초 미만 / 비정규장 30초 미만)를 넘는 계정을 자동 제재할 수 있습니다.<br>
+            <span style="color:#94a3b8;">아래 목록은 <code>presence</code>로 접속 중(약 6분 이내 핑)인 유저만 대상으로, <code>users/…/session/lastTradeTime</code>(및 레거시 <code>lastTradeTime</code>) 기준 <b>매매 미활동 시간이 긴 순</b>으로 최대 20명을 표시합니다. 매매 이력이 없으면 목록 하단에 표시됩니다.</span>
         </div>
         <div class="data-status-bar" style="margin-bottom:10px;">
             <span>장 상태: <b id="user-monitor-market-phase">판별 중...</b></span>
@@ -2108,6 +2109,16 @@
         </div>
         <div id="user-monitor-status" style="font-size:12px; color:#94a3b8; margin-bottom:10px;">대기 중</div>
         <div id="user-monitor-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <div style="margin-top:18px; padding-top:14px; border-top:1px solid #334155;">
+            <div style="font-size:13px; font-weight:800; color:#f8fafc; margin-bottom:8px;">🧊 접속 중 · 매매 미활동 (시간순, 최대 20명)</div>
+            <div class="data-status-bar" style="margin-bottom:8px;">
+                <button class="btn-success" type="button" style="padding:8px 12px; font-size:12px;" onclick="reloadIdleOnlineUsersMonitor()">🔄 미활동 목록 새로고침</button>
+            </div>
+            <div id="user-idle-monitor-status" style="font-size:12px; color:#94a3b8; margin-bottom:8px;">TOP10 새로고침 시 함께 갱신됩니다.</div>
+            <div id="user-idle-monitor-scroll" style="max-height:520px; overflow-y:auto; border:1px solid #334155; border-radius:10px; padding:8px; background:#020617;">
+                <div id="user-idle-monitor-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+        </div>
         </div>
         </div>
     </div>
@@ -4507,6 +4518,104 @@
     const USER_MONITOR_LIMIT = 600; // 최근 N건 tradeHistory 스캔
     const USER_MONITOR_PER_UID_MAX = 20; // 유저별 계산용 최근 체결 수
     let userMonitorRows = [];
+    /** presence 온라인 판별 — Cloud Functions `PRESENCE_TTL_MS` 와 동일(6분) */
+    const ADMIN_IDLE_ONLINE_TTL_MS = 6 * 60 * 1000;
+    const ADMIN_IDLE_ONLINE_MAX = 20;
+
+    function collectOnlinePresenceMaxPing(presenceVal, now) {
+        const out = Object.create(null);
+        const root = presenceVal && typeof presenceVal === 'object' ? presenceVal : {};
+        Object.entries(root).forEach(([uid, sessions]) => {
+            if (!uid || !sessions || typeof sessions !== 'object') return;
+            let maxAt = 0;
+            Object.values(sessions).forEach((v) => {
+                const t = Number(v && v.connectedAt);
+                if (Number.isFinite(t) && t > maxAt) maxAt = t;
+            });
+            if (maxAt > 0 && now - maxAt <= ADMIN_IDLE_ONLINE_TTL_MS) {
+                out[uid] = maxAt;
+            }
+        });
+        return out;
+    }
+
+    function renderIdleOnlineMonitorRows(rows) {
+        const listEl = document.getElementById('user-idle-monitor-list');
+        if (!listEl) return;
+        if (!rows.length) {
+            listEl.innerHTML =
+                '<div style="color:#64748b; font-size:13px; padding:12px; text-align:center;">접속 중인 유저가 없거나 조건에 맞는 데이터가 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = rows
+            .map((r, idx) => {
+                const rankColor = idx < 3 ? '#38bdf8' : '#64748b';
+                const idleLabel = r.idleMs == null ? '—' : msToText(r.idleMs);
+                const tradeLine =
+                    Number(r.lastTradeAt) > 0
+                        ? `마지막 매매: <b>${fmtTime(r.lastTradeAt)}</b>`
+                        : '마지막 매매: <b style="color:#94a3b8;">기록 없음</b>';
+                return `
+                <div class="batch-control" style="padding:10px; background:#0f172a; border-radius:8px;">
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <div style="font-size:12px; color:${rankColor}; font-weight:800;">#${idx + 1}</div>
+                        <div style="font-size:13px; color:#f8fafc; font-weight:700;">${escapeHtml(r.nickname || '-')}</div>
+                        <div style="font-size:11px; color:#64748b;">${escapeHtml(r.uid)}</div>
+                    </div>
+                    <div style="margin-top:8px; font-size:12px; color:#cbd5e1; display:flex; flex-wrap:wrap; gap:10px;">
+                        <span>미활동(매매 기준): <b style="color:#f59e0b;">${idleLabel}</b></span>
+                        <span>${tradeLine}</span>
+                        <span>접속 핑: <b>${fmtTime(r.presenceAt)}</b></span>
+                    </div>
+                </div>`;
+            })
+            .join('');
+    }
+
+    async function buildIdleOnlineUsersTop20() {
+        if (!isAdmin()) return;
+        const statusEl = document.getElementById('user-idle-monitor-status');
+        const listEl = document.getElementById('user-idle-monitor-list');
+        if (statusEl) statusEl.innerText = '집계 중...';
+        if (listEl) {
+            listEl.innerHTML =
+                '<div style="color:#64748b; font-size:13px; padding:12px; text-align:center;">불러오는 중...</div>';
+        }
+        const now = Date.now();
+        const [presSnap, usersSnap] = await Promise.all([get(ref(db, 'presence/')), getUsersRootCached()]);
+        const onlinePing = collectOnlinePresenceMaxPing(presSnap.val(), now);
+        const usersVal = usersSnap.val() || {};
+        const rows = [];
+        Object.entries(onlinePing).forEach(([uid, presenceAt]) => {
+            const u = usersVal[uid];
+            const ltSession = Number(u?.session?.lastTradeTime);
+            const ltRoot = Number(u?.lastTradeTime);
+            let lastTradeAt = 0;
+            if (Number.isFinite(ltSession) && ltSession > 0) lastTradeAt = ltSession;
+            if (Number.isFinite(ltRoot) && ltRoot > lastTradeAt) lastTradeAt = ltRoot;
+            const nickname = String(u?.nickname || u?.name || '').trim();
+            let idleMs = null;
+            if (lastTradeAt > 0) idleMs = Math.max(0, now - lastTradeAt);
+            rows.push({ uid, nickname, presenceAt, lastTradeAt, idleMs });
+        });
+        rows.sort((a, b) => {
+            const aHas = a.idleMs != null;
+            const bHas = b.idleMs != null;
+            if (aHas && bHas) {
+                if (b.idleMs !== a.idleMs) return b.idleMs - a.idleMs;
+                return (a.lastTradeAt - b.lastTradeAt) || String(a.uid).localeCompare(String(b.uid));
+            }
+            if (aHas && !bHas) return -1;
+            if (!aHas && bHas) return 1;
+            return String(a.nickname || a.uid).localeCompare(String(b.nickname || b.uid), 'ko');
+        });
+        const top = rows.slice(0, ADMIN_IDLE_ONLINE_MAX);
+        renderIdleOnlineMonitorRows(top);
+        if (statusEl) {
+            const onlineN = Object.keys(onlinePing).length;
+            statusEl.innerText = `접속 중 약 ${onlineN}명 · 미활동 상위 ${top.length}명 표시 · ${new Date().toLocaleString('ko-KR')}`;
+        }
+    }
 
     function parseHmSafe(str, fallback) {
         const s = String(str || fallback);
@@ -4748,6 +4857,22 @@
         } catch (e) {
             const statusEl = document.getElementById('user-monitor-status');
             if (statusEl) statusEl.innerText = '집계 실패: ' + (e?.message || e);
+        }
+        try {
+            await buildIdleOnlineUsersTop20();
+        } catch (e) {
+            const idleStatus = document.getElementById('user-idle-monitor-status');
+            if (idleStatus) idleStatus.innerText = '미활동 집계 실패: ' + (e?.message || e);
+        }
+    };
+
+    window.reloadIdleOnlineUsersMonitor = async function() {
+        if (!isAdmin()) return;
+        try {
+            await buildIdleOnlineUsersTop20();
+        } catch (e) {
+            const idleStatus = document.getElementById('user-idle-monitor-status');
+            if (idleStatus) idleStatus.innerText = '미활동 집계 실패: ' + (e?.message || e);
         }
     };
 
