@@ -295,13 +295,28 @@
             .control-bar,
             .rank-market-toggle-wrap,
             .rank-scope-toggle-wrap {
-                max-height: calc(240px - (220px * var(--mobile-immersive-progress, 0)));
-                opacity: calc(1 - (0.92 * var(--mobile-immersive-progress, 0)));
+                max-height: 240px;
+                opacity: 1;
                 overflow: hidden;
-                transform: translateY(calc(-10px * var(--mobile-immersive-progress, 0)));
+                transform: translateY(0);
+                transition: max-height 0.22s ease, opacity 0.2s ease, transform 0.2s ease, padding 0.2s ease, margin 0.2s ease, border 0.2s ease;
             }
-            .dual-rank-scroll {
-                padding-top: calc(0px + (2px * var(--mobile-immersive-progress, 0)));
+            body.mobile-immersive .header,
+            body.mobile-immersive .control-bar,
+            body.mobile-immersive .rank-market-toggle-wrap,
+            body.mobile-immersive .rank-scope-toggle-wrap {
+                max-height: 0;
+                opacity: 0;
+                transform: translateY(-10px);
+                border: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }
+            body.mobile-immersive-measuring .header,
+            body.mobile-immersive-measuring .control-bar,
+            body.mobile-immersive-measuring .rank-market-toggle-wrap,
+            body.mobile-immersive-measuring .rank-scope-toggle-wrap {
+                transition: none !important;
             }
         }
     </style>
@@ -783,30 +798,43 @@
         if (!window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)').matches) return;
         const wrap = document.getElementById('dual-rank-scroll');
         if (!wrap) return;
-        let ticking = false;
-        const RANGE = 140;
+        const shell = document.getElementById('main-section');
+        if (!shell) return;
+        document.body.classList.add('mobile-immersive-measuring');
+        const expandedHeight = shell.getBoundingClientRect().height || 0;
+        document.body.classList.add('mobile-immersive');
+        const collapsedHeight = shell.getBoundingClientRect().height || 0;
+        document.body.classList.remove('mobile-immersive');
+        document.body.classList.remove('mobile-immersive-measuring');
+        const collapseDelta = Math.max(28, Math.round(expandedHeight - collapsedHeight));
+        const expandDelta = collapseDelta;
         let lastTop = Math.max(0, wrap.scrollTop || 0);
-        let lastApplied = -1;
-        const EPSILON = 0.6;
-        const APPLY_STEP = 0.006;
-        const applyProgress = () => {
-            const top = Math.max(0, wrap.scrollTop || 0);
-            if (Math.abs(top - lastTop) < EPSILON) return;
-            const progress = Math.min(1, top / RANGE);
-            if (Math.abs(progress - lastApplied) < APPLY_STEP) return;
-            document.body.style.setProperty('--mobile-immersive-progress', progress.toFixed(3));
-            lastApplied = progress;
-            lastTop = top;
-        };
+        let downAccum = 0;
+        let upAccum = 0;
+        let collapsed = false;
         wrap.addEventListener('scroll', () => {
-            if (ticking) return;
-            ticking = true;
-            requestAnimationFrame(() => {
-                ticking = false;
-                applyProgress();
-            });
+            const top = Math.max(0, wrap.scrollTop || 0);
+            const delta = top - lastTop;
+            lastTop = top;
+            if (Math.abs(delta) < 0.5) return;
+            if (delta > 0) {
+                downAccum += delta;
+                upAccum = 0;
+                if (!collapsed && downAccum >= collapseDelta) {
+                    collapsed = true;
+                    downAccum = 0;
+                    document.body.classList.add('mobile-immersive');
+                }
+                return;
+            }
+            upAccum += -delta;
+            downAccum = 0;
+            if (collapsed && (top <= 4 || upAccum >= expandDelta)) {
+                collapsed = false;
+                upAccum = 0;
+                document.body.classList.remove('mobile-immersive');
+            }
         }, { passive: true });
-        applyProgress();
     }
 
     // 구독 시작 시 자동 스크롤도 시작
