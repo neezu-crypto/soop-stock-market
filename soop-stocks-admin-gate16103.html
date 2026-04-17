@@ -1701,7 +1701,9 @@
         <div class="info-box" style="margin-top:14px; border-color:#a78bfa; color:#ddd6fe;">
             <b>🎯 단일 종목 상장폐지/재상장</b> — <b>주식·코인</b> 탭에서 시세 <b>낮은 순</b>으로 정렬된 <b>최대 10개</b> 중 종목 1개를 선택해
             <b>선택한 탭의 시장만</b> 상장폐지합니다. (주식 탭 → 주식·유저 주식 보유만, 코인 탭 → 코인·유저 코인 보유만) 필요 시 <b>같은 ID로 시가 재상장</b>합니다.<br>
-            <span style="color:#c4b5fd;">시가 재상장은 <b>선택한 탭의 시장만</b> 시가로 복구합니다. (주식 탭 → 주식만 10,000원, 코인 탭 → 코인만 1억원) 폐지 직후 재상장 시에도 같은 시장만 적용됩니다. 예전에 양쪽 폐지한 경우에만 주식·코인 둘 다 재상장됩니다.</span>
+            <span style="color:#c4b5fd;">시가 재상장은 <b>선택한 탭의 시장만</b> 시가로 복구합니다. (주식 탭 → 주식만 10,000원, 코인 탭 → 코인만 1억원) 폐지 직후 재상장 시에도 같은 시장만 적용됩니다. 예전에 양쪽 폐지한 경우에만 주식·코인 둘 다 재상장됩니다.<br>
+            새로고침 후에도 같은 브라우저 탭이면 목록 맨 위에 <b>[폐지됨·재상장용]</b> 항목으로 최근 폐지 종목을 다시 고를 수 있습니다. (브라우저 세션, 최대 7일)<br>
+            <b>그 이전에 이미 삭제된 종목</b>은 목록에 없으므로, 아래 <b>시가 재상장 (수동 입력)</b>에서 종목 ID·이름·시장을 직접 넣어 실행하세요.</span>
         </div>
         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
             <button type="button" id="single-delist-tab-stock" onclick="switchSingleDelistMarketTab('stock')"
@@ -1718,6 +1720,25 @@
             <button type="button" class="btn-primary" style="background:#22c55e; color:#052e16;" onclick="relistSingleInstrumentAtInitialPrice()">시가 재상장</button>
         </div>
         <div id="single-delist-status" style="font-size:12px; color:#94a3b8; margin-top:8px;"></div>
+        <div class="info-box" style="margin-top:14px; border-color:#22c55e; color:#bbf7d0;">
+            <b>🛠 시가 재상장 (수동 입력)</b> — 업데이트 이전에 삭제했거나, 세션이 없어 목록에 안 보이는 종목용입니다.<br>
+            <span style="color:#86efac;">종목 ID는 Firebase에 쓰이는 값과 동일해야 합니다. 이름은 검색·표시용이며 비우면 ID와 같게 취급됩니다.</span>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px;">
+            <input type="text" id="manual-relist-id" placeholder="종목 ID (필수)"
+                style="flex:1; min-width:160px; background:#0f172a; border:1px solid #475569; color:#f8fafc; padding:10px 12px; border-radius:8px; box-sizing:border-box;">
+            <input type="text" id="manual-relist-name" placeholder="표시 이름 (선택)"
+                style="flex:1; min-width:140px; background:#0f172a; border:1px solid #475569; color:#f8fafc; padding:10px 12px; border-radius:8px; box-sizing:border-box;">
+            <select id="manual-relist-market"
+                style="min-width:140px; background:#0f172a; border:1px solid #475569; color:#f8fafc; padding:10px 12px; border-radius:8px;">
+                <option value="stock">주식만 재상장</option>
+                <option value="coin">코인만 재상장</option>
+                <option value="both">주식+코인 재상장</option>
+            </select>
+            <button type="button" class="btn-primary" style="background:#15803d; color:#fff; font-weight:800; padding:10px 14px; border-radius:8px; border:none; cursor:pointer;"
+                onclick="manualRelistInstrumentAtInitialPrice()">시가 재상장 (수동)</button>
+        </div>
+        <div id="manual-relist-status" style="font-size:12px; color:#94a3b8; margin-top:6px;"></div>
         <div class="info-box" style="margin-top:16px; border-color:#f59e0b; color:#fcd34d;">
             <b>🪙 코인 시장 동기화</b> — <code>stocks/</code>에 있는 종목 ID마다 <code>coins/</code>에 행이 없으면 생성합니다.<br>
             시가는 <b>1억원</b>으로 두고, 거래량·보유는 0부터 시작합니다. (주식 시세와 완전히 별도 노드)
@@ -3819,6 +3840,70 @@
     /** 단일 상장폐지 셀렉트: 주식 / 코인 탭 */
     let singleDelistMarketTab = 'stock';
 
+    const ADMIN_SESSION_LAST_DELISTED_KEY = 'soopAdminLastDelistedInstrument_v1';
+    const ADMIN_LAST_DELISTED_TTL_MS = 7 * 86400000;
+
+    function readStoredLastDelistedInstrument() {
+        try {
+            const raw = sessionStorage.getItem(ADMIN_SESSION_LAST_DELISTED_KEY);
+            if (!raw) return null;
+            const o = JSON.parse(raw);
+            if (!o || !o.id) return null;
+            const at = Number(o.deletedAt) || 0;
+            if (at && Date.now() - at > ADMIN_LAST_DELISTED_TTL_MS) {
+                sessionStorage.removeItem(ADMIN_SESSION_LAST_DELISTED_KEY);
+                return null;
+            }
+            const market = o.market === 'coin' || o.market === 'stock' || o.market === 'both' ? o.market : 'stock';
+            return {
+                id: String(o.id).trim(),
+                name: String(o.name || o.id).trim(),
+                deletedAt: at || Date.now(),
+                market,
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function refreshLastDelistedInstrumentFromStorage() {
+        const s = readStoredLastDelistedInstrument();
+        lastDelistedInstrumentMeta = s;
+    }
+
+    function persistLastDelistedInstrumentToStorage(meta) {
+        try {
+            if (!meta?.id) {
+                sessionStorage.removeItem(ADMIN_SESSION_LAST_DELISTED_KEY);
+                return;
+            }
+            sessionStorage.setItem(
+                ADMIN_SESSION_LAST_DELISTED_KEY,
+                JSON.stringify({
+                    id: String(meta.id).trim(),
+                    name: String(meta.name || meta.id).trim(),
+                    deletedAt: Number(meta.deletedAt) || Date.now(),
+                    market: meta.market === 'coin' || meta.market === 'stock' || meta.market === 'both' ? meta.market : 'stock',
+                })
+            );
+        } catch (_) { /* noop */ }
+    }
+
+    function clearLastDelistedInstrumentStorage() {
+        try {
+            sessionStorage.removeItem(ADMIN_SESSION_LAST_DELISTED_KEY);
+        } catch (_) { /* noop */ }
+        lastDelistedInstrumentMeta = null;
+    }
+
+    /** 폐지 직후 새로고침해도 재상장할 수 있도록, 현재 탭에만 유령 옵션 표시 */
+    function ghostDelistRelistMatchesCurrentTab(p) {
+        if (!p?.id) return false;
+        const m = p.market;
+        if (singleDelistMarketTab === 'coin') return m === 'coin' || m === 'both';
+        return m === 'stock' || m === 'both';
+    }
+
     function styleSingleDelistMarketTabs() {
         const sBtn = document.getElementById('single-delist-tab-stock');
         const cBtn = document.getElementById('single-delist-tab-coin');
@@ -3843,11 +3928,12 @@
     };
 
     function renderSingleDelistOptions() {
+        refreshLastDelistedInstrumentFromStorage();
         const sel = document.getElementById('single-delist-select');
         if (!sel) return;
         const prev = sel.value;
         const src = singleDelistMarketTab === 'coin' ? (allCoinsData || {}) : (allStocksData || {});
-        const rows = Object.entries(src)
+        let rows = Object.entries(src)
             .map(([id, s]) => ({
                 id,
                 name: String(s?.name || '').trim() || id,
@@ -3855,14 +3941,29 @@
             }))
             .sort((a, b) => (a.price - b.price) || String(a.id).localeCompare(String(b.id)))
             .slice(0, 10);
+        const persisted = readStoredLastDelistedInstrument();
+        if (persisted && ghostDelistRelistMatchesCurrentTab(persisted)) {
+            const stillInDb = Object.prototype.hasOwnProperty.call(src, persisted.id);
+            if (!stillInDb) {
+                rows = rows.filter((r) => r.id !== persisted.id);
+                rows.unshift({
+                    id: persisted.id,
+                    name: persisted.name || persisted.id,
+                    price: 0,
+                    _ghostRelist: true,
+                });
+                rows = rows.slice(0, 10);
+            }
+        }
         const tabLabel = singleDelistMarketTab === 'coin' ? '코인' : '주식';
         const options = [
             `<option value="">${tabLabel} — 저가순 최대 10개 중 선택 (이름 · ID · 시세)</option>`,
         ];
         rows.forEach((r) => {
-            const p = Math.floor(Number(r.price) || 0);
+            const p = r._ghostRelist ? '—' : `${Math.floor(Number(r.price) || 0).toLocaleString()}원`;
+            const prefix = r._ghostRelist ? '[폐지됨·재상장용] ' : '';
             options.push(
-                `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)} · ${escapeHtml(r.id)} · ${p.toLocaleString()}원</option>`
+                `<option value="${escapeHtml(r.id)}">${prefix}${escapeHtml(r.name)} · ${escapeHtml(r.id)} · ${p}</option>`
             );
         });
         sel.innerHTML = options.join('');
@@ -5584,6 +5685,7 @@
                 market
             });
             lastDelistedInstrumentMeta = { id, name, deletedAt: Date.now(), market };
+            persistLastDelistedInstrumentToStorage(lastDelistedInstrumentMeta);
             await loadStocksOnce();
             try { await loadCoinsTop10Once(); } catch (_) { /* noop */ }
             if (statusEl) {
@@ -5599,6 +5701,7 @@
 
     window.relistSingleInstrumentAtInitialPrice = async function() {
         if (!isAdmin()) return;
+        refreshLastDelistedInstrumentFromStorage();
         const sel = document.getElementById('single-delist-select');
         const statusEl = document.getElementById('single-delist-status');
         const selectedId = String(sel?.value || '').trim();
@@ -5613,10 +5716,16 @@
             if (m === 'coin' || m === 'stock') return m;
             return 'both';
         })();
+        const stored = readStoredLastDelistedInstrument();
         const name = selectedId
-            ? (singleDelistMarketTab === 'coin'
-                ? String(allCoinsData?.[id]?.name || allStocksData?.[id]?.name || '').trim()
-                : String(allStocksData?.[id]?.name || allCoinsData?.[id]?.name || '').trim())
+            ? (() => {
+                const liveCoin = String(allCoinsData?.[id]?.name || '').trim();
+                const liveStock = String(allStocksData?.[id]?.name || '').trim();
+                if (singleDelistMarketTab === 'coin') {
+                    return liveCoin || liveStock || (stored?.id === id ? String(stored.name || '').trim() : '') || '';
+                }
+                return liveStock || liveCoin || (stored?.id === id ? String(stored.name || '').trim() : '') || '';
+            })()
             : String(lastDelistedInstrumentMeta?.name || '').trim();
         if (!name) {
             if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '종목명이 확인되지 않습니다. 상장폐지 직후 재상장하거나 목록에서 다시 선택해주세요.'; }
@@ -5642,12 +5751,73 @@
             });
             await loadStocksOnce();
             try { await loadCoinsTop10Once(); } catch (_) { /* noop */ }
+            clearLastDelistedInstrumentStorage();
             if (statusEl) {
                 statusEl.style.color = '#86efac';
                 statusEl.textContent = `시가 재상장 완료: ${name} (${id})`;
             }
         } catch (e) {
             if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = `재상장 실패: ${e?.message || e}`; }
+        }
+    };
+
+    /** 목록·세션에 없는 종목(예: 업데이트 이전 삭제) — ID·이름·시장을 직접 입력해 시가 재상장 */
+    window.manualRelistInstrumentAtInitialPrice = async function() {
+        if (!isAdmin()) return;
+        const id = String(document.getElementById('manual-relist-id')?.value || '').trim();
+        const rawName = String(document.getElementById('manual-relist-name')?.value || '').trim();
+        const market = String(document.getElementById('manual-relist-market')?.value || 'stock').trim().toLowerCase();
+        const statusEl = document.getElementById('manual-relist-status');
+        const setSt = (c, t) => {
+            if (statusEl) {
+                statusEl.style.color = c;
+                statusEl.textContent = t;
+            }
+        };
+
+        if (!id) {
+            setSt('#f87171', '종목 ID를 입력해주세요.');
+            alert('종목 ID를 입력해주세요.');
+            return;
+        }
+        if (id.length > 200) {
+            setSt('#f87171', '종목 ID가 너무 깁니다. (200자 이하)');
+            return;
+        }
+        if (!['stock', 'coin', 'both'].includes(market)) {
+            setSt('#f87171', '시장 선택이 올바르지 않습니다.');
+            return;
+        }
+
+        const name = rawName || id;
+        const marketLabel = market === 'both' ? '주식·코인 모두' : (market === 'coin' ? '코인만' : '주식만');
+        const marketDetail =
+            market === 'stock'
+                ? '주식 시가 10,000원 + 검색 인덱스 (코인은 변경 없음)'
+                : market === 'coin'
+                    ? '코인 시가 100,000,000원 + 검색 인덱스 (주식은 변경 없음)'
+                    : '주식 10,000원 + 코인 100,000,000원';
+        if (!confirm(`「${marketLabel}」 수동 시가 재상장할까요?\n\n이름: ${name}\nID: ${id}\n\n${marketDetail}`)) return;
+
+        try {
+            setSt('#94a3b8', '시가 재상장 처리 중...');
+            await adminRebuildSingleInstrumentFn({
+                action: 'relist',
+                id,
+                name,
+                market
+            });
+            await loadStocksOnce();
+            try { await loadCoinsTop10Once(); } catch (_) { /* noop */ }
+            const idInp = document.getElementById('manual-relist-id');
+            const nameInp = document.getElementById('manual-relist-name');
+            if (idInp) idInp.value = '';
+            if (nameInp) nameInp.value = '';
+            setSt('#86efac', `✅ 수동 재상장 완료: ${name} (${id})`);
+            showAdminToast(`수동 재상장 완료: ${name} (${id})`);
+        } catch (e) {
+            setSt('#f87171', `실패: ${e?.message || e}`);
+            alert('수동 재상장 실패: ' + (e?.message || e));
         }
     };
 
