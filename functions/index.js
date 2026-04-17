@@ -2974,15 +2974,34 @@ exports.joinChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "25
   if (!rs.exists()) throw new HttpsError("not-found", "방을 찾을 수 없습니다.");
   const r = rs.val() || {};
   if (r.finalized === true) throw new HttpsError("failed-precondition", "이미 종료된 방입니다.");
+  if (r.resultsPhase === true) {
+    throw new HttpsError("failed-precondition", "결과 확인 중에는 참가할 수 없습니다.");
+  }
   const now = Date.now();
-  if (now >= Number(r.lobbyUntilMs || 0)) throw new HttpsError("failed-precondition", "모집이 마감되었습니다.");
+  const liveEnd = Number(r.liveEndMs || 0);
+  if (!Number.isFinite(liveEnd)) {
+    throw new HttpsError("failed-precondition", "챌린지 방 설정 오류입니다.");
+  }
+  if (now >= liveEnd) {
+    throw new HttpsError("failed-precondition", "매매가 종료된 방입니다.");
+  }
   const members = r.members && typeof r.members === "object" ? { ...r.members } : {};
   if (members[uid]) return { ok: true, roomId, already: true };
   const n = Object.keys(members).length;
   if (n >= CHALLENGE_ROOM_MAX_MEMBERS) throw new HttpsError("resource-exhausted", "방 인원이 가득 찼습니다.");
   members[uid] = { joinedAt: now };
-  await db.ref(`challengeRooms/${roomId}/members`).set(members);
-  await db.ref(`users/${uid}/challengeRoomId`).set(roomId);
+  const liveStarted = r.liveStarted === true;
+  const patch = {
+    [`challengeRooms/${roomId}/members`]: members,
+    [`users/${uid}/challengeRoomId`]: roomId,
+  };
+  // 라이브(또는 라이브 직전 플래그 이후) 중도 입장: 초기 자금·챌린지 포지션만 방 세션에 맞춤. 로비만 입장한 사람은 라이브 시작 시 일괄 초기화됨.
+  if (liveStarted) {
+    patch[`users/${uid}/challengeCash`] = CHALLENGE_DAILY_CASH_WON;
+    patch[`users/${uid}/challengeStocks`] = null;
+    patch[`users/${uid}/challengeCoins`] = null;
+  }
+  await db.ref().update(patch);
   return { ok: true, roomId };
 });
 
