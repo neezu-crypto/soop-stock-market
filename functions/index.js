@@ -2402,9 +2402,11 @@ exports.adminSyncCoinsFromStocks = onCall(
 const CHALLENGE_STOCK_OPEN_WON = 10000;
 const CHALLENGE_COIN_OPEN_WON = 100000000;
 const CHALLENGE_DAILY_CASH_WON = 10000000;
-/** 챌린지 방: 모집 1분 → 동시 시작 후 1시간 매매 (종목당 동시에 1개 활성 방만 허용) */
+/** 챌린지 방: 모집 1분 → 동시 시작 후 5분 매매 → 결과 화면(기본 3분) 후 정산 (종목당 동시에 1개 활성 방만 허용) */
 const CHALLENGE_LOBBY_MS = 60 * 1000;
-const CHALLENGE_LIVE_MS = 60 * 60 * 1000;
+const CHALLENGE_LIVE_MS = 5 * 60 * 1000;
+/** 매매 종료 후 RTDB에 순위를 남겨 두는 시간 — 이후 finalize 로 포인터·자산 초기화 */
+const CHALLENGE_RESULTS_DISPLAY_MS = 3 * 60 * 1000;
 const CHALLENGE_ROOM_MAX_MEMBERS = 40;
 
 /** 관리자: 메인 stocks/coins 기준으로 챌린지 시장 노드만 동기화(유저 청산 없음). 최초 배포·수동 동기화용 */
@@ -2678,8 +2680,6 @@ async function findBlockingChallengeRoomForStock(db, stockId) {
     if (!r || typeof r !== "object") continue;
     if (String(r.stockId || "").trim() !== stockId) continue;
     if (r.finalized === true) continue;
-    const liveEnd = Number(r.liveEndMs);
-    if (Number.isFinite(liveEnd) && now >= liveEnd) continue;
     return rid;
   }
   return null;
@@ -2700,10 +2700,17 @@ async function pruneStaleUserChallengeRoomPointer(db, uid) {
   }
   const r = rs.val() || {};
   const now = Date.now();
-  const liveEnd = Number(r.liveEndMs);
-  if (r.finalized === true || (Number.isFinite(liveEnd) && now >= liveEnd)) {
+  if (r.finalized === true) {
     await db.ref(`users/${uid}/challengeRoomId`).remove();
     return null;
+  }
+  const resultsUntil = Number(r.resultsUntilMs || 0);
+  if (r.resultsPhase === true && Number.isFinite(resultsUntil) && now < resultsUntil) {
+    return rid;
+  }
+  const liveEnd = Number(r.liveEndMs);
+  if (r.liveStarted === true && Number.isFinite(liveEnd) && now >= liveEnd && r.resultsPhase !== true) {
+    return rid;
   }
   return rid;
 }
@@ -2739,6 +2746,7 @@ async function assertChallengeTradeRoomForUser(db, auth, uid, stockId, challenge
   const members = r.members && typeof r.members === "object" ? r.members : {};
   if (!members[uid]) throw new HttpsError("permission-denied", "이 방의 참가자가 아닙니다.");
   if (r.liveStarted !== true) throw new HttpsError("failed-precondition", "아직 매매가 시작되지 않았습니다.");
+  if (r.resultsPhase === true) throw new HttpsError("failed-precondition", "매매가 종료되어 결과 확인 중입니다.");
   const now = Date.now();
   const liveStart = Number(r.liveStartMs);
   const liveEnd = Number(r.liveEndMs);
@@ -2776,7 +2784,7 @@ async function applyChallengeRoomLiveStart(db, roomId, r) {
     for (const u of uids) await db.ref(`users/${u}/challengeRoomId`).remove();
     return;
   }
-  const p = Math.max(1, Math.floor(Number(row.price) || CHALLENGE_STOCK_OPEN_WON));
+  const p = CHALLENGE_STOCK_OPEN_WON;
   await db.ref(`challengeStocks/${stockId}`).set({
     name: String(row.name || ""),
     price: p,
@@ -2796,6 +2804,45 @@ async function applyChallengeRoomLiveStart(db, roomId, r) {
     patch[`users/${u}/challengeCoins`] = null;
   });
   await db.ref().update(patch);
+}
+
+async function beginChallengeRoomResultsPhase(db, roomId, r) {
+  if (r.resultsPhase === true) return;
+  const stockId = String(r.stockId || "").trim();
+  const members = r.members && typeof r.members === "object" ? r.members : {};
+  const uids = Object.keys(members);
+  const now = Date.now();
+  let lastPx = CHALLENGE_STOCK_OPEN_WON;
+  if (stockId) {
+    const pxSnap = await db.ref(`challengeStocks/${stockId}/price`).once("value");
+    if (pxSnap.exists()) {
+      const n = Math.floor(Number(pxSnap.val()));
+      if (Number.isFinite(n) && n > 0) lastPx = n;
+    }
+  }
+  const rows = [];
+  for (const uid of uids) {
+    const us = await db.ref(`users/${uid}`).once("value");
+    const uval = us.exists() ? us.val() || {} : {};
+    const cash = Math.floor(Number(uval.challengeCash || 0));
+    const book = uval.challengeStocks && typeof uval.challengeStocks === "object" ? uval.challengeStocks : {};
+    const pos = stockId ? book[stockId] : null;
+    const qty = Math.floor(Number(pos?.qty || 0));
+    const totalWon = cash + qty * lastPx;
+    rows.push({ uid, cash, stockQty: qty, stockMark: qty * lastPx, totalWon });
+  }
+  rows.sort((a, b) => b.totalWon - a.totalWon);
+  rows.forEach((row, i) => {
+    row.rank = i + 1;
+  });
+  await db.ref(`challengeRooms/${roomId}`).update({
+    resultsPhase: true,
+    resultsAt: now,
+    resultsUntilMs: now + CHALLENGE_RESULTS_DISPLAY_MS,
+    resultsLeaderboard: rows,
+    resultsMemberCount: uids.length,
+    resultsMarkPrice: lastPx,
+  });
 }
 
 async function applyChallengeRoomFinalize(db, roomId, r) {
@@ -2833,8 +2880,15 @@ async function challengeRoomHousekeeperTick() {
       await applyChallengeRoomLiveStart(db, roomId, r);
       continue;
     }
-    if (r.liveStarted === true && now >= liveEnd) {
-      await applyChallengeRoomFinalize(db, roomId, r);
+    if (r.liveStarted === true && Number.isFinite(liveEnd) && now >= liveEnd) {
+      if (r.resultsPhase === true) {
+        const ru = Number(r.resultsUntilMs || 0);
+        if (Number.isFinite(ru) && now >= ru) {
+          await applyChallengeRoomFinalize(db, roomId, r);
+        }
+      } else {
+        await beginChallengeRoomResultsPhase(db, roomId, r);
+      }
     }
   }
 }
@@ -2960,6 +3014,42 @@ exports.leaveChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   await db.ref(`challengeRooms/${roomId}`).update({ members, hostUid });
   await db.ref(`users/${uid}/challengeRoomId`).remove();
   return { ok: true };
+});
+
+/** 참가자가 주기적으로 호출 — 로비 종료·라이브 시작, 매매 종료 후 결과 단계, 결과 종료 후 정산을 즉시 반영(하우스키퍼 지연 보완) */
+exports.advanceChallengeRoomIfDue = onCall({ cors: true, timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  const uid = auth.uid;
+  const db = admin.database();
+  const rid = await getUserChallengeRoomIdRaw(db, uid);
+  if (!rid) return { ok: true, advanced: false };
+  const rs = await db.ref(`challengeRooms/${rid}`).get();
+  if (!rs.exists()) return { ok: true, advanced: false };
+  const r = rs.val() || {};
+  if (r.finalized === true) return { ok: true, advanced: false };
+  const members = r.members && typeof r.members === "object" ? r.members : {};
+  if (!members[uid]) throw new HttpsError("permission-denied", "이 방의 참가자만 동기화할 수 있습니다.");
+  const now = Date.now();
+  const lobbyUntil = Number(r.lobbyUntilMs);
+  const liveEnd = Number(r.liveEndMs);
+  if (r.liveStarted !== true && Number.isFinite(lobbyUntil) && now >= lobbyUntil) {
+    await applyChallengeRoomLiveStart(db, rid, r);
+    return { ok: true, advanced: true, phase: "live" };
+  }
+  if (r.liveStarted === true && Number.isFinite(liveEnd) && now >= liveEnd) {
+    if (r.resultsPhase === true) {
+      const ru = Number(r.resultsUntilMs || 0);
+      if (Number.isFinite(ru) && now >= ru) {
+        await applyChallengeRoomFinalize(db, rid, r);
+        return { ok: true, advanced: true, phase: "finalized" };
+      }
+    } else {
+      await beginChallengeRoomResultsPhase(db, rid, r);
+      return { ok: true, advanced: true, phase: "results" };
+    }
+  }
+  return { ok: true, advanced: false };
 });
 
 exports.adminForceFinalizeChallengeRoom = onCall({ cors: true, timeoutSeconds: 60, memory: "256MiB" }, async (request) => {

@@ -3160,6 +3160,43 @@
         .btn-challenge-lobby-leave { background: rgba(239,68,68,0.2); color: #fecaca; margin-top: 4px; }
         .btn-challenge-room-create { width: 100%; background: rgba(99,102,241,0.25); color: var(--text-main); margin-top: 4px; }
 
+        .challenge-session-global-bar {
+            margin: 0 16px 10px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(168, 85, 247, 0.45);
+            background: linear-gradient(120deg, rgba(168, 85, 247, 0.22), rgba(59, 130, 246, 0.12));
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+        }
+        .challenge-session-global-bar__inner {
+            display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px;
+        }
+        .challenge-session-global-bar__text { flex: 1 1 200px; min-width: 0; }
+        .challenge-session-global-bar__title {
+            font-weight: 800; font-size: 15px; color: var(--text-main);
+            letter-spacing: -0.02em;
+        }
+        .challenge-session-global-bar__sub { font-size: 12px; color: var(--text-sub); margin-top: 4px; line-height: 1.5; }
+        .challenge-session-global-bar__cd {
+            font-variant-numeric: tabular-nums;
+            font-weight: 800; font-size: 18px; color: #e9d5ff;
+            align-self: center;
+            min-width: 7.5em;
+            text-align: right;
+        }
+        .challenge-session-global-bar__btn {
+            align-self: center;
+            padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer;
+            font-size: 12px; font-weight: 700;
+            background: rgba(255, 255, 255, 0.12); color: var(--text-main);
+        }
+        .challenge-results-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .challenge-results-table th, .challenge-results-table td {
+            padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+        }
+        .challenge-results-table th { color: var(--text-sub); font-weight: 700; }
+        .challenge-results-table tr.me { background: rgba(168, 85, 247, 0.15); }
+
         /* ── 절전 모드 오버레이 ── */
         #power-save-overlay {
             display: none;
@@ -3678,6 +3715,16 @@
     </div>
 </div>
 
+<div id="challenge-results-modal" class="inverse-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="challenge-results-title">
+    <div class="inverse-modal-content" style="max-width:520px;max-height:86vh;display:flex;flex-direction:column;">
+        <h2 id="challenge-results-title">챌린지 세션 결과</h2>
+        <div id="challenge-results-my-rank" style="font-size:14px;font-weight:800;color:var(--primary);margin:0 0 8px 0;"></div>
+        <div id="challenge-results-meta" style="font-size:12px;color:var(--text-sub);margin-bottom:10px;line-height:1.5;"></div>
+        <div id="challenge-results-table-wrap" style="overflow:auto;flex:1;min-height:100px;border:1px solid var(--border);border-radius:8px;"></div>
+        <button type="button" class="btn-challenge-secondary" id="challenge-results-close" style="margin-top:14px;">닫기</button>
+    </div>
+</div>
+
 <!-- ── 프로모 모달 ── -->
 <div id="promo-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
@@ -4167,6 +4214,18 @@
         <input type="text" id="search-input" placeholder="스트리머 검색..." autocomplete="off">
     </div>
 
+    <div id="challenge-session-global-bar" class="challenge-session-global-bar" style="display:none;" aria-live="polite">
+        <div class="challenge-session-global-bar__inner">
+            <div class="challenge-session-global-bar__text">
+                <div id="challenge-session-global-bar-title" class="challenge-session-global-bar__title"></div>
+                <div id="challenge-session-global-bar-sub" class="challenge-session-global-bar__sub"></div>
+            </div>
+            <div id="challenge-session-global-bar-countdown" class="challenge-session-global-bar__cd" aria-label="남은 시간"></div>
+            <button type="button" id="challenge-session-global-leave-btn" class="challenge-session-global-bar__btn" style="display:none;">방 나가기</button>
+            <button type="button" id="challenge-results-reopen-btn" class="challenge-session-global-bar__btn" style="display:none;">결과 다시 보기</button>
+        </div>
+    </div>
+
     <div id="challenge-lobby-panel" class="challenge-lobby-panel" style="display:none;">
         <div class="challenge-lobby-panel__inner">
             <div id="challenge-lobby-status" class="challenge-lobby-status"></div>
@@ -4302,6 +4361,7 @@ const submitChallengeSupporterVerifyFn = httpsCallable(fns, 'submitChallengeSupp
 const createChallengeRoomFn = httpsCallable(fns, 'createChallengeRoom');
 const joinChallengeRoomFn = httpsCallable(fns, 'joinChallengeRoom');
 const leaveChallengeRoomFn = httpsCallable(fns, 'leaveChallengeRoom');
+const advanceChallengeRoomIfDueFn = httpsCallable(fns, 'advanceChallengeRoomIfDue');
 let myStarPoints = 0;
 
 function renderStarPointsUi() {
@@ -6952,7 +7012,7 @@ function updateMarketTabChrome() {
         if (__challengeModeUi === true && __userChallengeVerified === true) {
             if (isChallengeModeTradeReady()) {
                 sub.textContent =
-                    '챌린지: 이 방에서 선택한 한 종목만 1시간 거래합니다. 세션이 끝나면 챌린지 자산이 초기화됩니다.';
+                    '챌린지: 이 방에서 선택한 한 종목만 5분간 거래합니다. 결과 확인 후 챌린지 자산이 초기화됩니다.';
             } else {
                 sub.textContent =
                     '챌린지: 방을 만들거나 참가해 1분 모집 후 동시에 시작합니다. 주식만 지원됩니다.';
@@ -6995,6 +7055,10 @@ let __userChallengeRoomId = '';
 let __challengeRoomSnap = null;
 let __challengeRoomDetailUnsub = null;
 let __prevChallengeRoomLiveForSubs = false;
+let __prevChallengeRoomResultsPhase = false;
+let __challengeResultsModalUserClosed = false;
+let __challengeUiTickTimer = null;
+let __lastAdvanceChallengeRoomIfDueMs = 0;
 
 function loadChallengeUiFromLocal() {
     try {
@@ -7016,12 +7080,61 @@ function isChallengeRoomLivePhase() {
     return now >= ls && now < le;
 }
 
-/** 챌린지 UI 켜짐·인증됨이지만 라이브 매매 구간이 아님 (로비·방 없음·모집 중) */
-function isChallengeLobbyUi() {
-    return __challengeModeUi === true && __userChallengeVerified === true && !isChallengeRoomLivePhase();
+/** liveStarted 표기 이후에도 시각상 매매 시작 시각 전(클럭·지연 흔들림 대비) */
+function isChallengeRoomWarmupPhase() {
+    const r = __challengeRoomSnap;
+    if (!r || typeof r !== 'object' || r.finalized === true) return false;
+    if (r.liveStarted !== true) return false;
+    const now = Date.now();
+    const ls = Number(r.liveStartMs);
+    if (!Number.isFinite(ls)) return false;
+    return now < ls;
 }
 
-/** 챌린지 라이브 1시간 구간에서만 challengeStocks·거래 허용 */
+/** 매매 종료 후 서버가 resultsLeaderboard 를 쓰기 전까지 (최대 수 초) */
+function isChallengeRoomInterstitialPhase() {
+    const r = __challengeRoomSnap;
+    if (!r || typeof r !== 'object') return false;
+    if (r.finalized === true) return false;
+    if (r.liveStarted !== true) return false;
+    if (r.resultsPhase === true) return false;
+    const now = Date.now();
+    const le = Number(r.liveEndMs);
+    if (!Number.isFinite(le)) return false;
+    return now >= le;
+}
+
+function isChallengeRoomResultsPhase() {
+    const r = __challengeRoomSnap;
+    if (!r || typeof r !== 'object') return false;
+    if (r.finalized === true) return false;
+    if (r.resultsPhase !== true) return false;
+    const now = Date.now();
+    const ru = Number(r.resultsUntilMs);
+    if (!Number.isFinite(ru)) return false;
+    return now < ru;
+}
+
+/** 챌린지 UI 켜짐·인증됨이지만 라이브 매매 구간이 아님 (로비·방 없음·모집 중) — 결과·집계 구간 제외 */
+function isChallengeLobbyUi() {
+    return (
+        __challengeModeUi === true &&
+        __userChallengeVerified === true &&
+        !isChallengeRoomLivePhase() &&
+        !isChallengeRoomWarmupPhase() &&
+        !isChallengeRoomResultsPhase() &&
+        !isChallengeRoomInterstitialPhase()
+    );
+}
+
+/** 미종료 챌린지 방에 있으나 라이브 매매 창이 아닐 때(로비·집계·결과) 주식 매매 차단 */
+function isChallengeStockTradeSessionGateActive() {
+    if (!__userChallengeRoomId || !__challengeRoomSnap || typeof __challengeRoomSnap !== 'object') return false;
+    if (__challengeRoomSnap.finalized === true) return false;
+    return !isChallengeRoomLivePhase();
+}
+
+/** 챌린지 라이브 매매 구간에서만 challengeStocks·거래 허용 */
 function isChallengeModeTradeReady() {
     return __challengeModeUi === true && __userChallengeVerified === true && isChallengeRoomLivePhase();
 }
@@ -7041,6 +7154,212 @@ function coinsCollectionPath() {
     return isChallengeModeTradeReady() ? 'challengeCoins' : 'coins';
 }
 
+function stopChallengeUiTickTimer() {
+    if (__challengeUiTickTimer) {
+        try {
+            clearInterval(__challengeUiTickTimer);
+        } catch (_) { /* noop */ }
+        __challengeUiTickTimer = null;
+    }
+}
+
+function ensureChallengeUiTickTimer() {
+    stopChallengeUiTickTimer();
+    const need = !!(
+        __userChallengeRoomId &&
+        __challengeRoomSnap &&
+        typeof __challengeRoomSnap === 'object' &&
+        __challengeRoomSnap.finalized !== true
+    );
+    if (!need) return;
+    __challengeUiTickTimer = setInterval(() => {
+        try {
+            refreshChallengeSessionGlobalBar();
+        } catch (_) { /* noop */ }
+        try {
+            tickChallengeLobbyCountdownOnly();
+        } catch (_) { /* noop */ }
+        try {
+            void tickAdvanceChallengeRoomIfDueThrottled();
+        } catch (_) { /* noop */ }
+    }, 1000);
+}
+
+async function tickAdvanceChallengeRoomIfDueThrottled() {
+    const now = Date.now();
+    if (now - __lastAdvanceChallengeRoomIfDueMs < 4000) return;
+    if (!__userChallengeRoomId || !__challengeRoomSnap || __challengeRoomSnap.finalized === true) return;
+    __lastAdvanceChallengeRoomIfDueMs = now;
+    try {
+        await advanceChallengeRoomIfDueFn({});
+    } catch (_) { /* noop */ }
+}
+
+function shouldShowChallengeSessionGlobalBar() {
+    return !!(
+        __userChallengeRoomId &&
+        __challengeRoomSnap &&
+        typeof __challengeRoomSnap === 'object' &&
+        __challengeRoomSnap.finalized !== true
+    );
+}
+
+function refreshChallengeSessionGlobalBar() {
+    const bar = document.getElementById('challenge-session-global-bar');
+    if (!bar) return;
+    if (!shouldShowChallengeSessionGlobalBar()) {
+        bar.style.display = 'none';
+        const rb = document.getElementById('challenge-results-reopen-btn');
+        if (rb) rb.style.display = 'none';
+        const lb = document.getElementById('challenge-session-global-leave-btn');
+        if (lb) lb.style.display = 'none';
+        return;
+    }
+    bar.style.display = '';
+    const r = __challengeRoomSnap;
+    const now = Date.now();
+    const title = document.getElementById('challenge-session-global-bar-title');
+    const sub = document.getElementById('challenge-session-global-bar-sub');
+    const cdEl = document.getElementById('challenge-session-global-bar-countdown');
+    const reopen = document.getElementById('challenge-results-reopen-btn');
+    const leaveGlobal = document.getElementById('challenge-session-global-leave-btn');
+    if (leaveGlobal) leaveGlobal.style.display = 'none';
+    const stockLabel = `${String(r.stockName || r.stockId || '')} (${String(r.stockId || '')})`;
+
+    let titleText = '챌린지 세션';
+    let subText = '';
+    let cdLine = '';
+
+    if (isChallengeRoomResultsPhase()) {
+        titleText = '챌린지 · 결과 확인';
+        const ru = Number(r.resultsUntilMs || 0);
+        const rem = Math.max(0, Math.ceil((ru - now) / 1000));
+        const nMem = Number(r.resultsMemberCount);
+        const fallback = Object.keys(r.members && typeof r.members === 'object' ? r.members : {}).length;
+        subText = `이번 방 종목: ${stockLabel} · 참가자 ${(Number.isFinite(nMem) ? nMem : fallback).toLocaleString()}명`;
+        cdLine = `정산까지 ${rem}초`;
+    } else if (isChallengeRoomInterstitialPhase()) {
+        titleText = '챌린지 · 집계 중';
+        subText = `매매 시간이 끝났습니다. 순위를 계산하는 중입니다. (${stockLabel})`;
+        cdLine = '…';
+    } else if (isChallengeRoomLivePhase()) {
+        titleText = '챌린지 · 매매 진행 중';
+        const le = Number(r.liveEndMs);
+        const rem = Number.isFinite(le) ? Math.max(0, Math.ceil((le - now) / 1000)) : 0;
+        subText = `선택 종목: ${stockLabel}`;
+        cdLine = `${String(Math.floor(rem / 60)).padStart(2, '0')}:${String(rem % 60).padStart(2, '0')}`;
+    } else if (isChallengeRoomWarmupPhase()) {
+        titleText = '챌린지 · 매매 시작 직전';
+        const ls = Number(r.liveStartMs);
+        const rem = Number.isFinite(ls) ? Math.max(0, Math.ceil((ls - now) / 1000)) : 0;
+        subText = `곧 동시 매매가 열립니다. (${stockLabel})`;
+        cdLine = `시작까지 ${rem}s`;
+    } else if (r.liveStarted !== true) {
+        titleText = '챌린지 방 · 대기(모집) 중';
+        const lu = Number(r.lobbyUntilMs);
+        const rem = Number.isFinite(lu) ? Math.max(0, Math.ceil((lu - now) / 1000)) : 0;
+        subText = `모든 참가자에게 표시됩니다. 모집이 끝나면 동시에 5분 매매가 시작됩니다. (${stockLabel})`;
+        cdLine = `시작까지 ${rem}s`;
+        if (leaveGlobal) {
+            const canLeave = Number.isFinite(lu) && now < lu;
+            leaveGlobal.style.display = canLeave ? '' : 'none';
+        }
+    } else {
+        titleText = '챌린지 세션';
+        subText = stockLabel;
+        cdLine = '';
+    }
+
+    if (title) title.textContent = titleText;
+    if (sub) sub.textContent = subText;
+    if (cdEl) cdEl.textContent = cdLine;
+    if (reopen) {
+        const showReopen = isChallengeRoomResultsPhase() && __challengeResultsModalUserClosed === true;
+        reopen.style.display = showReopen ? '' : 'none';
+    }
+}
+
+function tickChallengeLobbyCountdownOnly() {
+    if (!isChallengeLobbyUi()) return;
+    const r = __challengeRoomSnap;
+    const cdEl = document.getElementById('challenge-lobby-countdown');
+    if (!cdEl || !r) return;
+    const now = Date.now();
+    const lobbyUntil = Number(r.lobbyUntilMs);
+    const liveEnd = Number(r.liveEndMs);
+    if (r.liveStarted !== true && Number.isFinite(lobbyUntil)) {
+        const rem = Math.max(0, Math.ceil((lobbyUntil - now) / 1000));
+        cdEl.textContent = `동시 매매 시작까지 ${rem}초`;
+        return;
+    }
+    if (Number.isFinite(liveEnd) && r.liveStarted === true) {
+        const rem = Math.max(0, Math.ceil((liveEnd - now) / 1000));
+        cdEl.textContent = `매매 종료까지 ${String(Math.floor(rem / 60)).padStart(2, '0')}:${String(rem % 60).padStart(2, '0')}`;
+    }
+}
+
+function renderChallengeResultsModalContents() {
+    const myRankEl = document.getElementById('challenge-results-my-rank');
+    const metaEl = document.getElementById('challenge-results-meta');
+    const wrap = document.getElementById('challenge-results-table-wrap');
+    const r = __challengeRoomSnap;
+    if (!myRankEl || !metaEl || !wrap || !r || r.resultsPhase !== true) return;
+    let lb = [];
+    const rawLb = r.resultsLeaderboard;
+    if (Array.isArray(rawLb)) lb = rawLb.filter(Boolean);
+    else if (rawLb && typeof rawLb === 'object') {
+        lb = Object.keys(rawLb)
+            .sort((a, b) => Number(a) - Number(b))
+            .map((k) => rawLb[k])
+            .filter(Boolean);
+    }
+    const nMem = Number(r.resultsMemberCount);
+    const count = Number.isFinite(nMem) ? nMem : lb.length;
+    const mark = Number(r.resultsMarkPrice);
+    metaEl.textContent = `참가자 ${count.toLocaleString()}명 · 기준가 ${Number.isFinite(mark) ? mark.toLocaleString() : '—'}원(평가)`;
+    const uid = String(userUID || auth?.currentUser?.uid || '').trim();
+    let myRow = null;
+    for (const row of lb) {
+        if (row && String(row.uid || '') === uid) {
+            myRow = row;
+            break;
+        }
+    }
+    if (myRow) {
+        const tw = Math.floor(Number(myRow.totalWon) || 0);
+        myRankEl.textContent = `내 순위: ${Number(myRow.rank) || '—'}위 · 평가 자산 ${tw.toLocaleString()}원`;
+    } else {
+        myRankEl.textContent = '내 순위: 집계에 포함되지 않았습니다.';
+    }
+    const rowsHtml = ['<table class="challenge-results-table"><thead><tr><th>순위</th><th>평가자산</th><th>현금</th><th>수량</th><th>UID</th></tr></thead><tbody>'];
+    lb.forEach((row) => {
+        if (!row) return;
+        const ru = String(row.uid || '');
+        const shortUid = ru.length > 10 ? `${ru.slice(0, 6)}…${ru.slice(-4)}` : ru;
+        const isMe = uid && ru === uid;
+        const tw = Math.floor(Number(row.totalWon) || 0);
+        const cash = Math.floor(Number(row.cash) || 0);
+        const q = Math.floor(Number(row.stockQty) || 0);
+        rowsHtml.push(
+            `<tr class="${isMe ? 'me' : ''}"><td>${escapeHtml(String(row.rank || ''))}</td><td>${tw.toLocaleString()}</td><td>${cash.toLocaleString()}</td><td>${q.toLocaleString()}</td><td>${escapeHtml(shortUid)}${isMe ? ' (나)' : ''}</td></tr>`
+        );
+    });
+    rowsHtml.push('</tbody></table>');
+    wrap.innerHTML = rowsHtml.join('');
+}
+
+function openChallengeResultsModal() {
+    const m = document.getElementById('challenge-results-modal');
+    if (!m || !__challengeRoomSnap || __challengeRoomSnap.resultsPhase !== true) return;
+    renderChallengeResultsModalContents();
+    m.classList.add('active');
+}
+
+function closeChallengeResultsModal() {
+    const m = document.getElementById('challenge-results-modal');
+    if (m) m.classList.remove('active');
+}
+
 function stopChallengeRoomDetailListener() {
     if (__challengeRoomDetailUnsub) {
         try {
@@ -7050,6 +7369,12 @@ function stopChallengeRoomDetailListener() {
     }
     __challengeRoomSnap = null;
     __prevChallengeRoomLiveForSubs = false;
+    __prevChallengeRoomResultsPhase = false;
+    __challengeResultsModalUserClosed = false;
+    stopChallengeUiTickTimer();
+    try {
+        refreshChallengeSessionGlobalBar();
+    } catch (_) { /* noop */ }
 }
 
 function startChallengeRoomDetailListener(roomId) {
@@ -7067,6 +7392,17 @@ function startChallengeRoomDetailListener(roomId) {
                 __challengeRoomSnap = snap.exists() ? snap.val() : null;
                 if (!__challengeRoomSnap) {
                     __prevChallengeRoomLiveForSubs = false;
+                    __prevChallengeRoomResultsPhase = false;
+                    __challengeResultsModalUserClosed = false;
+                    try {
+                        closeChallengeResultsModal();
+                    } catch (_) { /* noop */ }
+                    try {
+                        stopChallengeUiTickTimer();
+                    } catch (_) { /* noop */ }
+                    try {
+                        refreshChallengeSessionGlobalBar();
+                    } catch (_) { /* noop */ }
                     try {
                         refreshChallengeLobbyPanels();
                     } catch (_) { /* noop */ }
@@ -7078,6 +7414,27 @@ function startChallengeRoomDetailListener(roomId) {
                     } catch (_) { /* noop */ }
                     return;
                 }
+                if (__challengeRoomSnap.finalized === true) {
+                    __prevChallengeRoomResultsPhase = false;
+                    try {
+                        closeChallengeResultsModal();
+                    } catch (_) { /* noop */ }
+                } else {
+                    const rp = __challengeRoomSnap.resultsPhase === true;
+                    if (rp && !__prevChallengeRoomResultsPhase) {
+                        __challengeResultsModalUserClosed = false;
+                        try {
+                            openChallengeResultsModal();
+                        } catch (_) { /* noop */ }
+                    }
+                    __prevChallengeRoomResultsPhase = !!rp;
+                }
+                try {
+                    ensureChallengeUiTickTimer();
+                } catch (_) { /* noop */ }
+                try {
+                    refreshChallengeSessionGlobalBar();
+                } catch (_) { /* noop */ }
                 const sid = String(__challengeRoomSnap.stockId || '').trim();
                 const liveNow = isChallengeRoomLivePhase();
                 if (liveNow && !__prevChallengeRoomLiveForSubs && sid) {
@@ -7133,6 +7490,12 @@ function syncChallengeUserRoomPointer(ridRaw) {
     if (rid) startChallengeRoomDetailListener(rid);
     else stopChallengeRoomDetailListener();
     try {
+        ensureChallengeUiTickTimer();
+    } catch (_) { /* noop */ }
+    try {
+        refreshChallengeSessionGlobalBar();
+    } catch (_) { /* noop */ }
+    try {
         refreshChallengeLobbyPanels();
     } catch (_) { /* noop */ }
     try {
@@ -7161,7 +7524,7 @@ function updateChallengeEmptyCopy() {
         desc.innerHTML =
             '위 검색창에서 <strong>한 종목</strong>을 찾은 뒤 검색 결과의 <strong>「이 종목으로 방 만들기」</strong>를 누르거나,<br>' +
             '아래에 친구가 공유한 <strong>방 ID</strong>를 입력해 참가할 수 있습니다.<br>' +
-            '1분 모집이 끝나면 참가자가 <strong>동시에</strong> 매매를 시작하며, <strong>1시간</strong> 후 자산이 초기화됩니다.';
+            '1분 모집이 끝나면 참가자가 <strong>동시에</strong> 5분간 매매한 뒤 <strong>결과 화면</strong>을 거쳐 자산이 초기화됩니다.';
     } else {
         title.textContent = '관심 종목을 추가해보세요';
         desc.innerHTML =
@@ -7220,7 +7583,7 @@ function refreshChallengeLobbyPanels() {
     statusEl.textContent =
         r.liveStarted === true
             ? '곧 매매가 시작됩니다…'
-            : '참가자를 모으는 중입니다. 모집이 끝나면 동시에 매매가 시작됩니다.';
+            : '챌린지 방이 활성화되었습니다. 아래 카운트다운이 0이 되면 참가자 전원이 동시에 5분 매매를 시작합니다.';
 }
 
 function wireChallengeLobbyControlsOnce() {
@@ -7252,6 +7615,42 @@ function wireChallengeLobbyControlsOnce() {
             alert(typeof msg === 'string' ? msg : '나가기에 실패했습니다.');
         }
     });
+    document.getElementById('challenge-session-global-leave-btn')?.addEventListener('click', async () => {
+        const roomId = String(__userChallengeRoomId || '').trim();
+        if (!roomId) return;
+        try {
+            await leaveChallengeRoomFn({ roomId });
+        } catch (e) {
+            const msg = e?.message || e?.details || String(e?.code || '실패');
+            alert(typeof msg === 'string' ? msg : '나가기에 실패했습니다.');
+        }
+    });
+    document.getElementById('challenge-results-close')?.addEventListener('click', () => {
+        __challengeResultsModalUserClosed = true;
+        try {
+            closeChallengeResultsModal();
+        } catch (_) { /* noop */ }
+        try {
+            refreshChallengeSessionGlobalBar();
+        } catch (_) { /* noop */ }
+    });
+    document.getElementById('challenge-results-reopen-btn')?.addEventListener('click', () => {
+        __challengeResultsModalUserClosed = false;
+        try {
+            openChallengeResultsModal();
+        } catch (_) { /* noop */ }
+    });
+    document.getElementById('challenge-results-modal')?.addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'challenge-results-modal') {
+            __challengeResultsModalUserClosed = true;
+            try {
+                closeChallengeResultsModal();
+            } catch (_) { /* noop */ }
+            try {
+                refreshChallengeSessionGlobalBar();
+            } catch (_) { /* noop */ }
+        }
+    });
 }
 
 async function handleChallengeCreateRoomFromPick(stockId) {
@@ -7264,7 +7663,7 @@ async function handleChallengeCreateRoomFromPick(stockId) {
     }
     try {
         await createChallengeRoomFn({ stockId: sid });
-        alert('방이 생성되었습니다. 1분간 참가자를 모읍니다.');
+        alert('방이 생성되었습니다. 1분간 참가자를 모으며, 이후 5분간 동시 매매합니다.');
         try {
             const si = document.getElementById('search-input');
             if (si) si.value = '';
@@ -7365,7 +7764,7 @@ function syncChallengeToggleDom() {
     const hint = document.getElementById('challenge-mode-hint');
     if (hint) {
         hint.textContent = __userChallengeVerified
-            ? '방·1분 모집·1시간 매매 · 세션 종료 시 자산 초기화'
+            ? '방·1분 모집·5분 매매·결과 화면 후 자산 초기화'
             : '후원자 인증 승인 후 이용 (별풍선 100개+)';
     }
 }
@@ -9776,6 +10175,7 @@ function isTradeButtonDisabled(stockId) {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) return false;
     if (isChallengeLobbyUi()) return true;
+    if (!isCoinMarket() && isChallengeStockTradeSessionGateActive()) return true;
     if (isGlobalTradeCooldownActive()) return true;
     if (isTrading === stockId) return true;
     return false;
@@ -10457,6 +10857,11 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
 
     if (isCoin && !canUseCoinMarket()) return;
 
+    if (!isAdmin && !isCoin && isChallengeStockTradeSessionGateActive()) {
+        tradeNotify('챌린지 방 세션 중에는 매매 시간에만 주식 거래가 가능합니다. (모집·집계·결과 구간에서는 불가)');
+        abortAutoIf();
+        return;
+    }
     if (!isAdmin && isChallengeLobbyUi()) {
         tradeNotify('챌린지 모집 중에는 매매할 수 없습니다. 매매가 시작된 뒤 다시 시도해 주세요.');
         abortAutoIf();
@@ -13724,7 +14129,7 @@ function renderFavoriteList() {
         return;
     }
 
-    if (isChallengeLobbyUi()) {
+    if (isChallengeLobbyUi() && !__userChallengeRoomId) {
         const q = document.getElementById('search-input')?.value?.trim() || '';
         if (!q) {
             listDiv.innerHTML = '';

@@ -3886,7 +3886,10 @@
         if (r.finalized === true) return 'done';
         if (r.liveStarted === true) {
             const le = Number(r.liveEndMs);
-            if (Number.isFinite(le) && now >= le) return 'endedPending';
+            if (Number.isFinite(le) && now >= le) {
+                if (r.resultsPhase === true) return 'results';
+                return 'endedPending';
+            }
             return 'live';
         }
         return 'lobby';
@@ -3901,7 +3904,7 @@
         let activeCount = 0;
         entries.forEach(([, r]) => {
             const ph = adminChallengeRoomPhase(r, now);
-            if (ph === 'lobby' || ph === 'live' || ph === 'endedPending') activeCount += 1;
+            if (ph === 'lobby' || ph === 'live' || ph === 'endedPending' || ph === 'results') activeCount += 1;
         });
         setAdminInboxCount('challenge-rooms', activeCount);
         if (statusEl) {
@@ -3918,15 +3921,23 @@
         entries.forEach(([roomId, r]) => {
             const ph = adminChallengeRoomPhase(r, now);
             const stCls =
-                ph === 'live' ? 'live' : ph === 'lobby' ? 'lobby' : ph === 'endedPending' ? 'lobby' : 'done';
+                ph === 'live'
+                    ? 'live'
+                    : ph === 'lobby'
+                      ? 'lobby'
+                      : ph === 'endedPending' || ph === 'results'
+                        ? 'lobby'
+                        : 'done';
             const stLabel =
                 ph === 'live'
-                    ? '라이브 매매'
+                    ? '라이브 매매(5분)'
                     : ph === 'lobby'
                       ? '모집(로비)'
-                      : ph === 'endedPending'
-                        ? '종료·정산대기'
-                        : '종료';
+                      : ph === 'results'
+                        ? '결과 표시'
+                        : ph === 'endedPending'
+                          ? '집계·정산대기'
+                          : '종료';
             const mem = r.members && typeof r.members === 'object' ? r.members : {};
             const nMem = Object.keys(mem).length;
             const host = escapeAdminText(r.hostUid || '—');
@@ -3994,7 +4005,7 @@
                 actions.appendChild(
                     mkBtn('강제 종료(정산)', '#ef4444', '#fff', (rid) => window.adminForceFinalizeChallengeRoom?.(rid))
                 );
-            } else if (ph === 'live' || ph === 'endedPending') {
+            } else if (ph === 'live' || ph === 'endedPending' || ph === 'results') {
                 actions.appendChild(
                     mkBtn('강제 종료(정산)', '#ef4444', '#fff', (rid) => window.adminForceFinalizeChallengeRoom?.(rid))
                 );
