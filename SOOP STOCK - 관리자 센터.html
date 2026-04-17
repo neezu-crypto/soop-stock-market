@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <title>SOOP STOCK - 관리자 센터</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <script type="text/javascript" nonce="3736a628d3634d3ea3adc65fc29" src="//local.adguard.org?ts=1776453909966&amp;type=content-script&amp;dmn=neezu-crypto.github.io&amp;url=https%3A%2F%2Fneezu-crypto.github.io%2Fsoop-stock-market%2Fsoop-stocks-admin-gate16103.html&amp;app=com.apple.Safari&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=1"></script><script type="text/javascript" nonce="3736a628d3634d3ea3adc65fc29" src="//local.adguard.org?ts=1776453909966&amp;name=AdGuard%20Extra&amp;type=user-script"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <style>
         body { font-family: 'Pretendard', sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 600px; background: #1e293b; padding: 30px; border-radius: 16px; border: 1px solid #334155; margin-bottom: 20px; display: none; }
@@ -204,24 +204,6 @@
         .admin-inbox-chip.has-pending .inbox-count { color: #fbbf24; font-weight: 800; }
         .admin-inbox.is-visible { display: flex; }
         .admin-accordion-anchor { scroll-margin-top: 14px; }
-        .challenge-rooms-admin-wrap { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; }
-        .challenge-room-admin-card {
-            background: #0f172a;
-            border: 1px solid #334155;
-            border-radius: 10px;
-            padding: 12px 14px;
-            font-size: 12px;
-        }
-        .challenge-room-admin-card .cr-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-        .challenge-room-admin-card .cr-status { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px; }
-        .challenge-room-admin-card .cr-status.lobby { background: rgba(245,158,11,0.2); color: #fbbf24; }
-        .challenge-room-admin-card .cr-status.live { background: rgba(34,197,94,0.2); color: #86efac; }
-        .challenge-room-admin-card .cr-status.done { background: rgba(100,116,139,0.25); color: #cbd5e1; }
-        .challenge-room-admin-card .cr-meta { color: #94a3b8; font-size: 11px; line-height: 1.55; margin-top: 8px; word-break: break-all; }
-        .challenge-room-admin-card .cr-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-        .challenge-room-admin-card .cr-actions button {
-            padding: 6px 10px; border-radius: 6px; border: none; font-size: 11px; font-weight: 700; cursor: pointer;
-        }
         .daily-routine-add-row {
             display: flex;
             gap: 10px;
@@ -684,10 +666,6 @@
             <button type="button" class="admin-inbox-chip" data-admin-scroll="challenge-supporter" title="챌린지 후원자 인증 검수로 이동">
                 <span class="inbox-label">🎮 후원자</span>
                 <span class="inbox-count" data-inbox-count="challenge-supporter">…</span>
-            </button>
-            <button type="button" class="admin-inbox-chip" data-admin-scroll="challenge-rooms" title="챌린지 방 세션으로 이동">
-                <span class="inbox-label">🚪 챌린지 방</span>
-                <span class="inbox-count" data-inbox-count="challenge-rooms">…</span>
             </button>
         </div>
     </div>
@@ -1282,28 +1260,6 @@
         <div id="challenge-supporter-status" style="font-size:12px; color:#94a3b8; margin-bottom:8px;">—</div>
         <div id="challenge-supporter-requests" style="display:flex; flex-direction:column; gap:10px;">
             <div style="padding:12px; color:#64748b; text-align:center;">불러오는 중...</div>
-        </div>
-        </div>
-        </div>
-    </div>
-
-    <!-- 🚪 챌린지 방 세션 관리 -->
-    <div id="admin-accordion-challenge-rooms" class="container admin-accordion-anchor" style="display:block; border-color:#a78bfa;">
-        <div class="accordion-header">
-            <h1>🚪 챌린지 모드 · 방 세션</h1>
-            <span class="accordion-arrow">▼</span>
-        </div>
-        <div class="accordion-body">
-        <div class="accordion-sep">
-        <div class="info-box" style="border-color:#a78bfa; color:#e9d5ff;">
-            <code style="font-size:11px;">challengeRooms</code> 에 생성·진행 중인 <b>챌린지 방</b>을 실시간으로 봅니다.<br>
-            <span style="color:#94a3b8;"><b>로비 취소</b>: 매매 시작 전 방 삭제·참가자 방 포인터 해제 · <b>강제 종료(정산)</b>: 하우스키퍼 종료와 동일하게 참가자 챌린지 자산 초기화·방 종료 처리 · <b>기록 삭제</b>: 이미 종료된 방 노드만 제거합니다.</span>
-        </div>
-        <div class="data-status-bar" style="margin-bottom:10px;">
-            <span id="challenge-rooms-admin-status" style="color:#c4b5fd;font-weight:700;">—</span>
-        </div>
-        <div id="challenge-rooms-admin-list" class="challenge-rooms-admin-wrap">
-            <div style="padding:12px; color:#64748b; text-align:center;">관리자 로그인 후 실시간으로 불러옵니다.</div>
         </div>
         </div>
         </div>
@@ -2326,9 +2282,6 @@
     const adminReviewChallengeSupporterRequestFn = httpsCallable(functions, 'adminReviewChallengeSupporterRequest');
     const adminGrantChallengeSupporterByUidFn = httpsCallable(functions, 'adminGrantChallengeSupporterByUid');
     const adminRevokeChallengeSupporterByUidFn = httpsCallable(functions, 'adminRevokeChallengeSupporterByUid');
-    const adminForceFinalizeChallengeRoomFn = httpsCallable(functions, 'adminForceFinalizeChallengeRoom');
-    const adminCancelChallengeRoomLobbyFn = httpsCallable(functions, 'adminCancelChallengeRoomLobby');
-    const adminDeleteChallengeRoomRecordFn = httpsCallable(functions, 'adminDeleteChallengeRoomRecord');
     const adminRunAssetRankingFn = httpsCallable(functions, 'adminRunAssetRanking');
     const adminRunStockHolderTop3Fn = httpsCallable(functions, 'adminRunStockHolderTop3');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
@@ -2533,36 +2486,12 @@
         return v && String(v.status || '').trim().toLowerCase() === 'pending';
     }
 
-    const adminInboxCounts = {
-        listing: null,
-        asset: null,
-        ad: null,
-        'chart-ad': null,
-        relay: null,
-        'ranking-req': null,
-        'live-ranking-req': null,
-        'title-sponsor': null,
-        'point-charge': null,
-        'challenge-supporter': null,
-        'challenge-rooms': null,
-    };
+    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null, 'live-ranking-req': null, 'title-sponsor': null, 'point-charge': null, 'challenge-supporter': null };
 
     function paintAdminRequestInbox() {
         const box = document.getElementById('admin-request-inbox');
         if (!box) return;
-        [
-            'listing',
-            'asset',
-            'ad',
-            'chart-ad',
-            'relay',
-            'ranking-req',
-            'live-ranking-req',
-            'title-sponsor',
-            'point-charge',
-            'challenge-supporter',
-            'challenge-rooms',
-        ].forEach((k) => {
+        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req', 'live-ranking-req', 'title-sponsor', 'point-charge', 'challenge-supporter'].forEach((k) => {
             const el = box.querySelector(`[data-inbox-count="${k}"]`);
             const chip = el && el.closest('.admin-inbox-chip');
             const v = adminInboxCounts[k];
@@ -2572,10 +2501,7 @@
     }
 
     function resetAdminInboxCounts() {
-        Object.keys(adminInboxCounts).forEach((k) => {
-            if (k === 'challenge-rooms') return;
-            adminInboxCounts[k] = null;
-        });
+        Object.keys(adminInboxCounts).forEach((k) => { adminInboxCounts[k] = null; });
         paintAdminRequestInbox();
     }
 
@@ -2957,7 +2883,6 @@
             'title-sponsor': 'admin-accordion-title-sponsor',
             'point-charge': 'admin-accordion-point-charge',
             'challenge-supporter': 'admin-accordion-challenge-supporter',
-            'challenge-rooms': 'admin-accordion-challenge-rooms',
         };
         const id = idMap[key];
         const el = id ? document.getElementById(id) : null;
@@ -3275,7 +3200,6 @@
 
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
     const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, liveRankingAccess: null, asset: null, pointCharge: null, challengeSupporter: null, challengeWhitelist: null };
-    let challengeRoomsAdminUnsub = null;
     let prevListingKeys = null;
     let prevAdKeys = null;
     let prevChartKeys = null;
@@ -3881,225 +3805,12 @@
         }
     };
 
-    function adminChallengeRoomPhase(r, now = Date.now()) {
-        if (!r || typeof r !== 'object') return 'unknown';
-        if (r.finalized === true) return 'done';
-        if (r.liveStarted === true) {
-            const le = Number(r.liveEndMs);
-            if (Number.isFinite(le) && now >= le) return 'endedPending';
-            return 'live';
-        }
-        return 'lobby';
-    }
-
-    function renderChallengeRoomsAdminList(raw, statusEl) {
-        const wrap = document.getElementById('challenge-rooms-admin-list');
-        if (!wrap) return;
-        const data = raw && typeof raw === 'object' ? raw : {};
-        const entries = Object.entries(data).filter(([, v]) => v && typeof v === 'object');
-        const now = Date.now();
-        let activeCount = 0;
-        entries.forEach(([, r]) => {
-            const ph = adminChallengeRoomPhase(r, now);
-            if (ph === 'lobby' || ph === 'live' || ph === 'endedPending') activeCount += 1;
-        });
-        setAdminInboxCount('challenge-rooms', activeCount);
-        if (statusEl) {
-            statusEl.textContent = `총 ${entries.length}건 · 진행 중(로비+라이브) ${activeCount}건`;
-        }
-        if (entries.length === 0) {
-            wrap.innerHTML =
-                '<div style="color:#64748b; font-size:13px; padding:12px; text-align:center;">등록된 챌린지 방이 없습니다.</div>';
-            return;
-        }
-        entries.sort((a, b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0));
-
-        const frag = document.createDocumentFragment();
-        entries.forEach(([roomId, r]) => {
-            const ph = adminChallengeRoomPhase(r, now);
-            const stCls =
-                ph === 'live' ? 'live' : ph === 'lobby' ? 'lobby' : ph === 'endedPending' ? 'lobby' : 'done';
-            const stLabel =
-                ph === 'live'
-                    ? '라이브 매매'
-                    : ph === 'lobby'
-                      ? '모집(로비)'
-                      : ph === 'endedPending'
-                        ? '종료·정산대기'
-                        : '종료';
-            const mem = r.members && typeof r.members === 'object' ? r.members : {};
-            const nMem = Object.keys(mem).length;
-            const host = escapeAdminText(r.hostUid || '—');
-            const sid = escapeAdminText(r.stockId || '—');
-            const sname = escapeAdminText(r.stockName || '');
-            const ridEsc = escapeAdminText(roomId);
-            const lobbyUntil = Number(r.lobbyUntilMs);
-            const liveEnd = Number(r.liveEndMs);
-            const flagParts = [];
-            if (r.abortedNoStock) flagParts.push(escapeAdminText('종목없음중단'));
-            if (r.cancelledEmpty) flagParts.push(escapeAdminText('빈방취소'));
-
-            const card = document.createElement('div');
-            card.className = 'challenge-room-admin-card';
-            const head = document.createElement('div');
-            head.className = 'cr-head';
-            const titleEl = document.createElement('div');
-            titleEl.style.cssText = 'font-weight:800;color:#f8fafc;font-size:13px;';
-            titleEl.textContent = sid + (sname ? ' · ' + sname : '');
-            const badge = document.createElement('span');
-            badge.className = 'cr-status ' + stCls;
-            badge.textContent = stLabel;
-            head.appendChild(titleEl);
-            head.appendChild(badge);
-
-            const meta = document.createElement('div');
-            meta.className = 'cr-meta';
-            const cr = r.createdAt ? new Date(r.createdAt).toLocaleString('ko-KR') : '—';
-            const lob = Number.isFinite(lobbyUntil) ? new Date(lobbyUntil).toLocaleString('ko-KR') : '—';
-            const leStr = Number.isFinite(liveEnd) ? new Date(liveEnd).toLocaleString('ko-KR') : '—';
-            meta.innerHTML =
-                'roomId: ' +
-                ridEsc +
-                '<br>호스트 UID: ' +
-                host +
-                ' · 참가 ' +
-                String(nMem) +
-                '명<br>생성: ' +
-                cr +
-                ' · 모집마감: ' +
-                lob +
-                ' · 매매종료: ' +
-                leStr +
-                (flagParts.length ? '<br><span style="color:#fbbf24;">' + flagParts.join(' · ') + '</span>' : '');
-
-            const actions = document.createElement('div');
-            actions.className = 'cr-actions';
-            const mkBtn = (label, bg, color, handler) => {
-                const b = document.createElement('button');
-                b.type = 'button';
-                b.textContent = label;
-                b.style.cssText =
-                    'padding:6px 10px;border-radius:6px;border:none;font-size:11px;font-weight:700;cursor:pointer;background:' +
-                    bg +
-                    ';color:' +
-                    color +
-                    ';';
-                b.addEventListener('click', () => handler(roomId));
-                return b;
-            };
-            if (ph === 'lobby') {
-                actions.appendChild(
-                    mkBtn('로비 취소', '#f59e0b', '#0f172a', (rid) => window.adminCancelChallengeRoomLobby?.(rid))
-                );
-                actions.appendChild(
-                    mkBtn('강제 종료(정산)', '#ef4444', '#fff', (rid) => window.adminForceFinalizeChallengeRoom?.(rid))
-                );
-            } else if (ph === 'live' || ph === 'endedPending') {
-                actions.appendChild(
-                    mkBtn('강제 종료(정산)', '#ef4444', '#fff', (rid) => window.adminForceFinalizeChallengeRoom?.(rid))
-                );
-            } else {
-                actions.appendChild(
-                    mkBtn('기록 삭제', '#64748b', '#fff', (rid) => window.adminDeleteChallengeRoomRecord?.(rid))
-                );
-            }
-
-            card.appendChild(head);
-            card.appendChild(meta);
-            card.appendChild(actions);
-            frag.appendChild(card);
-        });
-        wrap.innerHTML = '';
-        wrap.appendChild(frag);
-    }
-
-    function stopChallengeRoomsAdminListener() {
-        if (challengeRoomsAdminUnsub) {
-            try {
-                challengeRoomsAdminUnsub();
-            } catch (_) { /* noop */ }
-            challengeRoomsAdminUnsub = null;
-        }
-    }
-
-    function startChallengeRoomsAdminListener() {
-        stopChallengeRoomsAdminListener();
-        if (!isAdmin() || !db) return;
-        const statusEl = document.getElementById('challenge-rooms-admin-status');
-        try {
-            challengeRoomsAdminUnsub = onValue(
-                ref(db, 'challengeRooms'),
-                (snap) => {
-                    try {
-                        renderChallengeRoomsAdminList(snap.exists() ? snap.val() : {}, statusEl);
-                    } catch (e) {
-                        console.error('[challengeRooms admin]', e);
-                    }
-                },
-                (err) => {
-                    console.error('[challengeRooms admin]', err);
-                    if (statusEl) statusEl.textContent = '구독 오류: ' + (err?.message || err);
-                }
-            );
-        } catch (e) {
-            console.error(e);
-            if (statusEl) statusEl.textContent = '시작 실패: ' + (e?.message || e);
-        }
-    }
-
-    window.adminForceFinalizeChallengeRoom = async function (roomId) {
-        if (!isAdmin() || !roomId) return;
-        if (
-            !confirm(
-                '이 방을 강제로 종료(정산)할까요?\n\n· 참가자 챌린지 자산이 초기화되고 users/…/challengeRoomId 가 해제됩니다.\n· 하우스키퍼의 정상 종료 처리와 동일한 효과입니다.'
-            )
-        )
-            return;
-        try {
-            if (auth.currentUser) await auth.currentUser.getIdToken(true);
-            await adminForceFinalizeChallengeRoomFn({ roomId });
-            showAdminToast('강제 종료(정산)가 반영되었습니다.', 'ok');
-        } catch (e) {
-            alert('실패: ' + (e?.message || e));
-        }
-    };
-
-    window.adminCancelChallengeRoomLobby = async function (roomId) {
-        if (!isAdmin() || !roomId) return;
-        if (
-            !confirm(
-                '로비(모집) 중인 이 방을 취소하고 삭제할까요?\n\n· challengeRooms 노드가 삭제됩니다.\n· 참가자의 challengeRoomId 포인터가 해제됩니다.\n· 매매가 이미 시작된 방은 이 버튼으로 삭제할 수 없습니다.'
-            )
-        )
-            return;
-        try {
-            if (auth.currentUser) await auth.currentUser.getIdToken(true);
-            await adminCancelChallengeRoomLobbyFn({ roomId });
-            showAdminToast('로비 방이 취소되었습니다.', 'ok');
-        } catch (e) {
-            alert('실패: ' + (e?.message || e));
-        }
-    };
-
-    window.adminDeleteChallengeRoomRecord = async function (roomId) {
-        if (!isAdmin() || !roomId) return;
-        if (!confirm('종료된 이 방의 RTDB 기록만 삭제할까요?\n\n(참가자 데이터는 이미 정산된 상태여야 합니다.)')) return;
-        try {
-            if (auth.currentUser) await auth.currentUser.getIdToken(true);
-            await adminDeleteChallengeRoomRecordFn({ roomId });
-            showAdminToast('기록이 삭제되었습니다.', 'ok');
-        } catch (e) {
-            alert('실패: ' + (e?.message || e));
-        }
-    };
-
     function startRealtimeRequestListeners() {
         stopRealtimeRequestListeners();
         resetAdminInboxCounts();
         maybeRequestNotifPermission();
         const requestAccordionIds = [
             'admin-accordion-challenge-supporter',
-            'admin-accordion-challenge-rooms',
             'admin-accordion-point-charge',
             'admin-accordion-ad',
             'admin-accordion-chart-ad',
@@ -4714,7 +4425,6 @@
             await loadMaintenanceStatus();
             await loadMarketHours();
             startRealtimeRequestListeners();
-            startChallengeRoomsAdminListener();
             startConnectionCountListener();
             initCircuitFrozenPanelDelegation();
             startCircuitFrozenListener();
@@ -4738,7 +4448,6 @@
                 stopPaidPricingListener();
                 stopRealtimeRequestListeners();
                 stopTitleSponsorRequestListener();
-                stopChallengeRoomsAdminListener();
                 stopConnectionCountListener();
                 stopCircuitFrozenListener();
                 hideAdminRequestInbox();
@@ -4754,7 +4463,6 @@
                     stopPaidPricingListener();
                     stopRealtimeRequestListeners();
                     stopTitleSponsorRequestListener();
-                    stopChallengeRoomsAdminListener();
                     stopConnectionCountListener();
                     stopCircuitFrozenListener();
                     hideAdminRequestInbox();
