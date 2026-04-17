@@ -4539,6 +4539,39 @@
         return out;
     }
 
+    /** users/ 루트에 닉네임이 없는 계정(익명 등) 대비 — 관리자 화면 표시용 */
+    function pickIdleUserDisplayName(u, uid) {
+        const id = String(uid || '');
+        if (u && typeof u === 'object') {
+            const nick = String(u.nickname || u.name || u.displayName || '').trim();
+            if (nick) return nick;
+            const soop = String(u.soopId || '').trim();
+            if (soop) return `@${soop}`;
+            const giftCode = u.pointGiftCode;
+            if (giftCode !== undefined && giftCode !== null) {
+                const c = String(giftCode).trim();
+                if (c) return `선물코드 ${c}`;
+            }
+        }
+        if (id.length >= 8) return `닉네임 미등록 (${id.slice(0, 8)}…)`;
+        return id || '–';
+    }
+
+    /** 21941분 형태 대신 일·시간 단위로 읽기 쉽게 */
+    function formatIdleDurationMs(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return '–';
+        const totalSec = Math.floor(ms / 1000);
+        if (totalSec < 60) return `${totalSec}초`;
+        const totalMin = Math.floor(totalSec / 60);
+        if (totalMin < 60) return `${totalMin}분 ${totalSec % 60}초`;
+        const totalH = Math.floor(totalMin / 60);
+        if (totalH < 48) return `${totalH}시간 ${totalMin % 60}분`;
+        const days = Math.floor(totalH / 24);
+        const remH = totalH % 24;
+        const remMin = totalMin % 60;
+        return `${days}일 ${remH}시간 ${remMin}분`;
+    }
+
     function renderIdleOnlineMonitorRows(rows) {
         const listEl = document.getElementById('user-idle-monitor-list');
         if (!listEl) return;
@@ -4550,7 +4583,7 @@
         listEl.innerHTML = rows
             .map((r, idx) => {
                 const rankColor = idx < 3 ? '#38bdf8' : '#64748b';
-                const idleLabel = r.idleMs == null ? '—' : msToText(r.idleMs);
+                const idleLabel = r.idleMs == null ? '—' : formatIdleDurationMs(r.idleMs);
                 const tradeLine =
                     Number(r.lastTradeAt) > 0
                         ? `마지막 매매: <b>${fmtTime(r.lastTradeAt)}</b>`
@@ -4593,7 +4626,7 @@
             let lastTradeAt = 0;
             if (Number.isFinite(ltSession) && ltSession > 0) lastTradeAt = ltSession;
             if (Number.isFinite(ltRoot) && ltRoot > lastTradeAt) lastTradeAt = ltRoot;
-            const nickname = String(u?.nickname || u?.name || '').trim();
+            const nickname = pickIdleUserDisplayName(u, uid);
             let idleMs = null;
             if (lastTradeAt > 0) idleMs = Math.max(0, now - lastTradeAt);
             rows.push({ uid, nickname, presenceAt, lastTradeAt, idleMs });
