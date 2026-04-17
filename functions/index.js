@@ -2552,6 +2552,39 @@ exports.adminReviewChallengeSupporterRequest = onCall(
   }
 );
 
+/** 관리자: UID로 후원자(챌린지) 화이트리스트 직접 부여 — 신청 건 없이 entitlement 만 설정 */
+exports.adminGrantChallengeSupporterByUid = onCall(
+  { cors: true, timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const targetUid = String(request.data?.targetUid || "").trim();
+    if (!/^[A-Za-z0-9_-]{10,128}$/.test(targetUid)) {
+      throw new HttpsError("invalid-argument", "invalid targetUid.");
+    }
+    const db = admin.database();
+    const userSnap = await db.ref(`users/${targetUid}`).get();
+    if (!userSnap.exists()) {
+      throw new HttpsError("not-found", "user not found.");
+    }
+    const now = Date.now();
+    const by = String(request.auth?.token?.email || ADMIN_EMAIL);
+    await db.ref(`users/${targetUid}/entitlements/challengeSupporterVerified`).set(true);
+    try {
+      await db.ref("adminActivityLogs/challengeSupporterWhitelist").push({
+        type: "whitelist_add",
+        targetUid,
+        by,
+        createdAt: now,
+      });
+    } catch (_) {
+      /* noop */
+    }
+    return { ok: true, targetUid };
+  }
+);
+
 /** 챌린지 모드 거래 시 users 노드에 메인·챌린지 포트폴리오를 동시에 유지 */
 function packUserTradeResult(u, challengeModeReq, isCoin, cashOut, stockBookOut, coinBookOut) {
   const base = { ...u, lastTradeTime: null };

@@ -1235,6 +1235,18 @@
             <button type="button" class="btn-danger" style="padding:10px 14px; font-size:13px; font-weight:800;" onclick="window.runAdminChallengeDailyResetNow?.()">⚡ 챌린지 일일 초기화 즉시 실행</button>
             <span id="admin-challenge-tool-status" style="font-size:12px; color:#94a3b8; align-self:center;">—</span>
         </div>
+        <div style="background:#0f172a; border:1px solid #334155; border-radius:10px; padding:12px 14px; margin-bottom:12px;">
+            <div style="font-size:13px; font-weight:800; color:#22d3ee; margin-bottom:8px;">➕ 후원자 화이트리스트 (UID 직접 추가)</div>
+            <div style="font-size:12px; color:#94a3b8; margin-bottom:10px; line-height:1.5;">
+                정식 신청 없이 <code style="font-size:11px;">users/…/entitlements/challengeSupporterVerified</code> 만 <b>true</b>로 설정합니다. 대상 유저가 DB에 존재해야 합니다.
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <input type="text" id="challenge-supporter-direct-uid" placeholder="대상 Firebase UID" autocomplete="off"
+                    style="flex:1; min-width:200px; background:#1e293b; border:1px solid #475569; color:#e2e8f0; padding:10px 12px; border-radius:8px; font-size:13px; box-sizing:border-box;">
+                <button type="button" class="btn-primary" style="padding:10px 16px; font-size:13px; font-weight:800; white-space:nowrap;" onclick="window.grantChallengeSupporterByUid?.()">화이트리스트에 추가</button>
+            </div>
+            <div id="challenge-supporter-direct-status" style="font-size:12px; color:#94a3b8; margin-top:8px; min-height:18px;"></div>
+        </div>
         <div id="challenge-supporter-status" style="font-size:12px; color:#94a3b8; margin-bottom:8px;">—</div>
         <div id="challenge-supporter-requests" style="display:flex; flex-direction:column; gap:10px;">
             <div style="padding:12px; color:#64748b; text-align:center;">불러오는 중...</div>
@@ -2247,6 +2259,7 @@
     const adminSyncChallengeMarketsFromMainFn = httpsCallable(functions, 'adminSyncChallengeMarketsFromMain');
     const adminRunChallengeDailyResetFn = httpsCallable(functions, 'adminRunChallengeDailyReset');
     const adminReviewChallengeSupporterRequestFn = httpsCallable(functions, 'adminReviewChallengeSupporterRequest');
+    const adminGrantChallengeSupporterByUidFn = httpsCallable(functions, 'adminGrantChallengeSupporterByUid');
     const adminRunAssetRankingFn = httpsCallable(functions, 'adminRunAssetRanking');
     const adminRunStockHolderTop3Fn = httpsCallable(functions, 'adminRunStockHolderTop3');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
@@ -3701,6 +3714,30 @@
             showAdminToast('거절 처리되었습니다.', 'ok');
         } catch (e) {
             alert('거절 실패: ' + (e?.message || e));
+        }
+    };
+
+    window.grantChallengeSupporterByUid = async function () {
+        if (!isAdmin()) return;
+        const input = document.getElementById('challenge-supporter-direct-uid');
+        const statusEl = document.getElementById('challenge-supporter-direct-status');
+        const targetUid = String(input?.value || '').trim();
+        if (!targetUid) {
+            if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = 'UID를 입력하세요.'; }
+            return;
+        }
+        if (!confirm(`다음 UID에 후원자(챌린지) 화이트리스트를 부여할까요?\n\n${targetUid}`)) return;
+        if (statusEl) { statusEl.style.color = '#94a3b8'; statusEl.textContent = '처리 중…'; }
+        try {
+            if (auth.currentUser) await auth.currentUser.getIdToken(true);
+            await adminGrantChallengeSupporterByUidFn({ targetUid });
+            if (statusEl) { statusEl.style.color = '#86efac'; statusEl.textContent = `✅ 적용 완료: ${targetUid}`; }
+            if (input) input.value = '';
+            showAdminToast('후원자 화이트리스트가 적용되었습니다.', 'ok');
+        } catch (e) {
+            const msg = String(e?.message || e || '');
+            if (statusEl) { statusEl.style.color = '#f87171'; statusEl.textContent = '실패: ' + msg; }
+            showAdminToast('적용 실패: ' + msg, 'error');
         }
     };
 
