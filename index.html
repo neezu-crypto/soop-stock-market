@@ -1108,7 +1108,6 @@
                 margin-bottom: calc(20px - (10px * var(--mobile-wallet-collapse-progress, 0)));
                 transform: translateY(calc(-2px * var(--mobile-wallet-collapse-progress, 0)));
                 box-shadow: 0 calc(4px - (2px * var(--mobile-wallet-collapse-progress, 0))) calc(15px - (5px * var(--mobile-wallet-collapse-progress, 0))) rgba(0,0,0,0.24);
-                transition: padding 0.1s linear, margin 0.1s linear, transform 0.1s linear, box-shadow 0.1s linear;
             }
             .wallet-bar-main {
                 gap: calc(12px - (6px * var(--mobile-wallet-collapse-progress, 0))) !important;
@@ -1124,7 +1123,6 @@
                 max-height: calc(240px - (240px * var(--mobile-wallet-collapse-progress, 0)));
                 opacity: calc(1 - (0.96 * var(--mobile-wallet-collapse-progress, 0)));
                 overflow: hidden;
-                transition: max-height 0.1s linear, opacity 0.1s linear;
             }
             .wallet-bar-main > .wallet-info:nth-child(1),
             .wallet-bar-main > .wallet-info:nth-child(3) {
@@ -14107,11 +14105,19 @@ function setupMobileImmersiveScroll() {
     if (!window.matchMedia('(max-width: 768px)').matches) return;
     let ticking = false;
     const RANGE = 180;
+    let lastY = Math.max(0, window.scrollY || 0);
+    let lastApplied = -1;
+    const EPSILON = 0.75;
+    const APPLY_STEP = 0.006;
     const apply = () => {
         ticking = false;
         const y = Math.max(0, window.scrollY || 0);
+        if (Math.abs(y - lastY) < EPSILON) return;
         const progress = Math.min(1, y / RANGE);
+        if (Math.abs(progress - lastApplied) < APPLY_STEP) return;
         document.body.style.setProperty('--mobile-wallet-collapse-progress', progress.toFixed(3));
+        lastApplied = progress;
+        lastY = y;
     };
     window.addEventListener('scroll', () => {
         if (ticking) return;

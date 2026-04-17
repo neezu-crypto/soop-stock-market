@@ -299,7 +299,6 @@
                 opacity: calc(1 - (0.92 * var(--mobile-immersive-progress, 0)));
                 overflow: hidden;
                 transform: translateY(calc(-10px * var(--mobile-immersive-progress, 0)));
-                transition: max-height 0.1s linear, opacity 0.1s linear, transform 0.1s linear;
             }
             .dual-rank-scroll {
                 padding-top: calc(0px + (2px * var(--mobile-immersive-progress, 0)));
@@ -786,10 +785,18 @@
         if (!wrap) return;
         let ticking = false;
         const RANGE = 140;
+        let lastTop = Math.max(0, wrap.scrollTop || 0);
+        let lastApplied = -1;
+        const EPSILON = 0.6;
+        const APPLY_STEP = 0.006;
         const applyProgress = () => {
             const top = Math.max(0, wrap.scrollTop || 0);
+            if (Math.abs(top - lastTop) < EPSILON) return;
             const progress = Math.min(1, top / RANGE);
+            if (Math.abs(progress - lastApplied) < APPLY_STEP) return;
             document.body.style.setProperty('--mobile-immersive-progress', progress.toFixed(3));
+            lastApplied = progress;
+            lastTop = top;
         };
         wrap.addEventListener('scroll', () => {
             if (ticking) return;
