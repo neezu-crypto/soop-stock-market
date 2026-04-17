@@ -295,25 +295,14 @@
             .control-bar,
             .rank-market-toggle-wrap,
             .rank-scope-toggle-wrap {
-                max-height: 240px;
-                opacity: 1;
+                max-height: calc(240px - (220px * var(--mobile-immersive-progress, 0)));
+                opacity: calc(1 - (0.92 * var(--mobile-immersive-progress, 0)));
                 overflow: hidden;
-                transition: max-height 0.24s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease, border 0.2s ease;
+                transform: translateY(calc(-10px * var(--mobile-immersive-progress, 0)));
+                transition: max-height 0.1s linear, opacity 0.1s linear, transform 0.1s linear;
             }
-            body.mobile-immersive .header,
-            body.mobile-immersive .control-bar,
-            body.mobile-immersive .rank-market-toggle-wrap,
-            body.mobile-immersive .rank-scope-toggle-wrap {
-                max-height: 0;
-                opacity: 0;
-                overflow: hidden;
-                border: 0 !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-                transition: max-height 0.2s ease, opacity 0.2s ease, padding 0.2s ease;
-            }
-            body.mobile-immersive .dual-rank-scroll {
-                padding-top: 0;
+            .dual-rank-scroll {
+                padding-top: calc(0px + (2px * var(--mobile-immersive-progress, 0)));
             }
         }
     </style>
@@ -795,36 +784,22 @@
         if (!window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)').matches) return;
         const wrap = document.getElementById('dual-rank-scroll');
         if (!wrap) return;
-        let lastTop = Math.max(0, wrap.scrollTop || 0);
-        let hidden = false;
         let ticking = false;
-        const HIDE_AT = 48;
-        const SHOW_AT = 8;
-        const MIN_DELTA = 10;
+        const RANGE = 140;
+        const applyProgress = () => {
+            const top = Math.max(0, wrap.scrollTop || 0);
+            const progress = Math.min(1, top / RANGE);
+            document.body.style.setProperty('--mobile-immersive-progress', progress.toFixed(3));
+        };
         wrap.addEventListener('scroll', () => {
             if (ticking) return;
             ticking = true;
             requestAnimationFrame(() => {
                 ticking = false;
-                const top = Math.max(0, wrap.scrollTop || 0);
-                const delta = top - lastTop;
-                const down = delta > MIN_DELTA;
-                const up = delta < -MIN_DELTA;
-                if (hidden) {
-                    if (top <= SHOW_AT || up) {
-                        hidden = false;
-                        document.body.classList.remove('mobile-immersive');
-                    }
-                } else if (down && top >= HIDE_AT) {
-                    hidden = true;
-                    document.body.classList.add('mobile-immersive');
-                } else if (top <= SHOW_AT) {
-                    hidden = false;
-                    document.body.classList.remove('mobile-immersive');
-                }
-                lastTop = top;
+                applyProgress();
             });
         }, { passive: true });
+        applyProgress();
     }
 
     // 구독 시작 시 자동 스크롤도 시작
