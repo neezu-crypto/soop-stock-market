@@ -290,6 +290,23 @@
         body.focus-list-only .rank-col-title {
             padding-top: 6px;
         }
+        @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+            body.mobile-immersive .header,
+            body.mobile-immersive .control-bar,
+            body.mobile-immersive .rank-market-toggle-wrap,
+            body.mobile-immersive .rank-scope-toggle-wrap {
+                max-height: 0;
+                opacity: 0;
+                overflow: hidden;
+                border: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                transition: max-height 0.2s ease, opacity 0.2s ease, padding 0.2s ease;
+            }
+            body.mobile-immersive .dual-rank-scroll {
+                padding-top: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -765,6 +782,30 @@
         }, PAUSE_ON_INTERACT);
     }, { passive: true });
 
+    function setupMobileImmersiveOnRankScroll() {
+        if (!window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)').matches) return;
+        const wrap = document.getElementById('dual-rank-scroll');
+        if (!wrap) return;
+        let lastTop = Math.max(0, wrap.scrollTop || 0);
+        let ticking = false;
+        wrap.addEventListener('scroll', () => {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(() => {
+                ticking = false;
+                const top = Math.max(0, wrap.scrollTop || 0);
+                const down = top > lastTop + 4;
+                const up = top < lastTop - 4;
+                if (top < 10 || up) {
+                    document.body.classList.remove('mobile-immersive');
+                } else if (down && top > 20) {
+                    document.body.classList.add('mobile-immersive');
+                }
+                lastTop = top;
+            });
+        }, { passive: true });
+    }
+
     // 구독 시작 시 자동 스크롤도 시작
     const _origStart = window.startRanking;
     window.startRanking = function() {
@@ -776,6 +817,7 @@
     updateAutoScrollBadge();
     applyRankMarketView();
     applyRankDataScopeButtons();
+    setupMobileImmersiveOnRankScroll();
     window.addEventListener('resize', applyRankMarketView);
 
     // Ctrl+Enter: 리스트 전용 전체화면 토글
