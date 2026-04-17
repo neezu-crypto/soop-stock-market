@@ -291,6 +291,15 @@
             padding-top: 6px;
         }
         @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+            .header,
+            .control-bar,
+            .rank-market-toggle-wrap,
+            .rank-scope-toggle-wrap {
+                max-height: 240px;
+                opacity: 1;
+                overflow: hidden;
+                transition: max-height 0.24s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease, border 0.2s ease;
+            }
             body.mobile-immersive .header,
             body.mobile-immersive .control-bar,
             body.mobile-immersive .rank-market-toggle-wrap,
@@ -787,19 +796,31 @@
         const wrap = document.getElementById('dual-rank-scroll');
         if (!wrap) return;
         let lastTop = Math.max(0, wrap.scrollTop || 0);
+        let hidden = false;
         let ticking = false;
+        const HIDE_AT = 48;
+        const SHOW_AT = 8;
+        const MIN_DELTA = 10;
         wrap.addEventListener('scroll', () => {
             if (ticking) return;
             ticking = true;
             requestAnimationFrame(() => {
                 ticking = false;
                 const top = Math.max(0, wrap.scrollTop || 0);
-                const down = top > lastTop + 4;
-                const up = top < lastTop - 4;
-                if (top < 10 || up) {
-                    document.body.classList.remove('mobile-immersive');
-                } else if (down && top > 20) {
+                const delta = top - lastTop;
+                const down = delta > MIN_DELTA;
+                const up = delta < -MIN_DELTA;
+                if (hidden) {
+                    if (top <= SHOW_AT || up) {
+                        hidden = false;
+                        document.body.classList.remove('mobile-immersive');
+                    }
+                } else if (down && top >= HIDE_AT) {
+                    hidden = true;
                     document.body.classList.add('mobile-immersive');
+                } else if (top <= SHOW_AT) {
+                    hidden = false;
+                    document.body.classList.remove('mobile-immersive');
                 }
                 lastTop = top;
             });
