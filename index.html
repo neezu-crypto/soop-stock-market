@@ -320,6 +320,31 @@
         .stock-card .chart-wrap   { grid-area: chart; }
         .stock-card .trade-input-wrap { grid-area: trade; }
         .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background: var(--card-hover); }
+        .stock-card.challenge-session-active {
+            position: relative;
+            border-color: rgba(168, 85, 247, 0.55);
+            box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.35), 0 4px 18px rgba(124, 58, 237, 0.18);
+        }
+        .stock-card .challenge-session-ribbon {
+            display: none;
+            position: absolute;
+            top: 0;
+            right: 0;
+            z-index: 12;
+            padding: 5px 11px 6px 14px;
+            max-width: calc(100% - 8px);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: #faf5ff;
+            background: linear-gradient(120deg, #6d28d9, #a855f7);
+            border-radius: 0 15px 0 10px;
+            pointer-events: none;
+            line-height: 1.25;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+            text-align: right;
+        }
+        .stock-card.challenge-session-active .challenge-session-ribbon { display: block; }
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
         .stock-card.rebound-signal { border-color: #facc15 !important; box-shadow: 0 0 10px rgba(250,204,21,0.2); }
@@ -7141,6 +7166,36 @@ function isChallengeModeTradeReady() {
     return __challengeModeUi === true && __userChallengeVerified === true && isChallengeRoomLivePhase();
 }
 
+/** 챌린지(주식) 켜짐 + 아직 방 미참여 — 「이 종목으로 방 만들기」만 가능 */
+function isChallengeModePreRoomTradeLocked() {
+    if (isCoinMarket()) return false;
+    return __challengeModeUi === true && !__userChallengeRoomId;
+}
+
+/** 이 카드 종목이 현재 참가 중인 챌린지 방의 종목이고 세션 미종료 */
+function isChallengeRoomStockSessionActiveForCard(stockId) {
+    const sid = String(stockId || '').trim();
+    if (!sid) return false;
+    if (__challengeModeUi !== true || __userChallengeVerified !== true) return false;
+    if (!__userChallengeRoomId) return false;
+    const r = __challengeRoomSnap;
+    if (!r || typeof r !== 'object' || r.finalized === true) return false;
+    return String(r.stockId || '').trim() === sid;
+}
+
+function syncChallengeSessionRibbonOnCard(card, stockId) {
+    if (!card) return;
+    let rib = card.querySelector('.challenge-session-ribbon');
+    if (!rib) {
+        rib = document.createElement('div');
+        rib.className = 'challenge-session-ribbon';
+        rib.setAttribute('aria-hidden', 'true');
+        rib.textContent = '챌린지 진행중';
+        card.insertBefore(rib, card.firstChild);
+    }
+    card.classList.toggle('challenge-session-active', isChallengeRoomStockSessionActiveForCard(stockId));
+}
+
 function activeCashValue() {
     if (__challengeModeUi === true && __userChallengeVerified === true) {
         return Math.floor(Math.max(0, Number(myData?.challengeCash) || 0));
@@ -9665,6 +9720,10 @@ function renderCandleChart() {
 // ── 모달 내 거래 ─────────────────────────────────────────────
 window.tradeFromModal = function(type) {
     if (!chartModalStockId) return;
+    if (chartModalMarket !== 'coin' && isChallengeModePreRoomTradeLocked()) {
+        alert('챌린지 모드에서는 방을 만든 뒤에만 매매할 수 있습니다.');
+        return;
+    }
     const input = document.getElementById('modal-qty-input');
     if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
     const qty = calcMaxQty(chartModalStockId, type, parseInt(input.value) || 1);
@@ -9675,6 +9734,10 @@ window.tradeFromModal = function(type) {
 
 // ── 카드 수량 입력 거래 ──────────────────────────────────────
 window.tradeWithInput = function(id, type) {
+    if (!isCoinMarket() && isChallengeModePreRoomTradeLocked()) {
+        alert('챌린지 모드에서는 방을 만든 뒤에만 매매할 수 있습니다.');
+        return;
+    }
     const input = document.getElementById(`qty-${id}`);
     if (!input?.value) { alert('수량을 입력해주세요.'); input?.focus(); return; }
     const qty = calcMaxQty(id, type, parseInt(input.value) || 1);
@@ -10177,6 +10240,7 @@ function isGlobalTradeCooldownActive() {
 function isTradeButtonDisabled(stockId) {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) return false;
+    if (isChallengeModePreRoomTradeLocked()) return true;
     if (isChallengeLobbyUi()) return true;
     if (!isCoinMarket() && isChallengeStockTradeSessionGateActive()) return true;
     if (isGlobalTradeCooldownActive()) return true;
@@ -10202,6 +10266,7 @@ function isMaxSellButtonDisabled(stockId) {
     }
     if (isGlobalTradeCooldownActive()) return true;
     if (isTrading === stockId) return true;
+    if (isChallengeModePreRoomTradeLocked()) return true;
     return false;
 }
 
@@ -10296,6 +10361,9 @@ function applyTradeCooldownStateToButtons(buyBtn, sellBtn, stockId, options) {
         } else if (dis && isTrading === stockId) {
             btn.textContent = label;
             btn.title = defaultTradeBtnTitle(isBuy);
+        } else if (dis && isChallengeModePreRoomTradeLocked()) {
+            btn.textContent = label;
+            btn.title = '챌린지 방을 만든 뒤에만 매매할 수 있습니다. 목록의 「이 종목으로 방 만들기」를 이용하세요.';
         } else {
             btn.textContent = label;
             btn.title = defaultTradeBtnTitle(isBuy);
@@ -10317,8 +10385,18 @@ function applyTradeCooldownStateToCard(card, stockId) {
         maxBtn.style.opacity = maxDis ? '0.55' : '';
         maxBtn.title = autoTradeState[stockId]
             ? '자동매매 중에는 MAX를 사용할 수 없습니다.'
-            : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용';
+            : isChallengeModePreRoomTradeLocked()
+              ? '챌린지 방을 만든 뒤에만 사용할 수 있습니다.'
+              : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용';
     }
+    const qtyInp = card.querySelector('.trade-qty-input');
+    if (qtyInp) {
+        const lock = isChallengeModePreRoomTradeLocked();
+        qtyInp.disabled = lock;
+        qtyInp.style.opacity = lock ? '0.55' : '';
+        qtyInp.title = lock ? '챌린지 방에 참가한 뒤 매매할 수 있습니다.' : '';
+    }
+    syncChallengeSessionRibbonOnCard(card, stockId);
 }
 
 function refreshChartModalTradeButtons() {
@@ -10337,6 +10415,13 @@ function refreshChartModalTradeButtons() {
             : 'Google 계정으로 로그인하면 OBS URL을 발급할 수 있습니다. 클릭 시 안내 후 메인과 동일한 구글 로그인 창이 열립니다.';
     }
     applyTradeCooldownStateToButtons(wrap.querySelector('.modal-buy'), wrap.querySelector('.modal-sell'), id, { context: 'modal' });
+    const modalQty = document.getElementById('modal-qty-input');
+    if (modalQty && chartModalMarket !== 'coin') {
+        const lock = isChallengeModePreRoomTradeLocked();
+        modalQty.disabled = lock;
+        modalQty.style.opacity = lock ? '0.55' : '';
+        modalQty.title = lock ? '챌린지 방에 참가한 뒤 매매할 수 있습니다.' : '';
+    }
     const maxBtn = wrap.querySelector('.modal-maxsell');
     if (maxBtn) {
         const maxDis = isMaxSellButtonDisabled(id);
@@ -10344,7 +10429,9 @@ function refreshChartModalTradeButtons() {
         maxBtn.style.opacity = maxDis ? '0.55' : '';
         maxBtn.title = autoTradeState[id]
             ? '자동매매 중에는 MAX를 사용할 수 없습니다.'
-            : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용';
+            : chartModalMarket !== 'coin' && isChallengeModePreRoomTradeLocked()
+              ? '챌린지 방을 만든 뒤에만 사용할 수 있습니다.'
+              : '전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용';
     }
     const halfBtn = wrap.querySelector('.modal-halfsell');
     if (halfBtn) {
@@ -10353,7 +10440,9 @@ function refreshChartModalTradeButtons() {
         halfBtn.style.opacity = halfDis ? '0.55' : '';
         halfBtn.title = autoTradeState[id]
             ? '자동매매 중에는 50% 매도를 사용할 수 없습니다.'
-            : '보유의 약 50% 매도 — MAX와 동일 수수료·임팩트(서버 일괄 처리)';
+            : chartModalMarket !== 'coin' && isChallengeModePreRoomTradeLocked()
+              ? '챌린지 방을 만든 뒤에만 사용할 수 있습니다.'
+              : '보유의 약 50% 매도 — MAX와 동일 수수료·임팩트(서버 일괄 처리)';
     }
 }
 
@@ -13267,6 +13356,7 @@ function updateCardContent(card, s, userStock) {
         const maxHint = isCoinMarket() ? '수량 제한 없음' : '수량 제한 없음';
         const rankText = ` · 순위 ${getMarketRankText(s.id, coin ? 'coin' : 'stock')}`;
         card.innerHTML = `
+            <div class="challenge-session-ribbon" aria-hidden="true">챌린지 진행중</div>
             <div class="info-group">
                 <div class="stock-name"><span class="stock-name-text">${escapeHtml(name)}</span><span class="stock-title-badge" style="display:none;"></span></div>
                 <div class="my-qty">보유: ${userStock.qty}${posUnit}${uq < 0 ? ' <span style="color:var(--muted);font-size:11px;">(숏)</span>' : ''} <span class="${profitClass}">(${uq !== 0 && userStock.avg > 0 ? myProfit + '%' : '-'})</span>${rankText}</div>
@@ -13304,6 +13394,7 @@ function updateCardContent(card, s, userStock) {
         refreshCircuitFreezeOnStockCard(card, s.id);
         applyTradeCooldownStateToCard(card, s.id);
         applyTitleDecorationToCard(card, s.id);
+        syncChallengeSessionRibbonOnCard(card, s.id);
         return;
     }
 
@@ -13348,6 +13439,7 @@ function updateCardContent(card, s, userStock) {
 
     refreshCircuitFreezeOnStockCard(card, s.id);
     applyTitleDecorationToCard(card, s.id);
+    syncChallengeSessionRibbonOnCard(card, s.id);
 }
 
 // ── 주식 데이터 리스너 (stocks/ 전체 + 즐겨찾기/보유 개별) ───
