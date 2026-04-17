@@ -2402,6 +2402,10 @@ exports.adminSyncCoinsFromStocks = onCall(
 const CHALLENGE_STOCK_OPEN_WON = 10000;
 const CHALLENGE_COIN_OPEN_WON = 100000000;
 const CHALLENGE_DAILY_CASH_WON = 10000000;
+/** 챌린지 방: 모집 1분 → 동시 시작 후 1시간 매매 (종목당 동시에 1개 활성 방만 허용) */
+const CHALLENGE_LOBBY_MS = 60 * 1000;
+const CHALLENGE_LIVE_MS = 60 * 60 * 1000;
+const CHALLENGE_ROOM_MAX_MEMBERS = 40;
 
 /** 관리자: 메인 stocks/coins 기준으로 챌린지 시장 노드만 동기화(유저 청산 없음). 최초 배포·수동 동기화용 */
 exports.adminSyncChallengeMarketsFromMain = onCall(
@@ -2665,6 +2669,299 @@ function packUserTradeResult(u, challengeModeReq, isCoin, cashOut, stockBookOut,
   return base;
 }
 
+async function findBlockingChallengeRoomForStock(db, stockId) {
+  const snap = await db.ref("challengeRooms").once("value");
+  if (!snap.exists()) return null;
+  const now = Date.now();
+  for (const [rid, raw] of Object.entries(snap.val() || {})) {
+    const r = raw;
+    if (!r || typeof r !== "object") continue;
+    if (String(r.stockId || "").trim() !== stockId) continue;
+    if (r.finalized === true) continue;
+    const liveEnd = Number(r.liveEndMs);
+    if (Number.isFinite(liveEnd) && now >= liveEnd) continue;
+    return rid;
+  }
+  return null;
+}
+
+async function getUserChallengeRoomIdRaw(db, uid) {
+  const s = await db.ref(`users/${uid}/challengeRoomId`).once("value");
+  return s.exists() ? String(s.val() || "").trim() : "";
+}
+
+async function pruneStaleUserChallengeRoomPointer(db, uid) {
+  const rid = await getUserChallengeRoomIdRaw(db, uid);
+  if (!rid) return null;
+  const rs = await db.ref(`challengeRooms/${rid}`).once("value");
+  if (!rs.exists()) {
+    await db.ref(`users/${uid}/challengeRoomId`).remove();
+    return null;
+  }
+  const r = rs.val() || {};
+  const now = Date.now();
+  const liveEnd = Number(r.liveEndMs);
+  if (r.finalized === true || (Number.isFinite(liveEnd) && now >= liveEnd)) {
+    await db.ref(`users/${uid}/challengeRoomId`).remove();
+    return null;
+  }
+  return rid;
+}
+
+function assertGoogleChallengeSupporterForRoom(auth, preUser) {
+  if (isAdminAuth(auth)) return;
+  const provider = String(auth.token?.firebase?.sign_in_provider || "");
+  if (provider !== "google.com") {
+    throw new HttpsError("failed-precondition", "챌린지 모드는 Google 로그인이 필요합니다.");
+  }
+  if (preUser?.entitlements?.challengeSupporterVerified !== true) {
+    throw new HttpsError(
+      "permission-denied",
+      "챌린지 모드는 후원자 인증(별풍선 100개 이상) 승인 후 이용할 수 있습니다."
+    );
+  }
+}
+
+async function assertChallengeTradeRoomForUser(db, auth, uid, stockId, challengeRoomId, preUser) {
+  if (isAdminAuth(auth)) return;
+  assertGoogleChallengeSupporterForRoom(auth, preUser);
+  const rid = String(challengeRoomId || "").trim();
+  if (!rid) throw new HttpsError("invalid-argument", "challengeRoomId 가 필요합니다.");
+  const mine = String(preUser?.challengeRoomId || "").trim();
+  if (mine !== rid) throw new HttpsError("permission-denied", "챌린지 방 정보가 일치하지 않습니다.");
+  const rs = await db.ref(`challengeRooms/${rid}`).get();
+  if (!rs.exists()) throw new HttpsError("not-found", "챌린지 방을 찾을 수 없습니다.");
+  const r = rs.val() || {};
+  if (r.finalized === true) throw new HttpsError("failed-precondition", "챌린지 방이 종료되었습니다.");
+  if (String(r.stockId || "").trim() !== stockId) {
+    throw new HttpsError("failed-precondition", "이 방에서는 선택한 종목만 거래할 수 있습니다.");
+  }
+  const members = r.members && typeof r.members === "object" ? r.members : {};
+  if (!members[uid]) throw new HttpsError("permission-denied", "이 방의 참가자가 아닙니다.");
+  if (r.liveStarted !== true) throw new HttpsError("failed-precondition", "아직 매매가 시작되지 않았습니다.");
+  const now = Date.now();
+  const liveStart = Number(r.liveStartMs);
+  const liveEnd = Number(r.liveEndMs);
+  if (!Number.isFinite(liveStart) || !Number.isFinite(liveEnd)) {
+    throw new HttpsError("failed-precondition", "챌린지 방 설정 오류.");
+  }
+  if (now < liveStart) throw new HttpsError("failed-precondition", "매매 시작 전입니다.");
+  if (now >= liveEnd) throw new HttpsError("failed-precondition", "매매 시간이 종료되었습니다.");
+}
+
+async function applyChallengeRoomLiveStart(db, roomId, r) {
+  if (r.liveStarted === true) return;
+  const members = r.members && typeof r.members === "object" ? r.members : {};
+  const uids = Object.keys(members);
+  const now = Date.now();
+  const stockId = String(r.stockId || "").trim();
+  if (!stockId) {
+    await db.ref(`challengeRooms/${roomId}`).update({ finalized: true, liveStarted: true, abortedNoStock: true, finalizedAt: now });
+    for (const u of uids) await db.ref(`users/${u}/challengeRoomId`).remove();
+    return;
+  }
+  if (uids.length === 0) {
+    await db.ref(`challengeRooms/${roomId}`).update({ finalized: true, liveStarted: true, cancelledEmpty: true, finalizedAt: now });
+    return;
+  }
+  const stSnap = await db.ref(`stocks/${stockId}`).get();
+  if (!stSnap.exists()) {
+    await db.ref(`challengeRooms/${roomId}`).update({ finalized: true, liveStarted: true, abortedNoStock: true, finalizedAt: now });
+    for (const u of uids) await db.ref(`users/${u}/challengeRoomId`).remove();
+    return;
+  }
+  const row = normalizeStockRow(stSnap.val());
+  if (!row) {
+    await db.ref(`challengeRooms/${roomId}`).update({ finalized: true, liveStarted: true, abortedNoStock: true, finalizedAt: now });
+    for (const u of uids) await db.ref(`users/${u}/challengeRoomId`).remove();
+    return;
+  }
+  const p = Math.max(1, Math.floor(Number(row.price) || CHALLENGE_STOCK_OPEN_WON));
+  await db.ref(`challengeStocks/${stockId}`).set({
+    name: String(row.name || ""),
+    price: p,
+    volume: 0,
+    buyVol: 0,
+    sellVol: 0,
+    change: "0.00",
+    history: [p],
+  });
+  const patch = {
+    [`challengeRooms/${roomId}/liveStarted`]: true,
+    [`challengeRooms/${roomId}/liveStartedAt`]: now,
+  };
+  uids.forEach((u) => {
+    patch[`users/${u}/challengeCash`] = CHALLENGE_DAILY_CASH_WON;
+    patch[`users/${u}/challengeStocks`] = null;
+    patch[`users/${u}/challengeCoins`] = null;
+  });
+  await db.ref().update(patch);
+}
+
+async function applyChallengeRoomFinalize(db, roomId, r) {
+  if (r.finalized === true) return;
+  const members = r.members && typeof r.members === "object" ? r.members : {};
+  const uids = Object.keys(members);
+  const now = Date.now();
+  const patch = {
+    [`challengeRooms/${roomId}/finalized`]: true,
+    [`challengeRooms/${roomId}/finalizedAt`]: now,
+  };
+  uids.forEach((u) => {
+    patch[`users/${u}/challengeRoomId`] = null;
+    patch[`users/${u}/challengeCash`] = CHALLENGE_DAILY_CASH_WON;
+    patch[`users/${u}/challengeStocks`] = null;
+    patch[`users/${u}/challengeCoins`] = null;
+  });
+  await db.ref().update(patch);
+}
+
+async function challengeRoomHousekeeperTick() {
+  const db = admin.database();
+  const snap = await db.ref("challengeRooms").once("value");
+  if (!snap.exists()) return;
+  const now = Date.now();
+  const val = snap.val() || {};
+  for (const [roomId, raw] of Object.entries(val)) {
+    const r = raw;
+    if (!r || typeof r !== "object") continue;
+    const lobbyUntil = Number(r.lobbyUntilMs);
+    const liveEnd = Number(r.liveEndMs);
+    if (!Number.isFinite(lobbyUntil) || !Number.isFinite(liveEnd)) continue;
+    if (r.finalized === true) continue;
+    if (r.liveStarted !== true && now >= lobbyUntil) {
+      await applyChallengeRoomLiveStart(db, roomId, r);
+      continue;
+    }
+    if (r.liveStarted === true && now >= liveEnd) {
+      await applyChallengeRoomFinalize(db, roomId, r);
+    }
+  }
+}
+
+exports.challengeRoomHousekeeper = onSchedule(
+  {
+    schedule: "* * * * *",
+    timeZone: "Asia/Seoul",
+    region: "asia-northeast3",
+    timeoutSeconds: 120,
+    memory: "512MiB",
+  },
+  async () => {
+    try {
+      await challengeRoomHousekeeperTick();
+    } catch (e) {
+      console.error("[challengeRoomHousekeeper]", e?.message || e);
+    }
+  }
+);
+
+exports.createChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  const uid = auth.uid;
+  const stockId = String(request.data?.stockId || "").trim();
+  if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
+  const db = admin.database();
+  const uSnap = await db.ref(`users/${uid}`).get();
+  const preUser = uSnap.exists() ? uSnap.val() : {};
+  assertGoogleChallengeSupporterForRoom(auth, preUser);
+  await pruneStaleUserChallengeRoomPointer(db, uid);
+  const curRid = await getUserChallengeRoomIdRaw(db, uid);
+  if (curRid) throw new HttpsError("failed-precondition", "이미 참여 중인 챌린지 방이 있습니다.");
+  const block = await findBlockingChallengeRoomForStock(db, stockId);
+  if (block) throw new HttpsError("failed-precondition", "해당 종목으로 진행 중인 챌린지 방이 있습니다. 종료 후 다시 시도해 주세요.");
+  const stSnap = await db.ref(`stocks/${stockId}`).get();
+  if (!stSnap.exists()) throw new HttpsError("not-found", "종목을 찾을 수 없습니다.");
+  const stRow = normalizeStockRow(stSnap.val());
+  const stockName = stRow ? String(stRow.name || "") : "";
+  const now = Date.now();
+  const lobbyUntilMs = now + CHALLENGE_LOBBY_MS;
+  const liveStartMs = lobbyUntilMs;
+  const liveEndMs = liveStartMs + CHALLENGE_LIVE_MS;
+  const roomRef = db.ref("challengeRooms").push();
+  const roomId = roomRef.key;
+  if (!roomId) throw new HttpsError("internal", "room id failed");
+  await roomRef.set({
+    stockId,
+    stockName,
+    hostUid: uid,
+    createdAt: now,
+    lobbyUntilMs,
+    liveStartMs,
+    liveEndMs,
+    liveStarted: false,
+    finalized: false,
+    members: { [uid]: { joinedAt: now } },
+  });
+  await db.ref(`users/${uid}/challengeRoomId`).set(roomId);
+  return { ok: true, roomId, stockId, stockName, lobbyUntilMs, liveStartMs, liveEndMs };
+});
+
+exports.joinChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  const uid = auth.uid;
+  const roomId = String(request.data?.roomId || "").trim();
+  if (!roomId) throw new HttpsError("invalid-argument", "roomId required.");
+  const db = admin.database();
+  const uSnap = await db.ref(`users/${uid}`).get();
+  const preUser = uSnap.exists() ? uSnap.val() : {};
+  assertGoogleChallengeSupporterForRoom(auth, preUser);
+  await pruneStaleUserChallengeRoomPointer(db, uid);
+  const cur = await getUserChallengeRoomIdRaw(db, uid);
+  if (cur && cur !== roomId) throw new HttpsError("failed-precondition", "이미 다른 방에 참여 중입니다.");
+  const rs = await db.ref(`challengeRooms/${roomId}`).get();
+  if (!rs.exists()) throw new HttpsError("not-found", "방을 찾을 수 없습니다.");
+  const r = rs.val() || {};
+  if (r.finalized === true) throw new HttpsError("failed-precondition", "이미 종료된 방입니다.");
+  const now = Date.now();
+  if (now >= Number(r.lobbyUntilMs || 0)) throw new HttpsError("failed-precondition", "모집이 마감되었습니다.");
+  const members = r.members && typeof r.members === "object" ? { ...r.members } : {};
+  if (members[uid]) return { ok: true, roomId, already: true };
+  const n = Object.keys(members).length;
+  if (n >= CHALLENGE_ROOM_MAX_MEMBERS) throw new HttpsError("resource-exhausted", "방 인원이 가득 찼습니다.");
+  members[uid] = { joinedAt: now };
+  await db.ref(`challengeRooms/${roomId}/members`).set(members);
+  await db.ref(`users/${uid}/challengeRoomId`).set(roomId);
+  return { ok: true, roomId };
+});
+
+exports.leaveChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  const uid = auth.uid;
+  const roomId = String(request.data?.roomId || "").trim();
+  if (!roomId) throw new HttpsError("invalid-argument", "roomId required.");
+  const db = admin.database();
+  const rs = await db.ref(`challengeRooms/${roomId}`).get();
+  if (!rs.exists()) {
+    await db.ref(`users/${uid}/challengeRoomId`).remove();
+    return { ok: true, gone: true };
+  }
+  const r = rs.val() || {};
+  const now = Date.now();
+  if (r.liveStarted === true) throw new HttpsError("failed-precondition", "매매가 시작된 방에서는 나갈 수 없습니다.");
+  if (now >= Number(r.lobbyUntilMs || 0)) throw new HttpsError("failed-precondition", "모집이 마감되어 나갈 수 없습니다.");
+  const members = r.members && typeof r.members === "object" ? { ...r.members } : {};
+  if (!members[uid]) {
+    await db.ref(`users/${uid}/challengeRoomId`).remove();
+    return { ok: true };
+  }
+  delete members[uid];
+  const uids = Object.keys(members);
+  if (uids.length === 0) {
+    await db.ref(`challengeRooms/${roomId}`).remove();
+    await db.ref(`users/${uid}/challengeRoomId`).remove();
+    return { ok: true, deleted: true };
+  }
+  let hostUid = String(r.hostUid || "");
+  if (hostUid === uid) hostUid = uids[0];
+  await db.ref(`challengeRooms/${roomId}`).update({ members, hostUid });
+  await db.ref(`users/${uid}/challengeRoomId`).remove();
+  return { ok: true };
+});
+
 exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
@@ -2725,16 +3022,14 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   assertUserTradeRestrictionAllowed(auth, preUser);
   assertServerTradeCooldownAllowed(auth, siteConfig, preUser);
   if (challengeModeReq && !isAdminAuth(auth)) {
-    const provider = String(auth.token?.firebase?.sign_in_provider || "");
-    if (provider !== "google.com") {
-      throw new HttpsError("failed-precondition", "챌린지 모드는 Google 로그인이 필요합니다.");
-    }
-    if (preUser?.entitlements?.challengeSupporterVerified !== true) {
-      throw new HttpsError(
-        "permission-denied",
-        "챌린지 모드는 후원자 인증(별풍선 100개 이상) 승인 후 이용할 수 있습니다."
-      );
-    }
+    await assertChallengeTradeRoomForUser(
+      db,
+      auth,
+      uid,
+      stockId,
+      String(req.data?.challengeRoomId || "").trim(),
+      preUser
+    );
   }
   if (challengeModeReq && isCoin) {
     throw new HttpsError("failed-precondition", "챌린지 모드는 주식시장만 지원합니다.");

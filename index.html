@@ -3136,6 +3136,30 @@
         #stock-empty .empty-icon { font-size: 48px; }
         #stock-empty .empty-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
         #stock-empty .empty-desc  { font-size: 13px; line-height: 1.7; }
+
+        .challenge-lobby-panel {
+            margin: 0 16px 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border, rgba(255,255,255,0.12));
+            background: var(--card-bg, rgba(30,30,40,0.6));
+        }
+        .challenge-lobby-status { font-size: 13px; color: var(--text-sub); margin-bottom: 8px; line-height: 1.5; }
+        .challenge-lobby-room-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+        .challenge-lobby-countdown { font-size: 13px; color: var(--primary); margin-bottom: 6px; }
+        .challenge-lobby-members { font-size: 12px; color: var(--text-sub); margin-bottom: 10px; word-break: break-all; }
+        .challenge-lobby-join-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+        .challenge-join-room-input {
+            flex: 1 1 160px; min-width: 120px; padding: 8px 10px; border-radius: 8px;
+            border: 1px solid var(--border, rgba(255,255,255,0.15)); background: var(--bg); color: var(--text-main);
+        }
+        .btn-challenge-join-room, .btn-challenge-lobby-leave, .btn-challenge-room-create {
+            padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+        }
+        .btn-challenge-join-room { background: var(--primary); color: #0b0b12; }
+        .btn-challenge-lobby-leave { background: rgba(239,68,68,0.2); color: #fecaca; margin-top: 4px; }
+        .btn-challenge-room-create { width: 100%; background: rgba(99,102,241,0.25); color: var(--text-main); margin-top: 4px; }
+
         /* ── 절전 모드 오버레이 ── */
         #power-save-overlay {
             display: none;
@@ -4143,6 +4167,22 @@
         <input type="text" id="search-input" placeholder="스트리머 검색..." autocomplete="off">
     </div>
 
+    <div id="challenge-lobby-panel" class="challenge-lobby-panel" style="display:none;">
+        <div class="challenge-lobby-panel__inner">
+            <div id="challenge-lobby-status" class="challenge-lobby-status"></div>
+            <div id="challenge-lobby-room" class="challenge-lobby-room" style="display:none;">
+                <div id="challenge-lobby-room-title" class="challenge-lobby-room-title"></div>
+                <div id="challenge-lobby-countdown" class="challenge-lobby-countdown"></div>
+                <div id="challenge-lobby-members" class="challenge-lobby-members"></div>
+                <button type="button" id="challenge-lobby-leave-btn" class="btn-challenge-lobby-leave">방 나가기</button>
+            </div>
+            <div class="challenge-lobby-join-row">
+                <input type="text" id="challenge-join-room-input" class="challenge-join-room-input" placeholder="방 ID 입력 후 참가" autocomplete="off">
+                <button type="button" id="challenge-join-room-btn" class="btn-challenge-join-room">참가</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 빈 화면 안내 (즐겨찾기 없을 때) -->
     <div id="stock-empty">
         <div class="empty-icon">🔍</div>
@@ -4259,6 +4299,9 @@ const purchaseAndPublishTitleSponsorFn = httpsCallable(fns, 'purchaseAndPublishT
 const purchaseAndPublishAssetRankingFn = httpsCallable(fns, 'purchaseAndPublishAssetRanking');
 const purchaseAndPublishLiveRankingTop100Fn = httpsCallable(fns, 'purchaseAndPublishLiveRankingTop100');
 const submitChallengeSupporterVerifyFn = httpsCallable(fns, 'submitChallengeSupporterVerify');
+const createChallengeRoomFn = httpsCallable(fns, 'createChallengeRoom');
+const joinChallengeRoomFn = httpsCallable(fns, 'joinChallengeRoom');
+const leaveChallengeRoomFn = httpsCallable(fns, 'leaveChallengeRoom');
 let myStarPoints = 0;
 
 function renderStarPointsUi() {
@@ -4692,6 +4735,7 @@ let siteConfig      = {};
 let siteConfigReady = false; // siteConfig 초기 get(또는 타임아웃) 후 true — 그 전에는 시장 오픈으로 간주하지 않음
 function getEffectiveFrozenUntil(stockId) {
     if (isSoopAdminEmail()) return 0;
+    if (isChallengeModeTradeReady()) return 0;
     return siteConfig?.frozenStocks?.[stockId] || 0;
 }
 
@@ -5563,6 +5607,10 @@ function teardownUserDataListeners() {
         }
     }
     userDataUnsub = null;
+    try {
+        stopChallengeRoomDetailListener();
+    } catch (_) { /* noop */ }
+    __userChallengeRoomId = '';
 }
 
 /** stocks/coins 맵은 onValue 대신 주기적 get + 패널 열 때 갱신 (대역폭 절감) */
@@ -5696,6 +5744,25 @@ function attachUserDataShardListeners(uid) {
         );
     } catch (e) {
         logAuthTrailError('attachUserDataShardListeners challengeCash', e);
+    }
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/challengeRoomId`),
+                (snap) => {
+                    try {
+                        const v = snap.exists() ? String(snap.val() || '').trim() : '';
+                        syncChallengeUserRoomPointer(v);
+                    } catch (err) {
+                        console.warn('[Auth] users/.../challengeRoomId', err);
+                    }
+                },
+                (err) => console.error('[Auth] users/.../challengeRoomId onValue', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners challengeRoomId', e);
     }
 
     try {
@@ -6736,7 +6803,7 @@ let liveCoinImpactMultiplier = DEFAULT_COIN_MARKET_IMPACT_MULTIPLIER;
 /** 코인 시장: Firebase 로그인(익명 포함) 사용자 이용 가능 */
 function canUseCoinMarket() {
     try {
-        if (isChallengeModeTradeReady()) return false;
+        if (__challengeModeUi === true && __userChallengeVerified === true) return false;
         return !!auth?.currentUser?.uid;
     } catch (_) {
         return false;
@@ -6843,9 +6910,17 @@ function computeTotalWealthWon() {
         const p = Number(row?.price);
         if (Number.isFinite(p) && p > 0) w += Math.floor(p * q);
     };
-    Object.entries(myData?.stocks || {}).forEach(([id, p]) => addStockVal(id, Math.floor(Number(p?.qty) || 0)));
-    if (myData?.coins) {
-        Object.entries(myData.coins).forEach(([id, p]) => addCoinVal(id, Math.floor(Number(p?.qty) || 0)));
+    const stBook =
+        __challengeModeUi === true && __userChallengeVerified === true
+            ? (myData?.challengeStocks || {})
+            : (myData?.stocks || {});
+    Object.entries(stBook).forEach(([id, p]) => addStockVal(id, Math.floor(Number(p?.qty) || 0)));
+    const coinBook =
+        __challengeModeUi === true && __userChallengeVerified === true
+            ? (myData?.challengeCoins || {})
+            : (myData?.coins || {});
+    if (coinBook) {
+        Object.entries(coinBook).forEach(([id, p]) => addCoinVal(id, Math.floor(Number(p?.qty) || 0)));
     }
     return w;
 }
@@ -6863,8 +6938,8 @@ function updateWalletTradeCapLabel() {
 function updateMainMarketHeaderTitle() {
     const el = document.getElementById('main-market-title');
     if (!el) return;
-    if (isChallengeModeTradeReady()) {
-        el.textContent = isCoinMarket() ? '🪙 스트리머 코인시장 챌린지' : '📈 스트리머 주식시장 챌린지';
+    if (__challengeModeUi === true && __userChallengeVerified === true) {
+        el.textContent = '📈 스트리머 주식시장 챌린지';
         return;
     }
     el.textContent = isCoinMarket() ? '🪙 스트리머 코인시장' : '📈 스트리머 주식시장';
@@ -6874,10 +6949,14 @@ function updateMarketTabChrome() {
     updateMainMarketHeaderTitle();
     const sub = document.getElementById('main-market-subtitle');
     if (sub) {
-        if (isChallengeModeTradeReady()) {
-            sub.textContent = isCoinMarket()
-                ? '챌린지: 종목은 메인과 동기화·시세는 별도입니다. 챌린지 자산은 매일 루틴에서 1,000만원으로 초기화됩니다.'
-                : '챌린지: 종목은 메인과 동기화·시세는 별도입니다. 챌린지 자산은 매일 루틴에서 1,000만원으로 초기화됩니다.';
+        if (__challengeModeUi === true && __userChallengeVerified === true) {
+            if (isChallengeModeTradeReady()) {
+                sub.textContent =
+                    '챌린지: 이 방에서 선택한 한 종목만 1시간 거래합니다. 세션이 끝나면 챌린지 자산이 초기화됩니다.';
+            } else {
+                sub.textContent =
+                    '챌린지: 방을 만들거나 참가해 1분 모집 후 동시에 시작합니다. 주식만 지원됩니다.';
+            }
         } else {
             sub.textContent = isCoinMarket()
                 ? '코인 시세는 주식과 별도입니다. 스트리머 검색 후 ⭐ 즐겨찾기하면 코인 탭에서 시세·거래를 확인할 수 있습니다.'
@@ -6910,6 +6989,12 @@ window.setActiveMarket = function (mode) {
 const CHALLENGE_UI_LS_KEY = 'soop_stock_challenge_ui';
 let __challengeModeUi = false;
 let __userChallengeVerified = false;
+/** users/{uid}/challengeRoomId — 서버가 설정 */
+let __userChallengeRoomId = '';
+/** challengeRooms/{id} 스냅샷 (리스너) */
+let __challengeRoomSnap = null;
+let __challengeRoomDetailUnsub = null;
+let __prevChallengeRoomLiveForSubs = false;
 
 function loadChallengeUiFromLocal() {
     try {
@@ -6919,12 +7004,32 @@ function loadChallengeUiFromLocal() {
     }
 }
 
+function isChallengeRoomLivePhase() {
+    const r = __challengeRoomSnap;
+    if (!r || typeof r !== 'object') return false;
+    if (r.finalized === true) return false;
+    if (r.liveStarted !== true) return false;
+    const now = Date.now();
+    const ls = Number(r.liveStartMs);
+    const le = Number(r.liveEndMs);
+    if (!Number.isFinite(ls) || !Number.isFinite(le)) return false;
+    return now >= ls && now < le;
+}
+
+/** 챌린지 UI 켜짐·인증됨이지만 라이브 매매 구간이 아님 (로비·방 없음·모집 중) */
+function isChallengeLobbyUi() {
+    return __challengeModeUi === true && __userChallengeVerified === true && !isChallengeRoomLivePhase();
+}
+
+/** 챌린지 라이브 1시간 구간에서만 challengeStocks·거래 허용 */
 function isChallengeModeTradeReady() {
-    return __challengeModeUi === true && __userChallengeVerified === true;
+    return __challengeModeUi === true && __userChallengeVerified === true && isChallengeRoomLivePhase();
 }
 
 function activeCashValue() {
-    if (isChallengeModeTradeReady()) return Math.floor(Math.max(0, Number(myData?.challengeCash) || 0));
+    if (__challengeModeUi === true && __userChallengeVerified === true) {
+        return Math.floor(Math.max(0, Number(myData?.challengeCash) || 0));
+    }
     return Math.floor(Math.max(0, Number(myData?.cash) || 0));
 }
 
@@ -6934,6 +7039,251 @@ function stocksCollectionPath() {
 
 function coinsCollectionPath() {
     return isChallengeModeTradeReady() ? 'challengeCoins' : 'coins';
+}
+
+function stopChallengeRoomDetailListener() {
+    if (__challengeRoomDetailUnsub) {
+        try {
+            __challengeRoomDetailUnsub();
+        } catch (_) { /* noop */ }
+        __challengeRoomDetailUnsub = null;
+    }
+    __challengeRoomSnap = null;
+    __prevChallengeRoomLiveForSubs = false;
+}
+
+function startChallengeRoomDetailListener(roomId) {
+    const rid = String(roomId || '').trim();
+    if (!rid || !db) {
+        stopChallengeRoomDetailListener();
+        return;
+    }
+    stopChallengeRoomDetailListener();
+    __prevChallengeRoomLiveForSubs = false;
+    try {
+        __challengeRoomDetailUnsub = onValue(
+            ref(db, `challengeRooms/${rid}`),
+            (snap) => {
+                __challengeRoomSnap = snap.exists() ? snap.val() : null;
+                if (!__challengeRoomSnap) {
+                    __prevChallengeRoomLiveForSubs = false;
+                    try {
+                        refreshChallengeLobbyPanels();
+                    } catch (_) { /* noop */ }
+                    try {
+                        syncChallengeLobbyVisibility();
+                    } catch (_) { /* noop */ }
+                    try {
+                        refreshMainStockListView();
+                    } catch (_) { /* noop */ }
+                    return;
+                }
+                const sid = String(__challengeRoomSnap.stockId || '').trim();
+                const liveNow = isChallengeRoomLivePhase();
+                if (liveNow && !__prevChallengeRoomLiveForSubs && sid) {
+                    try {
+                        const si = document.getElementById('search-input');
+                        if (si) si.value = '';
+                        searchResults = {};
+                        disconnectSearchQuoteObserver();
+                    } catch (_) { /* noop */ }
+                    try {
+                        subscribeToOwned(sid);
+                    } catch (_) { /* noop */ }
+                    try {
+                        subscribeToFavorite(sid);
+                    } catch (_) { /* noop */ }
+                    try {
+                        refreshChallengeMarketBindings();
+                    } catch (_) { /* noop */ }
+                    try {
+                        if (userUID) void fetchHoldingsSnapshotForUid(userUID);
+                    } catch (_) { /* noop */ }
+                }
+                __prevChallengeRoomLiveForSubs = liveNow;
+                try {
+                    refreshChallengeLobbyPanels();
+                } catch (_) { /* noop */ }
+                try {
+                    syncChallengeLobbyVisibility();
+                } catch (_) { /* noop */ }
+                try {
+                    updateMainMarketHeaderTitle();
+                } catch (_) { /* noop */ }
+                try {
+                    updateMarketTabChrome();
+                } catch (_) { /* noop */ }
+                try {
+                    refreshMainStockListView();
+                } catch (_) { /* noop */ }
+                try {
+                    scheduleUserDataUiRefresh();
+                } catch (_) { /* noop */ }
+            },
+            (err) => console.error('[challengeRooms] onValue', err)
+        );
+    } catch (e) {
+        console.warn('[challengeRooms] listener', e);
+    }
+}
+
+function syncChallengeUserRoomPointer(ridRaw) {
+    const rid = String(ridRaw || '').trim();
+    __userChallengeRoomId = rid;
+    if (rid) startChallengeRoomDetailListener(rid);
+    else stopChallengeRoomDetailListener();
+    try {
+        refreshChallengeLobbyPanels();
+    } catch (_) { /* noop */ }
+    try {
+        syncChallengeLobbyVisibility();
+    } catch (_) { /* noop */ }
+    try {
+        refreshMainStockListView();
+    } catch (_) { /* noop */ }
+}
+
+function syncChallengeLobbyVisibility() {
+    const p = document.getElementById('challenge-lobby-panel');
+    if (!p) return;
+    const show = isChallengeLobbyUi();
+    p.style.display = show ? '' : 'none';
+}
+
+function updateChallengeEmptyCopy() {
+    const emptyDiv = document.getElementById('stock-empty');
+    if (!emptyDiv) return;
+    const title = emptyDiv.querySelector('.empty-title');
+    const desc = emptyDiv.querySelector('.empty-desc');
+    if (!title || !desc) return;
+    if (isChallengeLobbyUi()) {
+        title.textContent = '챌린지 방을 만들거나 참가하세요';
+        desc.innerHTML =
+            '위 검색창에서 <strong>한 종목</strong>을 찾은 뒤 검색 결과의 <strong>「이 종목으로 방 만들기」</strong>를 누르거나,<br>' +
+            '아래에 친구가 공유한 <strong>방 ID</strong>를 입력해 참가할 수 있습니다.<br>' +
+            '1분 모집이 끝나면 참가자가 <strong>동시에</strong> 매매를 시작하며, <strong>1시간</strong> 후 자산이 초기화됩니다.';
+    } else {
+        title.textContent = '관심 종목을 추가해보세요';
+        desc.innerHTML =
+            '위 검색창에서 스트리머를 검색한 뒤<br>⭐ 버튼을 눌러 즐겨찾기하면<br>여기에 실시간으로 표시됩니다.';
+    }
+}
+
+function refreshChallengeLobbyPanels() {
+    const statusEl = document.getElementById('challenge-lobby-status');
+    const roomBlock = document.getElementById('challenge-lobby-room');
+    const titleEl = document.getElementById('challenge-lobby-room-title');
+    const cdEl = document.getElementById('challenge-lobby-countdown');
+    const memEl = document.getElementById('challenge-lobby-members');
+    const leaveBtn = document.getElementById('challenge-lobby-leave-btn');
+    if (!statusEl || !roomBlock) return;
+
+    if (!isChallengeLobbyUi()) {
+        statusEl.textContent = '';
+        roomBlock.style.display = 'none';
+        return;
+    }
+
+    const r = __challengeRoomSnap;
+    const inRoom = !!(__userChallengeRoomId && r && typeof r === 'object');
+
+    if (!inRoom) {
+        statusEl.textContent = '종목을 검색한 뒤 방을 만들거나, 방 ID로 참가하세요.';
+        roomBlock.style.display = 'none';
+        if (leaveBtn) leaveBtn.style.display = 'none';
+        return;
+    }
+
+    roomBlock.style.display = '';
+    if (leaveBtn) leaveBtn.style.display = '';
+
+    const stockLabel = `${escapeHtml(String(r.stockName || r.stockId || ''))} (${escapeHtml(String(r.stockId || ''))})`;
+    if (titleEl) titleEl.textContent = `선택 종목: ${stockLabel}`;
+
+    const now = Date.now();
+    const lobbyUntil = Number(r.lobbyUntilMs);
+    const liveEnd = Number(r.liveEndMs);
+    let cdText = '';
+    if (r.liveStarted !== true && Number.isFinite(lobbyUntil)) {
+        const rem = Math.max(0, Math.ceil((lobbyUntil - now) / 1000));
+        cdText = `모집 마감까지 약 ${rem}초`;
+    } else if (Number.isFinite(liveEnd)) {
+        const rem = Math.max(0, Math.ceil((liveEnd - now) / 1000));
+        cdText = r.liveStarted === true ? `매매 종료까지 약 ${Math.floor(rem / 60)}분 ${rem % 60}초` : '';
+    }
+    if (cdEl) cdEl.textContent = cdText;
+
+    const members = r.members && typeof r.members === 'object' ? r.members : {};
+    const n = Object.keys(members).length;
+    if (memEl) memEl.textContent = `참가자 ${n}명 · 방 ID: ${__userChallengeRoomId}`;
+
+    statusEl.textContent =
+        r.liveStarted === true
+            ? '곧 매매가 시작됩니다…'
+            : '참가자를 모으는 중입니다. 모집이 끝나면 동시에 매매가 시작됩니다.';
+}
+
+function wireChallengeLobbyControlsOnce() {
+    if (wireChallengeLobbyControlsOnce.__done) return;
+    wireChallengeLobbyControlsOnce.__done = true;
+    document.getElementById('challenge-join-room-btn')?.addEventListener('click', async () => {
+        const inp = document.getElementById('challenge-join-room-input');
+        const roomId = String(inp?.value || '').trim();
+        if (!roomId) {
+            alert('방 ID를 입력해 주세요.');
+            return;
+        }
+        try {
+            await joinChallengeRoomFn({ roomId });
+            inp.value = '';
+            alert('방에 참가했습니다.');
+        } catch (e) {
+            const msg = e?.message || e?.details || String(e?.code || '실패');
+            alert(typeof msg === 'string' ? msg : '참가에 실패했습니다.');
+        }
+    });
+    document.getElementById('challenge-lobby-leave-btn')?.addEventListener('click', async () => {
+        const roomId = String(__userChallengeRoomId || '').trim();
+        if (!roomId) return;
+        try {
+            await leaveChallengeRoomFn({ roomId });
+        } catch (e) {
+            const msg = e?.message || e?.details || String(e?.code || '실패');
+            alert(typeof msg === 'string' ? msg : '나가기에 실패했습니다.');
+        }
+    });
+}
+
+async function handleChallengeCreateRoomFromPick(stockId) {
+    const sid = String(stockId || '').trim();
+    if (!sid) return;
+    if (!__userChallengeVerified) return;
+    if (__userChallengeRoomId) {
+        alert('이미 방에 있습니다. 먼저 나간 뒤 새 방을 만들 수 있습니다.');
+        return;
+    }
+    try {
+        await createChallengeRoomFn({ stockId: sid });
+        alert('방이 생성되었습니다. 1분간 참가자를 모읍니다.');
+        try {
+            const si = document.getElementById('search-input');
+            if (si) si.value = '';
+            searchResults = {};
+            disconnectSearchQuoteObserver();
+            if (searchUnsub) {
+                try {
+                    searchUnsub();
+                } catch (_) { /* noop */ }
+                searchUnsub = null;
+            }
+        } catch (_) { /* noop */ }
+        try {
+            refreshMainStockListView();
+        } catch (_) { /* noop */ }
+    } catch (e) {
+        const msg = e?.message || e?.details || String(e?.code || '실패');
+        alert(typeof msg === 'string' ? msg : '방 만들기에 실패했습니다.');
+    }
 }
 
 function pauseFavoritePriceListenerOnly(stockId) {
@@ -7015,7 +7365,7 @@ function syncChallengeToggleDom() {
     const hint = document.getElementById('challenge-mode-hint');
     if (hint) {
         hint.textContent = __userChallengeVerified
-            ? '일일 시가 리셋 · 메인과 별도 포트폴리오'
+            ? '방·1분 모집·1시간 매매 · 세션 종료 시 자산 초기화'
             : '후원자 인증 승인 후 이용 (별풍선 100개+)';
     }
 }
@@ -7032,6 +7382,15 @@ function setChallengeVerifiedFromEntitlements(val) {
         } catch (_) { /* noop */ }
         try {
             updateMainMarketHeaderTitle();
+        } catch (_) { /* noop */ }
+        try {
+            updateMarketTabChrome();
+        } catch (_) { /* noop */ }
+        try {
+            syncChallengeLobbyVisibility();
+        } catch (_) { /* noop */ }
+        try {
+            refreshMainStockListView();
         } catch (_) { /* noop */ }
     }
     if (next === __userChallengeVerified) {
@@ -7054,6 +7413,15 @@ function setChallengeVerifiedFromEntitlements(val) {
     } catch (_) { /* noop */ }
     try {
         applyCoinMarketFeatureVisibility();
+    } catch (_) { /* noop */ }
+    try {
+        updateMarketTabChrome();
+    } catch (_) { /* noop */ }
+    try {
+        syncChallengeLobbyVisibility();
+    } catch (_) { /* noop */ }
+    try {
+        refreshMainStockListView();
     } catch (_) { /* noop */ }
 }
 
@@ -9407,6 +9775,7 @@ function isGlobalTradeCooldownActive() {
 function isTradeButtonDisabled(stockId) {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) return false;
+    if (isChallengeLobbyUi()) return true;
     if (isGlobalTradeCooldownActive()) return true;
     if (isTrading === stockId) return true;
     return false;
@@ -9711,6 +10080,9 @@ function closeChallengeFlowModal(id) {
 
 function setupChallengeModeUi() {
     loadChallengeUiFromLocal();
+    try {
+        wireChallengeLobbyControlsOnce();
+    } catch (_) { /* noop */ }
     const chToggle = document.getElementById('challenge-mode-toggle');
     if (!chToggle) return;
     syncChallengeToggleDom();
@@ -9748,6 +10120,15 @@ function setupChallengeModeUi() {
         } catch (_) { /* noop */ }
         try {
             syncChallengeToggleDom();
+        } catch (_) { /* noop */ }
+        try {
+            syncChallengeLobbyVisibility();
+        } catch (_) { /* noop */ }
+        try {
+            refreshChallengeLobbyPanels();
+        } catch (_) { /* noop */ }
+        try {
+            refreshMainStockListView();
         } catch (_) { /* noop */ }
     }
 
@@ -9839,6 +10220,12 @@ function setupChallengeModeUi() {
             } catch (_) { /* noop */ }
             try {
                 syncChallengeToggleDom();
+            } catch (_) { /* noop */ }
+            try {
+                syncChallengeLobbyVisibility();
+            } catch (_) { /* noop */ }
+            try {
+                refreshMainStockListView();
             } catch (_) { /* noop */ }
             return;
         }
@@ -10070,6 +10457,12 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
 
     if (isCoin && !canUseCoinMarket()) return;
 
+    if (!isAdmin && isChallengeLobbyUi()) {
+        tradeNotify('챌린지 모집 중에는 매매할 수 없습니다. 매매가 시작된 뒤 다시 시도해 주세요.');
+        abortAutoIf();
+        return;
+    }
+
     const now = serverNowMs();
 
     // Hard-Stop: 새로고침/클릭 타이밍이 UI보다 빠르더라도, 로컬 저장된 쿨다운으로 즉시 차단
@@ -10149,11 +10542,19 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         return;
     }
 
-    const bookPre = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
+    const bookPre = isChallengeModeTradeReady() && !isCoin
+        ? (myData?.challengeStocks || {})
+        : isCoin
+            ? (myData?.coins || {})
+            : (myData?.stocks || {});
     const rawQtyPre = Math.floor(Number(bookPre[id]?.qty) || 0);
     // 보유 종목 수 제한 — 매수 시 신규 종목 체크 (주식/코인 포트폴리오 각각)
     if (type === 'buy') {
-        const book = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
+        const book = isChallengeModeTradeReady() && !isCoin
+            ? (myData?.challengeStocks || {})
+            : isCoin
+                ? (myData?.coins || {})
+                : (myData?.stocks || {});
         const currentQtyOf = book[id]?.qty || 0;
         if (currentQtyOf === 0) {
             const ownedCount = Object.values(book).filter((s) => Math.floor(Number(s?.qty) || 0) !== 0).length;
@@ -10290,14 +10691,18 @@ const userRef = ref(db, `users/${tradeUid}`);
 
     try {
         const tradeFn = httpsCallable(fns, 'trade');
-        await tradeFn({
+        const tradePayload = {
             stockId: id,
             side: type,
             qty,
             market: isCoin ? 'coin' : 'stock',
             inverseMode: isInverseModeEnabled(),
-            challengeMode: isChallengeModeTradeReady()
-        });
+            challengeMode: isChallengeModeTradeReady(),
+        };
+        if (isChallengeModeTradeReady() && !isCoin) {
+            tradePayload.challengeRoomId = String(__userChallengeRoomId || '').trim();
+        }
+        await tradeFn(tradePayload);
         const tradeTsCommitted = serverNowMs();
         lastTradeTime = tradeTsCommitted;
         if (userUID) {
@@ -12368,6 +12773,15 @@ function createSparkline(stockId, fallbackPrice, isUp) {
 
 function refreshMainStockListView() {
     if (!isTradingUiUnlocked()) return;
+    try {
+        updateChallengeEmptyCopy();
+    } catch (_) { /* noop */ }
+    try {
+        syncChallengeLobbyVisibility();
+    } catch (_) { /* noop */ }
+    try {
+        refreshChallengeLobbyPanels();
+    } catch (_) { /* noop */ }
     const q = document.getElementById('search-input')?.value?.trim() || '';
     if (!q) renderFavoriteList();
     else renderSearchResults();
@@ -12409,7 +12823,9 @@ function createStockCard(s) {
 
     const pos = isCoinMarket()
         ? ((myData?.coins || {})[s.id] || { qty: 0, avg: 0 })
-        : ((myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
+        : (isChallengeModeTradeReady()
+            ? ((myData?.challengeStocks || {})[s.id] || { qty: 0, avg: 0 })
+            : ((myData?.stocks || {})[s.id] || { qty: 0, avg: 0 }));
     updateCardContent(card, s, pos);
     return card;
 }
@@ -13222,6 +13638,105 @@ function renderFavoriteList() {
     if (!listDiv) return;
     if (!isTradingUiUnlocked()) return;
 
+    if (isChallengeModeTradeReady()) {
+        const sid = String(__challengeRoomSnap?.stockId || '').trim();
+        if (!sid) {
+            listDiv.innerHTML = '';
+            stockElements = {};
+            if (emptyDiv) {
+                updateChallengeEmptyCopy();
+                emptyDiv.style.display = 'flex';
+            }
+            return;
+        }
+        const base =
+            allStocks.find((x) => x?.id === sid) ||
+            ownedStocks[sid] ||
+            favorites[sid] || {
+                id: sid,
+                name: String(__challengeRoomSnap?.stockName || sid),
+                price: 0,
+                change: '0',
+                volume: 0,
+            };
+        const s = { ...base, id: sid, isFavorite: !!favorites[sid] };
+        if (emptyDiv) emptyDiv.style.display = 'none';
+        const searchValCh = document.getElementById('search-input')?.value || '';
+        if (searchValCh.trim()) return;
+        snapshotVisibleTradeQtyInputs();
+        clearStockListStatusNodes(listDiv);
+        const hoverFreezeCh = !!listDiv.querySelector('.stock-card:hover');
+        const fragmentCh = document.createDocumentFragment();
+        const itemsCh = [s];
+        const bookCh = myData?.challengeStocks || {};
+        itemsCh.forEach((row) => {
+            let card = stockElements[row.id];
+            if (!card) {
+                card = createStockCard(row);
+                stockElements[row.id] = card;
+            } else {
+                updateCardContent(card, row, bookCh[row.id] || { qty: 0, avg: 0 });
+            }
+            let favBtn = card.querySelector('.btn-favorite');
+            if (!favBtn) {
+                favBtn = document.createElement('button');
+                favBtn.className = 'btn-favorite';
+                favBtn.onclick = (e) => { e.stopPropagation(); toggleFavoriteForActiveMarket(row.id); };
+                card.querySelector('.price-group')?.appendChild(favBtn);
+            }
+            favBtn.title = row.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가';
+            favBtn.textContent = row.isFavorite ? '⭐' : '☆';
+            let btnGroup = card.querySelector('.price-btn-group');
+            if (!btnGroup) {
+                btnGroup = document.createElement('div');
+                btnGroup.className = 'price-btn-group';
+                if (favBtn.parentNode) favBtn.parentNode.removeChild(favBtn);
+                btnGroup.appendChild(favBtn);
+                const alertBtn = document.createElement('button');
+                alertBtn.className = 'btn-alert';
+                alertBtn.dataset.id = row.id;
+                alertBtn.onclick = (e) => { e.stopPropagation(); openAlertModal(row.id, row.name || row.id); };
+                btnGroup.appendChild(alertBtn);
+                card.querySelector('.price-group')?.appendChild(btnGroup);
+            }
+            const alertBtnEl = btnGroup.querySelector('.btn-alert');
+            if (alertBtnEl) {
+                alertBtnEl.textContent = getAlertIcon(row.id);
+                alertBtnEl.title = '알림 설정';
+            }
+            if (hoverFreezeCh) {
+                if (!card.isConnected) listDiv.appendChild(card);
+            } else {
+                fragmentCh.appendChild(card);
+            }
+        });
+        if (!hoverFreezeCh) {
+            Object.keys(stockElements).forEach((id) => {
+                if (!itemsCh.find((row) => row.id === id)) {
+                    stockElements[id]?.remove();
+                    delete stockElements[id];
+                }
+            });
+            listDiv.appendChild(fragmentCh);
+        }
+        refreshCircuitFreezeOnAllListCards();
+        ensureCircuitFreezeCountdownTimer();
+        return;
+    }
+
+    if (isChallengeLobbyUi()) {
+        const q = document.getElementById('search-input')?.value?.trim() || '';
+        if (!q) {
+            listDiv.innerHTML = '';
+            stockElements = {};
+            if (emptyDiv) {
+                updateChallengeEmptyCopy();
+                emptyDiv.style.display = 'flex';
+            }
+        }
+        return;
+    }
+
     // 즐겨찾기 + 보유 주식 합산 (중복 제거)
     const merged = {};
     Object.entries(favorites).forEach(([id, s])    => { merged[id] = { ...s, isFavorite: true }; });
@@ -13755,6 +14270,15 @@ function renderSearchResults() {
         return;
     }
 
+    if (isChallengeModeTradeReady()) {
+        try {
+            const si = document.getElementById('search-input');
+            if (si) si.value = '';
+        } catch (_) { /* noop */ }
+        renderFavoriteList();
+        return;
+    }
+
     const items = Object.values(searchResults)
         .sort((a, b) => (b.price || 0) - (a.price || 0));
 
@@ -13795,7 +14319,9 @@ function renderSearchResults() {
         } else {
             const pos = isCoinMarket()
                 ? ((myData?.coins || {})[s.id] || { qty: 0, avg: 0 })
-                : ((myData?.stocks || {})[s.id] || { qty: 0, avg: 0 });
+                : (isChallengeModeTradeReady()
+                    ? ((myData?.challengeStocks || {})[s.id] || { qty: 0, avg: 0 })
+                    : ((myData?.stocks || {})[s.id] || { qty: 0, avg: 0 }));
             updateCardContent(card, s, pos);
         }
         let favBtn = card.querySelector('.btn-favorite');
@@ -13808,6 +14334,27 @@ function renderSearchResults() {
         const isFav = isCoinMarket() ? !!favoriteCoins[s.id] : !!favorites[s.id];
         favBtn.title       = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
         favBtn.textContent = isFav ? '⭐' : '☆';
+
+        if (isChallengeLobbyUi() && !isCoinMarket() && !__userChallengeRoomId) {
+            let row = card.querySelector('.challenge-room-create-wrap');
+            if (!row) {
+                row = document.createElement('div');
+                row.className = 'challenge-room-create-wrap';
+                row.style.marginTop = '8px';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn-challenge-room-create';
+                btn.textContent = '이 종목으로 방 만들기';
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    void handleChallengeCreateRoomFromPick(s.id);
+                });
+                row.appendChild(btn);
+                card.querySelector('.trade-input-wrap')?.appendChild(row);
+            }
+        } else {
+            card.querySelector('.challenge-room-create-wrap')?.remove();
+        }
 
         if (hoverFreeze) {
             if (!card.isConnected) listDiv.appendChild(card);
