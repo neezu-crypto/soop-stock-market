@@ -160,11 +160,24 @@ function isRegularMarketServer(mh, dateKst) {
   return nowMins >= rOpenMins || nowMins < rCloseMins;
 }
 
-/** 정규장 1초 / 비정규장(장 운영 중) 30초 — 메인 앱 getTradeCooldownMs 와 동일 */
-function getTradeCooldownMsFromConfig(mh, dateKst) {
-  if (!mh || !mh.enabled) return 1000;
+/** Callable JWT — 구글 연동 계정만 1초 티어(정규장). 익명 등 그 외는 30초 티어. */
+function isGoogleLinkedTradeAuth(auth) {
+  return String(auth?.token?.firebase?.sign_in_provider || "") === "google.com";
+}
+
+/**
+ * 정규장: 구글 1초 / 익명·기타 30초. 비정규장(장 운영 중): 30초 공통.
+ * marketHours 미사용 시에도 동일 티어(구글 1초 / 비구글 30초).
+ * 메인 앱 `getTradeCooldownMs` 와 동일 규칙.
+ */
+function getTradeCooldownMsFromConfig(mh, dateKst, auth) {
+  if (isAdminAuth(auth)) return 0;
+  const google = isGoogleLinkedTradeAuth(auth);
+  if (!mh || !mh.enabled) {
+    return google ? 1000 : 30000;
+  }
   if (!isMarketOpenServer(mh, dateKst)) return 0;
-  if (isRegularMarketServer(mh, dateKst)) return 1000;
+  if (isRegularMarketServer(mh, dateKst)) return google ? 1000 : 30000;
   return 30000;
 }
 
@@ -305,7 +318,7 @@ function assertServerTradeCooldownAllowed(auth, siteConfig, preUser) {
   const mh = siteConfig.marketHours || {};
   const now = Date.now();
   const dateKst = nowKstDate();
-  const cooldownMs = getTradeCooldownMsFromConfig(mh, dateKst);
+  const cooldownMs = getTradeCooldownMsFromConfig(mh, dateKst, auth);
   if (cooldownMs <= 0) return;
   const lt = effectiveLastTradeTimeMs(preUser);
   if (!Number.isFinite(lt) || lt <= 0) return;

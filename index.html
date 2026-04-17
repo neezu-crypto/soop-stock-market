@@ -9354,16 +9354,28 @@ function hydrateLastTradeTimeFromOffPeakStorage() {
 
 function getTradeCooldownMsForTrade(isCoin, autoTrade) {
     // 코인/주식 모두 정규장·비정규장 공통 쿨다운 적용
-    // (정규장 1초 / 비정규장 30초, 관리자 제외)
+    // (구글·정규장 1초 / 그 외 정규장 30초 / 비정규장 30초, 관리자 제외)
     if (isCoin) return getTradeCooldownMs();
     return getTradeCooldownMs();
 }
 
-/** 정규장: 1초 / 비정규장(장 운영 중): 30초 — 관리자 0 */
+/** 구글 연동 로그인만 정규장 1초 티어 — 익명·다른 프로바이더는 30초 티어 */
+function isGoogleTradeCooldownTier() {
+    try {
+        const u = auth.currentUser;
+        if (!u || u.isAnonymous) return false;
+        return Array.isArray(u.providerData) && u.providerData.some((p) => p && p.providerId === 'google.com');
+    } catch (_) {
+        return false;
+    }
+}
+
+/** 정규장: 구글 1초 / 비구글 30초. 비정규장(장 운영 중): 30초 공통 — 관리자 0 */
 function getTradeCooldownMs() {
     const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
     if (isAdmin) return 0;
     if (!isMarketOpen()) return 0;
+    const googleTier = isGoogleTradeCooldownTier();
     // siteConfig 미수신(초기 로딩) 동안에는 off-peak 여부를 확정할 수 없으므로,
     // 로컬에 비정규장 거래 시각이 최근(30초 이내)으로 남아있으면 30초 쿨다운을 강제
     if (!siteConfigReady) {
@@ -9377,9 +9389,10 @@ function getTradeCooldownMs() {
                 if (Number.isFinite(ts) && ts > 0 && (serverNowMs() - ts) < 30000) return 30000;
             }
         }
-        return 1000; // 안전한 기본값
+        return googleTier ? 1000 : 30000;
     }
-    return isRegularMarket() ? 1000 : 30000;
+    if (isRegularMarket()) return googleTier ? 1000 : 30000;
+    return 30000;
 }
 
 function isGlobalTradeCooldownActive() {
