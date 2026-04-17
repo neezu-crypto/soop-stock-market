@@ -2335,6 +2335,189 @@ exports.adminSyncCoinsFromStocks = onCall(
   }
 );
 
+const CHALLENGE_STOCK_OPEN_WON = 10000;
+const CHALLENGE_COIN_OPEN_WON = 100000000;
+const CHALLENGE_DAILY_CASH_WON = 10000000;
+
+/** 관리자: 메인 stocks/coins 기준으로 챌린지 시장 노드만 동기화(유저 청산 없음). 최초 배포·수동 동기화용 */
+exports.adminSyncChallengeMarketsFromMain = onCall(
+  { cors: true, timeoutSeconds: 300, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    const [stocksSnap, coinsSnap, chStockSnap, chCoinSnap] = await Promise.all([
+      db.ref("stocks").get(),
+      db.ref("coins").get(),
+      db.ref("challengeStocks").get(),
+      db.ref("challengeCoins").get(),
+    ]);
+    const stocks = stocksSnap.exists() ? stocksSnap.val() || {} : {};
+    const coins = coinsSnap.exists() ? coinsSnap.val() || {} : {};
+    const chStocks = chStockSnap.exists() ? chStockSnap.val() || {} : {};
+    const chCoins = chCoinSnap.exists() ? chCoinSnap.val() || {} : {};
+    const chSUp = {};
+    Object.entries(stocks).forEach(([id, row]) => {
+      const name = String(row?.name || "");
+      const cur = chStocks[id] ? normalizeStockRow(chStocks[id]) : null;
+      const p = Math.max(1, Math.floor(Number(cur?.price || 0)) || CHALLENGE_STOCK_OPEN_WON);
+      chSUp[`challengeStocks/${id}`] = {
+        name,
+        price: p,
+        volume: Number(cur?.volume || 0) || 0,
+        buyVol: Number(cur?.buyVol || 0) || 0,
+        sellVol: Number(cur?.sellVol || 0) || 0,
+        change: cur?.change != null ? String(cur.change) : "0.00",
+        history: Array.isArray(cur?.history) && cur.history.length ? cur.history : [p],
+      };
+    });
+    Object.keys(chStocks).forEach((id) => {
+      if (!stocks[id]) chSUp[`challengeStocks/${id}`] = null;
+    });
+    const chCUp = {};
+    Object.entries(coins).forEach(([id, row]) => {
+      const name = String(row?.name || "");
+      const cur = chCoins[id] ? normalizeStockRow(chCoins[id]) : null;
+      const p = Math.max(1, Math.floor(Number(cur?.price || 0)) || CHALLENGE_COIN_OPEN_WON);
+      chCUp[`challengeCoins/${id}`] = {
+        name,
+        price: p,
+        volume: Number(cur?.volume || 0) || 0,
+        buyVol: Number(cur?.buyVol || 0) || 0,
+        sellVol: Number(cur?.sellVol || 0) || 0,
+        change: cur?.change != null ? String(cur.change) : "0.0000",
+        history: Array.isArray(cur?.history) && cur.history.length ? cur.history : [p],
+      };
+    });
+    Object.keys(chCoins).forEach((id) => {
+      if (!coins[id]) chCUp[`challengeCoins/${id}`] = null;
+    });
+    const CHUNK = 400;
+    const allKeys = [...Object.keys(chSUp), ...Object.keys(chCUp)];
+    for (let i = 0; i < allKeys.length; i += CHUNK) {
+      const patch = {};
+      allKeys.slice(i, i + CHUNK).forEach((k) => {
+        patch[k] = chSUp[k] !== undefined ? chSUp[k] : chCUp[k];
+      });
+      await db.ref().update(patch);
+    }
+    const rankR = await runMarketRankChallengeAggregation(db, { skipIfMarketClosed: false });
+    return { ok: true, stockIds: Object.keys(stocks).length, coinIds: Object.keys(coins).length, rank: rankR };
+  }
+);
+
+exports.submitChallengeSupporterVerify = onCall(
+  { cors: true, timeoutSeconds: 30, memory: "256MiB" },
+  async (request) => {
+    const auth = request.auth;
+    if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    if (String(auth.token?.firebase?.sign_in_provider || "") !== "google.com") {
+      throw new HttpsError("failed-precondition", "Google 로그인 계정만 신청할 수 있습니다.");
+    }
+    const nickname = String(request.data?.nickname || "").trim();
+    const soopId = String(request.data?.soopId || "").trim();
+    if (!nickname || nickname.length > 80) {
+      throw new HttpsError("invalid-argument", "닉네임을 입력해 주세요. (최대 80자)");
+    }
+    if (!soopId || soopId.length > 80) {
+      throw new HttpsError("invalid-argument", "SOOP 아이디를 입력해 주세요. (최대 80자)");
+    }
+    const db = admin.database();
+    const pendingSnap = await db
+      .ref("challengeSupporterRequests")
+      .orderByChild("uid")
+      .equalTo(auth.uid)
+      .limitToFirst(20)
+      .get();
+    if (pendingSnap.exists()) {
+      const rows = pendingSnap.val() || {};
+      for (const v of Object.values(rows)) {
+        if (v && v.status === "pending") {
+          throw new HttpsError("failed-precondition", "이미 검수 대기 중인 신청이 있습니다.");
+        }
+      }
+    }
+    const key = db.ref("challengeSupporterRequests").push().key;
+    if (!key) throw new HttpsError("internal", "push key failed");
+    await db.ref(`challengeSupporterRequests/${key}`).set({
+      uid: auth.uid,
+      email: String(auth.token?.email || ""),
+      nickname,
+      soopId,
+      status: "pending",
+      createdAt: Date.now(),
+    });
+    return { ok: true, requestId: key };
+  }
+);
+
+exports.adminRunChallengeDailyReset = onCall(
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    return await runDailyChallengeResetServer(db);
+  }
+);
+
+exports.adminReviewChallengeSupporterRequest = onCall(
+  { cors: true, timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const reqId = String(request.data?.requestId || "").trim();
+    const approve = request.data?.approve === true;
+    if (!reqId) throw new HttpsError("invalid-argument", "requestId required.");
+    const db = admin.database();
+    const rref = db.ref(`challengeSupporterRequests/${reqId}`);
+    const snap = await rref.get();
+    if (!snap.exists()) throw new HttpsError("not-found", "요청을 찾을 수 없습니다.");
+    const row = snap.val() || {};
+    if (row.status !== "pending") {
+      throw new HttpsError("failed-precondition", "이미 처리된 요청입니다.");
+    }
+    const targetUid = String(row.uid || "");
+    if (!targetUid) throw new HttpsError("failed-precondition", "uid 없음");
+    const now = Date.now();
+    if (approve) {
+      await db.ref().update({
+        [`challengeSupporterRequests/${reqId}/status`]: "approved",
+        [`challengeSupporterRequests/${reqId}/reviewedAt`]: now,
+        [`challengeSupporterRequests/${reqId}/reviewedBy`]: String(request.auth?.token?.email || ""),
+        [`users/${targetUid}/entitlements/challengeSupporterVerified`]: true,
+      });
+      return { ok: true, approved: true, uid: targetUid };
+    }
+    await rref.update({
+      status: "rejected",
+      reviewedAt: now,
+      reviewedBy: String(request.auth?.token?.email || ""),
+    });
+    return { ok: true, approved: false, uid: targetUid };
+  }
+);
+
+/** 챌린지 모드 거래 시 users 노드에 메인·챌린지 포트폴리오를 동시에 유지 */
+function packUserTradeResult(u, challengeModeReq, isCoin, cashOut, stockBookOut, coinBookOut) {
+  const base = { ...u, lastTradeTime: null };
+  if (!challengeModeReq) {
+    base.cash = cashOut;
+    base.stocks = stockBookOut;
+    base.coins = coinBookOut;
+    return base;
+  }
+  base.challengeCash = cashOut;
+  base.stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
+  base.coins = u.coins && typeof u.coins === "object" ? u.coins : {};
+  base.challengeStocks = stockBookOut;
+  base.challengeCoins = coinBookOut;
+  return base;
+}
+
 exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, async (req) => {
   const auth = req.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
@@ -2348,6 +2531,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const market = String(req.data?.market || "stock").trim().toLowerCase();
   const isCoin = market === "coin";
   const inverseModeReq = Boolean(req.data?.inverseMode);
+  const challengeModeReq = Boolean(req.data?.challengeMode);
 
   if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
   if (side !== "buy" && side !== "sell") throw new HttpsError("invalid-argument", "side must be buy|sell.");
@@ -2377,7 +2561,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
     if (!marketOpen) throw new HttpsError("failed-precondition", "Market closed.");
   }
 
-  if (!isCoin) {
+  if (!isCoin && !challengeModeReq) {
     const frozenMap = siteConfig.frozenStocks || {};
     const frozenUntil = Number(frozenMap?.[stockId] || 0);
     if (frozenUntil > Date.now() && !isAdminAuth(auth)) {
@@ -2393,16 +2577,43 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const preUser = preUserSnap.exists() ? preUserSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
   assertUserTradeRestrictionAllowed(auth, preUser);
   assertServerTradeCooldownAllowed(auth, siteConfig, preUser);
+  if (challengeModeReq && !isAdminAuth(auth)) {
+    const provider = String(auth.token?.firebase?.sign_in_provider || "");
+    if (provider !== "google.com") {
+      throw new HttpsError("failed-precondition", "챌린지 모드는 Google 로그인이 필요합니다.");
+    }
+    if (preUser?.entitlements?.challengeSupporterVerified !== true) {
+      throw new HttpsError(
+        "permission-denied",
+        "챌린지 모드는 후원자 인증(별풍선 100개 이상) 승인 후 이용할 수 있습니다."
+      );
+    }
+  }
+  if (challengeModeReq && isCoin) {
+    throw new HttpsError("failed-precondition", "챌린지 모드는 주식시장만 지원합니다.");
+  }
   /** RTDB 트랜잭션 콜백에서 cur가 null로만 오는 경우 대비 */
   const userSeedForTx = JSON.parse(JSON.stringify(preUser));
-  const preCash = Number(preUser.cash ?? 1000000);
-  const preStocksMap = preUser.stocks && typeof preUser.stocks === "object" ? preUser.stocks : {};
-  const preCoinsMap = preUser.coins && typeof preUser.coins === "object" ? preUser.coins : {};
+  const preCash = Number(challengeModeReq ? preUser.challengeCash ?? CHALLENGE_DAILY_CASH_WON : preUser.cash ?? 1000000);
+  const preStocksMap = challengeModeReq
+    ? preUser.challengeStocks && typeof preUser.challengeStocks === "object"
+      ? preUser.challengeStocks
+      : {}
+    : preUser.stocks && typeof preUser.stocks === "object"
+      ? preUser.stocks
+      : {};
+  const preCoinsMap = challengeModeReq
+    ? preUser.challengeCoins && typeof preUser.challengeCoins === "object"
+      ? preUser.challengeCoins
+      : {}
+    : preUser.coins && typeof preUser.coins === "object"
+      ? preUser.coins
+      : {};
   const preBookPos = isCoin ? preCoinsMap[stockId] || { qty: 0, avg: 0 } : preStocksMap[stockId] || { qty: 0, avg: 0 };
   const preHaveQty = Math.floor(Number(preBookPos.qty || 0));
   const invertPrice = inverseModeReq;
 
-  const stockPath = isCoin ? "coins" : "stocks";
+  const stockPath = challengeModeReq ? (isCoin ? "challengeCoins" : "challengeStocks") : isCoin ? "coins" : "stocks";
   const candleRoot = isCoin ? "coinCandles" : "candlesticks";
   const instrumentRef = db.ref(`${stockPath}/${stockId}`);
 
@@ -2581,10 +2792,16 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         );
       }
     }
-    const u = effectiveCur != null ? effectiveCur : { cash: 1000000, stocks: {}, coins: {} };
-    const cash = Number(u.cash ?? 1000000);
-    const stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
-    const coins = u.coins && typeof u.coins === "object" ? u.coins : {};
+    const u = effectiveCur != null ? effectiveCur : { cash: 1000000, challengeCash: CHALLENGE_DAILY_CASH_WON, stocks: {}, coins: {} };
+    const cash = Number(challengeModeReq ? u.challengeCash ?? CHALLENGE_DAILY_CASH_WON : u.cash ?? 1000000);
+    const mainStocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
+    const mainCoins = u.coins && typeof u.coins === "object" ? u.coins : {};
+    const chStocks = u.challengeStocks && typeof u.challengeStocks === "object" ? u.challengeStocks : {};
+    const chCoins = u.challengeCoins && typeof u.challengeCoins === "object" ? u.challengeCoins : {};
+    const stocks = challengeModeReq ? chStocks : mainStocks;
+    const coins = challengeModeReq ? chCoins : mainCoins;
+    const finish = (cashOut, stockBookOut, coinBookOut) =>
+      packUserTradeResult(u, challengeModeReq, isCoin, cashOut, stockBookOut, coinBookOut);
 
     if (isCoin) {
       const us = coins[stockId] || { qty: 0, avg: 0 };
@@ -2619,13 +2836,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           } else {
             nextCoins[stockId] = { qty: newQty, avg: haveAvg };
           }
-          return {
-            ...u,
-            cash: cash - total,
-            stocks,
-            coins: nextCoins,
-            lastTradeTime: null
-          };
+          return finish(cash - total, stocks, nextCoins);
         }
         if (haveQty < 0) {
           const newQty = haveQty + qty;
@@ -2639,50 +2850,32 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
             // 롱 전환 구간: 남은 롱 수량의 기준단가는 전환 시점 체결가
             nextCoins[stockId] = { qty: newQty, avg: Math.round(lastTradePrice) };
           }
-          return {
-            ...u,
-            cash: cash - total,
-            stocks,
-            coins: nextCoins,
-            lastTradeTime: null
-          };
+          return finish(cash - total, stocks, nextCoins);
         }
         if (haveQty > 0) {
           const totalCost = haveQty * haveAvg + total;
           const newQty = haveQty + qty;
-          return {
-            ...u,
-            cash: cash - total,
-            stocks,
-            coins: { ...coins, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
-            lastTradeTime: null
-          };
+          return finish(cash - total, stocks, {
+            ...coins,
+            [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) },
+          });
         }
         if (haveQty === 0) {
           if (inverseModeReq) {
-            return {
-              ...u,
-              cash: cash - total,
-              stocks,
-              coins: { ...coins, [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) } },
-              lastTradeTime: null
-            };
+            return finish(cash - total, stocks, {
+              ...coins,
+              [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) },
+            });
           }
-          return {
-            ...u,
-            cash: cash - total,
-            stocks,
-            coins: { ...coins, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } },
-            lastTradeTime: null
-          };
+          return finish(cash - total, stocks, {
+            ...coins,
+            [stockId]: { qty: qty, avg: Math.round(lastTradePrice) },
+          });
         }
-        return {
-          ...u,
-          cash: cash - total,
-          stocks,
-          coins: { ...coins, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } },
-          lastTradeTime: null
-        };
+        return finish(cash - total, stocks, {
+          ...coins,
+          [stockId]: { qty: qty, avg: Math.round(lastTradePrice) },
+        });
       }
 
       if (haveQty > 0) {
@@ -2695,13 +2888,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         } else {
           nextCoins[stockId] = { qty: newQty, avg: haveAvg };
         }
-        return {
-          ...u,
-          cash: cash + receive,
-          stocks,
-          coins: nextCoins,
-          lastTradeTime: null
-        };
+        return finish(cash + receive, stocks, nextCoins);
       }
       if (haveQty < 0) {
         if (haveQty > -qty && !isAdminAuth(auth)) return undefined;
@@ -2713,13 +2900,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         } else {
           nextCoins[stockId] = { qty: newQty, avg: haveAvg };
         }
-        return {
-          ...u,
-          cash: cash + receive,
-          stocks,
-          coins: nextCoins,
-          lastTradeTime: null
-        };
+        return finish(cash + receive, stocks, nextCoins);
       }
       return undefined;
     }
@@ -2756,13 +2937,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         } else {
           nextStocks[stockId] = { qty: newQty, avg: haveAvg };
         }
-        return {
-          ...u,
-          cash: cash - total,
-          stocks: nextStocks,
-          coins,
-          lastTradeTime: null
-        };
+        return finish(cash - total, nextStocks, coins);
       }
       if (haveQty < 0) {
         const newQty = haveQty + qty;
@@ -2776,50 +2951,20 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           // 롱 전환 구간: 남은 롱 수량의 기준단가는 전환 시점 체결가
           nextStocks[stockId] = { qty: newQty, avg: Math.round(lastTradePrice) };
         }
-        return {
-          ...u,
-          cash: cash - total,
-          stocks: nextStocks,
-          coins,
-          lastTradeTime: null
-        };
+        return finish(cash - total, nextStocks, coins);
       }
       if (haveQty > 0) {
         const totalCost = haveQty * haveAvg + total;
         const newQty = haveQty + qty;
-        return {
-          ...u,
-          cash: cash - total,
-          stocks: { ...stocks, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } },
-          coins,
-          lastTradeTime: null
-        };
+        return finish(cash - total, { ...stocks, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } }, coins);
       }
       if (haveQty === 0) {
         if (inverseModeReq) {
-          return {
-            ...u,
-            cash: cash - total,
-            stocks: { ...stocks, [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) } },
-            coins,
-            lastTradeTime: null
-          };
+          return finish(cash - total, { ...stocks, [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) } }, coins);
         }
-        return {
-          ...u,
-          cash: cash - total,
-          stocks: { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } },
-          coins,
-          lastTradeTime: null
-        };
+        return finish(cash - total, { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } }, coins);
       }
-      return {
-        ...u,
-        cash: cash - total,
-        stocks: { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } },
-        coins,
-        lastTradeTime: null
-      };
+      return finish(cash - total, { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } }, coins);
     }
 
     if (haveQty > 0) {
@@ -2832,13 +2977,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       } else {
         nextStocks[stockId] = { qty: newQty, avg: haveAvg };
       }
-      return {
-        ...u,
-        cash: cash + receive,
-        stocks: nextStocks,
-        coins,
-        lastTradeTime: null
-      };
+      return finish(cash + receive, nextStocks, coins);
     }
     if (haveQty < 0) {
       if (haveQty > -qty && !isAdminAuth(auth)) return undefined;
@@ -2850,13 +2989,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       } else {
         nextStocks[stockId] = { qty: newQty, avg: haveAvg };
       }
-      return {
-        ...u,
-        cash: cash + receive,
-        stocks: nextStocks,
-        coins,
-        lastTradeTime: null
-      };
+      return finish(cash + receive, nextStocks, coins);
     }
     return undefined;
   });
@@ -2880,23 +3013,25 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
     }
   }
 
-  const ts = Math.floor(Date.now() / 60000) * 60;
-  const candleRef = db.ref(`${candleRoot}/${stockId}/${ts}`);
-  await candleRef.transaction((cur) => {
-    if (!cur) {
-      return { o: lastTradePrice, h: lastTradePrice, l: lastTradePrice, c: lastTradePrice, v: qty, t: ts };
-    }
-    return {
-      ...cur,
-      h: Math.max(Number(cur.h || lastTradePrice), lastTradePrice),
-      l: Math.min(Number(cur.l || lastTradePrice), lastTradePrice),
-      c: lastTradePrice,
-      v: Number(cur.v || 0) + qty,
-      t: ts
-    };
-  });
+  if (!challengeModeReq) {
+    const ts = Math.floor(Date.now() / 60000) * 60;
+    const candleRef = db.ref(`${candleRoot}/${stockId}/${ts}`);
+    await candleRef.transaction((cur) => {
+      if (!cur) {
+        return { o: lastTradePrice, h: lastTradePrice, l: lastTradePrice, c: lastTradePrice, v: qty, t: ts };
+      }
+      return {
+        ...cur,
+        h: Math.max(Number(cur.h || lastTradePrice), lastTradePrice),
+        l: Math.min(Number(cur.l || lastTradePrice), lastTradePrice),
+        c: lastTradePrice,
+        v: Number(cur.v || 0) + qty,
+        t: ts
+      };
+    });
+  }
 
-  if (!isCoin) {
+  if (!isCoin && !challengeModeReq) {
     await maybeApplyStockVolatilityCircuitBreaker(db, stockId, auth);
   }
 
@@ -2912,6 +3047,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       newPrice: lastNewPrice,
       tradePrice: lastTradePrice,
       impact: lastImpact,
+      challengeMode: challengeModeReq ? true : null,
       createdAt: admin.database.ServerValue.TIMESTAMP
     });
   }
@@ -2924,7 +3060,8 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
     market: isCoin ? "coin" : "stock",
     tradePrice: lastTradePrice,
     newPrice: lastNewPrice,
-    tradeId: tradeId || null
+    tradeId: tradeId || null,
+    challengeMode: challengeModeReq || false
   };
 });
 
@@ -4230,6 +4367,20 @@ exports.refreshMarketRanksOnCoinPriceWrite = onValueWritten(
   }
 );
 
+exports.refreshMarketRanksOnChallengeStockPriceWrite = onValueWritten(
+  "/challengeStocks/{stockId}/price",
+  async () => {
+    await maybeRunMarketRankChallengeLiveRefresh("challenge_stock_price_write");
+  }
+);
+
+exports.refreshMarketRanksOnChallengeCoinPriceWrite = onValueWritten(
+  "/challengeCoins/{stockId}/price",
+  async () => {
+    await maybeRunMarketRankChallengeLiveRefresh("challenge_coin_price_write");
+  }
+);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // siteConfig/dailyAuto — Cloud Scheduler 서버 실행 (관리자 페이지 미오픈)
 // 관리자 UI와 동일 루틴 타입·KST 시각(hour/minute) 기준
@@ -4295,6 +4446,7 @@ function normalizeDailyRoutineItemServer(raw) {
   }
   if (type === "circuitBreakerClear") return { type: "circuitBreakerClear" };
   if (type === "marketRankRefresh") return { type: "marketRankRefresh" };
+  if (type === "challengePriceReset") return { type: "challengePriceReset" };
   return null;
 }
 
@@ -4575,6 +4727,171 @@ async function runDailyRegularHoursSetServer(db, ro, rc) {
   return { ok: true, regularOpen: ro, regularClose: rc };
 }
 
+async function runDailyChallengeResetServer(db) {
+  const [stocksSnap, coinsSnap, usersSnap, chStockSnap, chCoinSnap] = await Promise.all([
+    db.ref("stocks").get(),
+    db.ref("coins").get(),
+    db.ref("users").get(),
+    db.ref("challengeStocks").get(),
+    db.ref("challengeCoins").get(),
+  ]);
+  const stocks = stocksSnap.exists() ? stocksSnap.val() || {} : {};
+  const coins = coinsSnap.exists() ? coinsSnap.val() || {} : {};
+  const users = usersSnap.exists() ? usersSnap.val() || {} : {};
+  const chStocks = chStockSnap.exists() ? chStockSnap.val() || {} : {};
+  const chCoins = chCoinSnap.exists() ? chCoinSnap.val() || {} : {};
+
+  const updates = {};
+  let liquidatedUsers = 0;
+
+  for (const [uid, u] of Object.entries(users)) {
+    if (!u || typeof u !== "object") continue;
+    const bkS = u.challengeStocks && typeof u.challengeStocks === "object" ? u.challengeStocks : {};
+    const bkC = u.challengeCoins && typeof u.challengeCoins === "object" ? u.challengeCoins : {};
+    let touched = false;
+
+    for (const [sid, row] of Object.entries(bkS)) {
+      const qty = Math.floor(Number(row?.qty || 0));
+      if (!qty) continue;
+      touched = true;
+    }
+    for (const [cid, row] of Object.entries(bkC)) {
+      const qty = Math.floor(Number(row?.qty || 0));
+      if (!qty) continue;
+      touched = true;
+    }
+
+    updates[`users/${uid}/challengeCash`] = CHALLENGE_DAILY_CASH_WON;
+    updates[`users/${uid}/challengeStocks`] = null;
+    updates[`users/${uid}/challengeCoins`] = null;
+    if (touched) liquidatedUsers += 1;
+  }
+
+  const CHUNK = 400;
+  const keys = Object.keys(updates);
+  for (let i = 0; i < keys.length; i += CHUNK) {
+    const slice = keys.slice(i, i + CHUNK);
+    const patch = {};
+    slice.forEach((k) => {
+      patch[k] = updates[k];
+    });
+    await db.ref().update(patch);
+  }
+
+  const chSUp = {};
+  Object.entries(stocks).forEach(([id, row]) => {
+    const name = String(row?.name || "");
+    chSUp[`challengeStocks/${id}`] = {
+      name,
+      price: CHALLENGE_STOCK_OPEN_WON,
+      volume: 0,
+      buyVol: 0,
+      sellVol: 0,
+      change: "0.00",
+      history: [CHALLENGE_STOCK_OPEN_WON],
+    };
+  });
+  Object.keys(chStocks).forEach((id) => {
+    if (!stocks[id]) chSUp[`challengeStocks/${id}`] = null;
+  });
+
+  const chCUp = {};
+  Object.entries(coins).forEach(([id, row]) => {
+    const name = String(row?.name || "");
+    chCUp[`challengeCoins/${id}`] = {
+      name,
+      price: CHALLENGE_COIN_OPEN_WON,
+      volume: 0,
+      buyVol: 0,
+      sellVol: 0,
+      change: "0.0000",
+      history: [CHALLENGE_COIN_OPEN_WON],
+    };
+  });
+  Object.keys(chCoins).forEach((id) => {
+    if (!coins[id]) chCUp[`challengeCoins/${id}`] = null;
+  });
+
+  const instKeys = [...Object.keys(chSUp), ...Object.keys(chCUp)];
+  for (let i = 0; i < instKeys.length; i += CHUNK) {
+    const patch = {};
+    instKeys.slice(i, i + CHUNK).forEach((k) => {
+      const v = chSUp[k] !== undefined ? chSUp[k] : chCUp[k];
+      patch[k] = v;
+    });
+    await db.ref().update(patch);
+  }
+
+  const rankR = await runMarketRankChallengeAggregation(db, { skipIfMarketClosed: false });
+  return {
+    ok: true,
+    liquidatedUsers,
+    challengeCashReset: CHALLENGE_DAILY_CASH_WON,
+    challengeStocks: Object.keys(stocks).length,
+    challengeCoins: Object.keys(coins).length,
+    rank: rankR,
+  };
+}
+
+async function runMarketRankChallengeAggregation(db, { skipIfMarketClosed }) {
+  const mhSnap = await db.ref("siteConfig/marketHours").get();
+  const mh = mhSnap.exists() ? mhSnap.val() : null;
+  const kst = nowKstDate();
+  if (skipIfMarketClosed && mh && mh.enabled && !isMarketOpenServer(mh, kst)) {
+    return { skipped: true, reason: "market_closed" };
+  }
+  const [stocksSnap, coinsSnap] = await Promise.all([
+    db.ref("challengeStocks").get(),
+    db.ref("challengeCoins").get(),
+  ]);
+  const stocksVal = stocksSnap.exists() ? stocksSnap.val() || {} : {};
+  const coinsVal = coinsSnap.exists() ? coinsSnap.val() || {} : {};
+  const stockTop100 = buildTopPriceRowsFromMarketSnapshot(stocksVal, {
+    limit: MARKET_TOP_RANK_LIMIT,
+    isCoin: false,
+  });
+  const coinTop100 = buildTopPriceRowsFromMarketSnapshot(coinsVal, {
+    limit: MARKET_TOP_RANK_LIMIT,
+    isCoin: true,
+  });
+  const updatedAt = Date.now();
+  await db.ref().update({
+    "marketRank/challenge/top100/stocks": stockTop100,
+    "marketRank/challenge/top100/coins": coinTop100,
+    "marketRank/challenge/meta/updatedAt": updatedAt,
+  });
+  return {
+    skipped: false,
+    updatedAt,
+    stockTop100: stockTop100.length,
+    coinTop100: coinTop100.length,
+  };
+}
+
+async function tryAcquireMarketRankChallengeRefreshLock(db, nowMs, holdMs = MARKET_RANK_LIVE_REFRESH_MIN_GAP_MS) {
+  const ref = db.ref("marketRank/challenge/meta/liveRefreshLockUntil");
+  const tx = await ref.transaction((cur) => {
+    const curUntil = Number(cur || 0);
+    if (Number.isFinite(curUntil) && curUntil > nowMs) return;
+    return nowMs + holdMs;
+  });
+  return Boolean(tx?.committed);
+}
+
+async function maybeRunMarketRankChallengeLiveRefresh(sourceTag) {
+  const db = admin.database();
+  const now = Date.now();
+  try {
+    const locked = await tryAcquireMarketRankChallengeRefreshLock(db, now);
+    if (!locked) return;
+    const r = await runMarketRankChallengeAggregation(db, { skipIfMarketClosed: true });
+    if (r.skipped) return;
+    await db.ref("marketRank/challenge/meta/liveUpdatedAt").set(Date.now());
+  } catch (e) {
+    console.error(`[maybeRunMarketRankChallengeLiveRefresh:${sourceTag}]`, e?.message || e);
+  }
+}
+
 async function runDailyOneRoutine(db, it) {
   const t = it?.type;
   if (t === "ranking") return { type: t, result: await runDailyAssetRankingServer(db) };
@@ -4625,6 +4942,9 @@ async function runDailyOneRoutine(db, it) {
       thresholdWon,
     });
     return { type: t, result: r };
+  }
+  if (t === "challengePriceReset") {
+    return { type: t, result: await runDailyChallengeResetServer(db) };
   }
   return { type: t || "unknown", result: { ok: false, reason: "unknown_type" } };
 }

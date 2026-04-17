@@ -166,6 +166,73 @@
             outline: 2px solid var(--primary);
             outline-offset: 2px;
         }
+        .inverse-mode-box--dual {
+            gap: 10px;
+            min-width: 248px;
+            max-width: 340px;
+        }
+        .inverse-mode-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            width: 100%;
+        }
+        .inverse-mode-row__text {
+            flex: 1;
+            min-width: 0;
+            text-align: right;
+        }
+        .inverse-mode-divider {
+            height: 1px;
+            background: var(--border);
+            width: 100%;
+            margin: 2px 0;
+            opacity: 0.85;
+        }
+        .inverse-mode-box__hint--wide {
+            max-width: none;
+        }
+        .inverse-modal-content .btn-challenge-ok {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            background: #0d9488;
+            color: #fff;
+        }
+        .inverse-modal-content .btn-challenge-ok:hover { filter: brightness(1.08); }
+        .inverse-modal-content .btn-challenge-secondary {
+            width: 100%;
+            padding: 11px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-sub);
+            margin-top: 8px;
+        }
+        .inverse-modal-content .btn-challenge-secondary:hover {
+            border-color: var(--primary);
+            color: var(--text-main);
+        }
+        .challenge-verify-field {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--bg-color);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            margin-top: 4px;
+        }
         @media (max-width: 768px) {
             .main-hero-bar {
                 flex-direction: column;
@@ -176,12 +243,15 @@
                 align-items: flex-start;
                 align-self: stretch;
             }
+            .inverse-mode-row__text {
+                text-align: left;
+            }
             .inverse-mode-box__hint {
                 max-width: none;
                 text-align: left;
             }
         }
-        #inverse-mode-info-modal.inverse-modal-overlay {
+        .inverse-modal-overlay {
             position: fixed;
             inset: 0;
             background: rgba(0,0,0,0.65);
@@ -192,7 +262,7 @@
             padding: 20px;
             box-sizing: border-box;
         }
-        #inverse-mode-info-modal.inverse-modal-overlay.active { display: flex; }
+        .inverse-modal-overlay.active { display: flex; }
         .inverse-modal-content {
             width: 100%;
             max-width: 400px;
@@ -3452,6 +3522,59 @@
     </div>
 </div>
 
+<!-- ── 챌린지 모드: 우선 공개 안내 ── -->
+<div id="challenge-mode-intro-modal" class="inverse-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="challenge-intro-title">
+    <div class="inverse-modal-content">
+        <h2 id="challenge-intro-title">챌린지 모드 (후원자 우선)</h2>
+        <ul>
+            <li>챌린지 모드는 <b>별풍선 100개 이상 후원자</b>에게 우선 공개됩니다.</li>
+            <li>종목 구성은 메인 시장과 <b>동기화</b>되고, <b>시가·주가는 챌린지 전용</b>으로 따로 움직입니다.</li>
+            <li>챌린지 자산은 <b>매일 1,000만원</b>으로 초기화되며, 별포인트는 기존 계정 값을 그대로 사용합니다.</li>
+            <li>관리자 일일 루틴에서 시가가 리셋될 때 챌린지 보유분은 <b>강제 청산</b>될 수 있습니다.</li>
+        </ul>
+        <button type="button" class="btn-challenge-ok" id="challenge-intro-next">다음</button>
+        <button type="button" class="btn-challenge-secondary" id="challenge-intro-close">닫기</button>
+    </div>
+</div>
+
+<!-- ── 챌린지: 로그인 안내 (비로그인·익명) ── -->
+<div id="challenge-login-gate-modal" class="inverse-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="challenge-login-title">
+    <div class="inverse-modal-content">
+        <h2 id="challenge-login-title">로그인이 필요합니다</h2>
+        <p style="margin:0 0 14px 0;">챌린지 모드와 후원자 인증은 <b>Google로 연동된 계정</b>에서만 진행할 수 있습니다. 메인 화면과 동일한 방식으로 Google 로그인을 해 주세요.</p>
+        <button type="button" class="btn-challenge-ok" id="challenge-login-google-btn">Google로 로그인</button>
+        <button type="button" class="btn-challenge-secondary" id="challenge-login-close">닫기</button>
+    </div>
+</div>
+
+<!-- ── 챌린지: Google 연동 안내 ── -->
+<div id="challenge-google-gate-modal" class="inverse-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="challenge-google-title">
+    <div class="inverse-modal-content">
+        <h2 id="challenge-google-title">Google 계정 연동</h2>
+        <p style="margin:0 0 14px 0;">게스트·비구글 로그인 상태입니다. 후원자 인증 요청을 내려면 <b>Google 로그인(연동)</b>이 필요합니다.</p>
+        <button type="button" class="btn-challenge-ok" id="challenge-google-connect-btn">Google로 로그인</button>
+        <button type="button" class="btn-challenge-secondary" id="challenge-google-close">닫기</button>
+    </div>
+</div>
+
+<!-- ── 챌린지: 후원자 인증 요청 ── -->
+<div id="challenge-verify-request-modal" class="inverse-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="challenge-verify-title">
+    <div class="inverse-modal-content">
+        <h2 id="challenge-verify-title">후원자 인증 요청</h2>
+        <p style="margin:0 0 12px 0;font-size:12px;color:var(--muted);">별풍선 100개 이상 후원 내역 확인을 위해 닉네임과 SOOP 아이디를 입력해 주세요. 검수에는 시간이 걸릴 수 있습니다.</p>
+        <div style="margin-bottom:10px;">
+            <div style="font-size:12px;color:var(--text-sub);">닉네임</div>
+            <input id="challenge-verify-nickname" class="challenge-verify-field" type="text" maxlength="80" placeholder="방송 닉네임" autocomplete="nickname">
+        </div>
+        <div style="margin-bottom:14px;">
+            <div style="font-size:12px;color:var(--text-sub);">SOOP 아이디</div>
+            <input id="challenge-verify-soop-id" class="challenge-verify-field" type="text" maxlength="80" placeholder="soop 아이디" autocomplete="username">
+        </div>
+        <button type="button" class="btn-challenge-ok" id="challenge-verify-submit">인증 요청 보내기</button>
+        <button type="button" class="btn-challenge-secondary" id="challenge-verify-cancel">취소</button>
+    </div>
+</div>
+
 <!-- ── 프로모 모달 ── -->
 <div id="promo-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
@@ -3912,13 +4035,28 @@
                 관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.
             </p>
         </div>
-        <div class="inverse-mode-box" aria-label="인버스 모드">
-            <div class="inverse-mode-box__title">인버스 모드</div>
-            <div class="inverse-mode-box__hint">숏(마이너스 보유) · 매수 시 하락 / 매도 시 상승</div>
-            <label class="inverse-mode-toggle">
-                <input type="checkbox" id="inverse-mode-toggle" autocomplete="off">
-                <span class="inverse-mode-switch" aria-hidden="true"></span>
-            </label>
+        <div class="inverse-mode-box inverse-mode-box--dual" aria-label="모드 전환">
+            <div class="inverse-mode-row" aria-label="인버스 모드">
+                <div class="inverse-mode-row__text">
+                    <div class="inverse-mode-box__title">인버스 모드</div>
+                    <div class="inverse-mode-box__hint inverse-mode-box__hint--wide">숏(마이너스 보유) · 매수 시 하락 / 매도 시 상승</div>
+                </div>
+                <label class="inverse-mode-toggle">
+                    <input type="checkbox" id="inverse-mode-toggle" autocomplete="off">
+                    <span class="inverse-mode-switch" aria-hidden="true"></span>
+                </label>
+            </div>
+            <div class="inverse-mode-divider" role="presentation"></div>
+            <div class="inverse-mode-row" aria-label="챌린지 모드">
+                <div class="inverse-mode-row__text">
+                    <div class="inverse-mode-box__title">챌린지 모드</div>
+                    <div class="inverse-mode-box__hint inverse-mode-box__hint--wide" id="challenge-mode-hint">후원자 인증 승인 후 이용 (별풍선 100개+)</div>
+                </div>
+                <label class="inverse-mode-toggle">
+                    <input type="checkbox" id="challenge-mode-toggle" autocomplete="off">
+                    <span class="inverse-mode-switch" aria-hidden="true"></span>
+                </label>
+            </div>
         </div>
     </header>
 
@@ -4044,6 +4182,7 @@ const purchaseAndPublishRelayFn = httpsCallable(fns, 'purchaseAndPublishRelay');
 const purchaseAndPublishTitleSponsorFn = httpsCallable(fns, 'purchaseAndPublishTitleSponsor');
 const purchaseAndPublishAssetRankingFn = httpsCallable(fns, 'purchaseAndPublishAssetRanking');
 const purchaseAndPublishLiveRankingTop100Fn = httpsCallable(fns, 'purchaseAndPublishLiveRankingTop100');
+const submitChallengeSupporterVerifyFn = httpsCallable(fns, 'submitChallengeSupporterVerify');
 let myStarPoints = 0;
 
 function renderStarPointsUi() {
@@ -5348,15 +5487,23 @@ async function fetchHoldingsSnapshotForUid(uid) {
     if (!uid || !db) return;
     if (userUID !== uid) return;
     try {
-        const [stSnap, coSnap] = await Promise.all([
+        const [stSnap, coSnap, chSt, chCo, chCashSnap] = await Promise.all([
             get(ref(db, `users/${uid}/stocks`)),
-            get(ref(db, `users/${uid}/coins`))
+            get(ref(db, `users/${uid}/coins`)),
+            get(ref(db, `users/${uid}/challengeStocks`)),
+            get(ref(db, `users/${uid}/challengeCoins`)),
+            get(ref(db, `users/${uid}/challengeCash`)),
         ]);
-        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
+        myData = myData || { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
         const sv = stSnap.exists() ? stSnap.val() : null;
         myData.stocks = sv && typeof sv === 'object' && !Array.isArray(sv) ? sv : {};
         const cv = coSnap.exists() ? coSnap.val() : null;
         myData.coins = cv && typeof cv === 'object' && !Array.isArray(cv) ? cv : {};
+        const xs = chSt.exists() ? chSt.val() : null;
+        myData.challengeStocks = xs && typeof xs === 'object' && !Array.isArray(xs) ? xs : {};
+        const xc = chCo.exists() ? chCo.val() : null;
+        myData.challengeCoins = xc && typeof xc === 'object' && !Array.isArray(xc) ? xc : {};
+        myData.challengeCash = chCashSnap.exists() ? Math.floor(Number(chCashSnap.val()) || 10000000) : 10000000;
         scheduleUserDataUiRefresh();
     } catch (e) {
         console.warn('[Auth] fetchHoldingsSnapshotForUid', e);
@@ -5399,7 +5546,7 @@ function attachUserDataShardListeners(uid) {
                 ref(db, `${base}/summary`),
                 (snap) => {
                     try {
-                        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
+                        myData = myData || { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
                         if (snap.exists()) {
                             const s = snap.val();
                             if (s && typeof s === 'object' && typeof s.cash === 'number' && Number.isFinite(s.cash) && s.cash >= 0) {
@@ -5424,7 +5571,7 @@ function attachUserDataShardListeners(uid) {
                 ref(db, `${base}/cash`),
                 (snap) => {
                     try {
-                        myData = myData || { cash: 1000000, stocks: {}, coins: {} };
+                        myData = myData || { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
                         if (snap.exists()) {
                             const n = Number(snap.val());
                             myData.cash = Number.isFinite(n) && n >= 0 ? n : 1000000;
@@ -5441,6 +5588,31 @@ function attachUserDataShardListeners(uid) {
         );
     } catch (e) {
         logAuthTrailError('attachUserDataShardListeners cash', e);
+    }
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/challengeCash`),
+                (snap) => {
+                    try {
+                        myData = myData || { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
+                        if (snap.exists()) {
+                            const n = Number(snap.val());
+                            myData.challengeCash = Number.isFinite(n) && n >= 0 ? n : 10000000;
+                        } else {
+                            myData.challengeCash = 10000000;
+                        }
+                        scheduleUserDataUiRefresh();
+                    } catch (e) {
+                        console.warn('[Auth] users/.../challengeCash', e);
+                    }
+                },
+                (err) => console.error('[Auth] users/.../challengeCash onValue', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners challengeCash', e);
     }
 
     try {
@@ -5483,6 +5655,22 @@ function attachUserDataShardListeners(uid) {
         );
     } catch (e) {
         logAuthTrailError('attachUserDataShardListeners lastTradeTime legacy', e);
+    }
+
+    try {
+        pushUnsub(
+            onValue(
+                ref(db, `${base}/entitlements/challengeSupporterVerified`),
+                (snap) => {
+                    try {
+                        setChallengeVerifiedFromEntitlements(snap.exists() ? snap.val() === true : false);
+                    } catch (_) { /* noop */ }
+                },
+                (err) => console.error('[Auth] entitlements/challengeSupporterVerified', err)
+            )
+        );
+    } catch (e) {
+        logAuthTrailError('attachUserDataShardListeners challenge entitlement', e);
     }
 
     // 45초 주기 보유자산 폴링 제거(상시 트래픽 절감)
@@ -6465,6 +6653,7 @@ let liveCoinImpactMultiplier = DEFAULT_COIN_MARKET_IMPACT_MULTIPLIER;
 /** 코인 시장: Firebase 로그인(익명 포함) 사용자 이용 가능 */
 function canUseCoinMarket() {
     try {
+        if (isChallengeModeTradeReady()) return false;
         return !!auth?.currentUser?.uid;
     } catch (_) {
         return false;
@@ -6556,7 +6745,7 @@ function isCoinMarket() {
 }
 
 function computeTotalWealthWon() {
-    let w = Math.floor(Math.max(0, Number(myData?.cash) || 0));
+    let w = activeCashValue();
     const addStockVal = (id, qty) => {
         const q = Math.floor(Number(qty) || 0);
         if (!q) return;
@@ -6591,6 +6780,10 @@ function updateWalletTradeCapLabel() {
 function updateMainMarketHeaderTitle() {
     const el = document.getElementById('main-market-title');
     if (!el) return;
+    if (isChallengeModeTradeReady()) {
+        el.textContent = isCoinMarket() ? '🪙 스트리머 코인시장 챌린지' : '📈 스트리머 주식시장 챌린지';
+        return;
+    }
     el.textContent = isCoinMarket() ? '🪙 스트리머 코인시장' : '📈 스트리머 주식시장';
 }
 
@@ -6598,9 +6791,15 @@ function updateMarketTabChrome() {
     updateMainMarketHeaderTitle();
     const sub = document.getElementById('main-market-subtitle');
     if (sub) {
-        sub.textContent = isCoinMarket()
-            ? '코인 시세는 주식과 별도입니다. 스트리머 검색 후 ⭐ 즐겨찾기하면 코인 탭에서 시세·거래를 확인할 수 있습니다.'
-            : '관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.';
+        if (isChallengeModeTradeReady()) {
+            sub.textContent = isCoinMarket()
+                ? '챌린지: 종목은 메인과 동기화·시세는 별도입니다. 챌린지 자산은 매일 루틴에서 1,000만원으로 초기화됩니다.'
+                : '챌린지: 종목은 메인과 동기화·시세는 별도입니다. 챌린지 자산은 매일 루틴에서 1,000만원으로 초기화됩니다.';
+        } else {
+            sub.textContent = isCoinMarket()
+                ? '코인 시세는 주식과 별도입니다. 스트리머 검색 후 ⭐ 즐겨찾기하면 코인 탭에서 시세·거래를 확인할 수 있습니다.'
+                : '관심 스트리머를 검색하고 ⭐ 즐겨찾기하면 바로 확인할 수 있습니다.';
+        }
     }
     const ban = document.getElementById('live-ranking-banner-wrap');
     if (ban) ban.style.display = 'flex';
@@ -6624,6 +6823,156 @@ window.setActiveMarket = function (mode) {
         else refreshMainStockListView();
     } catch (_) { /* noop */ }
 };
+
+const CHALLENGE_UI_LS_KEY = 'soop_stock_challenge_ui';
+let __challengeModeUi = false;
+let __userChallengeVerified = false;
+
+function loadChallengeUiFromLocal() {
+    try {
+        __challengeModeUi = localStorage.getItem(CHALLENGE_UI_LS_KEY) === '1';
+    } catch (_) {
+        __challengeModeUi = false;
+    }
+}
+
+function isChallengeModeTradeReady() {
+    return __challengeModeUi === true && __userChallengeVerified === true;
+}
+
+function activeCashValue() {
+    if (isChallengeModeTradeReady()) return Math.floor(Math.max(0, Number(myData?.challengeCash) || 0));
+    return Math.floor(Math.max(0, Number(myData?.cash) || 0));
+}
+
+function stocksCollectionPath() {
+    return isChallengeModeTradeReady() ? 'challengeStocks' : 'stocks';
+}
+
+function coinsCollectionPath() {
+    return isChallengeModeTradeReady() ? 'challengeCoins' : 'coins';
+}
+
+function pauseFavoritePriceListenerOnly(stockId) {
+    if (favoriteUnsubs[stockId]) {
+        favoriteUnsubs[stockId]();
+        delete favoriteUnsubs[stockId];
+    }
+}
+
+function pauseFavoriteCoinListenerOnly(stockId) {
+    if (favoriteCoinUnsubs[stockId]) {
+        favoriteCoinUnsubs[stockId]();
+        delete favoriteCoinUnsubs[stockId];
+    }
+}
+
+function pauseOwnedListenerOnly(stockId) {
+    if (ownedUnsubs[stockId]) {
+        ownedUnsubs[stockId]();
+        delete ownedUnsubs[stockId];
+    }
+}
+
+function pauseOwnedCoinListenerOnly(stockId) {
+    if (ownedCoinUnsubs[stockId]) {
+        ownedCoinUnsubs[stockId]();
+        delete ownedCoinUnsubs[stockId];
+    }
+}
+
+function refreshChallengeMarketBindings() {
+    try {
+        if (typeof stocksUnsubscribe === 'function') {
+            stocksUnsubscribe();
+            stocksUnsubscribe = null;
+        }
+    } catch (_) { /* noop */ }
+    try {
+        if (typeof coinsUnsubscribe === 'function') {
+            coinsUnsubscribe();
+            coinsUnsubscribe = null;
+        }
+    } catch (_) { /* noop */ }
+    mainStocksSyncMode = null;
+    mainCoinsSyncMode = null;
+    try {
+        updateSyncStrategy();
+    } catch (_) { /* noop */ }
+    Object.keys(favorites || {}).forEach((id) => {
+        pauseFavoritePriceListenerOnly(id);
+        subscribeToFavorite(id);
+    });
+    Object.keys(favoriteCoins || {}).forEach((id) => {
+        pauseFavoriteCoinListenerOnly(id);
+        subscribeToFavoriteCoin(id);
+    });
+    const sb = isChallengeModeTradeReady() ? (myData?.challengeStocks || {}) : (myData?.stocks || {});
+    Object.keys(sb || {}).forEach((id) => {
+        if (Math.floor(Number(sb[id]?.qty || 0)) === 0) return;
+        pauseOwnedListenerOnly(id);
+        subscribeToOwned(id);
+    });
+    const cb = isChallengeModeTradeReady() ? (myData?.challengeCoins || {}) : (myData?.coins || {});
+    Object.keys(cb || {}).forEach((id) => {
+        if (Math.floor(Number(cb[id]?.qty || 0)) === 0) return;
+        pauseOwnedCoinListenerOnly(id);
+        subscribeToOwnedCoin(id);
+    });
+    try {
+        refreshMainStockListView();
+        renderMyPortfolio();
+        renderMyCoinPortfolio();
+    } catch (_) { /* noop */ }
+}
+
+function syncChallengeToggleDom() {
+    const el = document.getElementById('challenge-mode-toggle');
+    if (el) el.checked = __challengeModeUi;
+    const hint = document.getElementById('challenge-mode-hint');
+    if (hint) {
+        hint.textContent = __userChallengeVerified
+            ? '일일 시가 리셋 · 메인과 별도 포트폴리오'
+            : '후원자 인증 승인 후 이용 (별풍선 100개+)';
+    }
+}
+
+function setChallengeVerifiedFromEntitlements(val) {
+    const next = val === true;
+    if (__challengeModeUi && !next) {
+        __challengeModeUi = false;
+        try {
+            localStorage.setItem(CHALLENGE_UI_LS_KEY, '0');
+        } catch (_) { /* noop */ }
+        try {
+            refreshChallengeMarketBindings();
+        } catch (_) { /* noop */ }
+        try {
+            updateMainMarketHeaderTitle();
+        } catch (_) { /* noop */ }
+    }
+    if (next === __userChallengeVerified) {
+        try {
+            syncChallengeToggleDom();
+        } catch (_) { /* noop */ }
+        return;
+    }
+    __userChallengeVerified = next;
+    if (__challengeModeUi && next) {
+        try {
+            refreshChallengeMarketBindings();
+        } catch (_) { /* noop */ }
+    }
+    try {
+        syncChallengeToggleDom();
+    } catch (_) { /* noop */ }
+    try {
+        updateMainMarketHeaderTitle();
+    } catch (_) { /* noop */ }
+    try {
+        applyCoinMarketFeatureVisibility();
+    } catch (_) { /* noop */ }
+}
 
 /**
  * stocks/ 전체 목록: 관리자만 onValue(전체 트리). 일반 유저는 stocks/{id}만 구독 → 다운로드 대폭 절감.
@@ -6689,10 +7038,10 @@ function applyMainStocksDataSync() {
         logAuthTrail('[sync-strategy] applyMainStocksDataSync END (open, onValue already active)', { mode });
         return;
     }
-    logAuthTrail('[DB] applyMainStocksDataSync → onValue path: stocks/ (regular|offpeak)');
+    logAuthTrail('[DB] applyMainStocksDataSync → onValue path:', stocksCollectionPath() + '/');
     try {
-        stocksUnsubscribe = onValue(ref(db, 'stocks/'), processStocksSnap, (err) => {
-            console.warn('[sync-strategy] stocks/ onValue 오류:', err?.message || err);
+        stocksUnsubscribe = onValue(ref(db, `${stocksCollectionPath()}/`), processStocksSnap, (err) => {
+            console.warn('[sync-strategy] stocks root onValue 오류:', err?.message || err);
         });
     } catch (err) {
         logAuthTrailError('Caught in applyMainStocksDataSync (stocks/ onValue)', err);
@@ -6746,9 +7095,9 @@ function applyMainCoinsDataSync() {
             return;
         }
         if (typeof coinsUnsubscribe === 'function') return;
-        logAuthTrail('[DB] applyMainCoinsDataSync → onValue path: coins/ (admin)');
-        coinsUnsubscribe = onValue(ref(db, 'coins/'), processCoinsSnap, (err) => {
-            console.warn('[sync-strategy] coins/ onValue 오류:', err?.message || err);
+        logAuthTrail('[DB] applyMainCoinsDataSync → onValue path:', coinsCollectionPath() + '/');
+        coinsUnsubscribe = onValue(ref(db, `${coinsCollectionPath()}/`), processCoinsSnap, (err) => {
+            console.warn('[sync-strategy] coins root onValue 오류:', err?.message || err);
         });
     } catch (err) {
         logAuthTrailError('applyMainCoinsDataSync', err);
@@ -7142,7 +7491,7 @@ function renderMyPortfolio() {
     const totalAssetsDisplay = document.getElementById('total-assets');
     if (!portfolioDiv) return;
 
-    const userStocks = myData?.stocks || {};
+    const userStocks = isChallengeModeTradeReady() ? (myData?.challengeStocks || {}) : (myData?.stocks || {});
     const stockIds   = Object.keys(userStocks).filter(id => userStocks[id] && Math.floor(Number(userStocks[id].qty) || 0) !== 0);
     let totalStockValue = 0;
 
@@ -7203,7 +7552,7 @@ function renderMyCoinPortfolio() {
     const totalAssetsDisplay = document.getElementById('total-assets');
     if (!portfolioDiv) return;
 
-    const userCoins = myData?.coins || {};
+    const userCoins = isChallengeModeTradeReady() ? (myData?.challengeCoins || {}) : (myData?.coins || {});
     const coinIds   = Object.keys(userCoins).filter((id) => userCoins[id] && Math.floor(Number(userCoins[id].qty) || 0) !== 0);
     let totalCoinValue = 0;
 
@@ -7329,7 +7678,7 @@ function tryCloseIntro() {
 function updateUI(isFullRender = true) {
     const cashDisplay = document.getElementById('my-cash');
     if (myData) {
-        if (cashDisplay) cashDisplay.innerText = Math.floor(myData.cash).toLocaleString();
+        if (cashDisplay) cashDisplay.innerText = activeCashValue().toLocaleString();
         renderMyPortfolio();
         renderMyCoinPortfolio();
         try { saveAssetHistoryToday(computeTotalWealthWon()); } catch (_) { /* noop */ }
@@ -7713,7 +8062,7 @@ onAuthStateChanged(auth, async (user) => {
                 prevMarketOpenSnapshot = null;
                 try { applyMarketVolumeTop5Ui([], [], 0); } catch (_) { /* noop */ }
                 stockElements = {};
-                myData = { cash: 1000000, stocks: {}, coins: {} };
+                myData = { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
                 lastTradeTime = 0;
                 try { updateUI(true); } catch (_) { /* noop */ }
                 try { refreshMainStockListView(); } catch (_) { /* noop */ }
@@ -7731,7 +8080,7 @@ onAuthStateChanged(auth, async (user) => {
             } catch (_) { /* noop */ }
             try { startAssetRequestStatusWatch(user.uid); } catch (_) { /* noop */ }
             try { hydrateLastTradeTimeFromOffPeakStorage(); } catch (_) { /* noop */ }
-            if (!myData) myData = { cash: 1000000, stocks: {}, coins: {} };
+            if (!myData) myData = { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
 
             updateAuthStatusUI(user);
 
@@ -8526,7 +8875,7 @@ async function runAutoTradeLoop(id) {
                 stopAutoTrade(id);
                 return;
             }
-            const cash = Number(myData.cash) || 0;
+            const cash = activeCashValue();
             if (cash < 1) {
                 console.warn('[autoTrade] 잔고 없음 → 자동매매 종료', id);
                 stopAutoTrade(id);
@@ -8549,7 +8898,9 @@ async function runAutoTradeLoop(id) {
                 stopAutoTrade(id);
                 return;
             }
-            const book = coinQ ? (myData.coins || {}) : (myData.stocks || {});
+            const book = coinQ
+                ? (isChallengeModeTradeReady() ? (myData.challengeCoins || {}) : (myData.coins || {}))
+                : (isChallengeModeTradeReady() ? (myData.challengeStocks || {}) : (myData.stocks || {}));
             const currentQtyOf = Math.floor(Number(book[id]?.qty) || 0);
             if (currentQtyOf === 0) {
                 const ownedCount = Object.values(book).filter((s) => s && Math.floor(Number(s.qty) || 0) !== 0).length;
@@ -8791,13 +9142,13 @@ function calcMaxQty(stockId, type, inputQty) {
         ? (favoriteCoins[stockId] || ownedCoins[stockId] || searchResults[stockId])
         : (favorites[stockId] || ownedStocks[stockId] || searchResults[stockId]);
     const userStock = coinQ
-        ? (myData.coins?.[stockId] || { qty: 0 })
-        : (myData.stocks?.[stockId] || { qty: 0 });
+        ? (isChallengeModeTradeReady() ? (myData.challengeCoins?.[stockId] || { qty: 0 }) : (myData.coins?.[stockId] || { qty: 0 }))
+        : (isChallengeModeTradeReady() ? (myData.challengeStocks?.[stockId] || { qty: 0 }) : (myData.stocks?.[stockId] || { qty: 0 }));
     const maxWon = coinQ ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
 
     if (type === 'buy' && stock) {
         const estPrice  = Math.round(stock.price * (1 + 0.0005));
-        const maxAfford = Math.floor((myData.cash || 0) / estPrice);
+        const maxAfford = Math.floor(activeCashValue() / estPrice);
         const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
         return Math.min(v, maxAfford, maxByCap, 100);
     } else if (type === 'sell') {
@@ -8839,13 +9190,13 @@ window.smartClampQty = function(el, stockId, type) {
         ? (favoriteCoins[stockId] || ownedCoins[stockId] || searchResults[stockId])
         : (favorites[stockId] || ownedStocks[stockId] || searchResults[stockId]);
     const userStock = coinQ
-        ? (myData.coins?.[stockId] || { qty: 0 })
-        : (myData.stocks?.[stockId] || { qty: 0 });
+        ? (isChallengeModeTradeReady() ? (myData.challengeCoins?.[stockId] || { qty: 0 }) : (myData.coins?.[stockId] || { qty: 0 }))
+        : (isChallengeModeTradeReady() ? (myData.challengeStocks?.[stockId] || { qty: 0 }) : (myData.stocks?.[stockId] || { qty: 0 }));
     const maxWon = coinQ ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
 
     if (type === 'buy' && stock) {
         const estPrice  = Math.round(stock.price * (1 + 0.0005));
-        const maxAfford = Math.floor((myData.cash || 0) / estPrice);
+        const maxAfford = Math.floor(activeCashValue() / estPrice);
         const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
         const maxBuy    = Math.min(v, maxAfford, maxByCap, 100);
         el.value = Math.max(1, maxBuy);
@@ -9258,6 +9609,148 @@ function setupInverseModeUi() {
     });
 }
 
+function closeChallengeFlowModal(id) {
+    document.getElementById(id)?.classList.remove('active');
+}
+
+function setupChallengeModeUi() {
+    loadChallengeUiFromLocal();
+    const chToggle = document.getElementById('challenge-mode-toggle');
+    if (!chToggle) return;
+    syncChallengeToggleDom();
+
+    const introModal = 'challenge-mode-intro-modal';
+    const loginModal = 'challenge-login-gate-modal';
+    const googleModal = 'challenge-google-gate-modal';
+    const verifyModal = 'challenge-verify-request-modal';
+
+    [introModal, loginModal, googleModal, verifyModal].forEach((id) => {
+        const el = document.getElementById(id);
+        el?.addEventListener('click', (e) => {
+            if (e.target === el) closeChallengeFlowModal(id);
+        });
+    });
+
+    function finishChallengeEnable() {
+        [introModal, loginModal, googleModal, verifyModal].forEach(closeChallengeFlowModal);
+        __challengeModeUi = true;
+        try {
+            localStorage.setItem(CHALLENGE_UI_LS_KEY, '1');
+        } catch (_) { /* noop */ }
+        chToggle.checked = true;
+        try {
+            refreshChallengeMarketBindings();
+        } catch (_) { /* noop */ }
+        try {
+            applyCoinMarketFeatureVisibility();
+        } catch (_) { /* noop */ }
+        try {
+            updateMainMarketHeaderTitle();
+        } catch (_) { /* noop */ }
+        try {
+            updateMarketTabChrome();
+        } catch (_) { /* noop */ }
+        try {
+            syncChallengeToggleDom();
+        } catch (_) { /* noop */ }
+    }
+
+    function proceedAfterIntro() {
+        closeChallengeFlowModal(introModal);
+        const u = auth.currentUser;
+        if (!u || u.isAnonymous) {
+            document.getElementById(loginModal)?.classList.add('active');
+            return;
+        }
+        if (!isGoogleAuthenticatedUser(u)) {
+            document.getElementById(googleModal)?.classList.add('active');
+            return;
+        }
+        if (!__userChallengeVerified) {
+            document.getElementById(verifyModal)?.classList.add('active');
+            return;
+        }
+        finishChallengeEnable();
+    }
+
+    document.getElementById('challenge-intro-next')?.addEventListener('click', () => {
+        proceedAfterIntro();
+    });
+    document.getElementById('challenge-intro-close')?.addEventListener('click', () => {
+        closeChallengeFlowModal(introModal);
+        chToggle.checked = false;
+    });
+
+    document.getElementById('challenge-login-google-btn')?.addEventListener('click', async () => {
+        try {
+            if (typeof window.loginWithGoogle === 'function') await window.loginWithGoogle();
+        } catch (_) { /* noop */ }
+    });
+    document.getElementById('challenge-login-close')?.addEventListener('click', () => {
+        closeChallengeFlowModal(loginModal);
+        chToggle.checked = false;
+    });
+
+    document.getElementById('challenge-google-connect-btn')?.addEventListener('click', async () => {
+        try {
+            if (typeof window.loginWithGoogle === 'function') await window.loginWithGoogle();
+        } catch (_) { /* noop */ }
+    });
+    document.getElementById('challenge-google-close')?.addEventListener('click', () => {
+        closeChallengeFlowModal(googleModal);
+        chToggle.checked = false;
+    });
+
+    document.getElementById('challenge-verify-submit')?.addEventListener('click', async () => {
+        const nick = document.getElementById('challenge-verify-nickname')?.value?.trim() || '';
+        const sid = document.getElementById('challenge-verify-soop-id')?.value?.trim() || '';
+        if (!nick || !sid) {
+            alert('닉네임과 SOOP 아이디를 입력해 주세요.');
+            return;
+        }
+        try {
+            await submitChallengeSupporterVerifyFn({ nickname: nick, soopId: sid });
+            alert('후원자 인증 요청이 접수되었습니다. 검수가 완료되면 챌린지 모드를 다시 켜 주세요.');
+            closeChallengeFlowModal(verifyModal);
+            chToggle.checked = false;
+        } catch (e) {
+            const msg = e?.message || e?.details || String(e?.code || '요청 실패');
+            alert(typeof msg === 'string' ? msg : '요청에 실패했습니다.');
+        }
+    });
+    document.getElementById('challenge-verify-cancel')?.addEventListener('click', () => {
+        closeChallengeFlowModal(verifyModal);
+        chToggle.checked = false;
+    });
+
+    chToggle.addEventListener('change', () => {
+        if (!chToggle.checked) {
+            __challengeModeUi = false;
+            try {
+                localStorage.setItem(CHALLENGE_UI_LS_KEY, '0');
+            } catch (_) { /* noop */ }
+            try {
+                refreshChallengeMarketBindings();
+            } catch (_) { /* noop */ }
+            try {
+                applyCoinMarketFeatureVisibility();
+            } catch (_) { /* noop */ }
+            try {
+                updateMainMarketHeaderTitle();
+            } catch (_) { /* noop */ }
+            try {
+                updateMarketTabChrome();
+            } catch (_) { /* noop */ }
+            try {
+                syncChallengeToggleDom();
+            } catch (_) { /* noop */ }
+            return;
+        }
+        chToggle.checked = false;
+        document.getElementById(introModal)?.classList.add('active');
+    });
+}
+
 /** users/.../stocks/$stockId 규칙 통과용 — qty·avg만 숫자로 정리(레거시 문자열·배열 stocks 등 제거) */
 function normalizeUserStocksForRules(raw) {
     const o = {};
@@ -9284,6 +9777,10 @@ let isLiquidatingAll = false;
 async function sellAllHoldingsByFunction(stockId, market, opts) {
     if (!stockId) return;
     if (isLiquidatingAll) return;
+    if (isChallengeModeTradeReady()) {
+        alert('챌린지 모드에서는 MAX·50% 전량(서버) 매도를 사용할 수 없습니다. 수량을 나눠 일반 매도로 정리해 주세요.');
+        return;
+    }
     if (!myData) { alert('데이터 로딩 중입니다.'); return; }
     const isCoin = market === 'coin';
     const book = isCoin ? (myData?.coins || {}) : (myData?.stocks || {});
@@ -9330,8 +9827,11 @@ async function sellAllHoldingsByFunction(stockId, market, opts) {
             if (uSnap.exists()) {
                 const v = uSnap.val();
                 myData.cash = v.cash ?? 1000000;
+                myData.challengeCash = v.challengeCash ?? 10000000;
                 myData.stocks = v.stocks || {};
                 myData.coins = v.coins || {};
+                myData.challengeStocks = v.challengeStocks || {};
+                myData.challengeCoins = v.challengeCoins || {};
             }
             if (isCoin) {
                 const cSnap = await get(ref(db, `coins/${stockId}`));
@@ -9699,7 +10199,8 @@ const userRef = ref(db, `users/${tradeUid}`);
             side: type,
             qty,
             market: isCoin ? 'coin' : 'stock',
-            inverseMode: isInverseModeEnabled()
+            inverseMode: isInverseModeEnabled(),
+            challengeMode: isChallengeModeTradeReady()
         });
         const tradeTsCommitted = serverNowMs();
         lastTradeTime = tradeTsCommitted;
@@ -9717,11 +10218,14 @@ const userRef = ref(db, `users/${tradeUid}`);
         if (uSnap.exists()) {
             const v = uSnap.val();
             myData.cash = v.cash ?? 1000000;
+            myData.challengeCash = v.challengeCash ?? 10000000;
             myData.stocks = v.stocks || {};
             myData.coins = v.coins || {};
+            myData.challengeStocks = v.challengeStocks || {};
+            myData.challengeCoins = v.challengeCoins || {};
         }
         if (isCoin) {
-            const cSnap = await get(ref(db, `coins/${id}`));
+            const cSnap = await get(ref(db, `${coinsCollectionPath()}/${id}`));
             if (cSnap.exists()) {
                 const data = { ...cSnap.val(), id };
                 const idx = allCoins.findIndex((s) => s?.id === id);
@@ -9733,7 +10237,7 @@ const userRef = ref(db, `users/${tradeUid}`);
                 if (searchResults[id]) searchResults[id] = data;
             }
         } else {
-            const stSnap = await get(ref(db, `stocks/${id}`));
+            const stSnap = await get(ref(db, `${stocksCollectionPath()}/${id}`));
             if (stSnap.exists()) {
                 const data = { ...stSnap.val(), id };
                 const idx = allStocks.findIndex((s) => s?.id === id);
@@ -12361,7 +12865,7 @@ function subscribeToFavorite(stockId) {
         console.warn('[DB] subscribeToFavorite skipped invalid stockId:', stockId);
         return;
     }
-    const favPath = `stocks/${stockId}`;
+    const favPath = `${stocksCollectionPath()}/${stockId}`;
     logAuthTrail('[DB] subscribeToFavorite onValue path:', favPath);
     try {
     favoriteUnsubs[stockId] = onValue(ref(db, favPath), (snap) => {
@@ -12417,8 +12921,9 @@ window.toggleFavorite = function(stockId) {
         renderSearchResults();
     } else {
         // 추가 — 보유하지 않은 종목은 5개까지만 허용
-        const isOwned       = Math.floor(Number(myData?.stocks?.[stockId]?.qty) || 0) !== 0;
-        const nonOwnedCount = Object.keys(favorites).filter((fid) => Math.floor(Number(myData?.stocks?.[fid]?.qty) || 0) === 0).length;
+        const book = isChallengeModeTradeReady() ? myData?.challengeStocks : myData?.stocks;
+        const isOwned       = Math.floor(Number(book?.[stockId]?.qty) || 0) !== 0;
+        const nonOwnedCount = Object.keys(favorites).filter((fid) => Math.floor(Number(book?.[fid]?.qty) || 0) === 0).length;
         if (!isOwned && nonOwnedCount >= 5) {
             alert('보유하지 않은 종목의 즐겨찾기는 최대 5개까지 가능합니다.');
             return;
@@ -12447,8 +12952,9 @@ window.toggleFavoriteCoin = function (stockId) {
         renderFavoriteCoinList();
         renderSearchResults();
     } else {
-        const isOwned = Math.floor(Number(myData?.coins?.[stockId]?.qty) || 0) !== 0;
-        const nonOwnedCount = Object.keys(favoriteCoins).filter((fid) => Math.floor(Number(myData?.coins?.[fid]?.qty) || 0) === 0).length;
+        const cbook = isChallengeModeTradeReady() ? myData?.challengeCoins : myData?.coins;
+        const isOwned = Math.floor(Number(cbook?.[stockId]?.qty) || 0) !== 0;
+        const nonOwnedCount = Object.keys(favoriteCoins).filter((fid) => Math.floor(Number(cbook?.[fid]?.qty) || 0) === 0).length;
         if (!isOwned && nonOwnedCount >= 5) {
             alert('보유하지 않은 종목의 즐겨찾기는 최대 5개까지 가능합니다.');
             return;
@@ -13192,7 +13698,7 @@ function subscribeToOwned(stockId) {
     console.log('[owned] 구독 시작 시도:', stockId);
 
     const startOwned = () => {
-    const ownPath = `stocks/${stockId}`;
+    const ownPath = `${stocksCollectionPath()}/${stockId}`;
     logAuthTrail('[DB] subscribeToOwned onValue path:', ownPath);
     console.log('[owned] onValue 등록:', stockId);
     try {
@@ -13239,9 +13745,10 @@ function unsubscribeFromOwned(stockId) {
 
 // ── 보유 주식 변동 시 구독 재계산 ────────────────────────
 function syncOwnedSubscriptions() {
-    if (!myData?.stocks) { console.log('[sync] myData.stocks 없음'); return; }
+    const book = isChallengeModeTradeReady() ? myData?.challengeStocks : myData?.stocks;
+    if (!book) { console.log('[sync] stock book 없음'); return; }
     const currentOwned = new Set(
-        Object.keys(myData.stocks).filter(id => (myData.stocks[id]?.qty || 0) > 0)
+        Object.keys(book).filter((id) => Math.floor(Number(book[id]?.qty || 0)) !== 0)
     );
     console.log('[sync] 보유 종목:', [...currentOwned]);
     currentOwned.forEach((id) => {
@@ -13280,7 +13787,7 @@ function subscribeToFavoriteCoin(stockId) {
     if (favoriteCoinUnsubs[stockId]) return;
     if (stockId == null || stockId === '' || String(stockId) === 'undefined') return;
     try {
-        favoriteCoinUnsubs[stockId] = onValue(ref(db, `coins/${stockId}`), (snap) => {
+        favoriteCoinUnsubs[stockId] = onValue(ref(db, `${coinsCollectionPath()}/${stockId}`), (snap) => {
             if (!snap.exists()) return;
             const data = { ...snap.val(), id: stockId };
             const prevPrice = favoriteCoins[stockId]?.price;
@@ -13321,7 +13828,7 @@ function subscribeToOwnedCoin(stockId) {
     if (ownedCoinUnsubs[stockId]) return;
     if (stockId == null || stockId === '' || String(stockId) === 'undefined') return;
     try {
-        ownedCoinUnsubs[stockId] = onValue(ref(db, `coins/${stockId}`), (snap) => {
+        ownedCoinUnsubs[stockId] = onValue(ref(db, `${coinsCollectionPath()}/${stockId}`), (snap) => {
             if (!snap.exists()) return;
             const data = { ...snap.val(), id: stockId };
             const prevPrice = ownedCoins[stockId]?.price;
@@ -13347,9 +13854,10 @@ function subscribeToOwnedCoin(stockId) {
 
 function syncOwnedCoinSubscriptions() {
     if (!canUseCoinMarket()) return;
-    if (!myData?.coins) return;
+    const book = isChallengeModeTradeReady() ? myData?.challengeCoins : myData?.coins;
+    if (!book) return;
     const currentOwned = new Set(
-        Object.keys(myData.coins).filter((id) => (myData.coins[id]?.qty || 0) > 0)
+        Object.keys(book).filter((id) => Math.floor(Number(book[id]?.qty || 0)) !== 0)
     );
     currentOwned.forEach((id) => {
         if (!ownedCoins[id]) ownedCoins[id] = { id };
@@ -13426,6 +13934,10 @@ document.addEventListener('keydown', (e) => {
             const m = document.getElementById('inverse-mode-info-modal');
             if (m) m.classList.remove('active');
         })) return;
+        if (closeIfActive('challenge-mode-intro-modal', () => closeChallengeFlowModal('challenge-mode-intro-modal'))) return;
+        if (closeIfActive('challenge-login-gate-modal', () => closeChallengeFlowModal('challenge-login-gate-modal'))) return;
+        if (closeIfActive('challenge-google-gate-modal', () => closeChallengeFlowModal('challenge-google-gate-modal'))) return;
+        if (closeIfActive('challenge-verify-request-modal', () => closeChallengeFlowModal('challenge-verify-request-modal'))) return;
         if (document.getElementById('relay-container')?.classList.contains('mobile-open')) {
             window.closeRelayPanel();
             return;
@@ -13493,6 +14005,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 try { setupInverseModeUi(); } catch (_) { /* noop */ }
+try { setupChallengeModeUi(); } catch (_) { /* noop */ }
 
 })();
 </script>

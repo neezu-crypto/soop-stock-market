@@ -663,6 +663,10 @@
                 <span class="inbox-label">✨ 별포인트</span>
                 <span class="inbox-count" data-inbox-count="point-charge">…</span>
             </button>
+            <button type="button" class="admin-inbox-chip" data-admin-scroll="challenge-supporter" title="챌린지 후원자 인증 검수로 이동">
+                <span class="inbox-label">🎮 후원자</span>
+                <span class="inbox-count" data-inbox-count="challenge-supporter">…</span>
+            </button>
         </div>
     </div>
 
@@ -1209,6 +1213,31 @@
         <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn-success" onclick="savePaidPricingFromAdmin()">💾 저장</button>
             <span id="pricing-admin-status" style="font-size:12px; color:#94a3b8; align-self:center;">—</span>
+        </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- 🎮 챌린지 후원자 인증 검수 -->
+    <div id="admin-accordion-challenge-supporter" class="container admin-accordion-anchor" style="display:block; border-color:#22d3ee;">
+        <div class="accordion-header">
+            <h1>🎮 챌린지 모드 · 후원자 인증 검수</h1>
+            <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+        <div class="accordion-sep">
+        <div class="info-box" style="border-color:#22d3ee; color:#cffafe;">
+            <b>스트리머 주식시장 챌린지</b> 우선 공개(별풍선 100개 이상) 신청을 검수합니다. 승인 시 해당 계정에 <code style="font-size:11px;">users/…/entitlements/challengeSupporterVerified</code> 가 설정됩니다.<br>
+            <span style="color:#94a3b8;">일일 루틴 항목 <b>챌린지 모드 자산&주가 초기화</b>는 유저 챌린지 보유 강제청산 후 챌린지 자산(1,000만원)·주가·코인 시세를 함께 초기화합니다. 최초 배포 후 시세가 비어 있으면 아래 <b>챌린지 시장 동기화</b>를 한 번 실행하세요.</span>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:12px 0;">
+            <button type="button" class="btn-primary" style="padding:10px 14px; font-size:13px; font-weight:800;" onclick="window.runAdminSyncChallengeMarkets?.()">📎 챌린지 시장 동기화 (메인 종목 기준)</button>
+            <button type="button" class="btn-danger" style="padding:10px 14px; font-size:13px; font-weight:800;" onclick="window.runAdminChallengeDailyResetNow?.()">⚡ 챌린지 일일 초기화 즉시 실행</button>
+            <span id="admin-challenge-tool-status" style="font-size:12px; color:#94a3b8; align-self:center;">—</span>
+        </div>
+        <div id="challenge-supporter-status" style="font-size:12px; color:#94a3b8; margin-bottom:8px;">—</div>
+        <div id="challenge-supporter-requests" style="display:flex; flex-direction:column; gap:10px;">
+            <div style="padding:12px; color:#64748b; text-align:center;">불러오는 중...</div>
         </div>
         </div>
         </div>
@@ -1991,6 +2020,7 @@
                 <option value="userActivityPurge">🧾 유저 활동로그 데이터 삭제</option>
                 <option value="rankingVolumeReset">📊 실시간 랭킹 거래량만 초기화</option>
                 <option value="marketRankRefresh">📈 시장 순위·거래량 TOP 집계 (marketRank)</option>
+                <option value="challengePriceReset">🎮 챌린지 모드 자산&주가 초기화 (청산·자산·시가 리셋)</option>
                 <option value="clearAssetRequests">🗑 자산 지원 신청 리스트 전체 삭제</option>
                 <option value="clearAdRequests">🗑 홍보 신청 검수 리스트 전체 삭제</option>
                 <option value="autoSplit">✂️ 주가 자동 액면분할</option>
@@ -2218,6 +2248,9 @@
     const adminRejectPointChargeFn = httpsCallable(functions, 'adminRejectPointCharge');
     const adminRejectPaidRequestWithRefundFn = httpsCallable(functions, 'adminRejectPaidRequestWithRefund');
     const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
+    const adminSyncChallengeMarketsFromMainFn = httpsCallable(functions, 'adminSyncChallengeMarketsFromMain');
+    const adminRunChallengeDailyResetFn = httpsCallable(functions, 'adminRunChallengeDailyReset');
+    const adminReviewChallengeSupporterRequestFn = httpsCallable(functions, 'adminReviewChallengeSupporterRequest');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
     const adminInstrumentImpactFn = httpsCallable(functions, 'adminInstrumentImpact');
 
@@ -2398,12 +2431,12 @@
         return v && String(v.status || '').trim().toLowerCase() === 'pending';
     }
 
-    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null, 'live-ranking-req': null, 'title-sponsor': null, 'point-charge': null };
+    const adminInboxCounts = { listing: null, asset: null, ad: null, 'chart-ad': null, relay: null, 'ranking-req': null, 'live-ranking-req': null, 'title-sponsor': null, 'point-charge': null, 'challenge-supporter': null };
 
     function paintAdminRequestInbox() {
         const box = document.getElementById('admin-request-inbox');
         if (!box) return;
-        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req', 'live-ranking-req', 'title-sponsor', 'point-charge'].forEach((k) => {
+        ['listing', 'asset', 'ad', 'chart-ad', 'relay', 'ranking-req', 'live-ranking-req', 'title-sponsor', 'point-charge', 'challenge-supporter'].forEach((k) => {
             const el = box.querySelector(`[data-inbox-count="${k}"]`);
             const chip = el && el.closest('.admin-inbox-chip');
             const v = adminInboxCounts[k];
@@ -2794,6 +2827,7 @@
             'live-ranking-req': 'admin-accordion-live-ranking-access',
             'title-sponsor': 'admin-accordion-title-sponsor',
             'point-charge': 'admin-accordion-point-charge',
+            'challenge-supporter': 'admin-accordion-challenge-supporter',
         };
         const id = idMap[key];
         const el = id ? document.getElementById(id) : null;
@@ -3109,7 +3143,7 @@
     };
 
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
-    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, liveRankingAccess: null, asset: null, pointCharge: null };
+    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, liveRankingAccess: null, asset: null, pointCharge: null, challengeSupporter: null };
     let prevListingKeys = null;
     let prevAdKeys = null;
     let prevChartKeys = null;
@@ -3118,6 +3152,7 @@
     let prevRankingAccessKeys = null;
     let prevLiveRankingAccessKeys = null;
     let prevAssetKeys = null;
+    let prevChallengeSupporterKeys = null;
 
     function playAdminRequestBeep() {
         try {
@@ -3152,7 +3187,7 @@
     }
 
     function stopRealtimeRequestListeners() {
-        ['listing', 'ad', 'chart', 'relay', 'rankingAccess', 'asset', 'pointCharge', 'liveRankingAccess'].forEach((k) => {
+        ['listing', 'ad', 'chart', 'relay', 'rankingAccess', 'asset', 'pointCharge', 'liveRankingAccess', 'challengeSupporter'].forEach((k) => {
             const u = requestRealtimeUnsubs[k];
             if (u) {
                 u();
@@ -3167,6 +3202,7 @@
         prevRankingAccessKeys = null;
         prevLiveRankingAccessKeys = null;
         prevAssetKeys = null;
+        prevChallengeSupporterKeys = null;
     }
 
     function renderAdRequestsList(data, highlightIds) {
@@ -3541,10 +3577,136 @@
         });
     }
 
+    function renderChallengeSupporterRequestsList(data, highlightIds) {
+        const listEl = document.getElementById('challenge-supporter-requests');
+        const statusEl = document.getElementById('challenge-supporter-status');
+        if (!listEl) return;
+        const entries = Object.entries(data || {})
+            .filter(([, r]) => String(r?.status || '').toLowerCase() === 'pending')
+            .sort((a, b) => (Number(b?.[1]?.createdAt || 0) - Number(a?.[1]?.createdAt || 0)));
+        setAdminInboxCount('challenge-supporter', entries.length);
+        if (statusEl) statusEl.textContent = `대기 신청 ${entries.length}건`;
+        if (entries.length === 0) {
+            listEl.innerHTML = '<div style="padding:12px; color:#64748b; text-align:center;">대기 중인 신청이 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = entries.map(([reqId, r]) => {
+            const when = r.createdAt ? new Date(r.createdAt).toLocaleString('ko-KR') : '-';
+            const isHi = highlightIds && highlightIds.has(reqId);
+            const rid = encodeURIComponent(reqId);
+            return `<div data-challenge-req="${rid}" class="request-card pending${isHi ? ' just-arrived' : ''}" style="border:1px solid #334155; border-radius:10px; padding:10px; background:#0f172a;">
+                <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin-bottom:6px;">
+                    <div>
+                        <div style="font-weight:800; color:#f8fafc;">${escapeAdminText(r.nickname)} <span style="color:#64748b; font-weight:600;">@${escapeAdminText(r.soopId)}</span>${isHi ? '<span class="req-new-badge">NEW</span>' : ''}</div>
+                        <div style="font-size:11px; color:#94a3b8; margin-top:4px;">uid ${escapeAdminText(r.uid)} · ${escapeAdminText(r.email || '')}</div>
+                    </div>
+                    <div style="font-size:11px; color:#64748b;">${when}</div>
+                </div>
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button type="button" style="background:#22c55e; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:12px; font-weight:700;" onclick="approveChallengeSupporterRequest(decodeURIComponent(this.closest('[data-challenge-req]').getAttribute('data-challenge-req')))">승인</button>
+                    <button type="button" style="background:#ef4444; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:12px; font-weight:700;" onclick="rejectChallengeSupporterRequest(decodeURIComponent(this.closest('[data-challenge-req]').getAttribute('data-challenge-req')))">거절</button>
+                </div>
+            </div>`;
+        }).join('');
+        if (highlightIds && highlightIds.size) {
+            listEl.querySelectorAll('.just-arrived').forEach((el) => {
+                setTimeout(() => el.classList.remove('just-arrived'), 8000);
+            });
+        }
+    }
+
+    window.runAdminSyncChallengeMarkets = async function () {
+        if (!isAdmin()) return;
+        const st = document.getElementById('admin-challenge-tool-status');
+        try {
+            if (auth.currentUser) await auth.currentUser.getIdToken(true);
+        } catch (_) { /* noop */ }
+        try {
+            if (st) st.textContent = '동기화 중…';
+            const { data } = await adminSyncChallengeMarketsFromMainFn({});
+            if (st) {
+                st.textContent = data?.ok
+                    ? `완료 · 주식 ${data.stockIds ?? '-'}종 · 코인 ${data.coinIds ?? '-'}종`
+                    : '응답 오류';
+            }
+            showAdminToast('챌린지 시장 동기화가 반영되었습니다.', 'ok');
+        } catch (e) {
+            console.error(e);
+            if (st) st.textContent = '실패';
+            showAdminToast('동기화 실패: ' + (e?.message || e), 'error');
+        }
+    };
+
+    window.runAdminChallengeDailyResetNow = async function () {
+        if (!isAdmin()) return;
+        if (!confirm('챌린지 일일 초기화를 지금 실행할까요?\n\n· 유저 챌린지 보유 강제 청산\n· challengeStocks / challengeCoins 시가로 재설정\n· 챌린지 TOP100 집계')) return;
+        const st = document.getElementById('admin-challenge-tool-status');
+        try {
+            if (auth.currentUser) await auth.currentUser.getIdToken(true);
+        } catch (_) { /* noop */ }
+        try {
+            if (st) st.textContent = '초기화 실행 중…';
+            const { data } = await adminRunChallengeDailyResetFn({});
+            if (st) {
+                st.textContent = data?.ok
+                    ? `완료 · 청산 유저 ${data.liquidatedUsers ?? 0}명`
+                    : '응답 오류';
+            }
+            showAdminToast('챌린지 일일 초기화가 완료되었습니다.', 'ok');
+        } catch (e) {
+            console.error(e);
+            if (st) st.textContent = '실패';
+            showAdminToast('초기화 실패: ' + (e?.message || e), 'error');
+        }
+    };
+
+    window.approveChallengeSupporterRequest = async function (reqId) {
+        if (!isAdmin() || !reqId) return;
+        try {
+            if (auth.currentUser) await auth.currentUser.getIdToken(true);
+            await adminReviewChallengeSupporterRequestFn({ requestId: reqId, approve: true });
+            showAdminToast('후원자 인증이 승인되었습니다.', 'ok');
+        } catch (e) {
+            alert('승인 실패: ' + (e?.message || e));
+        }
+    };
+
+    window.rejectChallengeSupporterRequest = async function (reqId) {
+        if (!isAdmin() || !reqId) return;
+        if (!confirm('이 신청을 거절할까요?')) return;
+        try {
+            if (auth.currentUser) await auth.currentUser.getIdToken(true);
+            await adminReviewChallengeSupporterRequestFn({ requestId: reqId, approve: false });
+            showAdminToast('거절 처리되었습니다.', 'ok');
+        } catch (e) {
+            alert('거절 실패: ' + (e?.message || e));
+        }
+    };
+
     function startRealtimeRequestListeners() {
         stopRealtimeRequestListeners();
         resetAdminInboxCounts();
         maybeRequestNotifPermission();
+
+        requestRealtimeUnsubs.challengeSupporter = onValue(adminRecentRequestsQuery('challengeSupporterRequests'), (snap) => {
+            const data = snap.val() || {};
+            const keys = Object.keys(data);
+            let added = [];
+            if (prevChallengeSupporterKeys !== null) {
+                added = keys.filter((k) => !prevChallengeSupporterKeys.has(k));
+            }
+            prevChallengeSupporterKeys = new Set(keys);
+            const hi = new Set(added);
+            if (added.length) {
+                added.forEach((id) => {
+                    const r = data[id];
+                    if (r && String(r.status || '').toLowerCase() === 'pending') {
+                        notifyAdminNewRequest('챌린지 후원자 인증 신청', `${r.nickname || ''} @${r.soopId || ''}`);
+                    }
+                });
+            }
+            renderChallengeSupporterRequestsList(data, hi);
+        });
 
         requestRealtimeUnsubs.pointCharge = onValue(adminRecentRequestsQuery('pointChargeRequests'), (snap) => {
             const data = snap.val() || {};
@@ -7487,6 +7649,7 @@
         }
         if (type === 'circuitBreakerClear') return { type: 'circuitBreakerClear' };
         if (type === 'marketRankRefresh') return { type: 'marketRankRefresh' };
+        if (type === 'challengePriceReset') return { type: 'challengePriceReset' };
         return null;
     }
 
@@ -7516,7 +7679,8 @@
                 t === 'clearAssetRequests' ||
                 t === 'clearAdRequests' ||
                 t === 'circuitBreakerClear' ||
-                t === 'marketRankRefresh'
+                t === 'marketRankRefresh' ||
+                t === 'challengePriceReset'
             ) {
                 out.push({ type: t });
                 return;
@@ -7591,6 +7755,7 @@
             maintenanceMode: '🔧 점검 모드 (siteConfig/maintenance)',
             circuitBreakerClear: '⚡ 서킷브레이커 전체 해제',
             marketRankRefresh: '📈 시장 순위·거래량 TOP (marketRank)',
+            challengePriceReset: '🎮 챌린지 모드 자산&주가 초기화',
         };
         listEl.innerHTML = rows.map((it, idx) => {
             const t = it.type;
@@ -7672,6 +7837,7 @@
         else if (type === 'maintenanceMode') items.push({ type: 'maintenanceMode', maintenanceOn: false });
         else if (type === 'circuitBreakerClear') items.push({ type: 'circuitBreakerClear' });
         else if (type === 'marketRankRefresh') items.push({ type: 'marketRankRefresh' });
+        else if (type === 'challengePriceReset') items.push({ type: 'challengePriceReset' });
         else items.push({ type });
         renderDailyRoutineList(items);
         persistDailyAutoSettings();
@@ -8278,6 +8444,7 @@
                 maintenanceMode: '🔧 점검 모드 반영',
                 circuitBreakerClear: '⚡ 서킷브레이커 전체 해제',
                 marketRankRefresh: '📈 시장 순위·거래량 TOP 집계',
+                challengePriceReset: '🎮 챌린지 모드 자산&주가 초기화',
             };
             const setRoutineMaintenanceRuntime = async (payload) => {
                 try {
@@ -8395,6 +8562,20 @@
                             }
                             if (st) {
                                 st.textContent = `완료 — 주식 ${d.stockRankCount ?? 0}종 · 코인 ${d.coinRankCount ?? 0}종 · 거래량TOP5 주 ${d.stockVolTop5 ?? 0}/코 ${d.coinVolTop5 ?? 0} · ${when}`;
+                            }
+                        }
+                    } else if (it.type === 'challengePriceReset') {
+                        if (runLogEl) runLogEl.innerHTML += `<div>${i + 1}. 🎮 챌린지 모드 자산&주가 초기화 (adminRunChallengeDailyReset)</div>`;
+                        try {
+                            if (auth.currentUser) await auth.currentUser.getIdToken(true);
+                        } catch (_) { /* noop */ }
+                        const d = await adminRunChallengeDailyResetFn({});
+                        const data = d?.data;
+                        if (runLogEl) {
+                            if (data?.ok) {
+                                runLogEl.innerHTML += `<div style="color:#86efac;">   → 청산 유저 ${Number(data.liquidatedUsers || 0).toLocaleString()}명 · 챌린지 주식 ${Number(data.challengeStocks || 0).toLocaleString()}종 · 코인 ${Number(data.challengeCoins || 0).toLocaleString()}종</div>`;
+                            } else {
+                                runLogEl.innerHTML += `<div style="color:#ef4444;">   → 실패: ${escapeHtml(String(data?.reason || d?.message || 'error'))}</div>`;
                             }
                         }
                     } else if (runLogEl) {

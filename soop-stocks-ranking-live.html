@@ -40,12 +40,24 @@
         .btn-start  { background: #22c55e; color: white; padding: 8px 16px; font-size: 13px; }
         .btn-stop   { background: #ef4444; color: white; padding: 8px 16px; font-size: 13px; }
         .btn-back   { background: #334155; color: #94a3b8; padding: 8px 14px; font-size: 12px; }
-        .rank-market-toggle-wrap {
+        .rank-market-toggle-wrap,
+        .rank-scope-toggle-wrap {
             padding: 10px 24px 8px;
             border-bottom: 1px solid #1e293b;
             background: #0f172a;
-            display: none;
+            display: flex;
+            flex-direction: column;
             flex-shrink: 0;
+        }
+        .rank-scope-toggle-wrap {
+            padding-top: 4px;
+        }
+        .rank-scope-label {
+            font-size: 11px;
+            font-weight: 800;
+            color: #64748b;
+            margin-bottom: 6px;
+            letter-spacing: -0.02em;
         }
         .rank-market-toggle {
             display: inline-flex;
@@ -84,6 +96,10 @@
             gap: 0;
             align-items: flex-start;
             min-height: 100%;
+        }
+        .dual-rank-row.challenge-stock-only #stock-rank-col {
+            flex: 0 0 50%;
+            max-width: 50%;
         }
         .rank-col {
             flex: 1;
@@ -186,7 +202,8 @@
                 font-size: 11px;
                 line-height: 1.45;
             }
-            .rank-market-toggle-wrap {
+            .rank-market-toggle-wrap,
+            .rank-scope-toggle-wrap {
                 display: block;
                 padding: 8px 12px;
             }
@@ -306,6 +323,13 @@
             <button type="button" class="rank-market-btn" id="rank-market-coin-btn" onclick="setRankMarketView('coin')">🪙 코인</button>
         </div>
     </div>
+    <div class="rank-scope-toggle-wrap">
+        <div class="rank-scope-label">TOP100 데이터</div>
+        <div class="rank-market-toggle" role="tablist" aria-label="메인 또는 챌린지 랭킹">
+            <button type="button" class="rank-market-btn active" id="rank-scope-main-btn" onclick="setRankDataScope('main')">메인</button>
+            <button type="button" class="rank-market-btn" id="rank-scope-challenge-btn" onclick="setRankDataScope('challenge')">챌린지</button>
+        </div>
+    </div>
 
     <div class="dual-rank-scroll" id="dual-rank-scroll">
         <div class="dual-rank-row">
@@ -371,20 +395,72 @@
     let rankingActive = false;
     let rankingPausedForHidden = false;
     let rankMarketView = 'stock';
+    let rankDataScope = 'main';
+    let canViewMainRank = false;
+    let canViewChallengeRank = false;
+
+    function rankStocksPath() {
+        return rankDataScope === 'challenge' ? 'marketRank/challenge/top100/stocks' : 'marketRank/top100/stocks';
+    }
+    function rankCoinsPath() {
+        return rankDataScope === 'challenge' ? 'marketRank/challenge/top100/coins' : 'marketRank/top100/coins';
+    }
+    function rankMetaPath() {
+        return rankDataScope === 'challenge' ? 'marketRank/challenge/meta/updatedAt' : 'marketRank/meta/updatedAt';
+    }
+
+    function applyRankDataScopeButtons() {
+        const mainBtn = document.getElementById('rank-scope-main-btn');
+        const chBtn = document.getElementById('rank-scope-challenge-btn');
+        if (!mainBtn || !chBtn) return;
+        mainBtn.style.display = canViewMainRank ? '' : 'none';
+        chBtn.style.display = canViewChallengeRank ? '' : 'none';
+        mainBtn.classList.toggle('active', rankDataScope === 'main');
+        chBtn.classList.toggle('active', rankDataScope === 'challenge');
+    }
+
+    window.setRankDataScope = function(scope) {
+        const nextScope = scope === 'challenge' ? 'challenge' : 'main';
+        if (nextScope === 'main' && !canViewMainRank) return;
+        if (nextScope === 'challenge' && !canViewChallengeRank) return;
+        rankDataScope = nextScope;
+        if (rankDataScope === 'challenge') rankMarketView = 'stock';
+        applyRankDataScopeButtons();
+        applyRankMarketView();
+        if (rankingActive) {
+            stopSubscriptionsOnly();
+            window.startRanking();
+        }
+    };
 
     function isCompactMobileView() {
         return window.matchMedia('(max-width: 768px)').matches;
     }
 
     function applyRankMarketView() {
+        const rowWrap = document.querySelector('.dual-rank-row');
         const stockCol = document.getElementById('stock-rank-col');
         const coinCol = document.getElementById('coin-rank-col');
         const stockBtn = document.getElementById('rank-market-stock-btn');
         const coinBtn = document.getElementById('rank-market-coin-btn');
         if (!stockCol || !coinCol || !stockBtn || !coinBtn) return;
+        const challengeStockOnly = rankDataScope === 'challenge';
+        if (challengeStockOnly) rankMarketView = 'stock';
+
+        coinBtn.style.display = challengeStockOnly ? 'none' : '';
+        coinCol.style.display = challengeStockOnly ? 'none' : '';
+        if (rowWrap) rowWrap.classList.toggle('challenge-stock-only', challengeStockOnly && !isCompactMobileView());
+        stockCol.style.flex = '';
+        stockCol.style.maxWidth = '';
 
         stockBtn.classList.toggle('active', rankMarketView === 'stock');
         coinBtn.classList.toggle('active', rankMarketView === 'coin');
+
+        if (challengeStockOnly) {
+            stockCol.classList.remove('is-hidden-mobile', 'is-mobile-active');
+            coinCol.classList.remove('is-hidden-mobile', 'is-mobile-active');
+            return;
+        }
 
         if (!isCompactMobileView()) {
             stockCol.classList.remove('is-hidden-mobile', 'is-mobile-active');
@@ -399,6 +475,7 @@
     }
 
     window.setRankMarketView = function(view) {
+        if (rankDataScope === 'challenge' && view === 'coin') return;
         rankMarketView = view === 'coin' ? 'coin' : 'stock';
         applyRankMarketView();
     };
@@ -442,21 +519,37 @@
         rankingActive = false;
     }
 
-    async function canAccessLiveRanking(user) {
-        if (!user?.uid) return false;
-        if (String(user.email || '').toLowerCase() === String(ADMIN_EMAIL).toLowerCase()) return true;
+    async function getRankAccess(user) {
+        const out = { main: false, challenge: false };
+        if (!user?.uid) return out;
+        if (String(user.email || '').toLowerCase() === String(ADMIN_EMAIL).toLowerCase()) {
+            out.main = true;
+            out.challenge = true;
+            return out;
+        }
         try {
-            const entSnap = await get(ref(db, `users/${user.uid}/entitlements/liveRankingTop100ExpiresAt`));
+            const [entSnap, challengeSnap] = await Promise.all([
+                get(ref(db, `users/${user.uid}/entitlements/liveRankingTop100ExpiresAt`)),
+                get(ref(db, `users/${user.uid}/entitlements/challengeSupporterVerified`))
+            ]);
             const expiresAt = Number(entSnap.val() || 0);
-            return Number.isFinite(expiresAt) && expiresAt > Date.now();
+            out.main = Number.isFinite(expiresAt) && expiresAt > Date.now();
+            out.challenge = challengeSnap.exists() ? challengeSnap.val() === true : false;
+            return out;
         } catch (_) {
-            return false;
+            return out;
         }
     }
 
     onAuthStateChanged(auth, async (user) => {
-        const allowed = await canAccessLiveRanking(user);
-        if (allowed) {
+        const access = await getRankAccess(user);
+        canViewMainRank = access.main;
+        canViewChallengeRank = access.challenge;
+        if (canViewMainRank || canViewChallengeRank) {
+            if (!canViewMainRank && canViewChallengeRank) rankDataScope = 'challenge';
+            if (canViewMainRank && !canViewChallengeRank) rankDataScope = 'main';
+            applyRankDataScopeButtons();
+            applyRankMarketView();
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('main-section').style.display  = 'flex';
             return;
@@ -477,6 +570,14 @@
 
     window.startRanking = function() {
         if (rankingActive) return;
+        if (rankDataScope === 'main' && !canViewMainRank) {
+            setStatusText('메인 TOP100 열람 권한이 없습니다.');
+            return;
+        }
+        if (rankDataScope === 'challenge' && !canViewChallengeRank) {
+            setStatusText('챌린지 TOP100 열람 권한이 없습니다.');
+            return;
+        }
         rankingPausedForHidden = false;
         const tbodyS   = document.getElementById('ranking-tbody-stock');
         const tbodyC   = document.getElementById('ranking-tbody-coin');
@@ -489,8 +590,9 @@
         setStatusText('구독 중...');
         badge.style.display  = 'flex';
         rankingActive = true;
+        setStatusText(rankDataScope === 'challenge' ? '실시간 구독 중 · 챌린지 TOP100' : '실시간 구독 중 · 메인 TOP100');
 
-        stockTopUnsub = onValue(ref(db, 'marketRank/top100/stocks'), (snap) => {
+        stockTopUnsub = onValue(ref(db, rankStocksPath()), (snap) => {
             if (!snap.exists()) {
                 tbodyS.innerHTML = emptyRow;
                 countEl.textContent = '주식 0종목';
@@ -500,23 +602,28 @@
                 tbodyS.innerHTML = stocks.length ? buildRankingRows(stocks, '원', false) : emptyRow;
             }
             touchTime();
-            setStatusText('실시간 구독 중');
+            setStatusText(rankDataScope === 'challenge' ? '실시간 구독 중 · 챌린지 TOP100' : '실시간 구독 중 · 메인 TOP100');
         });
 
-        coinTopUnsub = onValue(ref(db, 'marketRank/top100/coins'), (snap) => {
-            if (!snap.exists()) {
-                tbodyC.innerHTML = emptyRow;
-                countCoin.textContent = '코인 0종목';
-            } else {
-                const coins = Array.isArray(snap.val()) ? snap.val() : [];
-                countCoin.textContent = `코인 ${coins.length}종목`;
-                tbodyC.innerHTML = coins.length ? buildRankingRows(coins, '원', true) : emptyRow;
-            }
-            touchTime();
-            setStatusText('실시간 구독 중');
-        });
+        if (rankDataScope === 'challenge') {
+            if (tbodyC) tbodyC.innerHTML = '<tr><td colspan="5" class="status-empty">챌린지 모드는 주식 랭킹만 제공합니다</td></tr>';
+            if (countCoin) countCoin.textContent = '코인 비활성';
+        } else {
+            coinTopUnsub = onValue(ref(db, rankCoinsPath()), (snap) => {
+                if (!snap.exists()) {
+                    tbodyC.innerHTML = emptyRow;
+                    countCoin.textContent = '코인 0종목';
+                } else {
+                    const coins = Array.isArray(snap.val()) ? snap.val() : [];
+                    countCoin.textContent = `코인 ${coins.length}종목`;
+                    tbodyC.innerHTML = coins.length ? buildRankingRows(coins, '원', true) : emptyRow;
+                }
+                touchTime();
+                setStatusText(rankDataScope === 'challenge' ? '실시간 구독 중 · 챌린지 TOP100' : '실시간 구독 중 · 메인 TOP100');
+            });
+        }
 
-        metaUnsub = onValue(ref(db, 'marketRank/meta/updatedAt'), (snap) => {
+        metaUnsub = onValue(ref(db, rankMetaPath()), (snap) => {
             const ts = Number(snap.val());
             if (Number.isFinite(ts) && ts > 0) touchTime(ts);
         });
@@ -651,6 +758,7 @@
     // 페이지 로드 시 초기화
     updateAutoScrollBadge();
     applyRankMarketView();
+    applyRankDataScopeButtons();
     window.addEventListener('resize', applyRankMarketView);
 </script>
 </body>
