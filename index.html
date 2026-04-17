@@ -3845,14 +3845,14 @@
         <div class="chart-modal-trade">
             <div style="display:flex; align-items:center; gap:8px; flex:1;">
                 <input type="number" id="modal-qty-input"
-                    value="1" min="1" max="100"
+                    value="1" min="1" step="1"
                     oninput="clampQty(this)"
                     onblur="smartClampQty(this, chartModalStockId, document.activeElement?.dataset?.tradeType || 'buy')"
                     style="width:80px; background:var(--bg-color); border:1px solid var(--border);
                            color:var(--text-main); font-size:14px; font-weight:700;
                            padding:10px; border-radius:8px; outline:none;
                            text-align:center; appearance:textfield; -moz-appearance:textfield;">
-                <span style="font-size:11px; color:var(--hint); white-space:nowrap;">최대 100주</span>
+                <span style="font-size:11px; color:var(--hint); white-space:nowrap;">수량 제한 없음(주문당 금액 한도)</span>
             </div>
             <button class="modal-buy"  data-trade-type="buy" type="button" title="탭: 1회 매수 · 3초 이상 누르면 자동매수(탭으로 종료)" onclick="handleModalTradeButtonClick(event, 'buy')" >매수</button>
             <button class="modal-maxsell" data-trade-type="sell" type="button" title="전량 매도(MAX) — 서버에서 일괄 처리, 8% 추가 수수료·전량매도 임팩트 계수 적용" onclick="handleModalMaxSellButtonClick(event)">MAX</button>
@@ -4090,7 +4090,7 @@
                 🎁 포인트 선물
             </button>
             <div class="wallet-inline-sep" aria-hidden="true"></div>
-            <div class="wallet-info">1회 최대 거래: <span id="wallet-max-trade" style="color:#f59e0b;">1억원</span></div>
+            <div class="wallet-info">1회 최대 거래: <span id="wallet-max-trade" style="color:#f59e0b;">—</span></div>
             <div id="coin-market-wallet-ui" style="display:none; align-items:center; flex-wrap:wrap; gap:6px;">
                 <div class="wallet-inline-sep" aria-hidden="true"></div>
                 <div class="wallet-market-toggle" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
@@ -6854,8 +6854,10 @@ function getStockSyncMode() {
     return 'regular';
 }
 
-const STOCK_MAX_TRADE_PER_ORDER_WON = 100000000;
-const COIN_MAX_TRADE_PER_ORDER_WON  = 100000000000;
+/** 1회 매매 명목 한도(원) — `USER_CASH_MAX`·RTDB 규칙과 동일(주식·코인 공통) */
+const MAX_TRADE_NOTIONAL_PER_ORDER_WON = 5_000_000_000_000;
+const STOCK_MAX_TRADE_PER_ORDER_WON = MAX_TRADE_NOTIONAL_PER_ORDER_WON;
+const COIN_MAX_TRADE_PER_ORDER_WON = MAX_TRADE_NOTIONAL_PER_ORDER_WON;
 /** 코인 체결 시 impact 배수 기본값(RTD에 값 없을 때) */
 const DEFAULT_COIN_MARKET_IMPACT_MULTIPLIER = 1.85;
 let liveCoinImpactMultiplier = DEFAULT_COIN_MARKET_IMPACT_MULTIPLIER;
@@ -6992,7 +6994,7 @@ function canAccessCoinMarket() {
 function updateWalletTradeCapLabel() {
     const el = document.getElementById('wallet-max-trade');
     if (!el) return;
-    el.textContent = isCoinMarket() ? '1000억원' : '1억원';
+    el.textContent = `${MAX_TRADE_NOTIONAL_PER_ORDER_WON.toLocaleString('ko-KR')}원 (주식·코인 동일)`;
 }
 
 function updateMainMarketHeaderTitle() {
@@ -9983,7 +9985,8 @@ function resolveStockForTradeQty(stockId, source) {
 }
 
 function calcMaxQty(stockId, type, inputQty) {
-    let v = Math.min(Math.max(1, inputQty), 100);
+    let v = Math.max(1, Math.floor(Number(inputQty)) || 0);
+    if (v > USER_STOCK_QTY_CAP) v = USER_STOCK_QTY_CAP;
     if (!myData) return v;
 
     const fromModal = chartModalStockId === stockId;
@@ -9999,23 +10002,23 @@ function calcMaxQty(stockId, type, inputQty) {
     if (type === 'buy' && stock) {
         const estPrice  = Math.round(stock.price * (1 + 0.0005));
         const maxAfford = Math.floor(activeCashValue() / estPrice);
-        const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
-        return Math.min(v, maxAfford, maxByCap, 100);
+        const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : USER_STOCK_QTY_CAP;
+        return Math.min(v, maxAfford, maxByCap);
     } else if (type === 'sell') {
         const raw = Math.floor(Number(userStock.qty) || 0);
         const cap = raw > 0 ? raw : raw < 0 ? -raw : 0;
-        return Math.min(v, cap, 100);
+        return Math.min(v, cap);
     }
     return v;
 }
 
-// ── 수량 입력 클램프 (1~100 범위 강제) ──────────────────────
+// ── 수량 입력 클램프 (JS 안전 정수·잔고·주문당 금액 한도는 smartClampQty·서버에서 보정) ─
 // 수량을 지울수있게 허용 — 거래 시점에만 유효성 검사
 window.clampQty = function(el) {
     if (el.value === '' || el.value === '-') return; // 입력 중 빈값 허용
-    let v = parseInt(el.value);
+    let v = parseInt(el.value, 10);
     if (isNaN(v)) { el.value = ''; return; }
-    if (v > 100) el.value = 100;
+    if (v > USER_STOCK_QTY_CAP) el.value = String(USER_STOCK_QTY_CAP);
     if (v < 0)   el.value = '';
     const stockId = inferStockIdFromQtyInput(el);
     if (stockId && el.value !== '') {
@@ -10028,9 +10031,9 @@ window.clampQty = function(el) {
 // type: 'sell' → 보유 수량 기준 최대 매도 가능 수량
 window.smartClampQty = function(el, stockId, type) {
     if (el.value === '') return; // 빈값 유지 허용
-    let v = parseInt(el.value);
+    let v = parseInt(el.value, 10);
     if (isNaN(v) || v < 1) { el.value = ''; return; }
-    if (v > 100) v = 100;
+    if (v > USER_STOCK_QTY_CAP) v = USER_STOCK_QTY_CAP;
 
     if (!myData) { el.value = v; return; }
 
@@ -10047,13 +10050,13 @@ window.smartClampQty = function(el, stockId, type) {
     if (type === 'buy' && stock) {
         const estPrice  = Math.round(stock.price * (1 + 0.0005));
         const maxAfford = Math.floor(activeCashValue() / estPrice);
-        const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
-        const maxBuy    = Math.min(v, maxAfford, maxByCap, 100);
+        const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : USER_STOCK_QTY_CAP;
+        const maxBuy    = Math.min(v, maxAfford, maxByCap);
         el.value = Math.max(1, maxBuy);
     } else if (type === 'sell') {
         const raw = Math.floor(Number(userStock.qty) || 0);
         const cap = raw > 0 ? raw : raw < 0 ? -raw : 0;
-        const maxSell = Math.min(v, cap, 100);
+        const maxSell = Math.min(v, cap);
         el.value = Math.max(1, maxSell);
     } else {
         el.value = v;
@@ -10418,7 +10421,7 @@ setInterval(() => {
 }, 1000);
 
 /** 클라이언트 정규화 상한 — RTDB users/.../cash·stocks 는 서버 전용 쓰기(규칙·Functions) */
-const USER_CASH_MAX = 5000000000000;
+const USER_CASH_MAX = MAX_TRADE_NOTIONAL_PER_ORDER_WON;
 const USER_STOCK_AVG_MAX = 5000000000000;
 /** 종목당 보유 수량 상한 없음(실수 방지로 JS 안전 정수까지만 클라이언트에서 정규화) */
 const USER_STOCK_QTY_CAP = Number.MAX_SAFE_INTEGER;
@@ -10941,8 +10944,8 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
     }
 
     // 서버 사이드 이중 검증 — 클라이언트 우회 방지
-    if (qty < 1 || qty > 100 || !Number.isInteger(qty)) {
-        tradeNotify(isCoin ? '거래 수량은 1~100코인 사이여야 합니다.' : '거래 수량은 1~100주 사이여야 합니다.');
+    if (!Number.isInteger(qty) || qty < 1 || qty > USER_STOCK_QTY_CAP) {
+        tradeNotify(isCoin ? '거래 수량은 1 이상의 정수여야 합니다.' : '거래 수량은 1주 이상의 정수여야 합니다.');
         abortAutoIf();
         return;
     }
@@ -10972,7 +10975,7 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
     }
 
     const maxOrderWon = isCoin ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
-    const maxLabel    = isCoin ? '1000억원' : '1억원';
+    const maxLabel = `${maxOrderWon.toLocaleString('ko-KR')}원`;
     const baseFee = Number(siteConfig?.sellConfig?.fee ?? 0.003);
     const invFeeRaw = siteConfig?.sellConfig?.inverseFee;
     let precheckFee = baseFee;
@@ -13261,7 +13264,7 @@ function updateCardContent(card, s, userStock) {
         const prevQty = rememberedQty != null
             ? String(rememberedQty)
             : (document.getElementById(`qty-${s.id}`)?.value || '1');
-        const maxHint = isCoinMarket() ? '최대 100코인' : '최대 100주';
+        const maxHint = isCoinMarket() ? '수량 제한 없음' : '수량 제한 없음';
         const rankText = ` · 순위 ${getMarketRankText(s.id, coin ? 'coin' : 'stock')}`;
         card.innerHTML = `
             <div class="info-group">
@@ -13276,7 +13279,7 @@ function updateCardContent(card, s, userStock) {
             <div class="trade-input-wrap">
                 <div class="trade-qty-row">
                     <input type="number" class="trade-qty-input" id="qty-${s.id}"
-                        value="${prevQty}" min="1" max="100"
+                        value="${prevQty}" min="1" step="1"
                         onclick="event.stopPropagation()"
                         oninput="clampQty(this)"
                         onblur="smartClampQty(this,'${s.id}',event.relatedTarget?.dataset?.tradeType||'buy')">
@@ -13329,7 +13332,7 @@ function updateCardContent(card, s, userStock) {
     }
 
     const hintEl = card.querySelector('.trade-qty-hint');
-    if (hintEl) hintEl.textContent = isCoinMarket() ? '최대 100코인' : '최대 100주';
+    if (hintEl) hintEl.textContent = '수량 제한 없음(주문당 금액 한도)';
 
     const priceEl = card.querySelector('.current-price');
     if (priceEl) { priceEl.textContent = `${(s.price || 0).toLocaleString()}원`; priceEl.className = `current-price ${isUp ? 'up' : 'down'}`; }

@@ -354,6 +354,11 @@ function clampInt(n, min, max) {
   return Math.min(max, Math.max(min, v));
 }
 
+/** `trade`·`adminInstrumentImpact` 1회 주문 수량 상한(실질 제한은 주문당 최대 원화·잔고) */
+const TRADE_ORDER_QTY_MAX = Number.MAX_SAFE_INTEGER;
+/** 1회 매매 명목 최대(원) — RTDB `users/cash` 규칙 상한과 동일 */
+const MAX_TRADE_NOTIONAL_WON = 5_000_000_000_000;
+
 function finiteOr(n, fallback) {
   const x = Number(n);
   return Number.isFinite(x) ? x : fallback;
@@ -3115,7 +3120,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const side = String(req.data?.side || "")
     .trim()
     .toLowerCase(); // 클라이언트·프록시에서 대소문자 섞여도 허용
-  const qty = clampInt(req.data?.qty, 1, 100);
+  const qty = clampInt(req.data?.qty, 1, TRADE_ORDER_QTY_MAX);
   const market = String(req.data?.market || "stock").trim().toLowerCase();
   const isCoin = market === "coin";
   const inverseModeReq = Boolean(req.data?.inverseMode);
@@ -3123,14 +3128,12 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
 
   if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
   if (side !== "buy" && side !== "sell") throw new HttpsError("invalid-argument", "side must be buy|sell.");
-  if (!qty) throw new HttpsError("invalid-argument", "qty must be 1..100.");
+  if (!qty) throw new HttpsError("invalid-argument", "qty must be a positive integer.");
   if (market !== "stock" && market !== "coin") {
     throw new HttpsError("invalid-argument", "market must be stock|coin.");
   }
 
-  const STOCK_MAX_ORDER_WON = 100000000;
-  const COIN_MAX_ORDER_WON = 100000000000;
-  const maxOrderWon = isCoin ? COIN_MAX_ORDER_WON : STOCK_MAX_ORDER_WON;
+  const maxOrderWon = MAX_TRADE_NOTIONAL_WON;
 
   const db = admin.database();
   const [cfgSnap, preUserSnap] = await Promise.all([db.ref("siteConfig").get(), db.ref(`users/${uid}`).get()]);
@@ -3238,7 +3241,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       if (estTotal > maxOrderWon) {
         throw new HttpsError(
           "failed-precondition",
-          isCoin ? "1회 최대 거래 금액(1000억원)을 초과합니다." : "1회 최대 거래 금액(1억원)을 초과합니다."
+          `1회 최대 거래 금액(${MAX_TRADE_NOTIONAL_WON.toLocaleString("ko-KR")}원)을 초과합니다.`
         );
       }
       if (preCash < estTotal) {
@@ -3249,7 +3252,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       if (estReceive > maxOrderWon) {
         throw new HttpsError(
           "failed-precondition",
-          isCoin ? "1회 최대 거래 금액(1000억원)을 초과합니다." : "1회 최대 거래 금액(1억원)을 초과합니다."
+          `1회 최대 거래 금액(${MAX_TRADE_NOTIONAL_WON.toLocaleString("ko-KR")}원)을 초과합니다.`
         );
       }
       if (preHaveQty > 0 && preHaveQty < qty) {
@@ -3665,7 +3668,7 @@ exports.adminInstrumentImpact = onCall({ cors: true, timeoutSeconds: 60, memory:
   const side = String(req.data?.side || "")
     .trim()
     .toLowerCase();
-  const qty = clampInt(req.data?.qty, 1, 100);
+  const qty = clampInt(req.data?.qty, 1, TRADE_ORDER_QTY_MAX);
   const market = String(req.data?.market || "stock").trim().toLowerCase();
   const isCoin = market === "coin";
   const inverseModeReq = Boolean(req.data?.inverseMode);
@@ -3676,7 +3679,7 @@ exports.adminInstrumentImpact = onCall({ cors: true, timeoutSeconds: 60, memory:
     throw new HttpsError("invalid-argument", "side must be buy|sell.");
   }
   if (!qty) {
-    throw new HttpsError("invalid-argument", "qty must be 1..100.");
+    throw new HttpsError("invalid-argument", "qty must be a positive integer.");
   }
   if (market !== "stock" && market !== "coin") {
     throw new HttpsError("invalid-argument", "market must be stock|coin.");

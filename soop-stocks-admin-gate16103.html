@@ -1474,7 +1474,7 @@
                 <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="coin-liquidity-trade-style" value="tick" checked> 1틱 연속매매</label>
                 <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="coin-liquidity-trade-style" value="burst"> 수량 x개 일시매매</label>
                 <span style="font-size:12px; color:#94a3b8;">수량</span>
-                <input type="number" id="coin-liquidity-burst-qty" value="20" min="1" max="100" step="1"
+                <input type="number" id="coin-liquidity-burst-qty" value="20" min="1" step="1"
                     style="width:64px; background:#0f172a; border:1px solid #334155; color:#e9d5ff; padding:6px 8px; border-radius:8px; font-size:13px; text-align:center;">
             </div>
             <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px;">
@@ -5357,7 +5357,7 @@
         const raw = adminForceQtyByStock[stockId];
         if (raw == null || raw === '') return '1';
         const n = Math.floor(Number(raw));
-        if (!Number.isInteger(n) || n < 1 || n > 100) return '1';
+        if (!Number.isInteger(n) || n < 1) return '1';
         return String(n);
     }
 
@@ -5486,8 +5486,8 @@
                         <button type="button" class="btn-success" onclick="updateSinglePrice('${id}')" style="padding:8px 12px; font-size:12px;">수정</button>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid #1e293b; padding-top:8px;">
-                        <span style="font-size:11px; color:#94a3b8;">수량(1~100)</span>
-                        <input type="number" min="1" max="100" value="${qtySaved}" id="admin-force-qty-${id}" inputmode="numeric"
+                        <span style="font-size:11px; color:#94a3b8;">수량(제한 없음·주문당 금액 한도)</span>
+                        <input type="number" min="1" step="1" value="${qtySaved}" id="admin-force-qty-${id}" inputmode="numeric"
                             oninput="window.adminForceQtyByStock['${id}']=this.value"
                             style="width:64px; padding:6px; background:#1e293b; border:1px solid #475569; color:#f8fafc; border-radius:6px; font-size:13px;">
                         <button type="button" class="btn-success" data-admin-force-stock="${id}" onclick="adminExecuteTrade('${id}','buy')" style="padding:6px 10px; font-size:11px; font-weight:700;">Admin Force Buy</button>
@@ -5648,8 +5648,8 @@
             qty = Math.floor(Number(qtyEl?.value));
         }
         if (!Number.isFinite(qty)) qty = NaN;
-        if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
-            if (!silent) showAdminToast('수량은 1~100 사이의 정수여야 합니다.', 'error');
+        if (!Number.isInteger(qty) || qty < 1) {
+            if (!silent) showAdminToast('수량은 1 이상의 정수여야 합니다.', 'error');
             return { ok: false, error: 'invalid_qty' };
         }
         const t = type === 'sell' ? 'sell' : 'buy';
@@ -5729,8 +5729,8 @@
             qty = 5;
         }
         if (!Number.isFinite(qty)) qty = NaN;
-        if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
-            if (!silent) showAdminToast('수량은 1~100 사이의 정수여야 합니다.', 'error');
+        if (!Number.isInteger(qty) || qty < 1) {
+            if (!silent) showAdminToast('수량은 1 이상의 정수여야 합니다.', 'error');
             return { ok: false, error: 'invalid_qty' };
         }
         const t = type === 'sell' ? 'sell' : 'buy';
@@ -5804,7 +5804,7 @@
         const styleEl = document.querySelector('input[name="coin-liquidity-trade-style"]:checked');
         const sellOnly = modeEl && modeEl.value === 'sellonly';
         const burstMode = styleEl && styleEl.value === 'burst';
-        const burstQty = Math.max(1, Math.min(100, Math.floor(Number(document.getElementById('coin-liquidity-burst-qty')?.value) || 20)));
+        const burstQty = Math.max(1, Math.floor(Number(document.getElementById('coin-liquidity-burst-qty')?.value) || 20));
         try {
             const snap = await getCoinsRootCached();
             if (!snap.exists()) {
@@ -5931,8 +5931,8 @@
 
                 const qtyEl = document.getElementById(`admin-force-qty-${stockId}`);
                 const q = Math.floor(Number(qtyEl?.value));
-                if (!Number.isInteger(q) || q < 1 || q > 100) {
-                    stopAdminMacro(stockId, '수량은 1~100 정수여야 합니다.');
+                if (!Number.isInteger(q) || q < 1) {
+                    stopAdminMacro(stockId, '수량은 1 이상의 정수여야 합니다.');
                     return;
                 }
 
