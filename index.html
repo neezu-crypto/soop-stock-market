@@ -4097,6 +4097,8 @@ import { getFunctions, httpsCallable }
 import { getAuth, initializeAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, browserPopupRedirectResolver,
     indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence } 
     from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+import { firebaseConfig } from "./shared/firebase.js";
+import { escapeHtml as sharedEscapeHtml, normalizeSearchKeyword as sharedNormalizeSearchKeyword } from "./shared/format.js";
 
 (function () {
 
@@ -4163,13 +4165,6 @@ if (isMaintenanceTime()) {
 attachMaintenanceOverlayHotkey();
 
 // ── 점검 시간 외 → Firebase 정상 초기화 ─────────────────
-const firebaseConfig = {
-    apiKey:      "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
-    authDomain:  "soop-stock-market.firebaseapp.com",
-    databaseURL: "https://soop-stock-market-default-rtdb.firebaseio.com/",
-    projectId:   "soop-stock-market",
-    appId:       "1:997788925900:web:cb613d438efec019a3a769"
-};
 const app  = initializeApp(firebaseConfig);
 const db   = getDatabase(app);
 const fns  = getFunctions(app, "us-central1");
@@ -12216,13 +12211,7 @@ window.addEventListener('load', () => {
 
 // ── XSS 방어: Firebase 데이터를 innerHTML에 삽입하기 전 이스케이프 ──
 function escapeHtml(str) {
-    if (str == null) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;');
+    return sharedEscapeHtml(str);
 }
 
 // URL이 http(s)://로 시작하지 않으면 fallback 반환 — javascript: 프로토콜 차단
@@ -13241,6 +13230,39 @@ function createFavoriteCard(s) {
 let stockNameCache = {}; // { id: name }
 
 // 종목 이름 목록을 localStorage 캐시 또는 Firebase에서 로드 (경량 stockSearchIndex·coinSearchIndex 우선)
+let legacyNameFallbackInFlight = null;
+let legacyNameFallbackAt = 0;
+const LEGACY_NAME_FALLBACK_COOLDOWN_MS = 60000;
+
+function collectNameMapFromMemory() {
+    const out = {};
+    const take = (row) => {
+        const id = String(row?.id || '').trim();
+        const name = String(row?.name || '').trim();
+        if (!id || !name) return;
+        if (!out[id]) out[id] = name;
+    };
+    (allStocks || []).forEach(take);
+    (allCoins || []).forEach(take);
+    Object.values(favorites || {}).forEach(take);
+    Object.values(favoriteCoins || {}).forEach(take);
+    Object.values(ownedStocks || {}).forEach(take);
+    Object.values(ownedCoins || {}).forEach(take);
+    Object.values(searchResults || {}).forEach(take);
+    return out;
+}
+
+async function loadLegacyFullNameCachesIntoMemoryDedup() {
+    const now = Date.now();
+    if (legacyNameFallbackInFlight) return legacyNameFallbackInFlight;
+    if (now - legacyNameFallbackAt < LEGACY_NAME_FALLBACK_COOLDOWN_MS) return;
+    legacyNameFallbackAt = now;
+    legacyNameFallbackInFlight = loadLegacyFullNameCachesIntoMemory().finally(() => {
+        legacyNameFallbackInFlight = null;
+    });
+    return legacyNameFallbackInFlight;
+}
+
 async function loadLegacyFullNameCachesIntoMemory() {
     try {
         const [snapSt, snapCo] = await Promise.all([
@@ -13320,7 +13342,18 @@ async function loadStockNameCache() {
         }
 
         if (!anyFromIndex) {
-            await loadLegacyFullNameCachesIntoMemory();
+            // 인덱스가 비었거나 읽기 실패여도 UX를 위해 먼저 로컬/메모리 이름 캐시를 재활용한다.
+            if (hasUsableNameCache && Object.keys(stockNameCache).length === 0) {
+                stockNameCache = { ...cachedNames };
+            }
+            const memoryNames = collectNameMapFromMemory();
+            if (Object.keys(memoryNames).length > 0) {
+                stockNameCache = { ...stockNameCache, ...memoryNames };
+            }
+            // 여전히 비어 있을 때만 마지막 수단으로 전체 트리 이름 fallback을 1회/쿨다운으로 제한
+            if (Object.keys(stockNameCache).length === 0) {
+                await loadLegacyFullNameCachesIntoMemoryDedup();
+            }
         }
 
         const existing = loadStaticCache() || {};
@@ -13526,20 +13559,7 @@ function setupSearchQuoteLazyLoad(myGen, qNorm, coinMode, pendingIdSet) {
 }
 
 function normalizeSearchKeyword(v) {
-    try {
-        return String(v || '')
-            .normalize('NFKC')
-            .toLowerCase()
-            .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
-            .replace(/\s+/g, '')
-            .trim();
-    } catch (_) {
-        return String(v || '')
-            .toLowerCase()
-            .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
-            .replace(/\s+/g, '')
-            .trim();
-    }
+    return sharedNormalizeSearchKeyword(v);
 }
 
 // 검색어 입력 처리 — 이름 캐시 기반 검색 후 가격 조회
