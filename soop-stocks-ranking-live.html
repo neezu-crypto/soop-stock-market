@@ -273,6 +273,23 @@
         }
         .auto-scroll-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: live-blink 1s infinite; }
         .auto-scroll-badge.paused .auto-scroll-dot { background: #64748b; animation: none; }
+
+        /* Ctrl+Enter: 순위 리스트 전용 화면 */
+        body.focus-list-only .header,
+        body.focus-list-only .control-bar,
+        body.focus-list-only .rank-market-toggle-wrap,
+        body.focus-list-only .rank-scope-toggle-wrap {
+            display: none !important;
+        }
+        body.focus-list-only #main-section {
+            padding: 0;
+        }
+        body.focus-list-only .dual-rank-scroll {
+            padding: 0 8px 8px;
+        }
+        body.focus-list-only .rank-col-title {
+            padding-top: 6px;
+        }
     </style>
 </head>
 <body>
@@ -760,6 +777,17 @@
     applyRankMarketView();
     applyRankDataScopeButtons();
     window.addEventListener('resize', applyRankMarketView);
+
+    // Ctrl+Enter: 리스트 전용 전체화면 토글
+    function toggleFocusListOnlyMode() {
+        document.body.classList.toggle('focus-list-only');
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            toggleFocusListOnlyMode();
+        }
+    });
 </script>
 </body>
 </html>
