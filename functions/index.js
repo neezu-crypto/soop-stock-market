@@ -4048,6 +4048,108 @@ exports.adminGrantAssetRequest = onCall(
   }
 );
 
+/** 로그인 유저: 자산 지원 신청 (클라이언트 직접 assetRequests 쓰기 금지 — 서버에서 잔고·중복 검증) */
+exports.submitAssetSupportRequest = onCall(
+  { cors: true, timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    const uid = request.auth.uid;
+    const nicknameRaw = String(request.data?.nickname || "").trim();
+    const requestReasonRaw = String(request.data?.requestReason || "").trim();
+    if (!nicknameRaw || nicknameRaw.length > 80) {
+      throw new HttpsError("invalid-argument", "nickname required (1~80 chars).");
+    }
+    if (requestReasonRaw.length > 2000) {
+      throw new HttpsError("invalid-argument", "requestReason too long.");
+    }
+
+    const db = admin.database();
+
+    const pendingSnap = await db.ref("assetRequests").orderByChild("uid").equalTo(uid).once("value");
+    const pendingVal = pendingSnap.exists() ? pendingSnap.val() || {} : {};
+    for (const v of Object.values(pendingVal)) {
+      if (v && typeof v === "object" && String(v.status || "").trim() === "pending") {
+        throw new HttpsError("failed-precondition", "pending asset request exists.");
+      }
+    }
+
+    const cashSnap = await db.ref(`users/${uid}/cash`).once("value");
+    let currentBalance = 1000000;
+    if (cashSnap.exists() && Number.isFinite(Number(cashSnap.val()))) {
+      currentBalance = Math.floor(Number(cashSnap.val()));
+    } else {
+      const sumSnap = await db.ref(`users/${uid}/summary/cash`).once("value");
+      if (sumSnap.exists() && Number.isFinite(Number(sumSnap.val()))) {
+        currentBalance = Math.floor(Number(sumSnap.val()));
+      }
+    }
+    if (!Number.isFinite(currentBalance) || currentBalance < 0) currentBalance = 0;
+
+    const newRef = db.ref("assetRequests").push();
+    const now = Date.now();
+    await newRef.set({
+      uid,
+      nickname: nicknameRaw,
+      currentBalance,
+      requestReason: requestReasonRaw,
+      requestAmount: 0,
+      status: "pending",
+      timestamp: admin.database.ServerValue.TIMESTAMP,
+      createdAtMs: now,
+    });
+
+    return { ok: true, requestId: newRef.key };
+  }
+);
+
+/** 관리자: assetRequests 전체 삭제 (일일 루틴·관리자 도구와 동일 로직) */
+exports.adminClearAssetRequests = onCall(
+  { cors: true, timeoutSeconds: 120, memory: "512MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    const n = await clearRtdbChildrenServer(db, "assetRequests");
+    return { ok: true, deleted: n };
+  }
+);
+
+/** 관리자: 기본 현금·무(0)보유 주식 유저 일괄 삭제 (클라이언트 users/ 직접 갱신 제거) */
+exports.adminDeleteInactiveUsers = onCall(
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    const snap = await db.ref("users").once("value");
+    const data = snap.exists() ? snap.val() || {} : {};
+    const inactive = [];
+    Object.entries(data).forEach(([u, user]) => {
+      const isDefaultCash = (user?.cash ?? 1000000) === 1000000;
+      const hasNoStocks = !user?.stocks || Object.keys(user.stocks).length === 0;
+      const hasZeroStocks =
+        user?.stocks && Object.values(user.stocks).every((s) => (s?.qty || 0) === 0);
+      if (isDefaultCash && (hasNoStocks || hasZeroStocks)) inactive.push(u);
+    });
+    if (inactive.length === 0) return { ok: true, deleted: 0 };
+
+    const BATCH = 500;
+    let deleted = 0;
+    for (let i = 0; i < inactive.length; i += BATCH) {
+      const batch = inactive.slice(i, i + BATCH);
+      const updates = {};
+      batch.forEach((u) => {
+        updates[`users/${u}`] = null;
+      });
+      await db.ref().update(updates);
+      deleted += batch.length;
+    }
+    return { ok: true, deleted };
+  }
+);
+
 /**
  * presence/{uid}/{sessionId} 변경 시 전체 presence를 읽어 TTL 기준 활성 세션 수를 집계하고
  * siteStats/connectionCount 에 스칼라로 기록 — 클라이언트는 이 노드만 구독해 다운로드 절감.

@@ -2235,6 +2235,8 @@
     const adminStockReverseSplitFn = httpsCallable(functions, 'adminStockReverseSplit');
     const adminPurgeUserActivityLogsFn = httpsCallable(functions, 'adminPurgeUserActivityLogs');
     const adminGrantAssetRequestFn = httpsCallable(functions, 'adminGrantAssetRequest');
+    const adminClearAssetRequestsFn = httpsCallable(functions, 'adminClearAssetRequests');
+    const adminDeleteInactiveUsersFn = httpsCallable(functions, 'adminDeleteInactiveUsers');
     const adminBulkListStocksFn = httpsCallable(functions, 'adminBulkListStocks');
     const adminBulkDeleteStocksFn = httpsCallable(functions, 'adminBulkDeleteStocks');
     const adminSyncCoinsFromStocksFn = httpsCallable(functions, 'adminSyncCoinsFromStocks');
@@ -4398,18 +4400,11 @@
             const inactive = await getInactiveUsers();
             if (inactive.length === 0) { statusEl.innerText = '삭제할 미거래 유저가 없습니다.'; return; }
             if (!confirm(`미거래 유저 ${inactive.length.toLocaleString()}명을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
-            const BATCH = 500;
-            let deleted = 0;
-            for (let i = 0; i < inactive.length; i += BATCH) {
-                const batch = inactive.slice(i, i + BATCH);
-                const updates = {};
-                batch.forEach(uid => { updates[uid] = null; });
-                await update(ref(db, 'users/'), updates);
-                deleted += batch.length;
-                statusEl.innerText = `삭제 중... (${deleted}/${inactive.length})`;
-            }
+            statusEl.innerText = '서버에서 삭제 중...';
+            const { data } = await adminDeleteInactiveUsersFn({});
+            const deleted = Math.max(0, Math.floor(Number(data?.deleted ?? 0)));
             invalidateUsersRootCache();
-            statusEl.innerText = `✅ ${inactive.length.toLocaleString()}명 삭제 완료`;
+            statusEl.innerText = `✅ ${deleted.toLocaleString()}명 삭제 완료`;
         } catch(e) { statusEl.innerText = '삭제 실패: ' + e.message; }
     };
 
@@ -8411,22 +8406,22 @@
         return { totalPurged: n, chunks: 1, viaFallback: true };
     }
 
-    /** assetRequests/ 하위 노드 전부 삭제 (일일 루틴·관리자 도구용) */
+    /** assetRequests/ 하위 노드 전부 삭제 (일일 루틴·관리자 도구용) — 서버 callable */
     async function clearAllAssetRequestsList(silent = false) {
         if (!isAdmin()) return 0;
         if (!silent && !confirm('assetRequests/ 아래 모든 항목(대기·처리 완료 포함)을 삭제합니다. 되돌릴 수 없습니다. 계속하시겠습니까?')) return 0;
-        const snap = await get(ref(db, 'assetRequests'));
-        if (!snap.exists()) {
-            if (!silent) showAdminToast('삭제할 항목이 없습니다.');
-            return 0;
+        try {
+            const { data } = await adminClearAssetRequestsFn({});
+            const n = Math.max(0, Math.floor(Number(data?.deleted ?? 0)));
+            if (!silent) {
+                if (n === 0) showAdminToast('삭제할 항목이 없습니다.');
+                else showAdminToast(`자산 지원 신청 ${n}건 삭제됨`);
+            }
+            return n;
+        } catch (e) {
+            if (!silent) showAdminToast('삭제 실패: ' + (e?.message || e));
+            throw e;
         }
-        const keys = Object.keys(snap.val() || {});
-        if (keys.length === 0) return 0;
-        const updates = {};
-        keys.forEach((k) => { updates[`assetRequests/${k}`] = null; });
-        await update(ref(db), updates);
-        if (!silent) showAdminToast(`자산 지원 신청 ${keys.length}건 삭제됨`);
-        return keys.length;
     }
 
     /** adRequests/ 홍보 신청 목록 전체 삭제 */

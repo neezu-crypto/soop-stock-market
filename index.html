@@ -4251,6 +4251,7 @@ const consumePointsForProductFn = httpsCallable(fns, 'consumePointsForProduct');
 const createPointChargeRequestFn = httpsCallable(fns, 'createPointChargeRequest');
 const transferStarPointsGiftFn = httpsCallable(fns, 'transferStarPointsGift');
 const getMyPointGiftCodeFn = httpsCallable(fns, 'getMyPointGiftCode');
+const submitAssetSupportRequestFn = httpsCallable(fns, 'submitAssetSupportRequest');
 const purchaseAndPublishPromoBannerFn = httpsCallable(fns, 'purchaseAndPublishPromoBanner');
 const purchaseAndPublishChartBannerFn = httpsCallable(fns, 'purchaseAndPublishChartBanner');
 const purchaseAndPublishRelayFn = httpsCallable(fns, 'purchaseAndPublishRelay');
@@ -4669,22 +4670,12 @@ window.submitAssetRequest = async function() {
     const btn = document.getElementById('asset-request-submit');
     if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
     try {
-        const newRef = push(ref(db, 'assetRequests'));
-        const pushId = newRef.key;
-        const currentBalance = Math.floor(Number(myData.cash) || 0);
-        const payload = {
-            uid: userUID,
+        const { data } = await submitAssetSupportRequestFn({
             nickname,
-            currentBalance,
-            requestReason: requestReason || '',
-            requestAmount: 0,
-            status: 'pending',
-            timestamp: serverTimestamp(),
-            createdAtMs: Date.now()
-        };
-        console.log('[assetRequests][Stage1] submitting', { pushId, path: `assetRequests/${pushId}`, payloadPreview: { ...payload, timestamp: '[serverTimestamp]' } });
-        await set(newRef, payload);
-        console.log('[assetRequests][Stage1] set() OK — pushId:', pushId, 'fullPath:', `assetRequests/${pushId}`);
+            requestReason: requestReason || ''
+        });
+        const pushId = String(data?.requestId || '').trim();
+        console.log('[assetRequests][Stage1] callable OK — requestId:', pushId);
         alert('✅ 신청이 접수되었습니다. 관리자 검토 후 처리됩니다.');
         window.closeAssetRequestModal();
         startAssetRequestStatusWatch(userUID);
