@@ -2534,12 +2534,22 @@ exports.adminReviewChallengeSupporterRequest = onCall(
     const targetUid = String(row.uid || "");
     if (!targetUid) throw new HttpsError("failed-precondition", "uid 없음");
     const now = Date.now();
+    const by = String(request.auth?.token?.email || "");
     if (approve) {
       await db.ref().update({
         [`challengeSupporterRequests/${reqId}/status`]: "approved",
         [`challengeSupporterRequests/${reqId}/reviewedAt`]: now,
-        [`challengeSupporterRequests/${reqId}/reviewedBy`]: String(request.auth?.token?.email || ""),
+        [`challengeSupporterRequests/${reqId}/reviewedBy`]: by,
         [`users/${targetUid}/entitlements/challengeSupporterVerified`]: true,
+        [`challengeSupporterWhitelist/${targetUid}`]: {
+          uid: targetUid,
+          addedAt: now,
+          addedBy: by,
+          source: "request",
+          requestId: reqId,
+          nickname: String(row.nickname || ""),
+          soopId: String(row.soopId || ""),
+        },
       });
       return { ok: true, approved: true, uid: targetUid };
     }
@@ -2570,10 +2580,50 @@ exports.adminGrantChallengeSupporterByUid = onCall(
     }
     const now = Date.now();
     const by = String(request.auth?.token?.email || ADMIN_EMAIL);
-    await db.ref(`users/${targetUid}/entitlements/challengeSupporterVerified`).set(true);
+    await db.ref().update({
+      [`users/${targetUid}/entitlements/challengeSupporterVerified`]: true,
+      [`challengeSupporterWhitelist/${targetUid}`]: {
+        uid: targetUid,
+        addedAt: now,
+        addedBy: by,
+        source: "direct",
+      },
+    });
     try {
       await db.ref("adminActivityLogs/challengeSupporterWhitelist").push({
         type: "whitelist_add",
+        targetUid,
+        by,
+        createdAt: now,
+      });
+    } catch (_) {
+      /* noop */
+    }
+    return { ok: true, targetUid };
+  }
+);
+
+/** 관리자: 후원자(챌린지) 화이트리스트 해제 — entitlement + 인덱스 노드 제거 */
+exports.adminRevokeChallengeSupporterByUid = onCall(
+  { cors: true, timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const targetUid = String(request.data?.targetUid || "").trim();
+    if (!/^[A-Za-z0-9_-]{10,128}$/.test(targetUid)) {
+      throw new HttpsError("invalid-argument", "invalid targetUid.");
+    }
+    const db = admin.database();
+    const now = Date.now();
+    const by = String(request.auth?.token?.email || ADMIN_EMAIL);
+    await db.ref().update({
+      [`users/${targetUid}/entitlements/challengeSupporterVerified`]: null,
+      [`challengeSupporterWhitelist/${targetUid}`]: null,
+    });
+    try {
+      await db.ref("adminActivityLogs/challengeSupporterWhitelist").push({
+        type: "whitelist_remove",
         targetUid,
         by,
         createdAt: now,

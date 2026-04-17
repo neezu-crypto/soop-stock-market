@@ -1247,6 +1247,16 @@
             </div>
             <div id="challenge-supporter-direct-status" style="font-size:12px; color:#94a3b8; margin-top:8px; min-height:18px;"></div>
         </div>
+        <div style="background:#0f172a; border:1px solid #334155; border-radius:10px; padding:12px 14px; margin-bottom:12px;">
+            <div style="font-size:13px; font-weight:800; color:#a5f3fc; margin-bottom:6px;">📋 후원자 화이트리스트 (관리)</div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:10px; line-height:1.45;">
+                신청 승인·UID 직접 추가로 부여된 계정이 여기 표시됩니다. <b>해제</b> 시 챌린지 후원자 권한이 즉시 제거됩니다. (이 노드 도입 이전에 entitlement만 수동으로 넣은 계정은 목록에 없을 수 있습니다.)
+            </div>
+            <div id="challenge-supporter-whitelist-status" style="font-size:12px; color:#94a3b8; margin-bottom:8px;">—</div>
+            <div id="challenge-supporter-whitelist-list" style="display:flex; flex-direction:column; gap:8px; max-height:320px; overflow-y:auto;">
+                <div style="padding:10px; color:#64748b; text-align:center;">불러오는 중...</div>
+            </div>
+        </div>
         <div id="challenge-supporter-status" style="font-size:12px; color:#94a3b8; margin-bottom:8px;">—</div>
         <div id="challenge-supporter-requests" style="display:flex; flex-direction:column; gap:10px;">
             <div style="padding:12px; color:#64748b; text-align:center;">불러오는 중...</div>
@@ -2260,6 +2270,7 @@
     const adminRunChallengeDailyResetFn = httpsCallable(functions, 'adminRunChallengeDailyReset');
     const adminReviewChallengeSupporterRequestFn = httpsCallable(functions, 'adminReviewChallengeSupporterRequest');
     const adminGrantChallengeSupporterByUidFn = httpsCallable(functions, 'adminGrantChallengeSupporterByUid');
+    const adminRevokeChallengeSupporterByUidFn = httpsCallable(functions, 'adminRevokeChallengeSupporterByUid');
     const adminRunAssetRankingFn = httpsCallable(functions, 'adminRunAssetRanking');
     const adminRunStockHolderTop3Fn = httpsCallable(functions, 'adminRunStockHolderTop3');
     const adminRebuildSearchIndexesFn = httpsCallable(functions, 'adminRebuildSearchIndexes');
@@ -3177,7 +3188,7 @@
     };
 
     // ── listing / ad / chartAd 신청 실시간 (onValue) ─────────────
-    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, liveRankingAccess: null, asset: null, pointCharge: null, challengeSupporter: null };
+    const requestRealtimeUnsubs = { listing: null, ad: null, chart: null, relay: null, rankingAccess: null, liveRankingAccess: null, asset: null, pointCharge: null, challengeSupporter: null, challengeWhitelist: null };
     let prevListingKeys = null;
     let prevAdKeys = null;
     let prevChartKeys = null;
@@ -3221,7 +3232,7 @@
     }
 
     function stopRealtimeRequestListeners() {
-        ['listing', 'ad', 'chart', 'relay', 'rankingAccess', 'asset', 'pointCharge', 'liveRankingAccess', 'challengeSupporter'].forEach((k) => {
+        ['listing', 'ad', 'chart', 'relay', 'rankingAccess', 'asset', 'pointCharge', 'liveRankingAccess', 'challengeSupporter', 'challengeWhitelist'].forEach((k) => {
             const u = requestRealtimeUnsubs[k];
             if (u) {
                 u();
@@ -3649,6 +3660,36 @@
         }
     }
 
+    function renderChallengeSupporterWhitelistList(data) {
+        const listEl = document.getElementById('challenge-supporter-whitelist-list');
+        const statusEl = document.getElementById('challenge-supporter-whitelist-status');
+        if (!listEl) return;
+        const entries = Object.entries(data || {}).filter(([, row]) => row && typeof row === 'object' && String(row.uid || '').trim());
+        entries.sort((a, b) => (Number(b[1]?.addedAt || 0) - Number(a[1]?.addedAt || 0)));
+        if (statusEl) {
+            statusEl.textContent = `등록 ${entries.length.toLocaleString()}명`;
+        }
+        if (entries.length === 0) {
+            listEl.innerHTML = '<div style="padding:10px; color:#64748b; text-align:center;">등록된 화이트리스트가 없습니다.</div>';
+            return;
+        }
+        listEl.innerHTML = entries.map(([uidKey, r]) => {
+            const uid = String(r.uid || uidKey || '').trim();
+            const enc = encodeURIComponent(uid);
+            const when = r.addedAt ? new Date(Number(r.addedAt)).toLocaleString('ko-KR') : '-';
+            const src = String(r.source || '').toLowerCase() === 'request' ? '신청 승인' : 'UID 직접';
+            const nick = r.nickname ? `${escapeAdminText(r.nickname)} <span style="color:#64748b;">@${escapeAdminText(r.soopId || '')}</span>` : '—';
+            return `<div data-whitelist-row="1" data-whitelist-uid="${enc}" class="request-card" style="border:1px solid #334155; border-radius:10px; padding:10px; background:#0f172a; display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                <div style="min-width:0; flex:1;">
+                    <div style="font-weight:800; color:#f8fafc; font-size:12px; word-break:break-all;">uid ${escapeAdminText(uid)}</div>
+                    <div style="font-size:11px; color:#94a3b8; margin-top:4px;">${nick}</div>
+                    <div style="font-size:11px; color:#64748b; margin-top:4px;">${escapeAdminText(src)} · ${escapeAdminText(r.addedBy || '')} · ${when}</div>
+                </div>
+                <button type="button" style="background:#64748b; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:12px; font-weight:700; flex-shrink:0;" onclick="revokeChallengeSupporterByUid(decodeURIComponent(this.closest('[data-whitelist-row]').getAttribute('data-whitelist-uid')))">해제</button>
+            </div>`;
+        }).join('');
+    }
+
     window.runAdminSyncChallengeMarkets = async function () {
         if (!isAdmin()) return;
         const st = document.getElementById('admin-challenge-tool-status');
@@ -3741,6 +3782,18 @@
         }
     };
 
+    window.revokeChallengeSupporterByUid = async function (targetUid) {
+        if (!isAdmin() || !targetUid) return;
+        if (!confirm(`다음 UID의 후원자(챌린지) 화이트리스트를 해제할까요?\n\n${targetUid}`)) return;
+        try {
+            if (auth.currentUser) await auth.currentUser.getIdToken(true);
+            await adminRevokeChallengeSupporterByUidFn({ targetUid });
+            showAdminToast('화이트리스트가 해제되었습니다.', 'ok');
+        } catch (e) {
+            alert('해제 실패: ' + (e?.message || e));
+        }
+    };
+
     function startRealtimeRequestListeners() {
         stopRealtimeRequestListeners();
         resetAdminInboxCounts();
@@ -3780,6 +3833,10 @@
                 });
             }
             renderChallengeSupporterRequestsList(data, hi);
+        });
+
+        requestRealtimeUnsubs.challengeWhitelist = onValue(ref(db, 'challengeSupporterWhitelist'), (snap) => {
+            renderChallengeSupporterWhitelistList(snap.exists() ? snap.val() : {});
         });
 
         requestRealtimeUnsubs.pointCharge = onValue(adminRecentRequestsQuery('pointChargeRequests'), (snap) => {
