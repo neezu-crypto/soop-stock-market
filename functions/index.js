@@ -281,14 +281,13 @@ function effectiveLastTradeTimeMs(preUser) {
 }
 
 function computeUserSummaryForRtdb(u) {
-  const cash = Math.floor(Number(u?.cash ?? 1000000));
+  const cashBig = userCashFieldToBigInt(u?.cash);
   const stocks = u?.stocks && typeof u.stocks === "object" ? u.stocks : {};
   const coins = u?.coins && typeof u.coins === "object" ? u.coins : {};
   const stockCount = Object.values(stocks).filter((row) => Math.floor(Number(row?.qty || 0)) !== 0).length;
   const coinCount = Object.values(coins).filter((row) => Math.floor(Number(row?.qty || 0)) !== 0).length;
-  const c = Number.isFinite(cash) && cash >= 0 ? cash : 1000000;
   return {
-    cash: c,
+    cash: cashBigIntToUserStorage(cashBig),
     stockCount,
     coinCount,
     updatedAt: Date.now(),
@@ -362,6 +361,88 @@ const MAX_TRADE_NOTIONAL_WON = 5_000_000_000_000;
 function finiteOr(n, fallback) {
   const x = Number(n);
   return Number.isFinite(x) ? x : fallback;
+}
+
+/** IEEE 안전 정수까지는 JSON number 로, 그 초과 분은 RTDB 에 10진 문자열로 저장 */
+const MAX_USER_CASH_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+function cashBigIntToUserStorage(b) {
+  if (b < 0n) b = 0n;
+  if (b <= MAX_USER_CASH_BIGINT) return Number(b);
+  return b.toString();
+}
+
+function userCashFieldToBigInt(v) {
+  if (v == null) return 1_000_000n;
+  if (typeof v === "bigint") return v < 0n ? 0n : v;
+  if (typeof v === "number" && Number.isFinite(v)) return BigInt(Math.floor(v));
+  const s = String(v).trim().replace(/,/g, "");
+  if (/^\d+$/.test(s)) {
+    try {
+      const b = BigInt(s);
+      return b < 0n ? 0n : b;
+    } catch (_) {
+      /* noop */
+    }
+  }
+  const n = Math.floor(Number(v));
+  return BigInt(Number.isFinite(n) ? n : 1_000_000);
+}
+
+function challengeCashFieldToBigInt(v) {
+  if (v == null) return BigInt(CHALLENGE_DAILY_CASH_WON);
+  if (typeof v === "bigint") return v < 0n ? 0n : v;
+  if (typeof v === "number" && Number.isFinite(v)) return BigInt(Math.floor(v));
+  const s = String(v).trim().replace(/,/g, "");
+  if (/^\d+$/.test(s)) {
+    try {
+      const b = BigInt(s);
+      return b < 0n ? 0n : b;
+    } catch (_) {
+      /* noop */
+    }
+  }
+  const n = Math.floor(Number(v));
+  return BigInt(Number.isFinite(n) ? n : CHALLENGE_DAILY_CASH_WON);
+}
+
+/** 관리자 지급액 — 클라이언트는 매우 큰 정수를 문자열로 보내야 함(Number는 끝자리가 깨짐). */
+function parseAdminGrantAmountRaw(raw) {
+  if (raw == null || raw === "") {
+    throw new HttpsError("invalid-argument", "amount required.");
+  }
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw) || raw <= 0) {
+      throw new HttpsError("invalid-argument", "amount must be a positive integer.");
+    }
+    const t = Math.trunc(raw);
+    if (!Number.isSafeInteger(t)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "금액이 너무 커서 숫자 타입으로 전달할 수 없습니다. 관리 페이지에서 쉼표 없이 숫자만 입력하거나, 최신 관리 페이지를 사용해 주세요."
+      );
+    }
+    return BigInt(t);
+  }
+  const s0 = String(raw).trim().replace(/,/g, "");
+  const s = s0.replace(/^0+(?=\d)/, "") || "0";
+  if (s.length > 400) {
+    throw new HttpsError("invalid-argument", "amount has too many digits.");
+  }
+  if (!/^\d+$/.test(s)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "amount must be a positive integer (digits only; omit commas)."
+    );
+  }
+  if (s === "0") {
+    throw new HttpsError("invalid-argument", "amount must be a positive integer.");
+  }
+  try {
+    return BigInt(s);
+  } catch (_) {
+    throw new HttpsError("invalid-argument", "amount is not a valid integer.");
+  }
 }
 
 /** 인버스 모드 거래 시 `siteConfig/sellConfig.inverseFee` (미설정·비유효 시 일반 fee) */
@@ -2662,13 +2743,20 @@ exports.adminRevokeChallengeSupporterByUid = onCall(
 /** 챌린지 모드 거래 시 users 노드에 메인·챌린지 포트폴리오를 동시에 유지 */
 function packUserTradeResult(u, challengeModeReq, isCoin, cashOut, stockBookOut, coinBookOut) {
   const base = { ...u, lastTradeTime: null };
+  const b =
+    typeof cashOut === "bigint"
+      ? cashOut
+      : challengeModeReq
+        ? challengeCashFieldToBigInt(cashOut)
+        : userCashFieldToBigInt(cashOut);
+  const stored = cashBigIntToUserStorage(b);
   if (!challengeModeReq) {
-    base.cash = cashOut;
+    base.cash = stored;
     base.stocks = stockBookOut;
     base.coins = coinBookOut;
     return base;
   }
-  base.challengeCash = cashOut;
+  base.challengeCash = stored;
   base.stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
   base.coins = u.coins && typeof u.coins === "object" ? u.coins : {};
   base.challengeStocks = stockBookOut;
@@ -3202,7 +3290,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   }
   /** RTDB 트랜잭션 콜백에서 cur가 null로만 오는 경우 대비 */
   const userSeedForTx = JSON.parse(JSON.stringify(preUser));
-  const preCash = Number(challengeModeReq ? preUser.challengeCash ?? CHALLENGE_DAILY_CASH_WON : preUser.cash ?? 1000000);
+  const preCash = challengeModeReq ? challengeCashFieldToBigInt(preUser.challengeCash) : userCashFieldToBigInt(preUser.cash);
   const preStocksMap = challengeModeReq
     ? preUser.challengeStocks && typeof preUser.challengeStocks === "object"
       ? preUser.challengeStocks
@@ -3256,19 +3344,19 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           throw new HttpsError("failed-precondition", "종목한도");
         }
       }
-      const estTotal = estTradePrice * qty;
-      if (estTotal > maxOrderWon) {
+      const estTotalB = BigInt(Math.round(estTradePrice * qty));
+      if (estTotalB > BigInt(maxOrderWon)) {
         throw new HttpsError(
           "failed-precondition",
           `1회 최대 거래 금액(${MAX_TRADE_NOTIONAL_WON.toLocaleString("ko-KR")}원)을 초과합니다.`
         );
       }
-      if (preCash < estTotal) {
+      if (preCash < estTotalB) {
         throw new HttpsError("failed-precondition", "잔액이 부족합니다.");
       }
     } else {
-      const estReceive = Math.round(estTradePrice * qty * (1 - fee));
-      if (estReceive > maxOrderWon) {
+      const estReceiveB = BigInt(Math.round(estTradePrice * qty * (1 - fee)));
+      if (estReceiveB > BigInt(maxOrderWon)) {
         throw new HttpsError(
           "failed-precondition",
           `1회 최대 거래 금액(${MAX_TRADE_NOTIONAL_WON.toLocaleString("ko-KR")}원)을 초과합니다.`
@@ -3401,7 +3489,9 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       }
     }
     const u = effectiveCur != null ? effectiveCur : { cash: 1000000, challengeCash: CHALLENGE_DAILY_CASH_WON, stocks: {}, coins: {} };
-    const cash = Number(challengeModeReq ? u.challengeCash ?? CHALLENGE_DAILY_CASH_WON : u.cash ?? 1000000);
+    const cash = challengeModeReq ? challengeCashFieldToBigInt(u.challengeCash) : userCashFieldToBigInt(u.cash);
+    const tradeNotionalB = BigInt(Math.round(lastTradePrice * qty));
+    const tradeReceiveB = BigInt(Math.round(lastTradePrice * qty * (1 - fee)));
     const mainStocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
     const mainCoins = u.coins && typeof u.coins === "object" ? u.coins : {};
     const chStocks = u.challengeStocks && typeof u.challengeStocks === "object" ? u.challengeStocks : {};
@@ -3417,8 +3507,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       const haveAvg = Math.round(Number(us.avg || 0));
 
       if (side === "buy") {
-        const total = lastTradePrice * qty;
-        if (cash < total && !isAdminAuth(auth)) return undefined;
+        if (cash < tradeNotionalB && !isAdminAuth(auth)) return undefined;
         if (!isAdminAuth(auth) && haveQty === 0) {
           const ownedCount = Object.values(coins).filter((s) => Math.floor(Number(s?.qty || 0)) !== 0).length;
           if (ownedCount >= 10) return undefined;
@@ -3444,7 +3533,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           } else {
             nextCoins[stockId] = { qty: newQty, avg: haveAvg };
           }
-          return finish(cash - total, stocks, nextCoins);
+          return finish(cash - tradeNotionalB, stocks, nextCoins);
         }
         if (haveQty < 0) {
           const newQty = haveQty + qty;
@@ -3458,29 +3547,29 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
             // 롱 전환 구간: 남은 롱 수량의 기준단가는 전환 시점 체결가
             nextCoins[stockId] = { qty: newQty, avg: Math.round(lastTradePrice) };
           }
-          return finish(cash - total, stocks, nextCoins);
+          return finish(cash - tradeNotionalB, stocks, nextCoins);
         }
         if (haveQty > 0) {
-          const totalCost = haveQty * haveAvg + total;
+          const totalCost = haveQty * haveAvg + Number(tradeNotionalB);
           const newQty = haveQty + qty;
-          return finish(cash - total, stocks, {
+          return finish(cash - tradeNotionalB, stocks, {
             ...coins,
             [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) },
           });
         }
         if (haveQty === 0) {
           if (inverseModeReq) {
-            return finish(cash - total, stocks, {
+            return finish(cash - tradeNotionalB, stocks, {
               ...coins,
               [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) },
             });
           }
-          return finish(cash - total, stocks, {
+          return finish(cash - tradeNotionalB, stocks, {
             ...coins,
             [stockId]: { qty: qty, avg: Math.round(lastTradePrice) },
           });
         }
-        return finish(cash - total, stocks, {
+        return finish(cash - tradeNotionalB, stocks, {
           ...coins,
           [stockId]: { qty: qty, avg: Math.round(lastTradePrice) },
         });
@@ -3488,7 +3577,6 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
 
       if (haveQty > 0) {
         if (haveQty < qty && !isAdminAuth(auth)) return undefined;
-        const receive = Math.round(lastTradePrice * qty * (1 - fee));
         const newQty = haveQty - qty;
         const nextCoins = { ...coins };
         if (newQty <= 0) {
@@ -3496,11 +3584,10 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         } else {
           nextCoins[stockId] = { qty: newQty, avg: haveAvg };
         }
-        return finish(cash + receive, stocks, nextCoins);
+        return finish(cash + tradeReceiveB, stocks, nextCoins);
       }
       if (haveQty < 0) {
         if (haveQty > -qty && !isAdminAuth(auth)) return undefined;
-        const receive = Math.round(lastTradePrice * qty * (1 - fee));
         const newQty = haveQty + qty;
         const nextCoins = { ...coins };
         if (newQty === 0) {
@@ -3508,7 +3595,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         } else {
           nextCoins[stockId] = { qty: newQty, avg: haveAvg };
         }
-        return finish(cash + receive, stocks, nextCoins);
+        return finish(cash + tradeReceiveB, stocks, nextCoins);
       }
       return undefined;
     }
@@ -3518,8 +3605,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
     const haveAvg = Math.round(Number(us.avg || 0));
 
     if (side === "buy") {
-      const total = lastTradePrice * qty;
-      if (cash < total && !isAdminAuth(auth)) return undefined;
+      if (cash < tradeNotionalB && !isAdminAuth(auth)) return undefined;
       if (!isAdminAuth(auth) && haveQty === 0) {
         const ownedCount = Object.values(stocks).filter((s) => Math.floor(Number(s?.qty || 0)) !== 0).length;
         if (ownedCount >= 10) return undefined;
@@ -3545,7 +3631,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         } else {
           nextStocks[stockId] = { qty: newQty, avg: haveAvg };
         }
-        return finish(cash - total, nextStocks, coins);
+        return finish(cash - tradeNotionalB, nextStocks, coins);
       }
       if (haveQty < 0) {
         const newQty = haveQty + qty;
@@ -3559,25 +3645,24 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
           // 롱 전환 구간: 남은 롱 수량의 기준단가는 전환 시점 체결가
           nextStocks[stockId] = { qty: newQty, avg: Math.round(lastTradePrice) };
         }
-        return finish(cash - total, nextStocks, coins);
+        return finish(cash - tradeNotionalB, nextStocks, coins);
       }
       if (haveQty > 0) {
-        const totalCost = haveQty * haveAvg + total;
+        const totalCost = haveQty * haveAvg + Number(tradeNotionalB);
         const newQty = haveQty + qty;
-        return finish(cash - total, { ...stocks, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } }, coins);
+        return finish(cash - tradeNotionalB, { ...stocks, [stockId]: { qty: newQty, avg: Math.round(totalCost / newQty) } }, coins);
       }
       if (haveQty === 0) {
         if (inverseModeReq) {
-          return finish(cash - total, { ...stocks, [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) } }, coins);
+          return finish(cash - tradeNotionalB, { ...stocks, [stockId]: { qty: -qty, avg: Math.round(lastTradePrice) } }, coins);
         }
-        return finish(cash - total, { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } }, coins);
+        return finish(cash - tradeNotionalB, { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } }, coins);
       }
-      return finish(cash - total, { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } }, coins);
+      return finish(cash - tradeNotionalB, { ...stocks, [stockId]: { qty: qty, avg: Math.round(lastTradePrice) } }, coins);
     }
 
     if (haveQty > 0) {
       if (haveQty < qty && !isAdminAuth(auth)) return undefined;
-      const receive = Math.round(lastTradePrice * qty * (1 - fee));
       const newQty = haveQty - qty;
       const nextStocks = { ...stocks };
       if (newQty <= 0) {
@@ -3585,11 +3670,10 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       } else {
         nextStocks[stockId] = { qty: newQty, avg: haveAvg };
       }
-      return finish(cash + receive, nextStocks, coins);
+      return finish(cash + tradeReceiveB, nextStocks, coins);
     }
     if (haveQty < 0) {
       if (haveQty > -qty && !isAdminAuth(auth)) return undefined;
-      const receive = Math.round(lastTradePrice * qty * (1 - fee));
       const newQty = haveQty + qty;
       const nextStocks = { ...stocks };
       if (newQty === 0) {
@@ -3597,7 +3681,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       } else {
         nextStocks[stockId] = { qty: newQty, avg: haveAvg };
       }
-      return finish(cash + receive, nextStocks, coins);
+      return finish(cash + tradeReceiveB, nextStocks, coins);
     }
     return undefined;
   });
@@ -4018,7 +4102,7 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     throw new HttpsError("aborted", "Price update contention.");
   }
 
-  const receive = Math.round(tradePrice * qty * (1 - fee - extraLiquidationFee));
+  const receiveB = BigInt(Math.round(tradePrice * qty * (1 - fee - extraLiquidationFee)));
   const preUserSnap = await userRef.get();
   const userSeedForTx = preUserSnap.exists()
     ? JSON.parse(JSON.stringify(preUserSnap.val()))
@@ -4034,7 +4118,7 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
       }
     }
     const u = effectiveCur != null ? effectiveCur : { cash: 1000000, stocks: {}, coins: {} };
-    const cash = Number(u.cash ?? 1000000);
+    const cash = userCashFieldToBigInt(u.cash);
     const stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
     const coins = u.coins && typeof u.coins === "object" ? u.coins : {};
     const book = market === "coin" ? coins : stocks;
@@ -4047,7 +4131,7 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     else nextBook[stockId] = { qty: newQty, avg: Number(pos.avg || 0) };
     return {
       ...u,
-      cash: cash + receive,
+      cash: cashBigIntToUserStorage(cash + receiveB),
       stocks: market === "coin" ? stocks : nextBook,
       coins: market === "coin" ? nextBook : coins,
       lastTradeTime: null,
@@ -4085,7 +4169,7 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     stockId,
     market,
     soldQty: qty,
-    totalReceived: receive,
+    totalReceived: receiveB <= MAX_USER_CASH_BIGINT ? Number(receiveB) : receiveB.toString(),
     chunks: 1,
   };
 });
@@ -4540,17 +4624,9 @@ exports.adminGrantAssetRequest = onCall(
     }
     const reqId = String(request.data?.reqId || "").trim();
     const targetUid = String(request.data?.targetUid || "").trim();
-    const amtRaw = Number(request.data?.amount);
-    const amount = Math.floor(amtRaw);
+    const grantAmt = parseAdminGrantAmountRaw(request.data?.amount);
     if (!reqId) throw new HttpsError("invalid-argument", "reqId required.");
     if (!targetUid) throw new HttpsError("invalid-argument", "targetUid required.");
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new HttpsError("invalid-argument", "amount must be a positive integer.");
-    }
-    // JS 안전 정수 범위 내에서만 처리
-    if (!Number.isSafeInteger(amount) || amount > 9_000_000_000_000_000) {
-      throw new HttpsError("invalid-argument", "amount is out of safe range.");
-    }
 
     const db = admin.database();
     const reqRef = db.ref(`assetRequests/${reqId}`);
@@ -4570,11 +4646,15 @@ exports.adminGrantAssetRequest = onCall(
     const userRef = db.ref(`users/${targetUid}`);
     const grantTx = await userRef.transaction((cur) => {
       const base = cur && typeof cur === "object" ? cur : { cash: 1000000, stocks: {}, coins: {} };
-      const cash = Math.floor(Number(base.cash) || 1000000);
-      return { ...base, cash: cash + amount };
+      const cashBig = userCashFieldToBigInt(base.cash);
+      const next = cashBig + grantAmt;
+      return { ...base, cash: cashBigIntToUserStorage(next) };
     });
     if (!grantTx.committed) {
-      throw new HttpsError("aborted", "User cash update did not commit.");
+      throw new HttpsError(
+        "aborted",
+        "User cash update did not commit (동시에 잔고가 바뀌었거나 한도 초과)."
+      );
     }
     if (grantTx.snapshot.exists()) {
       try {
@@ -4589,19 +4669,29 @@ exports.adminGrantAssetRequest = onCall(
     await db.ref().update({
       [`assetRequests/${reqId}/status`]: "completed",
       [`assetRequests/${reqId}/completedAt`]: now,
-      [`assetRequests/${reqId}/grantedAmount`]: amount,
+      [`assetRequests/${reqId}/grantedAmount`]:
+        grantAmt <= MAX_USER_CASH_BIGINT ? Number(grantAmt) : grantAmt.toString(),
+      [`assetRequests/${reqId}/grantedAmountStr`]: grantAmt.toString(),
       [`assetRequests/${reqId}/grantedBy`]: String(request.auth?.token?.email || ADMIN_EMAIL),
       [`adminLogs/grants/${logRef.key}`]: {
         adminEmail: String(request.auth?.token?.email || ADMIN_EMAIL),
         targetUid,
-        amount,
+        amount:
+          grantAmt <= MAX_USER_CASH_BIGINT ? Number(grantAmt) : grantAmt.toString(),
+        amountStr: grantAmt.toString(),
         requestId: reqId,
         via: "adminGrantAssetRequest",
         timestamp: admin.database.ServerValue.TIMESTAMP,
       },
     });
 
-    return { ok: true, reqId, targetUid, amount };
+    return {
+      ok: true,
+      reqId,
+      targetUid,
+      amount: grantAmt <= MAX_USER_CASH_BIGINT ? Number(grantAmt) : grantAmt.toString(),
+      amountStr: grantAmt.toString(),
+    };
   }
 );
 
@@ -4631,16 +4721,17 @@ exports.submitAssetSupportRequest = onCall(
     }
 
     const cashSnap = await db.ref(`users/${uid}/cash`).once("value");
-    let currentBalance = 1000000;
-    if (cashSnap.exists() && Number.isFinite(Number(cashSnap.val()))) {
-      currentBalance = Math.floor(Number(cashSnap.val()));
+    let balBig = userCashFieldToBigInt(1000000);
+    if (cashSnap.exists()) {
+      balBig = userCashFieldToBigInt(cashSnap.val());
     } else {
       const sumSnap = await db.ref(`users/${uid}/summary/cash`).once("value");
-      if (sumSnap.exists() && Number.isFinite(Number(sumSnap.val()))) {
-        currentBalance = Math.floor(Number(sumSnap.val()));
+      if (sumSnap.exists()) {
+        balBig = userCashFieldToBigInt(sumSnap.val());
       }
     }
-    if (!Number.isFinite(currentBalance) || currentBalance < 0) currentBalance = 0;
+    const currentBalance =
+      balBig <= MAX_USER_CASH_BIGINT ? Number(balBig) : balBig.toString();
 
     const newRef = db.ref("assetRequests").push();
     const now = Date.now();
@@ -4648,6 +4739,7 @@ exports.submitAssetSupportRequest = onCall(
       uid,
       nickname: nicknameRaw,
       currentBalance,
+      currentBalanceStr: balBig.toString(),
       requestReason: requestReasonRaw,
       requestAmount: 0,
       status: "pending",
@@ -4684,7 +4776,7 @@ exports.adminDeleteInactiveUsers = onCall(
     const data = snap.exists() ? snap.val() || {} : {};
     const inactive = [];
     Object.entries(data).forEach(([u, user]) => {
-      const isDefaultCash = (user?.cash ?? 1000000) === 1000000;
+      const isDefaultCash = userCashFieldToBigInt(user?.cash) === 1000000n;
       const hasNoStocks = !user?.stocks || Object.keys(user.stocks).length === 0;
       const hasZeroStocks =
         user?.stocks && Object.values(user.stocks).every((s) => (s?.qty || 0) === 0);
@@ -5225,23 +5317,17 @@ async function runDailyAssetRankingServer(db) {
   const coins = coinsSnap.exists() ? coinsSnap.val() || {} : {};
 
   const assetList = Object.entries(users).map(([uid, u]) => {
-    let cashRaw = Number(u?.cash);
-    if (
-      (!Number.isFinite(cashRaw) || cashRaw < 0) &&
-      u?.summary &&
-      typeof u.summary === "object"
-    ) {
-      cashRaw = Number(u.summary.cash);
-    }
-    let total = Math.floor(Number.isFinite(cashRaw) && cashRaw >= 0 ? cashRaw : 0);
+    const cashSrc =
+      u?.cash !== undefined && u?.cash !== null ? u.cash : u?.summary && u.summary.cash != null ? u.summary.cash : null;
+    let total = userCashFieldToBigInt(cashSrc);
     if (u.stocks && typeof u.stocks === "object") {
       Object.entries(u.stocks).forEach(([stockId, s]) => {
         const qty = Number(s?.qty);
         if (!Number.isFinite(qty) || qty <= 0) return;
         const price = Number(stocks[stockId]?.price);
         const p = Number.isFinite(price) && price >= 0 ? price : 0;
-        const add = Math.floor(p * qty);
-        if (Number.isFinite(add)) total += add;
+        const add = BigInt(Math.floor(p * qty));
+        total += add;
       });
     }
     if (u.coins && typeof u.coins === "object") {
@@ -5250,17 +5336,21 @@ async function runDailyAssetRankingServer(db) {
         if (!Number.isFinite(qty) || qty <= 0) return;
         const price = Number(coins[coinId]?.price);
         const p = Number.isFinite(price) && price >= 0 ? price : 0;
-        const add = Math.floor(p * qty);
-        if (Number.isFinite(add)) total += add;
+        const add = BigInt(Math.floor(p * qty));
+        total += add;
       });
     }
     return { uid, totalAsset: total };
   });
 
-  assetList.sort((a, b) => b.totalAsset - a.totalAsset);
+  assetList.sort((a, b) => {
+    if (a.totalAsset === b.totalAsset) return 0;
+    return a.totalAsset > b.totalAsset ? -1 : 1;
+  });
   const top100 = assetList.slice(0, 100).map((item, i) => ({
     rank: i + 1,
-    totalAsset: item.totalAsset,
+    totalAsset:
+      item.totalAsset <= MAX_USER_CASH_BIGINT ? Number(item.totalAsset) : item.totalAsset.toString(),
   }));
   const now = Date.now();
   await db.ref("assetRanking").set({

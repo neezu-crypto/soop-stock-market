@@ -5765,8 +5765,13 @@ function attachUserDataShardListeners(uid) {
                         myData = myData || { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
                         if (snap.exists()) {
                             const s = snap.val();
-                            if (s && typeof s === 'object' && typeof s.cash === 'number' && Number.isFinite(s.cash) && s.cash >= 0) {
-                                myData.cash = Math.floor(s.cash);
+                            if (s && typeof s === 'object' && s.cash != null && s.cash !== '') {
+                                const sc = s.cash;
+                                if (typeof sc === 'number' && Number.isFinite(sc) && sc >= 0) {
+                                    myData.cash = Math.floor(sc);
+                                } else if (typeof sc === 'string' && /^\d+$/.test(sc.trim())) {
+                                    myData.cash = sc.trim();
+                                }
                             }
                         }
                         scheduleUserDataUiRefresh();
@@ -5789,8 +5794,13 @@ function attachUserDataShardListeners(uid) {
                     try {
                         myData = myData || { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
                         if (snap.exists()) {
-                            const n = Number(snap.val());
-                            myData.cash = Number.isFinite(n) && n >= 0 ? n : 1000000;
+                            const raw = snap.val();
+                            if (typeof raw === 'string' && /^\d+$/.test(String(raw).trim())) {
+                                myData.cash = String(raw).trim();
+                            } else {
+                                const n = Number(raw);
+                                myData.cash = Number.isFinite(n) && n >= 0 ? n : 1000000;
+                            }
                         } else {
                             myData.cash = 1000000;
                         }
@@ -5814,8 +5824,13 @@ function attachUserDataShardListeners(uid) {
                     try {
                         myData = myData || { cash: 1000000, challengeCash: 10000000, stocks: {}, coins: {}, challengeStocks: {}, challengeCoins: {} };
                         if (snap.exists()) {
-                            const n = Number(snap.val());
-                            myData.challengeCash = Number.isFinite(n) && n >= 0 ? n : 10000000;
+                            const raw = snap.val();
+                            if (typeof raw === 'string' && /^\d+$/.test(String(raw).trim())) {
+                                myData.challengeCash = String(raw).trim();
+                            } else {
+                                const n = Number(raw);
+                                myData.challengeCash = Number.isFinite(n) && n >= 0 ? n : 10000000;
+                            }
                         } else {
                             myData.challengeCash = 10000000;
                         }
@@ -6982,20 +6997,20 @@ function isCoinMarket() {
 }
 
 function computeTotalWealthWon() {
-    let w = activeCashValue();
+    let w = activeCashBigInt();
     const addStockVal = (id, qty) => {
         const q = Math.floor(Number(qty) || 0);
         if (!q) return;
         const row = stockRowForId(id);
         const p = Number(row?.price);
-        if (Number.isFinite(p) && p > 0) w += Math.floor(p * q);
+        if (Number.isFinite(p) && p > 0) w += BigInt(Math.floor(p * q));
     };
     const addCoinVal = (id, qty) => {
         const q = Math.floor(Number(qty) || 0);
         if (!q) return;
         const row = favoriteCoins[id] || ownedCoins[id] || allCoins.find(s => s.id === id);
         const p = Number(row?.price);
-        if (Number.isFinite(p) && p > 0) w += Math.floor(p * q);
+        if (Number.isFinite(p) && p > 0) w += BigInt(Math.floor(p * q));
     };
     const stBook =
         __challengeModeUi === true && __userChallengeVerified === true
@@ -7009,7 +7024,8 @@ function computeTotalWealthWon() {
     if (coinBook) {
         Object.entries(coinBook).forEach(([id, p]) => addCoinVal(id, Math.floor(Number(p?.qty) || 0)));
     }
-    return w;
+    if (w > BigInt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
+    return Number(w);
 }
 
 function canAccessCoinMarket() {
@@ -7196,11 +7212,43 @@ function syncChallengeSessionRibbonOnCard(card, stockId) {
     card.classList.toggle('challenge-session-active', isChallengeRoomStockSessionActiveForCard(stockId));
 }
 
-function activeCashValue() {
-    if (__challengeModeUi === true && __userChallengeVerified === true) {
-        return Math.floor(Math.max(0, Number(myData?.challengeCash) || 0));
+/** RTDB cash/challengeCash: number 또는 (큰 값) 숫자 문자열 */
+function parseStoredWonToBigInt(v, fallbackNum) {
+    const fb = BigInt(Math.floor(Number(fallbackNum) || 0));
+    if (v == null || v === '') return fb;
+    if (typeof v === 'string') {
+        const s = v.trim().replace(/,/g, '');
+        if (/^\d+$/.test(s)) {
+            try {
+                return BigInt(s);
+            } catch (_) { /* noop */ }
+        }
     }
-    return Math.floor(Math.max(0, Number(myData?.cash) || 0));
+    if (typeof v === 'bigint') return v < 0n ? 0n : v;
+    const n = Math.floor(Number(v));
+    return BigInt(Number.isFinite(n) && n >= 0 ? n : Number(fallbackNum) || 0);
+}
+
+function activeCashBigInt() {
+    if (__challengeModeUi === true && __userChallengeVerified === true) {
+        return parseStoredWonToBigInt(myData?.challengeCash, 10000000);
+    }
+    return parseStoredWonToBigInt(myData?.cash, 1000000);
+}
+
+/** 레거시 호환·내부 비교용 숫자 (안전 정수 초과 시 캡) */
+function activeCashValue() {
+    const b = activeCashBigInt();
+    if (b > BigInt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
+    return Number(b);
+}
+
+function formatWonBigInt(b) {
+    try {
+        return (typeof b === 'bigint' ? b : BigInt(Math.floor(Number(b) || 0))).toLocaleString('ko-KR');
+    } catch (_) {
+        return String(b);
+    }
 }
 
 function stocksCollectionPath() {
@@ -8585,7 +8633,7 @@ function tryCloseIntro() {
 function updateUI(isFullRender = true) {
     const cashDisplay = document.getElementById('my-cash');
     if (myData) {
-        if (cashDisplay) cashDisplay.innerText = activeCashValue().toLocaleString();
+        if (cashDisplay) cashDisplay.innerText = formatWonBigInt(activeCashBigInt());
         renderMyPortfolio();
         renderMyCoinPortfolio();
         try { saveAssetHistoryToday(computeTotalWealthWon()); } catch (_) { /* noop */ }
@@ -9790,8 +9838,8 @@ async function runAutoTradeLoop(id) {
                 stopAutoTrade(id);
                 return;
             }
-            const cash = activeCashValue();
-            if (cash < 1) {
+            const cash = activeCashBigInt();
+            if (cash < 1n) {
                 console.warn('[autoTrade] 잔고 없음 → 자동매매 종료', id);
                 stopAutoTrade(id);
                 return;
@@ -9806,7 +9854,7 @@ async function runAutoTradeLoop(id) {
             }
             const estPrice = Math.round(Number(stRow.price) * (1 + 0.0005));
             const maxWon = coinQ ? COIN_MAX_TRADE_PER_ORDER_WON : STOCK_MAX_TRADE_PER_ORDER_WON;
-            const maxAfford = Math.floor(cash / Math.max(1, estPrice));
+            const maxAfford = Number(cash / BigInt(Math.max(1, estPrice)));
             const maxByCap = estPrice > 0 ? Math.floor(maxWon / estPrice) : 100;
             if (Math.min(maxAfford, maxByCap) < 1) {
                 console.warn('[autoTrade] 잔고·1회 한도상 매수 불가 → 자동매매 종료', id);
@@ -10064,7 +10112,7 @@ function calcMaxQty(stockId, type, inputQty) {
 
     if (type === 'buy' && stock) {
         const estPrice  = Math.round(stock.price * (1 + 0.0005));
-        const maxAfford = Math.floor(activeCashValue() / estPrice);
+        const maxAfford = Number(activeCashBigInt() / BigInt(Math.max(1, estPrice)));
         const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : USER_STOCK_QTY_CAP;
         return Math.min(v, maxAfford, maxByCap);
     } else if (type === 'sell') {
@@ -10112,7 +10160,7 @@ window.smartClampQty = function(el, stockId, type) {
 
     if (type === 'buy' && stock) {
         const estPrice  = Math.round(stock.price * (1 + 0.0005));
-        const maxAfford = Math.floor(activeCashValue() / estPrice);
+        const maxAfford = Number(activeCashBigInt() / BigInt(Math.max(1, estPrice)));
         const maxByCap  = estPrice > 0 ? Math.floor(maxWon / estPrice) : USER_STOCK_QTY_CAP;
         const maxBuy    = Math.min(v, maxAfford, maxByCap);
         el.value = Math.max(1, maxBuy);
@@ -11681,14 +11729,14 @@ async function loadAssetRanking() {
         const updatedAt = data.updatedAt ? new Date(data.updatedAt).toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'numeric',minute:'numeric'}) : '-';
         if (updatedEl) updatedEl.textContent = updatedAt + ' 기준';
 
-        // 내 자산 계산
-        let myAsset = myData?.cash || 0;
+        // 내 자산 계산 (큰 현금 문자열 지원)
+        let myAsset = parseStoredWonToBigInt(myData?.cash, 0);
         if (myData?.stocks) {
             Object.entries(myData.stocks).forEach(([id, s]) => {
                 if (!s.qty || s.qty <= 0) return;
                 const row = stockRowForId(id);
                 const p = Number(row?.price);
-                if (Number.isFinite(p) && p > 0) myAsset += p * s.qty;
+                if (Number.isFinite(p) && p > 0) myAsset += BigInt(Math.floor(p * s.qty));
             });
         }
         if (myData?.coins) {
@@ -11696,25 +11744,39 @@ async function loadAssetRanking() {
                 if (!s.qty || s.qty <= 0) return;
                 const row = favoriteCoins[id] || ownedCoins[id] || allCoins.find((st) => st.id === id);
                 const p = Number(row?.price);
-                if (Number.isFinite(p) && p > 0) myAsset += p * s.qty;
+                if (Number.isFinite(p) && p > 0) myAsset += BigInt(Math.floor(p * s.qty));
             });
         }
-        myAsset = Math.floor(myAsset);
+
+        const itemAssetNum = (x) => {
+            if (x == null) return 0;
+            if (typeof x === 'string' && /^\d+$/.test(x.trim())) {
+                try {
+                    return BigInt(x.trim());
+                } catch (_) {
+                    return 0n;
+                }
+            }
+            return BigInt(Math.floor(Number(x) || 0));
+        };
 
         // 내 순위 찾기 — items는 내림차순 정렬
         let myRank = total; // 기본값: 전체 꼴찌
         if (items.length > 0) {
-            if (myAsset >= items[0].totalAsset) {
+            if (myAsset >= itemAssetNum(items[0].totalAsset)) {
                 // 1위보다 자산이 많거나 같음
                 myRank = 1;
-            } else if (myAsset < items[items.length - 1].totalAsset) {
+            } else if (myAsset < itemAssetNum(items[items.length - 1].totalAsset)) {
                 // 100위보다 적음 → 100위 밖
                 myRank = total;
             } else {
                 // items 내에서 순위 찾기
                 const myRankItem = items.find((item, i) => {
                     const next = items[i + 1];
-                    return myAsset >= item.totalAsset && (!next || myAsset > next.totalAsset);
+                    return (
+                        myAsset >= itemAssetNum(item.totalAsset) &&
+                        (!next || myAsset > itemAssetNum(next.totalAsset))
+                    );
                 });
                 myRank = myRankItem ? myRankItem.rank : total;
             }
@@ -11731,7 +11793,7 @@ async function loadAssetRanking() {
                 rankNoEl.style.color = 'var(--muted)';
             }
         }
-        if (rankAssetEl) rankAssetEl.textContent = `내 자산: ${myAsset.toLocaleString()}원`;
+        if (rankAssetEl) rankAssetEl.textContent = `내 자산: ${formatWonBigInt(myAsset)}원`;
         if (rankCtxEl)   rankCtxEl.textContent   = `위로 ${above.toLocaleString()}명 · 아래로 ${below.toLocaleString()}명 · 전체 ${total.toLocaleString()}명`;
 
         // TOP 100 목록
@@ -11740,10 +11802,11 @@ async function loadAssetRanking() {
             const medal   = item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : item.rank;
             const bgColor = isMine ? 'rgba(245,158,11,0.1)' : 'transparent';
             const border  = isMine ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent';
+            const taDisp = formatWonBigInt(itemAssetNum(item.totalAsset));
             return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-radius:8px; background:${bgColor}; border:${border};">
                 <span style="font-size:13px; font-weight:${isMine?'800':'400'}; color:${isMine?'#f59e0b':'var(--text-sub)'}; width:36px;">${medal}</span>
                 <span style="flex:1; font-size:12px; color:${isMine?'var(--text-main)':'var(--muted)'};">${isMine?'◀ 나':'　'}</span>
-                <span style="font-size:12px; font-weight:700; color:${isMine?'#f59e0b':'var(--text-sub)'};">${item.totalAsset.toLocaleString()}원</span>
+                <span style="font-size:12px; font-weight:700; color:${isMine?'#f59e0b':'var(--text-sub)'};">${taDisp}원</span>
             </div>`;
         }).join('');
 

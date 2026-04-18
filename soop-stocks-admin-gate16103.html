@@ -2430,15 +2430,28 @@
     async function fetchUserLiveCashDisplay(uid) {
         if (!uid) return '—';
         try {
+            const fmt = (raw) => {
+                if (raw == null || raw === '') return null;
+                const s = typeof raw === 'string' ? raw.trim().replace(/,/g, '') : '';
+                if (typeof raw === 'string' && /^\d+$/.test(s)) {
+                    try {
+                        return BigInt(s).toLocaleString('ko-KR');
+                    } catch (_) {
+                        return null;
+                    }
+                }
+                const c = Number(raw);
+                return Number.isFinite(c) ? Math.floor(c).toLocaleString('ko-KR') : null;
+            };
             const cashSnap = await get(ref(db, `users/${uid}/cash`));
             if (cashSnap.exists()) {
-                const c = Number(cashSnap.val());
-                if (Number.isFinite(c)) return Math.floor(c).toLocaleString();
+                const out = fmt(cashSnap.val());
+                if (out) return out;
             }
             const sumSnap = await get(ref(db, `users/${uid}/summary/cash`));
             if (sumSnap.exists()) {
-                const c = Number(sumSnap.val());
-                if (Number.isFinite(c)) return Math.floor(c).toLocaleString();
+                const out = fmt(sumSnap.val());
+                if (out) return out;
             }
         } catch (_) { /* noop */ }
         return '—';
@@ -3023,7 +3036,18 @@
         );
         const rows = pending.map(([reqId, req], i) => {
             const liveCash = liveCashList[i] || '—';
-            const reqBal = (req.currentBalance != null) ? Math.floor(Number(req.currentBalance) || 0).toLocaleString() : '—';
+            const reqBal =
+                req.currentBalanceStr != null && String(req.currentBalanceStr).trim()
+                    ? (() => {
+                          try {
+                              return BigInt(String(req.currentBalanceStr).trim()).toLocaleString('ko-KR');
+                          } catch (_) {
+                              return Math.floor(Number(req.currentBalance) || 0).toLocaleString();
+                          }
+                      })()
+                    : req.currentBalance != null
+                      ? Math.floor(Number(req.currentBalance) || 0).toLocaleString()
+                      : '—';
             const reason = (req.requestReason || '').trim();
             const reasonFull = escapeHtml(reason || '—');
             const hi = highlightIds && highlightIds.has(reqId);
@@ -3043,8 +3067,9 @@
                     <td style="padding:8px; vertical-align:top;">
                         <div style="border:1px solid #334155; background:#0f172a; border-radius:8px; padding:8px 10px;">
                             <div style="font-size:10px; color:#64748b; margin-bottom:6px;">지급 금액 입력</div>
-                            <input type="number" id="grant-amt-${reqId}" min="1" step="1" placeholder="금액"
-                                style="width:100%; min-width:140px; padding:8px 10px; border-radius:6px; border:1px solid #475569; background:#111827; color:#f8fafc; font-size:12px; box-sizing:border-box;">
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" id="grant-amt-${reqId}" placeholder="원 단위 정수 (큰 금액은 쉼표 없이)"
+                                style="width:100%; min-width:140px; padding:8px 10px; border-radius:6px; border:1px solid #475569; background:#111827; color:#f8fafc; font-size:12px; box-sizing:border-box;"
+                                title="보유 현금은 최대 약 9×10^15원까지 정확히 저장됩니다 (JavaScript 안전 정수).">
                             <div class="asset-grant-preset-wrap" aria-label="지급액 빠른 입력" style="margin-top:8px;">
                                 <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="500000">50만</button>
                                 <button type="button" class="asset-grant-preset-btn" data-req-id="${escapeHtml(reqId)}" data-amount="1000000">100만</button>
@@ -3088,25 +3113,36 @@
         if (!isAdmin()) return;
         const el = document.getElementById(`grant-amt-${reqId}`);
         if (!el) return;
-        el.value = String(Math.floor(Number(amt)) || 0);
+        el.value = String(amt != null ? amt : '');
         try { el.focus(); } catch (_) { /* noop */ }
     };
+
+    function formatKoDigitsString(digits) {
+        const d = String(digits || '').trim().replace(/,/g, '').replace(/^0+(?=\d)/, '') || '0';
+        try {
+            return BigInt(d === '' ? '0' : d).toLocaleString('ko-KR');
+        } catch (_) {
+            return digits;
+        }
+    }
 
     window.grantAssetRequest = async function(reqId, targetUid) {
         if (!isAdmin()) return;
         const input = document.getElementById(`grant-amt-${reqId}`);
-        const amt = Math.floor(Number(input?.value));
-        if (!Number.isFinite(amt) || amt <= 0) {
-            alert('지급 금액을 1원 이상의 정수로 입력해주세요.');
+        const raw = String(input?.value ?? '').trim().replace(/,/g, '');
+        if (!/^\d+$/.test(raw) || /^0+$/.test(raw)) {
+            alert('지급 금액을 1원 이상의 정수로 입력해 주세요. (아주 큰 금액은 쉼표 없이 숫자만)');
             return;
         }
-        if (!confirm(`다음 유저에게 ${amt.toLocaleString()}원을 지급할까요?\n\nUID: ${targetUid}`)) return;
+        const disp = formatKoDigitsString(raw);
+        if (!confirm(`다음 유저에게 ${disp}원을 지급할까요?\n\nUID: ${targetUid}`)) return;
         try {
-            await adminGrantAssetRequestFn({ reqId, targetUid, amount: amt });
-            showAdminToast(`✅ ${amt.toLocaleString()}원 지급 완료`);
+            await adminGrantAssetRequestFn({ reqId, targetUid, amount: raw });
+            showAdminToast(`✅ ${disp}원 지급 완료`);
         } catch (e) {
             console.warn('[grantAssetRequest]', e);
-            alert('지급 실패: ' + (e?.message || e));
+            const msg = e?.message || e?.details || String(e?.code || e);
+            alert('지급 실패: ' + msg);
         }
     };
 
