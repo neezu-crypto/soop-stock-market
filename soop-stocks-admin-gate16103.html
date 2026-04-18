@@ -711,7 +711,7 @@
         <div class="accordion-sep">
         <div class="info-box">
             메인 페이지의 <b>주가순 순위</b>·<b>거래량 TOP5</b>에 쓰이는 <code style="font-size:11px;">marketRank</code>를 즉시 다시 계산합니다.<br>
-            자동 갱신은 장 중 약 15분마다(스케줄)이며, 여기서는 <b>관리자가 수동으로</b> 실행합니다. <b>장 마감 중에도</b> 실행 가능합니다.
+            거래량 TOP5는 <b>자동 스케줄 갱신 없음</b>(유료 회원이 메인에서 15분당 1회 수동 갱신). 여기서는 <b>관리자가 즉시</b> 전체 집계를 실행합니다. <b>장 마감 중에도</b> 실행 가능합니다.
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:12px;">
             <button type="button" class="btn-primary" style="margin-top:0; width:auto; padding:12px 20px; font-size:14px; font-weight:800;"
@@ -2141,7 +2141,8 @@
         <div class="info-box">
             최근 10분 매매 기록(<code>tradeHistory</code>) 기준으로 매매 주기가 빠른 유저 TOP10을 자동 탐색합니다.<br>
             현재 장 상태 기준 임계치(정규장 1초 미만 / 비정규장 30초 미만)를 넘는 계정을 자동 제재할 수 있습니다.<br>
-            <span style="color:#94a3b8;">아래 목록은 <code>presence</code>로 접속 중(약 6분 이내 핑)인 유저만 대상으로, <code>users/…/session/lastTradeTime</code>(및 레거시 <code>lastTradeTime</code>) 기준 <b>매매 미활동 시간이 긴 순</b>으로 최대 20명을 표시합니다. 매매 이력이 없으면 목록 하단에 표시됩니다.</span>
+            <span style="color:#94a3b8;">TOP10 카드에는 <b>현재 접속(presence) 여부</b>, <b>유료 회원 여부</b>, 최근 스캔된 <code>tradeHistory</code>에서의 <b>가장 최근 체결 종목명</b>이 함께 표시됩니다.</span><br>
+            <span style="color:#94a3b8;">아래 목록은 <code>presence</code>로 접속 중(약 6분 이내 핑)인 유저만 대상으로, <code>users/…/session/lastTradeTime</code>(및 레거시 <code>lastTradeTime</code>) 기준 <b>매매 미활동 시간이 긴 순</b>으로 최대 20명을 표시합니다. 매매 이력이 없으면 목록 하단에 표시됩니다. 카드에는 <b>접속 중</b>, <b>유료 회원 여부</b>, <code>tradeHistory</code> 최근 스캔 범위 내 <b>가장 최근 체결 종목명</b>이 함께 표시됩니다.</span>
         </div>
         <div class="data-status-bar" style="margin-bottom:10px;">
             <span>장 상태: <b id="user-monitor-market-phase">판별 중...</b></span>
@@ -2306,7 +2307,7 @@
     const db  = getDatabase(app);
     /** Gen2 callable 기본 리전(us-central1). Functions를 다른 리전에 배포했다면 getFunctions(app, 'asia-northeast3') 등으로 맞출 것 */
     const functions = getFunctions(app);
-    /** refreshMarketPriceRanks / adminRefreshMarketRanks 배포 리전과 동일 */
+    /** adminRefreshMarketRanks 등 일부 Callable은 asia-northeast3 배포 */
     const functionsAsiaN3 = getFunctions(app, 'asia-northeast3');
     const adminStockSplitFn = httpsCallable(functions, 'adminStockSplit');
     const adminStockReverseSplitFn = httpsCallable(functions, 'adminStockReverseSplit');
@@ -4896,6 +4897,79 @@
         return id || '–';
     }
 
+    /** RTDB users 문서 기준 유료 회원(entitlements 우선, 레거시 폴백) */
+    function userPaidMemberFromUserDoc(u) {
+        if (!u || typeof u !== 'object') return false;
+        const ent = u.entitlements && typeof u.entitlements === 'object' ? u.entitlements : {};
+        if (ent.paidMember === true) return true;
+        return u.paidMember === true;
+    }
+
+    /**
+     * tradeHistory 목록(createdAt 내림차순 권장)에서 uid별 가장 최근 1건.
+     * @param {Array<object>} tradesSortedDesc
+     * @returns {Map<string, { stockId: string, market: string, createdAt: number }>}
+     */
+    function buildLatestTradeDetailByUidFromTrades(tradesSortedDesc) {
+        const m = new Map();
+        const arr = Array.isArray(tradesSortedDesc) ? tradesSortedDesc : [];
+        arr.forEach((t) => {
+            if (!t || typeof t !== 'object') return;
+            const uid = String(t.uid || '').trim();
+            if (!uid || m.has(uid)) return;
+            const ts = Number(t.createdAt);
+            if (!Number.isFinite(ts)) return;
+            const sid = String(t.stockId || '').trim();
+            if (!sid) return;
+            const market = t.market === 'coin' ? 'coin' : 'stock';
+            m.set(uid, { stockId: sid, market, createdAt: ts });
+        });
+        return m;
+    }
+
+    /** stocks|coins/{id}/name 조회 — 관리자 전용 */
+    async function resolveInstrumentDisplayName(stockId, market) {
+        const id = String(stockId || '').trim();
+        if (!id) return '–';
+        const isCoin = market === 'coin';
+        const path = isCoin ? `coins/${id}/name` : `stocks/${id}/name`;
+        try {
+            const sn = await get(ref(db, path));
+            const nm = sn.exists() ? String(sn.val() || '').trim() : '';
+            return nm || id;
+        } catch (_) {
+            return id;
+        }
+    }
+
+    /** rows에 lastStockId + lastMarket 있으면 lastStockLabel 채움 */
+    async function attachLastTradeStockLabels(rows) {
+        if (!rows || !rows.length) return;
+        const keys = new Set();
+        rows.forEach((r) => {
+            if (!r?.lastStockId) return;
+            const mk = r.lastMarket === 'coin' ? 'coin' : 'stock';
+            keys.add(`${mk}:${r.lastStockId}`);
+        });
+        const labelByKey = Object.create(null);
+        await Promise.all(
+            [...keys].map(async (k) => {
+                const colon = k.indexOf(':');
+                const mk = k.slice(0, colon);
+                const id = k.slice(colon + 1);
+                labelByKey[k] = await resolveInstrumentDisplayName(id, mk);
+            })
+        );
+        rows.forEach((r) => {
+            if (!r?.lastStockId) {
+                r.lastStockLabel = '–';
+                return;
+            }
+            const mk = r.lastMarket === 'coin' ? 'coin' : 'stock';
+            r.lastStockLabel = labelByKey[`${mk}:${r.lastStockId}`] || r.lastStockId;
+        });
+    }
+
     /** 21941분 형태 대신 일·시간 단위로 읽기 쉽게 */
     function formatIdleDurationMs(ms) {
         if (!Number.isFinite(ms) || ms < 0) return '–';
@@ -4927,17 +5001,26 @@
                     Number(r.lastTradeAt) > 0
                         ? `마지막 매매: <b>${fmtTime(r.lastTradeAt)}</b>`
                         : '마지막 매매: <b style="color:#94a3b8;">기록 없음</b>';
+                const paidLabel = r.isPaidMember ? '예' : '아니오';
+                const paidColor = r.isPaidMember ? '#a78bfa' : '#64748b';
+                const lastStock = escapeHtml(r.lastStockLabel || '–');
                 return `
                 <div class="batch-control" style="padding:10px; background:#0f172a; border-radius:8px;">
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <div style="font-size:12px; color:${rankColor}; font-weight:800;">#${idx + 1}</div>
                         <div style="font-size:13px; color:#f8fafc; font-weight:700;">${escapeHtml(r.nickname || '-')}</div>
                         <div style="font-size:11px; color:#64748b;">${escapeHtml(r.uid)}</div>
+                        <span style="font-size:11px; color:#86efac; font-weight:700;">접속 중</span>
+                        <span style="font-size:11px; color:${paidColor}; font-weight:700;">유료 회원: ${paidLabel}</span>
                     </div>
                     <div style="margin-top:8px; font-size:12px; color:#cbd5e1; display:flex; flex-wrap:wrap; gap:10px;">
                         <span>미활동(매매 기준): <b style="color:#f59e0b;">${idleLabel}</b></span>
                         <span>${tradeLine}</span>
                         <span>접속 핑: <b>${fmtTime(r.presenceAt)}</b></span>
+                    </div>
+                    <div style="margin-top:6px; font-size:12px; color:#94a3b8;">
+                        최근 거래 종목: <b style="color:#e2e8f0;">${lastStock}</b>
+                        ${r.lastMarket === 'coin' ? ' <span style="color:#64748b;">(코인)</span>' : ''}
                     </div>
                 </div>`;
             })
@@ -4954,9 +5037,19 @@
                 '<div style="color:#64748b; font-size:13px; padding:12px; text-align:center;">불러오는 중...</div>';
         }
         const now = Date.now();
-        const [presSnap, usersSnap] = await Promise.all([get(ref(db, 'presence/')), getUsersRootCached()]);
+        const [presSnap, usersSnap, tradeSnap] = await Promise.all([
+            get(ref(db, 'presence/')),
+            getUsersRootCached(),
+            get(query(ref(db, 'tradeHistory'), orderByChild('createdAt'), limitToLast(USER_MONITOR_LIMIT))),
+        ]);
         const onlinePing = collectOnlinePresenceMaxPing(presSnap.val(), now);
         const usersVal = usersSnap.val() || {};
+        const tradesSorted = tradeSnap.exists()
+            ? Object.values(tradeSnap.val() || {})
+                  .filter((t) => t && typeof t.uid === 'string' && Number.isFinite(Number(t.createdAt)))
+                  .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+            : [];
+        const latestTradeByUid = buildLatestTradeDetailByUidFromTrades(tradesSorted);
         const rows = [];
         Object.entries(onlinePing).forEach(([uid, presenceAt]) => {
             const u = usersVal[uid];
@@ -4968,7 +5061,17 @@
             const nickname = pickIdleUserDisplayName(u, uid);
             let idleMs = null;
             if (lastTradeAt > 0) idleMs = Math.max(0, now - lastTradeAt);
-            rows.push({ uid, nickname, presenceAt, lastTradeAt, idleMs });
+            const lt = latestTradeByUid.get(uid);
+            rows.push({
+                uid,
+                nickname,
+                presenceAt,
+                lastTradeAt,
+                idleMs,
+                isPaidMember: userPaidMemberFromUserDoc(u),
+                lastStockId: lt?.stockId,
+                lastMarket: lt?.market,
+            });
         });
         rows.sort((a, b) => {
             const aHas = a.idleMs != null;
@@ -4982,6 +5085,7 @@
             return String(a.nickname || a.uid).localeCompare(String(b.nickname || b.uid), 'ko');
         });
         const top = rows.slice(0, ADMIN_IDLE_ONLINE_MAX);
+        await attachLastTradeStockLabels(top);
         renderIdleOnlineMonitorRows(top);
         if (statusEl) {
             const onlineN = Object.keys(onlinePing).length;
@@ -5092,12 +5196,19 @@
             const riskColor = isAbuse ? '#ef4444' : '#64748b';
             const blockText = isBlocked ? `제재중 (${fmtTime(r.blockedUntil)}까지)` : '정상';
             const blockColor = isBlocked ? '#fca5a5' : '#86efac';
+            const onlineLabel = r.isOnline ? '온라인' : '오프라인';
+            const onlineColor = r.isOnline ? '#86efac' : '#94a3b8';
+            const paidLabel = r.isPaidMember ? '예' : '아니오';
+            const paidColor = r.isPaidMember ? '#a78bfa' : '#64748b';
+            const lastStock = escapeHtml(r.lastStockLabel || '–');
             return `
                 <div class="batch-control" style="padding:10px; background:#0f172a; border-radius:8px; display:flex; flex-direction:column; gap:8px;">
                     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <div style="font-size:12px; color:${idx < 3 ? '#f59e0b' : '#64748b'}; font-weight:800;">#${idx + 1}</div>
                         <div style="font-size:13px; color:#f8fafc; font-weight:700;">${escapeHtml(r.nickname || '-')}</div>
                         <div style="font-size:11px; color:#64748b;">${escapeHtml(r.uid)}</div>
+                        <div style="font-size:11px; color:${onlineColor}; font-weight:700;">접속: ${onlineLabel}</div>
+                        <div style="font-size:11px; color:${paidColor}; font-weight:700;">유료 회원: ${paidLabel}</div>
                         <div style="font-size:11px; color:${blockColor}; font-weight:700;">${blockText}</div>
                     </div>
                     <div style="display:flex; gap:10px; flex-wrap:wrap; font-size:12px; color:#cbd5e1;">
@@ -5105,6 +5216,10 @@
                         <span>평균 주기: <b>${msToText(r.avgMs)}</b></span>
                         <span>최근 체결: <b>${r.tradeCount}건</b></span>
                         <span>마지막 거래: <b>${fmtTime(r.lastTradeAt)}</b></span>
+                    </div>
+                    <div style="font-size:12px; color:#94a3b8;">
+                        최근 거래 종목: <b style="color:#e2e8f0;">${lastStock}</b>
+                        ${r.lastMarket === 'coin' ? ' <span style="color:#64748b;">(코인)</span>' : ''}
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                         <button class="btn-danger" style="padding:6px 10px; font-size:11px;" onclick="monitorRestrictUser(${JSON.stringify(r.uid)}, 30)">30분 제재</button>
@@ -5124,10 +5239,13 @@
         const chipEl = document.getElementById('user-monitor-threshold-chip');
         if (statusEl) statusEl.innerText = autoSanction ? '자동 제재 탐지 중...' : '집계 중...';
 
-        const [mhSnap, tradeSnap] = await Promise.all([
+        const now = Date.now();
+        const [mhSnap, tradeSnap, presSnap] = await Promise.all([
             get(ref(db, 'siteConfig/marketHours')),
             get(query(ref(db, 'tradeHistory'), orderByChild('createdAt'), limitToLast(USER_MONITOR_LIMIT))),
+            get(ref(db, 'presence/')),
         ]);
+        const onlinePing = collectOnlinePresenceMaxPing(presSnap.val(), now);
 
         const mh = mhSnap.exists() ? (mhSnap.val() || {}) : {};
         const phase = getMonitorMarketPhase(mh);
@@ -5145,10 +5263,11 @@
             return;
         }
 
-        const cutoff = Date.now() - USER_MONITOR_LOOKBACK_MS;
+        const cutoff = now - USER_MONITOR_LOOKBACK_MS;
         const trades = Object.values(tradeSnap.val() || {})
             .filter((t) => t && typeof t.uid === 'string' && Number.isFinite(Number(t.createdAt)))
             .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+        const latestTradeByUid = buildLatestTradeDetailByUidFromTrades(trades);
 
         const timesByUid = {};
         trades.forEach((t) => {
@@ -5170,29 +5289,44 @@
             if (!intervals.length) return null;
             const fastestMs = Math.min(...intervals);
             const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-            return { uid, fastestMs, avgMs, tradeCount: times.length, lastTradeAt: times[0] };
+            const lt = latestTradeByUid.get(uid);
+            return {
+                uid,
+                fastestMs,
+                avgMs,
+                tradeCount: times.length,
+                lastTradeAt: times[0],
+                lastStockId: lt?.stockId,
+                lastMarket: lt?.market,
+            };
         }).filter(Boolean)
           .sort((a, b) => (a.avgMs - b.avgMs) || (a.fastestMs - b.fastestMs))
           .slice(0, 10);
 
-        const enriched = await Promise.all(metrics.map(async (m) => {
-            let nickname = '';
-            let blockedUntil = 0;
-            try {
-                const [nickSnap, nameSnap, modSnap, tbSnap] = await Promise.all([
-                    get(ref(db, `users/${m.uid}/nickname`)),
-                    get(ref(db, `users/${m.uid}/name`)),
-                    get(ref(db, `users/${m.uid}/moderation`)),
-                    get(ref(db, `users/${m.uid}/tradeBlockedUntil`))
-                ]);
-                if (nickSnap.exists()) nickname = String(nickSnap.val() || '');
-                else if (nameSnap.exists()) nickname = String(nameSnap.val() || '');
-                const mod = modSnap.exists() ? (modSnap.val() || {}) : {};
-                const tbRoot = tbSnap.exists() ? Number(tbSnap.val()) : 0;
-                blockedUntil = Number(mod.tradeBlockedUntil || tbRoot || 0);
-            } catch (_) { /* noop */ }
-            return { ...m, nickname, blockedUntil };
-        }));
+        const enriched = await Promise.all(
+            metrics.map(async (m) => {
+                let nickname = '';
+                let blockedUntil = 0;
+                let isPaidMember = false;
+                try {
+                    const uSnap = await get(ref(db, `users/${m.uid}`));
+                    const u = uSnap.exists() ? uSnap.val() || {} : {};
+                    nickname = pickIdleUserDisplayName(u, m.uid);
+                    const mod = u.moderation || {};
+                    blockedUntil = Number(mod.tradeBlockedUntil || u.tradeBlockedUntil || 0);
+                    isPaidMember = userPaidMemberFromUserDoc(u);
+                } catch (_) { /* noop */ }
+                return {
+                    ...m,
+                    nickname,
+                    blockedUntil,
+                    isPaidMember,
+                    isOnline: Boolean(onlinePing[m.uid]),
+                };
+            })
+        );
+
+        await attachLastTradeStockLabels(enriched);
 
         userMonitorRows = enriched;
         renderUserMonitorRows(enriched, phase, thresholdMs);
