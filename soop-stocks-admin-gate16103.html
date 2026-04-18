@@ -1252,6 +1252,18 @@
             <b>스트리머 주식시장 챌린지</b> 우선 공개(별풍선 100개 이상) 신청을 검수합니다. 승인 시 해당 계정에 <code style="font-size:11px;">users/…/entitlements/challengeSupporterVerified</code> 가 설정됩니다.<br>
             <span style="color:#94a3b8;">일일 루틴 항목 <b>챌린지 모드 자산&주가 초기화</b>는 유저 챌린지 보유 강제청산 후 챌린지 자산(1,000만원)·주가·코인 시세를 함께 초기화합니다. 최초 배포 후 시세가 비어 있으면 아래 <b>챌린지 시장 동기화</b>를 한 번 실행하세요.</span>
         </div>
+        <div style="background:#0f172a; border:1px solid #334155; border-radius:10px; padding:12px 14px; margin-bottom:12px;">
+            <div style="font-size:13px; font-weight:800; color:#fbbf24; margin-bottom:8px;">🏆 챌린지 일반 / 대회 모드</div>
+            <div style="font-size:12px; color:#94a3b8; margin-bottom:10px; line-height:1.55;">
+                <b>일반</b>: 인증된 후원자는 검색 후 「이 종목으로 방 만들기」로 방을 만들 수 있습니다.<br>
+                <b>대회</b>: <code style="font-size:11px;">siteConfig/challengeTournamentMode</code> 를 켜면 <b>이 관리자 계정만</b> 방을 생성할 수 있습니다. 참가·매매는 기존과 같이 방 ID로 가능하며, 메인 앱의 <code style="font-size:11px;">createChallengeRoom</code> 함수에서도 동일하게 차단됩니다.
+            </div>
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px; color:#e2e8f0;">
+                <input type="checkbox" id="challenge-tournament-mode-toggle" onchange="window.toggleChallengeTournamentMode?.(this.checked)" style="width:18px; height:18px;">
+                <span><b>대회 모드</b> (일반 유저 방 생성 불가)</span>
+            </label>
+            <div id="challenge-tournament-mode-status" class="maintenance-status" style="margin-top:10px;">—</div>
+        </div>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:12px 0;">
             <button type="button" class="btn-primary" style="padding:10px 14px; font-size:13px; font-weight:800;" onclick="window.runAdminSyncChallengeMarkets?.()">📎 챌린지 시장 동기화 (메인 종목 기준)</button>
             <button type="button" class="btn-danger" style="padding:10px 14px; font-size:13px; font-weight:800;" onclick="window.runAdminChallengeDailyResetNow?.()">⚡ 챌린지 일일 초기화 즉시 실행</button>
@@ -2085,7 +2097,7 @@
                 <option value="candlePrune">🗑 오래된 캔들 정리</option>
                 <option value="userActivityPurge">🧾 유저 활동로그 데이터 삭제</option>
                 <option value="rankingVolumeReset">📊 실시간 랭킹 거래량만 초기화</option>
-                <option value="marketRankRefresh">📈 시장 순위·거래량 TOP 집계 (marketRank)</option>
+                <option value="marketRankRefresh">📈 시장 순위 집계 (거래량 TOP5 제외·marketRank)</option>
                 <option value="challengePriceReset">🎮 챌린지 모드 자산&주가 초기화 (청산·자산·시가 리셋)</option>
                 <option value="clearAssetRequests">🗑 자산 지원 신청 리스트 전체 삭제</option>
                 <option value="clearAdRequests">🗑 홍보 신청 검수 리스트 전체 삭제</option>
@@ -2505,12 +2517,13 @@
         }, isError ? 4200 : 2400);
     }
 
-    /** 일일 루틴용 — 동일 Callable, 토스트·confirm 없음 */
-    async function runMarketRankRefreshCallableSilent() {
+    /** 일일 루틴용 — 동일 Callable, 토스트·confirm 없음 · 거래량 TOP5 제외 시 omitVolumeTop5 */
+    async function runMarketRankRefreshCallableSilent(opts = {}) {
         try {
             if (auth.currentUser) await auth.currentUser.getIdToken(true);
         } catch (_) { /* noop */ }
-        const res = await adminRefreshMarketRanksFn({});
+        const omitVolumeTop5 = opts.omitVolumeTop5 === true;
+        const res = await adminRefreshMarketRanksFn(omitVolumeTop5 ? { omitVolumeTop5: true } : {});
         return res?.data;
     }
 
@@ -4735,6 +4748,74 @@
         }
     };
 
+    // ── 챌린지 대회 모드 (관리자만 방 생성) ─────────────────
+    async function loadChallengeTournamentModeStatus() {
+        const toggle = document.getElementById('challenge-tournament-mode-toggle');
+        const statusEl = document.getElementById('challenge-tournament-mode-status');
+        try {
+            const snap = await get(ref(db, 'siteConfig/challengeTournamentMode'));
+            const isOn = snap.exists() && snap.val() === true;
+            if (toggle) toggle.checked = isOn;
+            renderChallengeTournamentModeStatus(isOn);
+        } catch (e) {
+            if (statusEl) {
+                statusEl.innerHTML = `<span class="dot" style="background:#ef4444;"></span><span style="color:#ef4444;">불러오기 실패</span>`;
+            }
+        }
+    }
+
+    function renderChallengeTournamentModeStatus(isOn) {
+        const statusEl = document.getElementById('challenge-tournament-mode-status');
+        if (!statusEl) return;
+        statusEl.innerHTML = isOn
+            ? `<span class="dot" style="background:#f59e0b;"></span><span style="color:#fbbf24;">대회 모드 ON — 일반 유저는 방 생성 불가 (참가는 방 ID로 가능)</span>`
+            : `<span class="dot" style="background:#22c55e;"></span><span style="color:#86efac;">일반 모드 — 인증 후원자가 방을 만들 수 있음</span>`;
+    }
+
+    window.toggleChallengeTournamentMode = async function(isOn) {
+        if (!isAdmin()) return;
+        const toggle = document.getElementById('challenge-tournament-mode-toggle');
+        const msg = isOn
+            ? '🏆 대회 모드를 켜시겠습니까?\n\n일반 후원자는 방을 만들 수 없고, 이 관리자 계정으로만 방을 생성할 수 있습니다. 참가는 방 ID로 그대로 가능합니다.'
+            : '일반 모드로 돌아가시겠습니까?\n\n인증된 후원자 누구나 다시 방을 만들 수 있습니다.';
+        if (!confirm(msg)) {
+            if (toggle) toggle.checked = !isOn;
+            return;
+        }
+        try {
+            await set(ref(db, 'siteConfig/challengeTournamentMode'), !!isOn);
+            renderChallengeTournamentModeStatus(!!isOn);
+            alert(isOn ? '🏆 대회 모드가 켜졌습니다.' : '일반 모드로 전환되었습니다.');
+        } catch (e) {
+            alert('변경 실패: ' + (e?.message || e));
+            if (toggle) toggle.checked = !isOn;
+        }
+    };
+
+    let challengeTournamentModeUnsub = null;
+    function stopChallengeTournamentModeListener() {
+        if (challengeTournamentModeUnsub) {
+            try {
+                challengeTournamentModeUnsub();
+            } catch (_) { /* noop */ }
+            challengeTournamentModeUnsub = null;
+        }
+    }
+    function startChallengeTournamentModeListener() {
+        stopChallengeTournamentModeListener();
+        if (!isAdmin() || !db) return;
+        challengeTournamentModeUnsub = onValue(
+            ref(db, 'siteConfig/challengeTournamentMode'),
+            (snap) => {
+                const isOn = snap.exists() && snap.val() === true;
+                const toggle = document.getElementById('challenge-tournament-mode-toggle');
+                if (toggle) toggle.checked = isOn;
+                renderChallengeTournamentModeStatus(isOn);
+            },
+            (err) => console.error('[Admin] challengeTournamentMode', err)
+        );
+    }
+
     let pendingLogoutUiTimeout = null;
     const LOGOUT_UI_DEBOUNCE_MS = 900;
 
@@ -4760,6 +4841,8 @@
             await buildFastTradeUsersTop10({ autoSanction: false });
             await loadChartBannerStatus();
             await loadMaintenanceStatus();
+            await loadChallengeTournamentModeStatus();
+            startChallengeTournamentModeListener();
             await loadMarketHours();
             startRealtimeRequestListeners();
             startChallengeRoomsAdminListener();
@@ -4787,6 +4870,7 @@
                 stopRealtimeRequestListeners();
                 stopTitleSponsorRequestListener();
                 stopChallengeRoomsAdminListener();
+                stopChallengeTournamentModeListener();
                 stopConnectionCountListener();
                 stopCircuitFrozenListener();
                 hideAdminRequestInbox();
@@ -4803,6 +4887,7 @@
                     stopRealtimeRequestListeners();
                     stopTitleSponsorRequestListener();
                     stopChallengeRoomsAdminListener();
+                    stopChallengeTournamentModeListener();
                     stopConnectionCountListener();
                     stopCircuitFrozenListener();
                     hideAdminRequestInbox();
@@ -8536,7 +8621,7 @@
             regularHoursSet: '⚡ 정규장 시간 변경',
             maintenanceMode: '🔧 점검 모드 (siteConfig/maintenance)',
             circuitBreakerClear: '⚡ 서킷브레이커 전체 해제',
-            marketRankRefresh: '📈 시장 순위·거래량 TOP (marketRank)',
+            marketRankRefresh: '📈 시장 순위 집계 (거래량 TOP5 제외·marketRank)',
             challengePriceReset: '🎮 챌린지 모드 자산&주가 초기화',
         };
         listEl.innerHTML = rows.map((it, idx) => {
@@ -9225,7 +9310,7 @@
                 regularHoursSet: '⚡ 정규장 시간 변경',
                 maintenanceMode: '🔧 점검 모드 반영',
                 circuitBreakerClear: '⚡ 서킷브레이커 전체 해제',
-                marketRankRefresh: '📈 시장 순위·거래량 TOP 집계',
+                marketRankRefresh: '📈 시장 순위 집계 (거래량 TOP5 제외)',
                 challengePriceReset: '🎮 챌린지 모드 자산&주가 초기화',
             };
             const setRoutineMaintenanceRuntime = async (payload) => {
@@ -9322,9 +9407,9 @@
                         }
                     } else if (it.type === 'marketRankRefresh') {
                         if (runLogEl) {
-                            runLogEl.innerHTML += `<div>${i + 1}. 📈 시장 순위·거래량 TOP 집계 (adminRefreshMarketRanks)</div>`;
+                            runLogEl.innerHTML += `<div>${i + 1}. 📈 시장 순위 집계 · 거래량 TOP5 제외 (adminRefreshMarketRanks)</div>`;
                         }
-                        const d = await runMarketRankRefreshCallableSilent();
+                        const d = await runMarketRankRefreshCallableSilent({ omitVolumeTop5: true });
                         const st = document.getElementById('market-rank-refresh-status');
                         if (!d?.ok) {
                             if (runLogEl) {
@@ -9340,10 +9425,10 @@
                         } else {
                             const when = d.updatedAt ? new Date(d.updatedAt).toLocaleString('ko-KR') : '';
                             if (runLogEl) {
-                                runLogEl.innerHTML += `<div style="color:#86efac;">   → 주식 ${d.stockRankCount ?? 0}·코인 ${d.coinRankCount ?? 0}종 · volTOP5 ${d.stockVolTop5 ?? 0}/${d.coinVolTop5 ?? 0} · ${escapeHtml(when)}</div>`;
+                                runLogEl.innerHTML += `<div style="color:#86efac;">   → 주식 ${d.stockRankCount ?? 0}·코인 ${d.coinRankCount ?? 0}종 · 거래량TOP5 집계 생략 · ${escapeHtml(when)}</div>`;
                             }
                             if (st) {
-                                st.textContent = `완료 — 주식 ${d.stockRankCount ?? 0}종 · 코인 ${d.coinRankCount ?? 0}종 · 거래량TOP5 주 ${d.stockVolTop5 ?? 0}/코 ${d.coinVolTop5 ?? 0} · ${when}`;
+                                st.textContent = `완료(루틴) — 주식 ${d.stockRankCount ?? 0}종 · 코인 ${d.coinRankCount ?? 0}종 · 거래량TOP5 미갱신 · ${when}`;
                             }
                         }
                     } else if (it.type === 'challengePriceReset') {
