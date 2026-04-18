@@ -2928,13 +2928,26 @@ async function beginChallengeRoomResultsPhase(db, roomId, r) {
   rows.forEach((row, i) => {
     row.rank = i + 1;
   });
-  await db.ref(`challengeRooms/${roomId}`).update({
-    resultsPhase: true,
-    resultsAt: now,
-    resultsUntilMs: now + CHALLENGE_RESULTS_DISPLAY_MS,
-    resultsLeaderboard: rows,
-    resultsMemberCount: uids.length,
-    resultsMarkPrice: lastPx,
+  const stockNamePub = String(r.stockName || "").trim() || stockId || "";
+  const publicEntries = rows.slice(0, 10).map((row) => ({
+    rank: row.rank,
+    totalWon: row.totalWon,
+  }));
+  await db.ref().update({
+    [`challengeRooms/${roomId}/resultsPhase`]: true,
+    [`challengeRooms/${roomId}/resultsAt`]: now,
+    [`challengeRooms/${roomId}/resultsUntilMs`]: now + CHALLENGE_RESULTS_DISPLAY_MS,
+    [`challengeRooms/${roomId}/resultsLeaderboard`]: rows,
+    [`challengeRooms/${roomId}/resultsMemberCount`]: uids.length,
+    [`challengeRooms/${roomId}/resultsMarkPrice`]: lastPx,
+    [`challengePublic/recentAssetRank`]: {
+      updatedAt: now,
+      roomId,
+      stockId: stockId || "",
+      stockName: stockNamePub,
+      memberCount: uids.length,
+      entries: publicEntries,
+    },
   });
 }
 

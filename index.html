@@ -4189,8 +4189,8 @@
         <span class="notice-text"></span>
     </div>
 </div>
-<div id="volume-top5-wrap" class="volume-top5-wrap" style="display:none;" aria-label="거래량 상위 종목">
-    <div class="volume-top5-grid">
+<div id="volume-top5-wrap" class="volume-top5-wrap" style="display:none;" aria-label="시장 요약">
+    <div id="volume-top5-main-mode" class="volume-top5-grid">
         <div>
             <div class="volume-top5-head">주식 거래량 TOP5</div>
             <ul class="volume-top5-list" id="volume-top5-stocks"></ul>
@@ -4198,6 +4198,16 @@
         <div>
             <div class="volume-top5-head">코인 거래량 TOP5</div>
             <ul class="volume-top5-list" id="volume-top5-coins"></ul>
+        </div>
+    </div>
+    <div id="challenge-recent-rank-mode" class="volume-top5-grid challenge-recent-rank-grid" style="display:none;" aria-label="최근 챌린지 경기 자산 순위">
+        <div>
+            <div class="volume-top5-head">최근 경기 자산 1~5위</div>
+            <ul class="volume-top5-list" id="challenge-recent-rank-left"></ul>
+        </div>
+        <div>
+            <div class="volume-top5-head">최근 경기 자산 6~10위</div>
+            <ul class="volume-top5-list" id="challenge-recent-rank-right"></ul>
         </div>
     </div>
     <div class="volume-top5-meta" id="volume-top5-meta"></div>
@@ -6182,11 +6192,153 @@ function applyMarketVolumeTop5Ui(stockRows, coinRows, updatedAtMs) {
     }
     const hasAny = stockRows.length > 0 || coinRows.length > 0;
     wrap.style.display = hasAny ? 'block' : 'none';
+    try {
+        refreshMarketOrChallengeTopBars();
+    } catch (_) { /* noop */ }
+}
+
+function formatChallengeRankTotalWon(v) {
+    if (v == null) return '0원';
+    if (typeof v === 'string') {
+        const s = v.trim().replace(/,/g, '');
+        if (/^\d+$/.test(s)) {
+            try {
+                return BigInt(s).toLocaleString('ko-KR') + '원';
+            } catch (_) { /* noop */ }
+        }
+    }
+    const n = Math.floor(Number(v));
+    return (Number.isFinite(n) ? n : 0).toLocaleString('ko-KR') + '원';
+}
+
+function paintChallengeRecentRankUi(payload) {
+    const ulL = document.getElementById('challenge-recent-rank-left');
+    const ulR = document.getElementById('challenge-recent-rank-right');
+    const meta = document.getElementById('volume-top5-meta');
+    if (!ulL || !ulR) return;
+    if (!payload || typeof payload !== 'object') {
+        const fillE = (ul) => {
+            ul.textContent = '';
+            const li = document.createElement('li');
+            li.style.border = 'none';
+            li.style.color = 'var(--text-sub)';
+            li.style.fontWeight = '500';
+            li.textContent = '데이터 없음';
+            ul.appendChild(li);
+        };
+        fillE(ulL);
+        fillE(ulR);
+        if (meta) {
+            meta.textContent = '아직 집계된 챌린지 경기가 없습니다.';
+            meta.style.display = '';
+        }
+        return;
+    }
+    const fillUl = (ul, rows) => {
+        ul.textContent = '';
+        if (!rows.length) {
+            const li = document.createElement('li');
+            li.style.border = 'none';
+            li.style.color = 'var(--text-sub)';
+            li.style.fontWeight = '500';
+            li.textContent = '데이터 없음';
+            ul.appendChild(li);
+            return;
+        }
+        rows.forEach((e) => {
+            const li = document.createElement('li');
+            const spR = document.createElement('span');
+            spR.className = 'volume-top5-rank';
+            spR.textContent = String(e.rank ?? '');
+            const spV = document.createElement('span');
+            spV.className = 'volume-top5-vol';
+            spV.textContent = formatChallengeRankTotalWon(e.totalWon);
+            li.appendChild(spR);
+            li.appendChild(spV);
+            ul.appendChild(li);
+        });
+    };
+    const entries = Array.isArray(payload?.entries) ? payload.entries : [];
+    const left = entries.filter((e) => (Number(e.rank) || 0) >= 1 && (Number(e.rank) || 0) <= 5);
+    const right = entries.filter((e) => (Number(e.rank) || 0) >= 6 && (Number(e.rank) || 0) <= 10);
+    fillUl(ulL, left);
+    fillUl(ulR, right);
+    if (meta) {
+        const sn = String(payload?.stockName || payload?.stockId || '').trim() || '—';
+        const mc = Number(payload?.memberCount);
+        const t = Number(payload?.updatedAt);
+        const mcStr = Number.isFinite(mc) && mc > 0 ? `${mc.toLocaleString('ko-KR')}명` : '—';
+        const timeStr =
+            Number.isFinite(t) && t > 0 ? new Date(t).toLocaleString('ko-KR') : '';
+        meta.textContent = timeStr ? `${sn} · 참가 ${mcStr} · ${timeStr}` : `${sn} · 참가 ${mcStr}`;
+        meta.style.display = '';
+    }
+}
+
+let __challengePublicRecentUnsub = null;
+
+function syncChallengePublicRecentRankSubscription(enable) {
+    if (!enable) {
+        if (__challengePublicRecentUnsub) {
+            try {
+                __challengePublicRecentUnsub();
+            } catch (_) { /* noop */ }
+            __challengePublicRecentUnsub = null;
+        }
+        return;
+    }
+    if (!db || !auth.currentUser) return;
+    if (__challengePublicRecentUnsub) return;
+    try {
+        __challengePublicRecentUnsub = onValue(
+            ref(db, 'challengePublic/recentAssetRank'),
+            (snap) => {
+                try {
+                    paintChallengeRecentRankUi(snap.exists() ? snap.val() : null);
+                } catch (_) { /* noop */ }
+            },
+            (err) => console.warn('[challengePublic/recentAssetRank]', err?.message || err)
+        );
+    } catch (e) {
+        __challengePublicRecentUnsub = null;
+        console.warn('[challengePublic] subscribe', e?.message || e);
+    }
+}
+
+/** 챌린지(주식·인증)일 때 거래량 TOP5 대신 최근 경기 자산 TOP10(5:5) */
+function refreshMarketOrChallengeTopBars() {
+    const wrap = document.getElementById('volume-top5-wrap');
+    const mainEl = document.getElementById('volume-top5-main-mode');
+    const chEl = document.getElementById('challenge-recent-rank-mode');
+    if (!wrap || !mainEl || !chEl) return;
+    if (isCoinMarket()) {
+        mainEl.style.display = '';
+        chEl.style.display = 'none';
+        syncChallengePublicRecentRankSubscription(false);
+        return;
+    }
+    const useChallenge = __challengeModeUi === true && __userChallengeVerified === true;
+    if (useChallenge) {
+        mainEl.style.display = 'none';
+        chEl.style.display = '';
+        wrap.style.display = 'block';
+        syncChallengePublicRecentRankSubscription(true);
+        return;
+    }
+    mainEl.style.display = '';
+    chEl.style.display = 'none';
+    syncChallengePublicRecentRankSubscription(false);
 }
 
 /** 세션당 1회 — marketRank 전체 get(순위 + 거래량 TOP5, 왕복 1회) */
 async function fetchServerMarketRanksOnce() {
     if (!db || !auth.currentUser) return;
+    if (!isCoinMarket() && __challengeModeUi === true && __userChallengeVerified === true) {
+        try {
+            refreshMarketOrChallengeTopBars();
+        } catch (_) { /* noop */ }
+        return;
+    }
     try {
         const snap = await get(ref(db, 'marketRank'));
         stockRankFromServer = false;
@@ -7087,6 +7239,9 @@ window.setActiveMarket = function (mode) {
         if (sq) void handleSearch(sq);
         else refreshMainStockListView();
     } catch (_) { /* noop */ }
+    try {
+        refreshMarketOrChallengeTopBars();
+    } catch (_) { /* noop */ }
 };
 
 const CHALLENGE_UI_LS_KEY = 'soop_stock_challenge_ui';
@@ -7896,10 +8051,19 @@ function setChallengeVerifiedFromEntitlements(val) {
         try {
             refreshMainStockListView();
         } catch (_) { /* noop */ }
+        try {
+            refreshMarketOrChallengeTopBars();
+        } catch (_) { /* noop */ }
+        try {
+            fetchServerMarketRanksOnce().catch(() => {});
+        } catch (_) { /* noop */ }
     }
     if (next === __userChallengeVerified) {
         try {
             syncChallengeToggleDom();
+        } catch (_) { /* noop */ }
+        try {
+            refreshMarketOrChallengeTopBars();
         } catch (_) { /* noop */ }
         return;
     }
@@ -7926,6 +8090,9 @@ function setChallengeVerifiedFromEntitlements(val) {
     } catch (_) { /* noop */ }
     try {
         refreshMainStockListView();
+    } catch (_) { /* noop */ }
+    try {
+        refreshMarketOrChallengeTopBars();
     } catch (_) { /* noop */ }
 }
 
@@ -9106,6 +9273,9 @@ onAuthStateChanged(auth, async (user) => {
             stockRankFromServer = false;
             coinRankFromServer = false;
             prevMarketOpenSnapshot = null;
+            try {
+                syncChallengePublicRecentRankSubscription(false);
+            } catch (_) { /* noop */ }
             try { applyMarketVolumeTop5Ui([], [], 0); } catch (_) { /* noop */ }
             try {
                 const rankBtn = document.getElementById('tab-btn-ranking');
@@ -10670,6 +10840,9 @@ function setupChallengeModeUi() {
         try {
             refreshMainStockListView();
         } catch (_) { /* noop */ }
+        try {
+            refreshMarketOrChallengeTopBars();
+        } catch (_) { /* noop */ }
     }
 
     function proceedAfterIntro() {
@@ -10766,6 +10939,12 @@ function setupChallengeModeUi() {
             } catch (_) { /* noop */ }
             try {
                 refreshMainStockListView();
+            } catch (_) { /* noop */ }
+            try {
+                refreshMarketOrChallengeTopBars();
+            } catch (_) { /* noop */ }
+            try {
+                fetchServerMarketRanksOnce().catch(() => {});
             } catch (_) { /* noop */ }
             return;
         }
