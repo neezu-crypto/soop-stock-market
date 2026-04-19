@@ -5894,6 +5894,23 @@ exports.adminRefreshMarketRanks = onCall(
   }
 );
 
+/** 관리자만 — 실시간 랭킹용 거래량(volume)·누적 매수·매도(buyVol, sellVol) 전 종목 초기화 (브라우저 RTDB 규칙 회피) */
+exports.adminResetRankingVolumes = onCall(
+  {
+    cors: true,
+    timeoutSeconds: 300,
+    memory: "512MiB",
+    region: "asia-northeast3",
+  },
+  async (request) => {
+    if (!isAdminAuth(request.auth)) {
+      throw new HttpsError("permission-denied", "Admin only.");
+    }
+    const db = admin.database();
+    return await resetRankingVolumesAllMarkets(db);
+  }
+);
+
 /** 유료 회원 — 주식·코인 거래량 TOP5 포함 전체 marketRank 재집계 (15분당 1회, 장 운영 중만) */
 exports.refreshMarketRanksPaidMember = onCall(
   { cors: true, timeoutSeconds: 300, memory: "512MiB" },
@@ -6309,7 +6326,8 @@ async function runDailyPurgeUserTradeHistoryServer(db) {
   return { ok: true, totalPurged: total, hasMore: false, rounds };
 }
 
-async function runDailyResetRankingVolumesServer(db) {
+/** 실시간 랭킹용: stocks/·coins/ 의 volume·buyVol·sellVol 만 0 (주가 유지). Admin SDK 전용. */
+async function resetRankingVolumesAllMarkets(db) {
   const [sSnap, cSnap] = await Promise.all([
     db.ref("stocks").once("value"),
     db.ref("coins").once("value"),
@@ -6340,6 +6358,10 @@ async function runDailyResetRankingVolumesServer(db) {
   const ns = sData ? Object.keys(sData).length : 0;
   const nc = cData ? Object.keys(cData).length : 0;
   return { ok: true, ns, nc };
+}
+
+async function runDailyResetRankingVolumesServer(db) {
+  return resetRankingVolumesAllMarkets(db);
 }
 
 async function clearRtdbChildrenServer(db, rootKey) {

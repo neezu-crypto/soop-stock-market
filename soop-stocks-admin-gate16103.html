@@ -2334,6 +2334,8 @@
     const adminRejectPointChargeFn = httpsCallable(functions, 'adminRejectPointCharge');
     const adminRejectPaidRequestWithRefundFn = httpsCallable(functions, 'adminRejectPaidRequestWithRefund');
     const adminRefreshMarketRanksFn = httpsCallable(functionsAsiaN3, 'adminRefreshMarketRanks');
+    /** 실시간 랭킹 거래량 필드 초기화 — RTDB 규칙 회피 (asia-northeast3) */
+    const adminResetRankingVolumesFn = httpsCallable(functionsAsiaN3, 'adminResetRankingVolumes');
     const adminSyncChallengeMarketsFromMainFn = httpsCallable(functions, 'adminSyncChallengeMarketsFromMain');
     const adminRunChallengeDailyResetFn = httpsCallable(functions, 'adminRunChallengeDailyReset');
     const adminReviewChallengeSupporterRequestFn = httpsCallable(functions, 'adminReviewChallengeSupporterRequest');
@@ -6894,39 +6896,21 @@
         } catch (e) { alert('초기화 실패: ' + e.message); }
     };
 
-    /** 실시간 랭킹용: stocks/·coins/ 의 volume·buyVol·sellVol 만 0 (주가 유지) */
+    /** 실시간 랭킹용: Cloud Function `adminResetRankingVolumes` — 브라우저 RTDB 대량 update 시 Permission denied 방지 */
     async function executeResetAllVolumesForRanking() {
-        const [sSnap, cSnap] = await Promise.all([
-            getStocksRootCached(),
-            getCoinsRootCached()
-        ]);
-        const sData = sSnap.exists() ? sSnap.val() : null;
-        const cData = cSnap.exists() ? cSnap.val() : null;
-        const sUpdates = {};
-        const cUpdates = {};
-        if (sData) {
-            Object.keys(sData).forEach((id) => {
-                sUpdates[`${id}/volume`] = 0;
-                sUpdates[`${id}/buyVol`] = 0;
-                sUpdates[`${id}/sellVol`] = 0;
-            });
+        try {
+            if (auth?.currentUser) await auth.currentUser.getIdToken(true);
+        } catch (_) { /* noop */ }
+        const result = await adminResetRankingVolumesFn({});
+        const d = result?.data || {};
+        if (d.ok === true) {
+            try { await invalidateStaticCache(); } catch (_) { /* noop */ }
+            return { ok: true, ns: Number(d.ns) || 0, nc: Number(d.nc) || 0 };
         }
-        if (cData) {
-            Object.keys(cData).forEach((id) => {
-                cUpdates[`${id}/volume`] = 0;
-                cUpdates[`${id}/buyVol`] = 0;
-                cUpdates[`${id}/sellVol`] = 0;
-            });
-        }
-        if (Object.keys(sUpdates).length === 0 && Object.keys(cUpdates).length === 0) {
+        if (d.ok === false && d.reason === 'empty') {
             return { ok: false, reason: 'empty', ns: 0, nc: 0 };
         }
-        if (Object.keys(sUpdates).length) await update(ref(db, 'stocks/'), sUpdates);
-        if (Object.keys(cUpdates).length) await update(ref(db, 'coins/'), cUpdates);
-        try { await invalidateStaticCache(); } catch (_) { /* noop */ }
-        const ns = sData ? Object.keys(sData).length : 0;
-        const nc = cData ? Object.keys(cData).length : 0;
-        return { ok: true, ns, nc };
+        throw new Error(d.reason || result?.message || 'adminResetRankingVolumes failed');
     }
 
     window.resetAllVolumesForRanking = async function() {
