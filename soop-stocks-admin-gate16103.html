@@ -6317,14 +6317,14 @@
         stocksUpdates[`${stockId}/price`]         = newPrice;
         stocksUpdates[`${stockId}/bannerImg`]     = newBanner;
         stocksUpdates[`${stockId}/link`]          = newLink;
-        stocksUpdates[`${stockId}/bannerEndDate`] = newDate;
+        stocksUpdates[`${stockId}/bannerEndDate`] = newDate || null;
         stocksUpdates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
 
         // stocksBanner/ 동시 쓰기 (배너 데이터만 분리 경로에도 저장)
         const bannerUpdates = {};
         bannerUpdates[`${stockId}/bannerImg`]     = newBanner;
         bannerUpdates[`${stockId}/link`]          = newLink;
-        bannerUpdates[`${stockId}/bannerEndDate`] = newDate;
+        bannerUpdates[`${stockId}/bannerEndDate`] = newDate || null;
         bannerUpdates[`${stockId}/bannerIsPaid`]  = editBannerIsPaid;
 
         try {
@@ -7333,6 +7333,7 @@
 
             await update(ref(db, 'stocks/'), stocksUpdates);
             await update(ref(db, 'stocksBanner/'), bannerUpdates);
+            invalidateStaticCache(); // 사용자 페이지 캐시 무효화
             alert(`✅ ${targetNickname} 종목에 ${bannerMode === 'paid' ? '유료' : '무료'} 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
             ['banner-nickname','banner-img-url','banner-link-url','banner-days'].forEach(id => { document.getElementById(id).value = ''; });
             document.getElementById('banner-enddate-preview').innerText = '';

@@ -14304,7 +14304,7 @@ function renderBanners() {
                 diffDays
             };
         })
-        .filter(s => s && s.diffDays >= 0);
+        .filter(s => s && s.diffDays >= 0 && s.diffDays !== Infinity);
 
     // 2. 유료(bannerIsPaid) 우선, 각 그룹 내에서 남은 기간 내림차순 정렬
     activeBanners.sort((a, b) => {
