@@ -1,7 +1,7 @@
 {
   "rules": {
     "marketRank": {
-      ".read": "auth != null && auth.uid != null",
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
       ".write": false
     }
   }

@@ -181,6 +181,156 @@ function getTradeCooldownMsFromConfig(mh, dateKst, auth) {
   return 30000;
 }
 
+/** 유료 회원 플래그 — `users/.../entitlements/paidMember` 우선(레거시 `paidMember` 폴백). */
+function userPaidMemberFromDoc(userVal) {
+  if (!userVal || typeof userVal !== "object") return false;
+  const ent = userVal.entitlements && typeof userVal.entitlements === "object" ? userVal.entitlements : {};
+  if (ent.paidMember === true) return true;
+  return userVal.paidMember === true;
+}
+
+/** 티어3 혜택 칭호 스킨 (별포인트 구매 아님). 레거키: 예전 유료-only 단계에서 저장된 `paidMember` */
+const TITLE_SPONSOR_SOURCE_TIER3 = "tier3";
+const TITLE_SPONSOR_SOURCE_PAID_MEMBER_LEGACY = "paidMember";
+
+function isTier3BenefitTitleSponsorSource(src) {
+  const s = String(src || "").trim();
+  return s === TITLE_SPONSOR_SOURCE_TIER3 || s === TITLE_SPONSOR_SOURCE_PAID_MEMBER_LEGACY;
+}
+
+function isApprovedActiveStockTitleRow(cur, nowMs) {
+  if (!cur || typeof cur !== "object") return false;
+  if (cur.active === false) return false;
+  if (String(cur.status || "").toLowerCase() !== "approved") return false;
+  const exp = Number(cur.expiresAt || 0);
+  if (exp > 0 && exp <= nowMs) return false;
+  return true;
+}
+
+/** 같은 유저는 활성 칭호를 같은 종목에서 덮어쓸 수 있음(티어3 전용 Callable만 호출). 타인 활성 칭호는 불가. */
+function canReplaceOrPublishStockTitle(cur, requestUid, nowMs) {
+  if (!isApprovedActiveStockTitleRow(cur, nowMs)) return true;
+  const owner = String(cur.uid || "");
+  return owner === requestUid;
+}
+
+async function readWalletPointsBalance(db, uid) {
+  const w = await db.ref(`users/${uid}/wallet`).get();
+  const v = w.exists() ? w.val() || {} : {};
+  const raw = v.points;
+  const parsed =
+    typeof raw === "number" ? raw : Number(String(raw ?? "0").replace(/[^0-9.-]/g, ""));
+  return Math.max(0, Math.floor(Number.isFinite(parsed) ? parsed : 0));
+}
+
+/** 프리미엄 토글 — 루트 `premiumServicesEnabled` (레거시 entitlements 폴백). */
+function userPremiumServicesEnabledFromDoc(userVal) {
+  if (!userVal || typeof userVal !== "object") return false;
+  if (userVal.premiumServicesEnabled === true) return true;
+  const ent = userVal.entitlements && typeof userVal.entitlements === "object" ? userVal.entitlements : {};
+  return ent.premiumServicesEnabled === true;
+}
+
+/** RTDB만으로 판별 가능한 티어3 전제(유료+프리미엄). Google 연동은 Callable에서 별도 검증. */
+function userDocShowsTier3Entitlements(userVal) {
+  return userPaidMemberFromDoc(userVal) && userPremiumServicesEnabledFromDoc(userVal);
+}
+
+/**
+ * 티어3 혜택 칭호 인덱스: `tier3TitleStockIds`(신규) + 레거시 `paidMemberTitleStockIds`
+ * sponsorSource 가 tier3 또는 레거시 paidMember 인 행만 제거
+ */
+async function removeTier3BenefitTitleSkinsForUid(db, uid) {
+  const u = String(uid || "").trim();
+  if (!u) return { clearedStocks: 0 };
+  const stockIdSet = new Set();
+  for (const path of [`users/${u}/tier3TitleStockIds`, `users/${u}/paidMemberTitleStockIds`]) {
+    const idxSnap = await db.ref(path).get();
+    if (!idxSnap.exists()) continue;
+    const idx = idxSnap.val();
+    if (!idx || typeof idx !== "object") continue;
+    Object.keys(idx).forEach((k) => {
+      if (idx[k] === true || idx[k] != null) stockIdSet.add(k);
+    });
+  }
+  if (!stockIdSet.size) return { clearedStocks: 0 };
+  const updates = {};
+  let n = 0;
+  for (const stockId of stockIdSet) {
+    const tSnap = await db.ref(`stockTitles/${stockId}`).get();
+    if (!tSnap.exists()) continue;
+    const row = tSnap.val() || {};
+    if (String(row.uid || "") !== u) continue;
+    if (!isTier3BenefitTitleSponsorSource(row.sponsorSource)) continue;
+    updates[`stockTitles/${stockId}`] = null;
+    n += 1;
+  }
+  updates[`users/${u}/tier3TitleStockIds`] = null;
+  updates[`users/${u}/paidMemberTitleStockIds`] = null;
+  if (Object.keys(updates).length) await db.ref().update(updates);
+  return { clearedStocks: n };
+}
+
+async function maybeRevokeTier3BenefitTitleSkins(db, uid) {
+  const uSnap = await db.ref(`users/${uid}`).get();
+  const u = uSnap.exists() ? uSnap.val() || {} : {};
+  if (userDocShowsTier3Entitlements(u)) return { clearedStocks: 0, skipped: true };
+  return await removeTier3BenefitTitleSkinsForUid(db, uid);
+}
+
+function getMaxNonOwnedFavoritesForTierNum(tier) {
+  if (tier <= 1) return 1;
+  if (tier === 2) return 2;
+  return 5;
+}
+
+/**
+ * Tier1 익명·비구글 / Tier2 구글 / Tier3 구글 + entitlements.paidMember + premium ON
+ * 챌린지·관리자 판정은 호출부에서 별도 처리.
+ */
+function resolveTradeTierFromUser(auth, userVal) {
+  if (isAdminAuth(auth)) return 3;
+  if (!isGoogleLinkedTradeAuth(auth)) return 1;
+  const paid = userPaidMemberFromDoc(userVal);
+  const prem = userPremiumServicesEnabledFromDoc(userVal);
+  if (paid && prem) return 3;
+  return 2;
+}
+
+/** 정규장 기준 티어2 매매 쿨다운(ms). 클라이언트 `getTradeCooldownMs` 와 동일 값 유지. */
+const TIER2_REGULAR_MARKET_TRADE_COOLDOWN_MS = 10000;
+
+function getTradeCooldownMsFromTier(tier, mh, dateKst, auth) {
+  if (isAdminAuth(auth)) return 0;
+  if (!mh || !mh.enabled) {
+    if (tier === 1) return 30000;
+    if (tier === 2) return TIER2_REGULAR_MARKET_TRADE_COOLDOWN_MS;
+    return 1000;
+  }
+  if (!isMarketOpenServer(mh, dateKst)) return 0;
+  if (!isRegularMarketServer(mh, dateKst)) return 30000;
+  if (tier === 1) return 30000;
+  if (tier === 2) return TIER2_REGULAR_MARKET_TRADE_COOLDOWN_MS;
+  return 1000;
+}
+
+function getMaxHoldingsForTier(tier) {
+  if (tier <= 1) return 3;
+  if (tier === 2) return 6;
+  return 10;
+}
+
+function getMaxNotionalPerOrderForTier(tier) {
+  if (tier === 1) return 100_000_000;
+  if (tier === 2) return 100_000_000_000;
+  return 5_000_000_000_000;
+}
+
+function getMaxQtyPerOrderForTier(tier) {
+  if (tier >= 3) return Number.MAX_SAFE_INTEGER;
+  return 100;
+}
+
 /** soop-stocks-ranking-live.html sortByPriceDesc 와 동일 필터·정렬 + 동가 시 id 안정 정렬 */
 const MARKET_RANK_SORT_VERSION = 1;
 const MARKET_TOP_RANK_LIMIT = 100;
@@ -317,7 +467,8 @@ function assertServerTradeCooldownAllowed(auth, siteConfig, preUser) {
   const mh = siteConfig.marketHours || {};
   const now = Date.now();
   const dateKst = nowKstDate();
-  const cooldownMs = getTradeCooldownMsFromConfig(mh, dateKst, auth);
+  const tier = resolveTradeTierFromUser(auth, preUser);
+  const cooldownMs = getTradeCooldownMsFromTier(tier, mh, dateKst, auth);
   if (cooldownMs <= 0) return;
   const lt = effectiveLastTradeTimeMs(preUser);
   if (!Number.isFinite(lt) || lt <= 0) return;
@@ -658,6 +809,9 @@ exports.fetchSearchQuotes = onCall(
   async (req) => {
     if (!req.auth?.uid) {
       throw new HttpsError("unauthenticated", "Login required.");
+    }
+    if (!isAdminAuth(req.auth) && !isGoogleLinkedTradeAuth(req.auth)) {
+      throw new HttpsError("failed-precondition", "Google 계정 연동 후 검색 시세를 이용할 수 있습니다.");
     }
     const market = String(req.data?.market || "stock").trim().toLowerCase();
     const isCoin = market === "coin";
@@ -1193,6 +1347,24 @@ async function deductPointsOrThrow(db, uid, pointCost) {
   throw new HttpsError("aborted", "deductPointsOrThrow failed unexpectedly.");
 }
 
+/** RTDB 고비용 읽기(캔들·랭킹 등) — 별포인트 구매·충전 시 Functions만 연장 */
+const DATA_HEAVY_ACCESS_EXTEND_DEFAULT_MS = 14 * 24 * 60 * 60 * 1000;
+async function extendUserDataHeavyAccess(db, uid, extendMs = DATA_HEAVY_ACCESS_EXTEND_DEFAULT_MS) {
+  const u = String(uid || "").trim();
+  if (!u) return;
+  const ms = Math.max(1, Math.floor(Number(extendMs) || DATA_HEAVY_ACCESS_EXTEND_DEFAULT_MS));
+  try {
+    const ref = db.ref(`users/${u}/entitlements/dataHeavyAccessExpiresAt`);
+    const s = await ref.get();
+    const cur = s.exists() ? Number(s.val()) : 0;
+    const curOk = Number.isFinite(cur) && cur > 0 ? cur : 0;
+    const base = Math.max(Date.now(), curOk);
+    await ref.set(base + ms);
+  } catch (e) {
+    console.warn("[entitlements] extendUserDataHeavyAccess failed", u, e?.message || e);
+  }
+}
+
 async function appendPointLedger(db, uid, row) {
   const refPush = db.ref(`pointLedger/${uid}`).push();
   const payload = {
@@ -1291,6 +1463,7 @@ exports.adminApprovePointCharge = onCall(
       pointsGranted: points,
       ledgerTxnId: txnId,
     });
+    await extendUserDataHeavyAccess(db, uid, 30 * 24 * 60 * 60 * 1000);
     return { ok: true, reqId, uid, pointsGranted: points, balanceAfter: after };
   }
 );
@@ -1387,6 +1560,7 @@ exports.purchaseAndPublishPromoBanner = onCall(
         doneAt: nowMs(),
       };
       await opRef.set(payload);
+      await extendUserDataHeavyAccess(db, uid);
       return payload;
     } catch (err) {
       logCallableFailure(functionName, request, err, {
@@ -1466,6 +1640,7 @@ exports.purchaseAndPublishChartBanner = onCall(
         doneAt: nowMs(),
       };
       await opRef.set(payload);
+      await extendUserDataHeavyAccess(db, uid);
       return payload;
     } catch (err) {
       logCallableFailure(functionName, request, err, {
@@ -1569,6 +1744,7 @@ exports.purchaseAndPublishRelay = onCall(
         doneAt: nowMs(),
       };
       await opRef.set(payload);
+      await extendUserDataHeavyAccess(db, uid);
       return payload;
     } catch (err) {
       logCallableFailure(functionName, request, err, {
@@ -1625,22 +1801,24 @@ exports.purchaseAndPublishTitleSponsor = onCall(
         throw new HttpsError("invalid-argument", "invalid clientRequestId.");
 
       const db = admin.database();
-      const cfgSnap = await db.ref("siteConfig").get();
-      const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
-      const pointCost = pricing.titleSponsorUnitCost;
-      const durationMs = 5 * 24 * 60 * 60 * 1000; // default: 5 days
-
-      // 종목당 활성 1개 — 현재 만료가 지나지 않은 "approved+active"면 구매를 막습니다.
-      const stockSnap = await db.ref(`stockTitles/${stockId}`).get();
-      if (stockSnap.exists()) {
-        const cur = stockSnap.val() || {};
-        const active = cur.active !== false;
-        const approved = String(cur.status || "").toLowerCase() === "approved";
-        const expiresAt = Number(cur.expiresAt || 0);
-        if (active && approved && expiresAt > nowMs()) {
-          throw new HttpsError("failed-precondition", "title already active.");
-        }
+      const userSnap = await db.ref(`users/${uid}`).get();
+      const userDoc = userSnap.exists() ? userSnap.val() || {} : {};
+      const tier3 = resolveTradeTierFromUser(request.auth, userDoc) === 3;
+      if (!tier3) {
+        throw new HttpsError(
+          "failed-precondition",
+          "칭호 스킨은 티어3(Google 연동 + 유료 회원 + 프리미엄 옵션 ON)에서만 적용할 수 있습니다."
+        );
       }
+
+      const stockSnap = await db.ref(`stockTitles/${stockId}`).get();
+      const curRow = stockSnap.exists() ? stockSnap.val() || {} : {};
+      const tNow = nowMs();
+      if (!canReplaceOrPublishStockTitle(curRow, uid, tNow)) {
+        throw new HttpsError("failed-precondition", "title already active.");
+      }
+
+      const pointCost = 0;
 
       const opRef = db.ref(`pointOps/${uid}/titleSponsor/${clientRequestId}`);
       const opSnap = await opRef.get();
@@ -1655,24 +1833,14 @@ exports.purchaseAndPublishTitleSponsor = onCall(
         title,
         theme,
         pointCost,
+        tier3Benefit: true,
         createdAt: nowMs(),
       });
 
-      const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
-      const ledgerTxnId = await appendPointLedger(db, uid, {
-        type: "purchase_title_sponsor",
-        amount: -pointCost,
-        balanceAfter,
-        requestType: "titleSponsor",
-        requestId: clientRequestId,
-        requestPath: `pointOps/${uid}/titleSponsor/${clientRequestId}`,
-        note: `publish title sponsor ${stockId}`,
-        createdBy: "user",
-      });
-
-      const now = nowMs();
-      const expiresAt = now + durationMs;
-      await db.ref(`stockTitles/${stockId}`).set({
+      const balanceAfter = await readWalletPointsBalance(db, uid);
+      const expiresAt = 0;
+      const durationOut = 0;
+      const titlePayload = {
         title,
         theme,
         status: "approved",
@@ -1680,13 +1848,18 @@ exports.purchaseAndPublishTitleSponsor = onCall(
         uid,
         stockId,
         stockName: stockName || stockId,
-        approvedAt: now,
-        startedAt: now,
+        approvedAt: tNow,
+        startedAt: tNow,
         expiresAt,
-        durationMs,
+        durationMs: durationOut,
+        sponsorSource: TITLE_SPONSOR_SOURCE_TIER3,
         requestId: clientRequestId,
-        updatedAt: now,
+        updatedAt: tNow,
         updatedByUid: uid,
+      };
+      await db.ref().update({
+        [`stockTitles/${stockId}`]: titlePayload,
+        [`users/${uid}/tier3TitleStockIds/${stockId}`]: true,
       });
 
       const payload = {
@@ -1701,12 +1874,16 @@ exports.purchaseAndPublishTitleSponsor = onCall(
         pointCost,
         balanceAfter,
         expiresAt,
-        durationMs,
-        ledgerTxnId,
-        doneAt: now,
+        durationMs: durationOut,
+        ledgerTxnId: null,
+        sponsorSource: TITLE_SPONSOR_SOURCE_TIER3,
+        tier3Benefit: true,
+        paidMemberBenefit: false,
+        doneAt: tNow,
       };
 
       await opRef.set(payload);
+      await extendUserDataHeavyAccess(db, uid);
       return payload;
     } catch (err) {
       logCallableFailure(functionName, request, err, {
@@ -1736,14 +1913,17 @@ exports.purchaseAndPublishAssetRanking = onCall(
       if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
 
       const db = admin.database();
-      const cfgSnap = await db.ref("siteConfig").get();
-      const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
-      const pointCost = Math.max(1, Math.floor(Number(pricing.assetRanking || 0)));
+      const userSnap = await db.ref(`users/${uid}`).get();
+      const userDoc = userSnap.exists() ? userSnap.val() || {} : {};
+      const tier3 = resolveTradeTierFromUser(request.auth, userDoc) === 3;
+      if (!tier3) {
+        throw new HttpsError(
+          "failed-precondition",
+          "자산·보유 랭킹 열람은 티어3(Google 연동 + 유료 회원 + 프리미엄 옵션 ON)에서 이용할 수 있습니다."
+        );
+      }
 
-      const RANKING_ACCESS_DURATION_MS = 12 * 60 * 60 * 1000;
       const now = nowMs();
-      const accessExpiresAt = now + RANKING_ACCESS_DURATION_MS;
-
       const opRef = db.ref(`pointOps/${uid}/assetRanking/${clientRequestId}`);
       const opSnap = await opRef.get();
       if (opSnap.exists() && String(opSnap.val()?.status || "").toLowerCase() === "done") {
@@ -1753,66 +1933,9 @@ exports.purchaseAndPublishAssetRanking = onCall(
       const reqRef = db.ref(`assetRankingRequests/${uid}`);
       const reqSnap = await reqRef.get();
       const curReq = reqSnap.exists() ? (reqSnap.val() || {}) : {};
-      const curStatus = String(curReq.status || "").toLowerCase();
-      const curAccessExpiresAt = Number(curReq.accessExpiresAt || 0);
-      const curApprovedAt = Number(curReq.approvedAt || 0);
 
-      // 이미 승인된 기간 내면 중복결제 방지: 승인 상태만 유지
-      if (curStatus === "approved") {
-        const exp = Number.isFinite(curAccessExpiresAt) && curAccessExpiresAt > 0 ? curAccessExpiresAt : curApprovedAt + RANKING_ACCESS_DURATION_MS;
-        if (exp > Date.now()) {
-          const walletSnap = await db.ref(`users/${uid}/wallet`).get();
-          const balanceAfter = Math.max(0, Math.floor(Number(walletSnap.val()?.points || 0)));
-          return {
-            ok: true,
-            status: "done",
-            alreadyActive: true,
-            pointCost: 0,
-            balanceAfter,
-            assetRankingRequest: curReq,
-          };
-        }
-      }
-
-      // 레거시 pending(기존 consumePointsForProduct 경로)라면 포인트는 이미 차감되었을 가능성이 높으므로,
-      // 재차감 없이 승인/만료 시각만 승격합니다.
-      if (curStatus === "pending") {
-        const walletSnap = await db.ref(`users/${uid}/wallet`).get();
-        const balanceAfter = Math.max(0, Math.floor(Number(walletSnap.val()?.points || 0)));
-        await reqRef.update({
-          status: "approved",
-          approvedAt: now,
-          accessExpiresAt,
-          // UI 호환 필드 유지
-          cost: curReq.cost ?? pointCost,
-          pointCost: curReq.pointCost ?? pointCost,
-          paymentStatus: curReq.paymentStatus ?? "paid",
-          updatedAt: now,
-        });
-        await opRef.set({ status: "done", uid, clientRequestId, pointCost: 0, updatedAt: now });
-        return {
-          ok: true,
-          status: "done",
-          activatedFromPending: true,
-          accessExpiresAt,
-          pointCost: 0,
-          balanceAfter,
-        };
-      }
-
-      // 승인/거절/만료 등 다른 상태라면, 새로 포인트 차감 후 승인 publish
-      const balanceAfter = await deductPointsOrThrow(db, uid, pointCost);
-
-      const ledgerTxnId = await appendPointLedger(db, uid, {
-        type: "purchase_asset_ranking",
-        amount: -pointCost,
-        balanceAfter,
-        requestType: "assetRanking",
-        requestId: clientRequestId,
-        requestPath: `pointOps/${uid}/assetRanking/${clientRequestId}`,
-        note: `publish asset ranking access`,
-        createdBy: "user",
-      });
+      const walletSnap = await db.ref(`users/${uid}/wallet`).get();
+      const balanceAfter = Math.max(0, Math.floor(Number(walletSnap.val()?.points || 0)));
 
       await reqRef.set({
         uid,
@@ -1820,13 +1943,15 @@ exports.purchaseAndPublishAssetRanking = onCall(
         soopId,
         status: "approved",
         approvedAt: now,
-        accessExpiresAt,
+        accessExpiresAt: 0,
+        accessSource: "tier3",
+        tier3Eligibility: true,
         createdAt: curReq.createdAt ?? now,
         updatedAt: now,
-        cost: pointCost,
-        pointCost,
-        paymentStatus: "paid",
-        pointTxnId: String(ledgerTxnId || ""),
+        cost: 0,
+        pointCost: 0,
+        paymentStatus: "tier3",
+        pointTxnId: "",
       });
 
       await opRef.set({
@@ -1835,15 +1960,29 @@ exports.purchaseAndPublishAssetRanking = onCall(
         clientRequestId,
         nickname: nicknameRaw,
         soopId,
-        pointCost,
+        pointCost: 0,
         balanceAfter,
-        accessExpiresAt,
+        accessExpiresAt: 0,
+        accessSource: "tier3",
+        tier3Benefit: true,
         assetRankingRequestPath: `assetRankingRequests/${uid}`,
-        ledgerTxnId,
+        ledgerTxnId: null,
         doneAt: nowMs(),
       });
 
-      return { ok: true, status: "done", clientRequestId, uid, pointCost, balanceAfter, accessExpiresAt, ledgerTxnId };
+      await extendUserDataHeavyAccess(db, uid);
+      return {
+        ok: true,
+        status: "done",
+        clientRequestId,
+        uid,
+        pointCost: 0,
+        balanceAfter,
+        accessExpiresAt: 0,
+        ledgerTxnId: null,
+        tier3Benefit: true,
+        accessSource: "tier3",
+      };
     } catch (err) {
       logCallableFailure(functionName, request, err, {
         nickname: toLogSafeValue(request.data?.nickname),
@@ -1873,6 +2012,86 @@ exports.purchaseAndPublishLiveRankingTop100 = onCall(
       if (!clientRequestId || !/^[A-Za-z0-9_-]{8,80}$/.test(clientRequestId)) throw new HttpsError("invalid-argument", "invalid clientRequestId.");
 
       const db = admin.database();
+      const userSnapEarly = await db.ref(`users/${uid}`).get();
+      const userDocEarly = userSnapEarly.exists() ? userSnapEarly.val() || {} : {};
+      if (resolveTradeTierFromUser(request.auth, userDocEarly) === 3) {
+        const nowT3 = nowMs();
+        const opRefT3 = db.ref(`pointOps/${uid}/liveRankingTop100/${clientRequestId}`);
+        const opSnapT3 = await opRefT3.get();
+        if (opSnapT3.exists() && String(opSnapT3.val()?.status || "").toLowerCase() === "done") {
+          return { ok: true, status: "done", ...opSnapT3.val() };
+        }
+        const reqRefT3 = db.ref(`liveRankingTop100Requests/${uid}`);
+        const reqSnapT3 = await reqRefT3.get();
+        const curReqT3 = reqSnapT3.exists() ? (reqSnapT3.val() || {}) : {};
+        const curStatusT3 = String(curReqT3.status || "").toLowerCase();
+        const curExpT3 = Number(curReqT3.accessExpiresAt || 0);
+        const walletSnapT3 = await db.ref(`users/${uid}/wallet`).get();
+        const balanceAfterT3 = Math.max(0, Math.floor(Number(walletSnapT3.val()?.points || 0)));
+        if (curStatusT3 === "approved" && Number.isFinite(curExpT3) && curExpT3 > nowT3) {
+          return {
+            ok: true,
+            status: "done",
+            alreadyActive: true,
+            pointCost: 0,
+            balanceAfter: balanceAfterT3,
+            liveRankingTop100Request: curReqT3,
+            tier3Benefit: true,
+            accessSource: String(curReqT3.accessSource || "tier3"),
+          };
+        }
+        const farT3 = nowT3 + 100 * 365 * 24 * 60 * 60 * 1000;
+        await db.ref().update({
+          [`liveRankingTop100Requests/${uid}`]: {
+            uid,
+            nickname: nicknameRaw,
+            soopId,
+            status: "approved",
+            approvedAt: nowT3,
+            accessExpiresAt: farT3,
+            durationDays: 0,
+            accessSource: "tier3",
+            tier3Eligibility: true,
+            createdAt: curReqT3.createdAt ?? nowT3,
+            updatedAt: nowT3,
+            cost: 0,
+            pointCost: 0,
+            paymentStatus: "tier3",
+            pointTxnId: "",
+          },
+          [`users/${uid}/entitlements/liveRankingTop100ExpiresAt`]: farT3,
+        });
+        await opRefT3.set({
+          status: "done",
+          uid,
+          clientRequestId,
+          nickname: nicknameRaw,
+          soopId,
+          pointCost: 0,
+          balanceAfter: balanceAfterT3,
+          accessExpiresAt: farT3,
+          durationDays: 0,
+          tier3Benefit: true,
+          accessSource: "tier3",
+          doneAt: nowT3,
+        });
+        await extendUserDataHeavyAccess(db, uid);
+        return {
+          ok: true,
+          status: "done",
+          clientRequestId,
+          uid,
+          nickname: nicknameRaw,
+          soopId,
+          pointCost: 0,
+          balanceAfter: balanceAfterT3,
+          accessExpiresAt: farT3,
+          durationDays: 0,
+          tier3Benefit: true,
+          accessSource: "tier3",
+        };
+      }
+
       const cfgSnap = await db.ref("siteConfig").get();
       const pricing = getPricingPoints(cfgSnap.exists() ? cfgSnap.val() : {});
       const pointCost = Math.max(1, Math.floor(Number(pricing.liveRankingTop100 || 0)));
@@ -1932,6 +2151,7 @@ exports.purchaseAndPublishLiveRankingTop100 = onCall(
           activatedFromPending: true,
           updatedAt: now,
         });
+        await extendUserDataHeavyAccess(db, uid);
         return {
           ok: true,
           status: "done",
@@ -1991,6 +2211,7 @@ exports.purchaseAndPublishLiveRankingTop100 = onCall(
       };
 
       await opRef.set(payload);
+      await extendUserDataHeavyAccess(db, uid);
       return payload;
     } catch (err) {
       logCallableFailure(functionName, request, err, {
@@ -2215,41 +2436,15 @@ exports.consumePointsForProduct = onCall(
     let pointCost = 0;
 
     if (productType === "liveRankingTop100") {
-      const nickname = String(payload.nickname || "").trim();
-      const soopId = String(payload.soopId || "").trim();
-      if (!nickname || !soopId) throw new HttpsError("invalid-argument", "nickname/soopId required.");
-      pointCost = pricing.liveRankingTop100;
-      const durationDays = pricing.liveRankingTop100DurationDays;
-      requestPath = `liveRankingTop100Requests/${uid}`;
-      writePayload = {
-        nickname,
-        soopId,
-        uid,
-        status: "pending",
-        createdAt: now,
-        cost: pointCost,
-        pointCost,
-        paymentStatus: "paid",
-        pointTxnId: "",
-        durationDays,
-      };
+      throw new HttpsError(
+        "failed-precondition",
+        "실시간 Top100 직접 열람은 별포인트 상품이 아닙니다. 티어3 유지 시 열람되거나 purchaseAndPublishLiveRankingTop100를 사용하세요."
+      );
     } else if (productType === "assetRanking") {
-      const nickname = String(payload.nickname || "").trim();
-      const soopId = String(payload.soopId || "").trim();
-      if (!nickname || !soopId) throw new HttpsError("invalid-argument", "nickname/soopId required.");
-      pointCost = pricing.assetRanking;
-      requestPath = `assetRankingRequests/${uid}`;
-      writePayload = {
-        nickname,
-        soopId,
-        uid,
-        status: "pending",
-        createdAt: now,
-        cost: pointCost,
-        pointCost,
-        paymentStatus: "paid",
-        pointTxnId: "",
-      };
+      throw new HttpsError(
+        "failed-precondition",
+        "자산·보유 랭킹 열람은 별포인트 상품이 아닙니다. 티어3 유지 시 열람됩니다."
+      );
     } else if (productType === "relay") {
       const nickname = String(payload.nickname || "").trim();
       const soopId = String(payload.soopId || "").trim();
@@ -2317,31 +2512,10 @@ exports.consumePointsForProduct = onCall(
         pointTxnId: "",
       };
     } else if (productType === "titleSponsor") {
-      const stockId = String(payload.stockId || "").trim();
-      const stockName = String(payload.stockName || "").trim();
-      const market = String(payload.market || "stock").trim();
-      const title = String(payload.title || "").trim();
-      const theme = String(payload.theme || "preset1").trim();
-      if (!stockId || !title) throw new HttpsError("invalid-argument", "invalid title payload.");
-      pointCost = pricing.titleSponsorUnitCost;
-      const reqId = `title_${uid}_${now}`;
-      requestPath = `titleRequests/${reqId}`;
-      writePayload = {
-        uid,
-        stockId,
-        stockName,
-        market,
-        title,
-        theme,
-        status: "pending",
-        cost: pointCost,
-        pointCost,
-        paymentStatus: "paid",
-        pointTxnId: "",
-        durationMs: Number(payload.durationMs || 5 * 24 * 60 * 60 * 1000),
-        createdAt: now,
-        updatedAt: now,
-      };
+      throw new HttpsError(
+        "failed-precondition",
+        "종목 칭호 스킨은 별포인트 상품이 아닙니다. 티어3에서 purchaseAndPublishTitleSponsor를 사용하세요."
+      );
     } else {
       throw new HttpsError("invalid-argument", "unsupported productType.");
     }
@@ -2494,6 +2668,14 @@ const CHALLENGE_LIVE_MS = 5 * 60 * 1000;
 /** 매매 종료 후 RTDB에 순위를 남겨 두는 시간 — 이후 finalize 로 포인터·자산 초기화 */
 const CHALLENGE_RESULTS_DISPLAY_MS = 3 * 60 * 1000;
 const CHALLENGE_ROOM_MAX_MEMBERS = 40;
+
+/** 챌린지 방 참가 시 표시용 닉네임 — 결과창에서만 참조 */
+function sanitizeChallengeMemberNickname(raw) {
+  let s = String(raw ?? "").trim().replace(/\s+/g, " ");
+  if (!s) return "";
+  if (s.length > 48) s = s.slice(0, 48);
+  return s;
+}
 
 /** 관리자: 메인 stocks/coins 기준으로 챌린지 시장 노드만 동기화(유저 청산 없음). 최초 배포·수동 동기화용 */
 exports.adminSyncChallengeMarketsFromMain = onCall(
@@ -2922,7 +3104,19 @@ async function beginChallengeRoomResultsPhase(db, roomId, r) {
     const pos = stockId ? book[stockId] : null;
     const qty = Math.floor(Number(pos?.qty || 0));
     const totalWon = cash + qty * lastPx;
-    rows.push({ uid, cash, stockQty: qty, stockMark: qty * lastPx, totalWon });
+    const memRow = members[uid] && typeof members[uid] === "object" ? members[uid] : {};
+    let nick = sanitizeChallengeMemberNickname(memRow?.nickname || "");
+    if (!nick && uval) {
+      nick = sanitizeChallengeMemberNickname(uval?.nickname || uval?.name || "") || "";
+    }
+    rows.push({
+      uid,
+      cash,
+      stockQty: qty,
+      stockMark: qty * lastPx,
+      totalWon,
+      ...(nick ? { nickname: nick } : {}),
+    });
   }
   rows.sort((a, b) => b.totalWon - a.totalWon);
   rows.forEach((row, i) => {
@@ -3026,6 +3220,10 @@ exports.createChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "
   const uSnap = await db.ref(`users/${uid}`).get();
   const preUser = uSnap.exists() ? uSnap.val() : {};
   assertGoogleChallengeSupporterForRoom(auth, preUser);
+  const tourSnap = await db.ref("siteConfig/challengeTournamentMode").get();
+  if (tourSnap.exists() && tourSnap.val() === true && !isAdminAuth(auth)) {
+    throw new HttpsError("permission-denied", "대회 모드에서는 관리자만 방을 만들 수 있습니다.");
+  }
   await pruneStaleUserChallengeRoomPointer(db, uid);
   const curRid = await getUserChallengeRoomIdRaw(db, uid);
   if (curRid) throw new HttpsError("failed-precondition", "이미 참여 중인 챌린지 방이 있습니다.");
@@ -3042,6 +3240,9 @@ exports.createChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "
   const roomRef = db.ref("challengeRooms").push();
   const roomId = roomRef.key;
   if (!roomId) throw new HttpsError("internal", "room id failed");
+  const hostNickname = sanitizeChallengeMemberNickname(request.data?.nickname || "");
+  const hostMember =
+    hostNickname !== "" ? { joinedAt: now, nickname: hostNickname } : { joinedAt: now };
   await roomRef.set({
     stockId,
     stockName,
@@ -3052,7 +3253,7 @@ exports.createChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "
     liveEndMs,
     liveStarted: false,
     finalized: false,
-    members: { [uid]: { joinedAt: now } },
+    members: { [uid]: hostMember },
   });
   await db.ref(`users/${uid}/challengeRoomId`).set(roomId);
   return { ok: true, roomId, stockId, stockName, lobbyUntilMs, liveStartMs, liveEndMs };
@@ -3090,7 +3291,9 @@ exports.joinChallengeRoom = onCall({ cors: true, timeoutSeconds: 30, memory: "25
   if (members[uid]) return { ok: true, roomId, already: true };
   const n = Object.keys(members).length;
   if (n >= CHALLENGE_ROOM_MAX_MEMBERS) throw new HttpsError("resource-exhausted", "방 인원이 가득 찼습니다.");
-  members[uid] = { joinedAt: now };
+  const joinNickname = sanitizeChallengeMemberNickname(request.data?.nickname || "");
+  members[uid] =
+    joinNickname !== "" ? { joinedAt: now, nickname: joinNickname } : { joinedAt: now };
   const liveStarted = r.liveStarted === true;
   const patch = {
     [`challengeRooms/${roomId}/members`]: members,
@@ -3240,25 +3443,47 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const side = String(req.data?.side || "")
     .trim()
     .toLowerCase(); // 클라이언트·프록시에서 대소문자 섞여도 허용
-  const qty = clampInt(req.data?.qty, 1, TRADE_ORDER_QTY_MAX);
   const market = String(req.data?.market || "stock").trim().toLowerCase();
   const isCoin = market === "coin";
   const inverseModeReq = Boolean(req.data?.inverseMode);
   const challengeModeReq = Boolean(req.data?.challengeMode);
+  const autoTradeReq = Boolean(req.data?.autoTrade);
 
   if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
   if (side !== "buy" && side !== "sell") throw new HttpsError("invalid-argument", "side must be buy|sell.");
-  if (!qty) throw new HttpsError("invalid-argument", "qty must be a positive integer.");
   if (market !== "stock" && market !== "coin") {
     throw new HttpsError("invalid-argument", "market must be stock|coin.");
   }
-
-  const maxOrderWon = MAX_TRADE_NOTIONAL_WON;
 
   const db = admin.database();
   const [cfgSnap, preUserSnap] = await Promise.all([db.ref("siteConfig").get(), db.ref(`users/${uid}`).get()]);
 
   const siteConfig = cfgSnap.exists() ? cfgSnap.val() : {};
+  const preUserEarly = preUserSnap.exists() ? preUserSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
+  const tierEarly = resolveTradeTierFromUser(auth, preUserEarly);
+
+  if (!isAdminAuth(auth)) {
+    if (challengeModeReq && !isGoogleLinkedTradeAuth(auth)) {
+      throw new HttpsError("failed-precondition", "챌린지 매매는 Google 계정 연동이 필요합니다.");
+    }
+    if (!challengeModeReq && isCoin && !isGoogleLinkedTradeAuth(auth)) {
+      throw new HttpsError("failed-precondition", "코인 매매는 Google 계정 연동 후 이용할 수 있습니다.");
+    }
+    if (!challengeModeReq && !isGoogleLinkedTradeAuth(auth) && market !== "stock") {
+      throw new HttpsError("failed-precondition", "비연동 계정은 주식 매매만 이용할 수 있습니다.");
+    }
+    if (autoTradeReq && tierEarly < 3) {
+      throw new HttpsError("failed-precondition", "자동매매는 유료 프리미엄(티어3)에서만 사용할 수 있습니다.");
+    }
+    if (inverseModeReq && tierEarly < 3) {
+      throw new HttpsError("failed-precondition", "인버스 모드는 유료 프리미엄(티어3)에서만 사용할 수 있습니다.");
+    }
+  }
+
+  const qty = clampInt(req.data?.qty, 1, getMaxQtyPerOrderForTier(tierEarly));
+  if (!qty) throw new HttpsError("invalid-argument", "qty must be a positive integer.");
+
+  const maxOrderWon = isAdminAuth(auth) ? MAX_TRADE_NOTIONAL_WON : getMaxNotionalPerOrderForTier(tierEarly);
   if (siteConfig.maintenance === true && !isAdminAuth(auth)) {
     throw new HttpsError("failed-precondition", "Maintenance mode.");
   }
@@ -3285,7 +3510,8 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
   const standardFee = Number(sellConfig.fee ?? 0.003);
   const fee = resolveTradeFee(standardFee, sellConfig, inverseModeReq);
 
-  const preUser = preUserSnap.exists() ? preUserSnap.val() : { cash: 1000000, stocks: {}, coins: {} };
+  const preUser = preUserEarly;
+  const maxHoldSym = isAdminAuth(auth) ? 999 : getMaxHoldingsForTier(resolveTradeTierFromUser(auth, preUser));
   assertUserTradeRestrictionAllowed(auth, preUser);
   assertServerTradeCooldownAllowed(auth, siteConfig, preUser);
   if (challengeModeReq && !isAdminAuth(auth)) {
@@ -3353,7 +3579,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       const bookForLimit = isCoin ? preCoinsMap : preStocksMap;
       if (preHaveQty === 0) {
         const ownedCount = Object.values(bookForLimit).filter((s) => Math.floor(Number(s?.qty || 0)) !== 0).length;
-        if (ownedCount >= 10) {
+        if (ownedCount >= maxHoldSym) {
           throw new HttpsError("failed-precondition", "종목한도");
         }
       }
@@ -3523,7 +3749,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
         if (cash < tradeNotionalB && !isAdminAuth(auth)) return undefined;
         if (!isAdminAuth(auth) && haveQty === 0) {
           const ownedCount = Object.values(coins).filter((s) => Math.floor(Number(s?.qty || 0)) !== 0).length;
-          if (ownedCount >= 10) return undefined;
+          if (ownedCount >= maxHoldSym) return undefined;
         }
         if (inverseModeReq) {
           const newQty = haveQty - qty;
@@ -3621,7 +3847,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 60, memory: "512MiB" }, asy
       if (cash < tradeNotionalB && !isAdminAuth(auth)) return undefined;
       if (!isAdminAuth(auth) && haveQty === 0) {
         const ownedCount = Object.values(stocks).filter((s) => Math.floor(Number(s?.qty || 0)) !== 0).length;
-        if (ownedCount >= 10) return undefined;
+        if (ownedCount >= maxHoldSym) return undefined;
       }
       if (inverseModeReq) {
         const newQty = haveQty - qty;
@@ -4003,6 +4229,12 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     throw new HttpsError("invalid-argument", "market must be stock|coin.");
   }
 
+  if (!isAdminAuth(auth)) {
+    if (market === "coin" && !isGoogleLinkedTradeAuth(auth)) {
+      throw new HttpsError("failed-precondition", "코인 전량 매도는 Google 계정 연동 후 이용할 수 있습니다.");
+    }
+  }
+
   const db = admin.database();
   const stockPath = market === "coin" ? "coins" : "stocks";
   const userBookPath = market === "coin" ? "coins" : "stocks";
@@ -4031,6 +4263,11 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
   const preUserForCooldown = preUserSnapForCooldown.exists() ? preUserSnapForCooldown.val() : {};
   assertUserTradeRestrictionAllowed(auth, preUserForCooldown);
   assertServerTradeCooldownAllowed(auth, siteConfig, preUserForCooldown);
+
+  const liqTier = resolveTradeTierFromUser(auth, preUserForCooldown);
+  if (fraction < 1 - 1e-9 && !isAdminAuth(auth) && liqTier < 3) {
+    throw new HttpsError("failed-precondition", "부분(50% 등) 일괄 매도는 유료 프리미엄(티어3)에서만 이용할 수 있습니다.");
+  }
 
   const bookSnap = await db.ref(`users/${uid}/${userBookPath}/${stockId}`).get();
   const haveQty = Math.floor(Number(bookSnap.val()?.qty || 0));
@@ -4186,6 +4423,293 @@ exports.liquidateAll = onCall({ cors: true, timeoutSeconds: 540, memory: "1GiB" 
     chunks: 1,
   };
 });
+
+/** 분봉 캔들 Callable — RTDB 직접 읽기 차단 시 클라이언트가 티어별로 요청 */
+exports.getCandlesForTier = onCall({ cors: true, timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  const stockId = String(request.data?.stockId || "").trim();
+  const market = String(request.data?.market || "stock").trim().toLowerCase();
+  if (!stockId) throw new HttpsError("invalid-argument", "stockId required.");
+  if (market !== "stock" && market !== "coin") {
+    throw new HttpsError("invalid-argument", "market must be stock|coin.");
+  }
+  const db = admin.database();
+  const uSnap = await db.ref(`users/${request.auth.uid}`).get();
+  const u = uSnap.exists() ? uSnap.val() : {};
+  const tier = resolveTradeTierFromUser(request.auth, u);
+  if (tier <= 1) {
+    return { ok: true, tier, candles: [] };
+  }
+  const root = market === "coin" ? "coinCandles" : "candlesticks";
+  const snap = await db.ref(`${root}/${stockId}`).get();
+  const raw = snap.exists() ? snap.val() : {};
+  const now = Date.now();
+  const windowMs = tier >= 3 ? 6 * 60 * 60 * 1000 : 60 * 60 * 1000;
+  const tMin = now - windowMs;
+  const rows = Object.values(raw || {})
+    .filter((c) => c && typeof c === "object" && Number.isFinite(Number(c.t)) && Number(c.t) >= tMin)
+    .sort((a, b) => Number(a.t) - Number(b.t));
+  const cap = tier >= 3 ? 400 : 80;
+  const slice = rows.slice(Math.max(0, rows.length - cap));
+  return { ok: true, tier, candles: slice };
+});
+
+/** 익명(티어1) 포트폴리오 시세 — 30초당 1회 */
+exports.fetchTier1PortfolioQuotes = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  const ids = Array.isArray(request.data?.stockIds) ? request.data.stockIds : [];
+  const clean = [...new Set(ids.map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 30);
+  if (!clean.length) return { ok: true, quotes: {} };
+  const db = admin.database();
+  const uid = request.auth.uid;
+  const uSnap = await db.ref(`users/${uid}`).get();
+  const u = uSnap.exists() ? uSnap.val() : {};
+  if (resolveTradeTierFromUser(request.auth, u) !== 1) {
+    throw new HttpsError("failed-precondition", "익명(비구글) 티어에서만 사용할 수 있습니다.");
+  }
+  const stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
+  const heldIds = Object.entries(stocks)
+    .filter(([, row]) => Math.floor(Number(row?.qty || 0)) !== 0)
+    .map(([k]) => k)
+    .sort()
+    .slice(0, 3);
+  const heldSet = new Set(heldIds);
+  const metaSnap = await db.ref(`users/${uid}/portfolioMeta/favoriteStockOrder`).get();
+  const favOrder = metaSnap.exists() && Array.isArray(metaSnap.val()) ? metaSnap.val() : [];
+  const extra = [];
+  for (const id of favOrder) {
+    const sid = String(id || "").trim();
+    if (!sid || heldSet.has(sid)) continue;
+    extra.push(sid);
+    if (extra.length >= 1) break;
+  }
+  const allowed = new Set([...heldSet, ...extra]);
+  for (const id of clean) {
+    if (!allowed.has(id)) {
+      throw new HttpsError("invalid-argument", "보유(최대 3)·비보유 즐겨찾기(최대 1) 범위의 종목만 조회할 수 있습니다.");
+    }
+  }
+  const last = Number(u.tier1QuoteThrottleAt || 0);
+  const now = Date.now();
+  if (Number.isFinite(last) && last > 0 && now - last < 25000) {
+    throw new HttpsError("resource-exhausted", "30초에 한 번만 요청할 수 있습니다.");
+  }
+  await db.ref(`users/${uid}/tier1QuoteThrottleAt`).set(now);
+  const out = {};
+  await Promise.all(
+    clean.map(async (id) => {
+      const s = await db.ref(`stocks/${id}`).get();
+      if (s.exists()) out[id] = s.val();
+    })
+  );
+  return { ok: true, quotes: out };
+});
+
+async function rebuildQuoteAllowlistForUser(db, auth, uid, u) {
+  const tier = resolveTradeTierFromUser(auth, u);
+  if (tier < 2 || !isGoogleLinkedTradeAuth(auth)) return { ok: false, skipped: true };
+  const maxHold = getMaxHoldingsForTier(tier);
+  const maxFav = getMaxNonOwnedFavoritesForTierNum(tier);
+  const stocks = u.stocks && typeof u.stocks === "object" ? u.stocks : {};
+  const held = Object.entries(stocks)
+    .filter(([, row]) => Math.floor(Number(row?.qty || 0)) !== 0)
+    .map(([k]) => k)
+    .sort();
+  const heldTrim = held.slice(0, maxHold);
+  const heldSet = new Set(heldTrim);
+  const metaSnap = await db.ref(`users/${uid}/portfolioMeta/favoriteStockOrder`).get();
+  const order = metaSnap.exists() && Array.isArray(metaSnap.val()) ? metaSnap.val() : [];
+  const extras = [];
+  for (const rawId of order) {
+    const id = String(rawId || "").trim();
+    if (!id || heldSet.has(id)) continue;
+    extras.push(id);
+    if (extras.length >= maxFav) break;
+  }
+  const allow = [...new Set([...heldTrim, ...extras])];
+  const stockIds = {};
+  allow.forEach((id) => {
+    stockIds[id] = true;
+  });
+  await db.ref(`users/${uid}/quoteAllowlist/stockIds`).set(stockIds);
+  return { ok: true, tier, stockIds: allow };
+}
+
+/** 티어 한도에 맞춰 주식 시세 구독 허용 목록(RTD quoteAllowlist) 갱신 — Tier2+ */
+exports.reconcileUserQuoteSubscriptions = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  if (!isGoogleLinkedTradeAuth(request.auth)) {
+    throw new HttpsError("failed-precondition", "Google 연동 계정만 사용할 수 있습니다.");
+  }
+  const uid = request.auth.uid;
+  const db = admin.database();
+  const uSnap = await db.ref(`users/${uid}`).get();
+  const u = uSnap.exists() ? uSnap.val() : {};
+  const tier = resolveTradeTierFromUser(request.auth, u);
+  if (tier < 2) {
+    throw new HttpsError("failed-precondition", "티어2 이상에서만 동기화됩니다.");
+  }
+  const out = await rebuildQuoteAllowlistForUser(db, request.auth, uid, u);
+  return { ok: true, tier: out.tier, stockIds: out.stockIds || [] };
+});
+
+/** 즐겨찾기 순서(서버 저장) — 클라이언트는 RTDB에 직접 쓰지 않음 */
+exports.syncPortfolioFavoriteOrder = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  const order = Array.isArray(request.data?.favoriteStockOrder) ? request.data.favoriteStockOrder : [];
+  const ids = [...new Set(order.map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 40);
+  const uid = request.auth.uid;
+  await admin.database().ref(`users/${uid}/portfolioMeta/favoriteStockOrder`).set(ids);
+  return { ok: true, count: ids.length };
+});
+
+/** 유료회원(paidMember) 전제 — 프리미엄 토글 시 1P 차감·시간당 1P 자동 차감 큐 등록 */
+exports.setPremiumServicesEnabled = onCall({ cors: true, timeoutSeconds: 60, memory: "256MiB" }, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+  if (!isGoogleLinkedTradeAuth(request.auth)) {
+    throw new HttpsError("failed-precondition", "Google 연동 계정만 사용할 수 있습니다.");
+  }
+  const want = Boolean(request.data?.enabled);
+  const uid = request.auth.uid;
+  const db = admin.database();
+  const uSnap = await db.ref(`users/${uid}`).get();
+  const u = uSnap.exists() ? uSnap.val() : {};
+  if (!userPaidMemberFromDoc(u)) {
+    throw new HttpsError("failed-precondition", "유료 회원으로 등록된 계정만 프리미엄을 켤 수 있습니다.");
+  }
+  if (!want) {
+    await db.ref(`users/${uid}/premiumServicesEnabled`).remove();
+    await db.ref(`premiumBillingQueue/${uid}`).remove();
+    try {
+      const uSnap2 = await db.ref(`users/${uid}`).get();
+      const u2 = uSnap2.exists() ? uSnap2.val() : {};
+      await rebuildQuoteAllowlistForUser(db, request.auth, uid, u2);
+    } catch (e) {
+      console.warn("[setPremiumServicesEnabled] quote allowlist", e?.message || e);
+    }
+    return { ok: true, premiumServicesEnabled: false };
+  }
+  if (userPremiumServicesEnabledFromDoc(u)) {
+    return { ok: true, premiumServicesEnabled: true };
+  }
+  const pointCost = 1;
+  const now = nowMs();
+  const walletRef = db.ref(`users/${uid}/wallet`);
+  const tx = await walletRef.transaction((cur) => {
+    const base = cur && typeof cur === "object" ? cur : {};
+    const points = Math.max(0, Math.floor(Number(base.points || 0)));
+    if (points < pointCost) return undefined;
+    return {
+      ...base,
+      points: points - pointCost,
+      updatedAt: now,
+    };
+  });
+  if (!tx.committed) throw new HttpsError("failed-precondition", "별포인트가 부족합니다. (프리미엄 켜기 1P)");
+  const after = Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
+  await appendPointLedger(db, uid, {
+    type: "consume",
+    amount: -pointCost,
+    balanceAfter: after,
+    requestType: "premiumServices",
+    requestId: "enable",
+    requestPath: `users/${uid}/premiumServicesEnabled`,
+    note: "enable premium tier (1P)",
+    createdBy: uid,
+  });
+  await db.ref(`users/${uid}/premiumServicesEnabled`).set(true);
+  await db.ref(`premiumBillingQueue/${uid}`).set({
+    nextDebitAt: Date.now() + 60 * 60 * 1000,
+    updatedAt: now,
+  });
+  try {
+    const uSnap2 = await db.ref(`users/${uid}`).get();
+    const u2 = uSnap2.exists() ? uSnap2.val() : {};
+    await rebuildQuoteAllowlistForUser(db, request.auth, uid, u2);
+  } catch (e) {
+    console.warn("[setPremiumServicesEnabled] quote allowlist", e?.message || e);
+  }
+  return { ok: true, premiumServicesEnabled: true, balanceAfter: after };
+});
+
+exports.adminSetPaidMember = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  if (!isAdminAuth(request.auth)) throw new HttpsError("permission-denied", "Admin only.");
+  const target = String(request.data?.uid || "").trim();
+  const paid = Boolean(request.data?.paidMember);
+  if (!target) throw new HttpsError("invalid-argument", "uid required.");
+  const db = admin.database();
+  await db.ref(`users/${target}/entitlements/paidMember`).set(paid);
+  try {
+    await db.ref(`users/${target}/paidMember`).remove();
+  } catch (_) {
+    /* noop */
+  }
+  if (!paid) {
+    await db.ref(`users/${target}/premiumServicesEnabled`).remove();
+    await db.ref(`premiumBillingQueue/${target}`).remove();
+    try {
+      await db.ref(`users/${target}/quoteAllowlist`).remove();
+    } catch (_) {
+      /* noop */
+    }
+  }
+  return { ok: true, paidMember: paid };
+});
+
+exports.scheduledPremiumTierHourlyDebit = onSchedule(
+  {
+    schedule: "0 * * * *",
+    timeZone: "Asia/Seoul",
+    region: "asia-northeast3",
+    memory: "256MiB",
+  },
+  async () => {
+    const db = admin.database();
+    const snap = await db.ref("premiumBillingQueue").get();
+    if (!snap.exists()) return;
+    const now = Date.now();
+    const entries = snap.val() || {};
+    for (const [uid, row] of Object.entries(entries)) {
+      if (!uid || !row || typeof row !== "object") continue;
+      const due = Number(row.nextDebitAt || 0);
+      if (!Number.isFinite(due) || due > now) continue;
+      const uSnap = await db.ref(`users/${uid}`).get();
+      const u = uSnap.exists() ? uSnap.val() : {};
+      if (!userPremiumServicesEnabledFromDoc(u) || !userPaidMemberFromDoc(u)) {
+        await db.ref(`premiumBillingQueue/${uid}`).remove();
+        continue;
+      }
+      const cost = 1;
+      const walletRef = db.ref(`users/${uid}/wallet`);
+      const tx = await walletRef.transaction((cur) => {
+        const base = cur && typeof cur === "object" ? cur : {};
+        const points = Math.max(0, Math.floor(Number(base.points || 0)));
+        if (points < cost) return undefined;
+        return { ...base, points: points - cost, updatedAt: nowMs() };
+      });
+      if (!tx.committed) {
+        await db.ref(`users/${uid}/premiumServicesEnabled`).remove();
+        await db.ref(`premiumBillingQueue/${uid}`).remove();
+        continue;
+      }
+      const after = Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
+      await appendPointLedger(db, uid, {
+        type: "consume",
+        amount: -cost,
+        balanceAfter: after,
+        requestType: "premiumServices",
+        requestId: "hourly",
+        requestPath: `premiumBillingQueue/${uid}`,
+        note: "premium hourly (1P)",
+        createdBy: "system",
+      });
+      await db.ref(`premiumBillingQueue/${uid}`).update({
+        nextDebitAt: Date.now() + 60 * 60 * 1000,
+        updatedAt: nowMs(),
+      });
+    }
+  }
+);
 
 /**
  * 액면분할: Admin SDK로 stocks + 전 users 스캔·갱신 (callable·일일 스케줄 공용)
@@ -4831,6 +5355,67 @@ exports.updateConnectionCount = onValueWritten(
   }
 );
 
+/** 티어3 전제(유료+프리미엄)가 깨지면 티어3 혜택 칭호 스킨 제거 (RTDB 기준, Google 연동은 Callable에서만 검증) */
+exports.onTier3TitleSkinsMaybeRevokeEntitlementsPaid = onValueWritten(
+  "/users/{uid}/entitlements/paidMember",
+  async (event) => {
+    const uid = String(event.params.uid || "").trim();
+    if (!uid) return;
+    const db = admin.database();
+    try {
+      const r = await maybeRevokeTier3BenefitTitleSkins(db, uid);
+      if (r.clearedStocks > 0) console.log("[onTier3TitleSkins] paidMember entitlements", uid, r);
+    } catch (e) {
+      console.error("[onTier3TitleSkins] paidMember entitlements", uid, e?.message || e);
+    }
+  }
+);
+
+exports.onTier3TitleSkinsMaybeRevokeEntitlementsPremium = onValueWritten(
+  "/users/{uid}/entitlements/premiumServicesEnabled",
+  async (event) => {
+    const uid = String(event.params.uid || "").trim();
+    if (!uid) return;
+    const db = admin.database();
+    try {
+      const r = await maybeRevokeTier3BenefitTitleSkins(db, uid);
+      if (r.clearedStocks > 0) console.log("[onTier3TitleSkins] premium entitlements", uid, r);
+    } catch (e) {
+      console.error("[onTier3TitleSkins] premium entitlements", uid, e?.message || e);
+    }
+  }
+);
+
+exports.onTier3TitleSkinsMaybeRevokeLegacyPaid = onValueWritten(
+  "/users/{uid}/paidMember",
+  async (event) => {
+    const uid = String(event.params.uid || "").trim();
+    if (!uid) return;
+    const db = admin.database();
+    try {
+      const r = await maybeRevokeTier3BenefitTitleSkins(db, uid);
+      if (r.clearedStocks > 0) console.log("[onTier3TitleSkins] paidMember legacy", uid, r);
+    } catch (e) {
+      console.error("[onTier3TitleSkins] paidMember legacy", uid, e?.message || e);
+    }
+  }
+);
+
+exports.onTier3TitleSkinsMaybeRevokeLegacyPremium = onValueWritten(
+  "/users/{uid}/premiumServicesEnabled",
+  async (event) => {
+    const uid = String(event.params.uid || "").trim();
+    if (!uid) return;
+    const db = admin.database();
+    try {
+      const r = await maybeRevokeTier3BenefitTitleSkins(db, uid);
+      if (r.clearedStocks > 0) console.log("[onTier3TitleSkins] premium root", uid, r);
+    } catch (e) {
+      console.error("[onTier3TitleSkins] premium root", uid, e?.message || e);
+    }
+  }
+);
+
 /**
  * 서킷 동결 시 RTDB 대역 외 푸시(선택): SOOP_CIRCUIT_FCM_TOPIC 이 설정된 경우에만 FCM topic 전송.
  * 앱에서 해당 토픽을 구독하면 알림을 RTDB 리스너 없이 받을 수 있음.
@@ -5038,9 +5623,11 @@ exports.onMarketHoursWriteSyncDatabaseRules = onValueWritten(
 
 /**
  * marketRank 갱신 — 스케줄/실시간 트리거에서 공용 사용.
+ * 거래량 TOP5는 includeVolumeTop5 가 false 이면 건너뜀(일일 자동 루틴 `marketRankRefresh` 등).
+ * 유료 회원 수동 갱신·관리자 Callable 은 true 로 전체 집계.
  * @returns {Promise<{skipped?:boolean,reason?:string,updatedAt?:number,stockRankCount?:number,coinRankCount?:number,stockVolTop5?:number,coinVolTop5?:number,stockTop100?:number,coinTop100?:number}>}
  */
-async function runMarketRankAggregation(db, { skipIfMarketClosed }) {
+async function runMarketRankAggregation(db, { skipIfMarketClosed, includeVolumeTop5 = true }) {
   const mhSnap = await db.ref("siteConfig/marketHours").get();
   const mh = mhSnap.exists() ? mhSnap.val() : null;
   const kst = nowKstDate();
@@ -5057,8 +5644,8 @@ async function runMarketRankAggregation(db, { skipIfMarketClosed }) {
   const coinsVal = coinsSnap.exists() ? coinsSnap.val() : {};
   const stockRank = buildPriceRankByIdFromMarketSnapshot(stocksVal);
   const coinRank = buildPriceRankByIdFromMarketSnapshot(coinsVal);
-  const stockVolTop5 = buildVolumeTop5FromMarketSnapshot(stocksVal);
-  const coinVolTop5 = buildVolumeTop5FromMarketSnapshot(coinsVal);
+  const stockVolTop5 = includeVolumeTop5 ? buildVolumeTop5FromMarketSnapshot(stocksVal) : [];
+  const coinVolTop5 = includeVolumeTop5 ? buildVolumeTop5FromMarketSnapshot(coinsVal) : [];
   const stockTop100 = buildTopPriceRowsFromMarketSnapshot(stocksVal, {
     limit: MARKET_TOP_RANK_LIMIT,
     isCoin: false,
@@ -5068,20 +5655,25 @@ async function runMarketRankAggregation(db, { skipIfMarketClosed }) {
     isCoin: true,
   });
   const updatedAt = Date.now();
-  await db.ref().update({
+  const patch = {
     "marketRank/stocks/byPrice": stockRank,
     "marketRank/coins/byPrice": coinRank,
-    "marketRank/stocks/byVolumeTop5": stockVolTop5,
-    "marketRank/coins/byVolumeTop5": coinVolTop5,
     "marketRank/top100/stocks": stockTop100,
     "marketRank/top100/coins": coinTop100,
     "marketRank/meta/updatedAt": updatedAt,
     "marketRank/meta/sortKey": `byPrice_v${MARKET_RANK_SORT_VERSION}`,
     "marketRank/meta/topLimit": MARKET_TOP_RANK_LIMIT,
-  });
+  };
+  if (includeVolumeTop5) {
+    patch["marketRank/stocks/byVolumeTop5"] = stockVolTop5;
+    patch["marketRank/coins/byVolumeTop5"] = coinVolTop5;
+    patch["marketRank/meta/volumeTop5UpdatedAt"] = updatedAt;
+  }
+  await db.ref().update(patch);
   const out = {
     skipped: false,
     updatedAt,
+    includeVolumeTop5,
     stockRankCount: Object.keys(stockRank).length,
     coinRankCount: Object.keys(coinRank).length,
     stockVolTop5: stockVolTop5.length,
@@ -5090,7 +5682,7 @@ async function runMarketRankAggregation(db, { skipIfMarketClosed }) {
     coinTop100: coinTop100.length,
   };
   console.log(
-    `[runMarketRankAggregation] ok stocks=${out.stockRankCount} coins=${out.coinRankCount} top100 stock=${out.stockTop100} coin=${out.coinTop100} volTop5 stock=${out.stockVolTop5} coin=${out.coinVolTop5}`
+    `[runMarketRankAggregation] ok volTop5=${includeVolumeTop5 ? "yes" : "no"} stocks=${out.stockRankCount} coins=${out.coinRankCount} top100 stock=${out.stockTop100} coin=${out.coinTop100} volTop5 stock=${out.stockVolTop5} coin=${out.coinVolTop5}`
   );
   return out;
 }
@@ -5115,7 +5707,7 @@ async function maybeRunMarketRankLiveRefresh(sourceTag) {
   try {
     const locked = await tryAcquireMarketRankRefreshLock(db, now);
     if (!locked) return;
-    const r = await runMarketRankAggregation(db, { skipIfMarketClosed: true });
+    const r = await runMarketRankAggregation(db, { skipIfMarketClosed: true, includeVolumeTop5: false });
     if (r.skipped) return;
     await db.ref("marketRank/meta/liveUpdatedAt").set(Date.now());
   } catch (e) {
@@ -5123,7 +5715,9 @@ async function maybeRunMarketRankLiveRefresh(sourceTag) {
   }
 }
 
-/** 관리자만 — marketRank 즉시 재집계 (장 마감 중에도 실행 가능) */
+const PAID_MARKET_RANK_VOLUME_REFRESH_COOLDOWN_MS = 15 * 60 * 1000;
+
+/** 관리자만 — marketRank 즉시 재집계 (장 마감 중에도 실행 가능). `omitVolumeTop5: true` 이면 거래량 TOP5 노드는 건너뜀(일일 자동 루틴과 동일). */
 exports.adminRefreshMarketRanks = onCall(
   {
     cors: true,
@@ -5136,8 +5730,53 @@ exports.adminRefreshMarketRanks = onCall(
       throw new HttpsError("permission-denied", "Admin only.");
     }
     const db = admin.database();
-    const r = await runMarketRankAggregation(db, { skipIfMarketClosed: false });
+    const omitVol = request.data?.omitVolumeTop5 === true;
+    const r = await runMarketRankAggregation(db, {
+      skipIfMarketClosed: false,
+      includeVolumeTop5: !omitVol,
+    });
     return { ok: true, ...r };
+  }
+);
+
+/** 유료 회원 — 주식·코인 거래량 TOP5 포함 전체 marketRank 재집계 (15분당 1회, 장 운영 중만) */
+exports.refreshMarketRanksPaidMember = onCall(
+  { cors: true, timeoutSeconds: 300, memory: "512MiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    if (!isGoogleLinkedTradeAuth(request.auth)) {
+      throw new HttpsError("failed-precondition", "Google 연동 계정만 사용할 수 있습니다.");
+    }
+    const uid = request.auth.uid;
+    const db = admin.database();
+    const uSnap = await db.ref(`users/${uid}`).get();
+    const u = uSnap.exists() ? uSnap.val() : {};
+    if (!userPaidMemberFromDoc(u)) {
+      throw new HttpsError("failed-precondition", "유료 회원만 거래량 순위를 갱신할 수 있습니다.");
+    }
+    const lastRef = db.ref(`users/${uid}/session/lastPaidMarketRankVolumeRefreshAt`);
+    const lastSnap = await lastRef.get();
+    const lastMs = lastSnap.exists() ? Number(lastSnap.val()) : 0;
+    const now = Date.now();
+    if (Number.isFinite(lastMs) && lastMs > 0 && now - lastMs < PAID_MARKET_RANK_VOLUME_REFRESH_COOLDOWN_MS) {
+      const waitMs = PAID_MARKET_RANK_VOLUME_REFRESH_COOLDOWN_MS - (now - lastMs);
+      const waitMin = Math.max(1, Math.ceil(waitMs / 60000));
+      throw new HttpsError(
+        "resource-exhausted",
+        `갱신은 ${Math.round(PAID_MARKET_RANK_VOLUME_REFRESH_COOLDOWN_MS / 60000)}분에 한 번만 가능합니다. (약 ${waitMin}분 후 다시 시도)`
+      );
+    }
+    const r = await runMarketRankAggregation(db, { skipIfMarketClosed: true, includeVolumeTop5: true });
+    if (r.skipped) {
+      throw new HttpsError("failed-precondition", "장 운영 시간에만 갱신할 수 있습니다.");
+    }
+    await lastRef.set(now);
+    return {
+      ok: true,
+      cooldownMs: PAID_MARKET_RANK_VOLUME_REFRESH_COOLDOWN_MS,
+      nextAllowedAt: now + PAID_MARKET_RANK_VOLUME_REFRESH_COOLDOWN_MS,
+      ...r,
+    };
   }
 );
 
@@ -5152,6 +5791,45 @@ exports.adminRunAssetRanking = onCall(
   }
 );
 
+/** 티어3 — 전체 유저 자산 TOP100 집계(무거움). 계정당 쿨다운으로 남용 방지 */
+const ASSET_RANKING_TIER3_REFRESH_COOLDOWN_MS = 15 * 60 * 1000;
+exports.runAssetRankingTier3 = onCall(
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    if (!isGoogleLinkedTradeAuth(request.auth)) {
+      throw new HttpsError("failed-precondition", "Google 연동 계정만 사용할 수 있습니다.");
+    }
+    const uid = request.auth.uid;
+    const db = admin.database();
+    const uSnap = await db.ref(`users/${uid}`).get();
+    const u = uSnap.exists() ? uSnap.val() || {} : {};
+    if (resolveTradeTierFromUser(request.auth, u) !== 3) {
+      throw new HttpsError("failed-precondition", "자산 랭킹 집계는 티어3에서만 실행할 수 있습니다.");
+    }
+    const lastRef = db.ref(`users/${uid}/session/lastAssetRankingTier3RunAt`);
+    const lastSnap = await lastRef.get();
+    const lastMs = lastSnap.exists() ? Number(lastSnap.val()) : 0;
+    const now = Date.now();
+    if (Number.isFinite(lastMs) && lastMs > 0 && now - lastMs < ASSET_RANKING_TIER3_REFRESH_COOLDOWN_MS) {
+      const waitMs = ASSET_RANKING_TIER3_REFRESH_COOLDOWN_MS - (now - lastMs);
+      const waitMin = Math.max(1, Math.ceil(waitMs / 60000));
+      throw new HttpsError(
+        "resource-exhausted",
+        `집계는 ${Math.round(ASSET_RANKING_TIER3_REFRESH_COOLDOWN_MS / 60000)}분에 한 번만 요청할 수 있습니다. (약 ${waitMin}분 후 다시 시도)`
+      );
+    }
+    const r = await runDailyAssetRankingServer(db);
+    await lastRef.set(now);
+    return {
+      ok: true,
+      cooldownMs: ASSET_RANKING_TIER3_REFRESH_COOLDOWN_MS,
+      nextAllowedAt: now + ASSET_RANKING_TIER3_REFRESH_COOLDOWN_MS,
+      ...r,
+    };
+  }
+);
+
 exports.adminRunStockHolderTop3 = onCall(
   { cors: true, timeoutSeconds: 540, memory: "1GiB" },
   async (request) => {
@@ -5160,29 +5838,6 @@ exports.adminRunStockHolderTop3 = onCall(
     }
     const db = admin.database();
     return await runDailyStockHolderTop3Server(db);
-  }
-);
-
-/**
- * 주가/코인 시가총액 랭킹과 동일 기준(byPrice) 순위를 marketRank 에 기록.
- * 비용 절감: 15분마다만 실행, KST 기준 장 마감 시 stocks/coins 전체 읽기 생략.
- */
-exports.refreshMarketPriceRanks = onSchedule(
-  {
-    schedule: "every 15 minutes",
-    region: "asia-northeast3",
-    timeoutSeconds: 300,
-    memory: "512MiB",
-  },
-  async () => {
-    const db = admin.database();
-    try {
-      const r = await runMarketRankAggregation(db, { skipIfMarketClosed: true });
-      if (r.skipped) return;
-    } catch (e) {
-      console.error("[refreshMarketPriceRanks]", e?.message || e);
-      throw e;
-    }
   }
 );
 
@@ -5750,7 +6405,10 @@ async function runDailyOneRoutine(db, it) {
     return { type: t, result: await runDailyClearCircuitFreezesServer(db) };
   }
   if (t === "marketRankRefresh") {
-    const r = await runMarketRankAggregation(db, { skipIfMarketClosed: false });
+    const r = await runMarketRankAggregation(db, {
+      skipIfMarketClosed: false,
+      includeVolumeTop5: false,
+    });
     return { type: t, result: r };
   }
   if (t === "regularHoursSet") {

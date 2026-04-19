@@ -565,6 +565,34 @@
         rankingActive = false;
     }
 
+    function isGoogleLinkedFirebaseUser(u) {
+        try {
+            if (!u || u.isAnonymous) return false;
+            const list = u.providerData;
+            if (!list || !list.length) return false;
+            return list.some((p) => p && p.providerId === 'google.com');
+        } catch (_) {
+            return false;
+        }
+    }
+    function userPaidMemberFromDoc(u) {
+        if (!u || typeof u !== 'object') return false;
+        if (u.entitlements && u.entitlements.paidMember === true) return true;
+        return u.paidMember === true;
+    }
+    function userPremiumServicesEnabledFromDoc(u) {
+        if (!u || typeof u !== 'object') return false;
+        if (u.premiumServicesEnabled === true) return true;
+        const ent = u.entitlements && typeof u.entitlements === 'object' ? u.entitlements : null;
+        return !!(ent && ent.premiumServicesEnabled === true);
+    }
+    /** 메인 앱 getClientTradeTier === 3 과 동일: Google + 유료 + 프리미엄 ON */
+    function isTier3LiveRankingViewer(user, userDoc) {
+        if (!isGoogleLinkedFirebaseUser(user)) return false;
+        const u = userDoc && typeof userDoc === 'object' ? userDoc : {};
+        return userPaidMemberFromDoc(u) && userPremiumServicesEnabledFromDoc(u);
+    }
+
     async function getRankAccess(user) {
         const out = { main: false, challenge: false };
         if (!user?.uid) return out;
@@ -574,12 +602,16 @@
             return out;
         }
         try {
-            const [entSnap, challengeSnap] = await Promise.all([
+            const [entSnap, userSnap, challengeSnap] = await Promise.all([
                 get(ref(db, `users/${user.uid}/entitlements/liveRankingTop100ExpiresAt`)),
+                get(ref(db, `users/${user.uid}`)),
                 get(ref(db, `users/${user.uid}/entitlements/challengeSupporterVerified`))
             ]);
+            const udoc = userSnap.exists() ? userSnap.val() || {} : {};
             const expiresAt = Number(entSnap.val() || 0);
-            out.main = Number.isFinite(expiresAt) && expiresAt > Date.now();
+            const byExpiry = Number.isFinite(expiresAt) && expiresAt > Date.now();
+            const byTier3 = isTier3LiveRankingViewer(user, udoc);
+            out.main = byExpiry || byTier3;
             out.challenge = challengeSnap.exists() ? challengeSnap.val() === true : false;
             return out;
         } catch (_) {
