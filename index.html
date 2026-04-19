@@ -11696,7 +11696,7 @@ async function sellAllHoldingsByFunction(stockId, market, opts) {
         const f = Number(opts.fraction);
         if (Number.isFinite(f) && f > 0 && f <= 1) fraction = f;
     }
-    const isAdmLiq = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    const isAdmLiq = isPrimarySiteAdmin();
     if (fraction < 1 - 1e-9 && !isAdmLiq && getClientTradeTier() < 3) {
         alert('부분(50%) 일괄 매도는 유료 프리미엄(티어3)에서만 이용할 수 있습니다.');
         return;
@@ -11717,8 +11717,7 @@ async function sellAllHoldingsByFunction(stockId, market, opts) {
         const tradeTsCommitted = serverNowMs();
         lastTradeTime = tradeTsCommitted;
         if (userUID) {
-            const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-            if (isAdminUser) {
+            if (isPrimarySiteAdmin()) {
                 clearOffPeakTradeTimeStorageForUid(userUID);
             } else if (isMarketOpen() && !isRegularMarket()) {
                 persistOffPeakTradeTime(tradeTsCommitted);
@@ -11853,7 +11852,11 @@ async function sellAllHoldingsByFunction(stockId, market, opts) {
         }, 0);
     } catch (e) {
         console.error('[MAX SELL][function]', e);
-        alert(fraction < 1 - 1e-9 ? '일괄 매도(50%) 중 오류가 발생했습니다.' : '전량매도 중 오류가 발생했습니다.');
+        const det = String(e?.message || e?.details || e?.code || '').trim();
+        const hint = det ? `\n\n(${det})` : '';
+        alert(
+            (fraction < 1 - 1e-9 ? '일괄 매도(50%) 중 오류가 발생했습니다.' : '전량매도 중 오류가 발생했습니다.') + hint
+        );
     } finally {
         isLiquidatingAll = false;
         isTrading = null;

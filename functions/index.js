@@ -17,6 +17,8 @@ setGlobalOptions({
 });
 
 const ADMIN_EMAIL = "skftodwocks2@gmail.com";
+/** Callable JWT에 email 클레임이 없는 경우 대비(선택). `firebase functions:config:set admin.uid=...` 등으로 설정 */
+const ADMIN_UID_FALLBACK = String(process.env.ADMIN_UID || "").trim();
 
 /** 메인 앱과 동일: 마지막 하트비트 후 이 시간 초과 세션은 집계에서 제외 (index.html 이전 countActivePresenceSessions 와 동일) */
 const PRESENCE_TTL_MS = 6 * 60 * 1000;
@@ -40,7 +42,17 @@ function countActivePresenceSessionsFromVal(data, now = Date.now()) {
 }
 
 function isAdminAuth(auth) {
-  const em = String(auth?.token?.email || "").toLowerCase();
+  if (!auth?.uid) return false;
+  if (ADMIN_UID_FALLBACK && auth.uid === ADMIN_UID_FALLBACK) return true;
+  const t = auth.token || {};
+  let em = String(t.email || "").trim().toLowerCase();
+  if (!em && t.firebase && typeof t.firebase === "object") {
+    const idents = t.firebase.identities;
+    if (idents && typeof idents === "object") {
+      const arr = idents.email;
+      if (Array.isArray(arr) && arr.length) em = String(arr[0] || "").trim().toLowerCase();
+    }
+  }
   return em === ADMIN_EMAIL.toLowerCase();
 }
 
