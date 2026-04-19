@@ -7759,7 +7759,12 @@ function updateMarketTabChrome() {
 
 window.setActiveMarket = function (mode) {
     const m = mode === 'coin' ? 'coin' : 'stock';
-    if (m === 'coin' && !canUseCoinMarket()) return;
+    if (m === 'coin' && !canUseCoinMarket()) {
+        if (getClientTradeTier() < 2) {
+            alert('코인 시장은 Google 계정 연동(티어2 이상) 후 이용할 수 있습니다.\n화면 상단의 구글로 전환 버튼으로 로그인해 주세요.');
+        }
+        return;
+    }
     if (m === activeMarket) return;
     activeMarket = m;
     try { sessionStorage.setItem('soop_active_market', activeMarket); } catch (_) { /* noop */ }
@@ -10134,6 +10139,10 @@ function filterByTimeframe(candles, timeframeMin) {
 
 // ── 차트 모달 열기 ───────────────────────────────────────────
 window.openChartModal = function(stockId) {
+    if (getClientTradeTier() < 2) {
+        alert('차트는 Google 계정 연동(티어2 이상) 후 이용할 수 있습니다.\n구글 로그인 및 티어 업그레이드가 필요합니다.');
+        return;
+    }
     chartModalMarket = isCoinMarket() ? 'coin' : 'stock';
     const s = chartModalMarket === 'coin'
         ? (favoriteCoins[stockId] || ownedCoins[stockId] || searchResults[stockId] || allCoins.find((x) => x.id === stockId))
@@ -10361,9 +10370,14 @@ document.getElementById('chart-modal-overlay').addEventListener('click', (e) => 
 // ── 기간 탭 ─────────────────────────────────────────────────
 document.querySelectorAll('.tf-tab').forEach(tab => {
     tab.addEventListener('click', function () {
+        const mins = parseInt(this.dataset.minutes);
+        if (getClientTradeTier() < 3 && mins > 60) {
+            alert('1시간을 초과하는 타임프레임(3시간·6시간)은 티어3 전용 혜택입니다.\nGoogle 연동 후 유료 회원 + 프리미엄 옵션을 켜 주세요.');
+            return;
+        }
         document.querySelectorAll('.tf-tab').forEach(t => t.classList.remove('active'));
         this.classList.add('active');
-        chartTimeframeMin = parseInt(this.dataset.minutes);
+        chartTimeframeMin = mins;
         renderCandleChart();
     });
 });
@@ -10772,7 +10786,7 @@ async function runAutoTradeLoop(id) {
 
 function startAutoTrade(id, side, source) {
     if (getClientTradeTier() < 3) {
-        alert('자동매매는 유료 프리미엄(티어3)에서만 사용할 수 있습니다.');
+        alert('자동매매는 티어3 전용 혜택입니다.\nGoogle 연동 후 유료 회원 + 프리미엄 옵션을 켜 주세요.');
         return;
     }
     if (autoTradeState[id]) stopAutoTrade(id);
@@ -11490,7 +11504,7 @@ function setupInverseModeUi() {
     toggle.addEventListener('change', () => {
         if (getClientTradeTier() < 3) {
             toggle.checked = false;
-            alert('인버스 모드는 유료 프리미엄(티어3)에서만 사용할 수 있습니다.');
+            alert('인버스 모드는 티어3 전용 혜택입니다.\nGoogle 연동 후 유료 회원 + 프리미엄 옵션을 켜 주세요.');
             return;
         }
         const on = toggle.checked;
@@ -11734,7 +11748,7 @@ async function sellAllHoldingsByFunction(stockId, market, opts) {
     }
     const isAdmLiq = isPrimarySiteAdmin();
     if (fraction < 1 - 1e-9 && !isAdmLiq && getClientTradeTier() < 3) {
-        alert('부분(50%) 일괄 매도는 유료 프리미엄(티어3)에서만 이용할 수 있습니다.');
+        alert('부분(50%) 일괄 매도는 티어3 전용 혜택입니다.\nGoogle 연동 후 유료 회원 + 프리미엄 옵션을 켜 주세요.');
         return;
     }
 
@@ -11928,12 +11942,12 @@ window.trade = async function (id, type, qty = 1, opts = {}) {
         return;
     }
     if (!isAdmin && getClientTradeTier() < 3 && autoTrade) {
-        tradeNotify('자동매매는 유료 프리미엄(티어3)에서만 사용할 수 있습니다.');
+        tradeNotify('자동매매는 티어3 전용 혜택입니다.');
         abortAutoIf();
         return;
     }
     if (!isAdmin && getClientTradeTier() < 3 && isInverseModeEnabled()) {
-        tradeNotify('인버스 모드는 유료 프리미엄(티어3)에서만 사용할 수 있습니다. 설정을 끈 뒤 다시 시도해 주세요.');
+        tradeNotify('인버스 모드는 티어3 전용 혜택입니다. 설정을 끈 뒤 다시 시도해 주세요.');
         abortAutoIf();
         return;
     }
@@ -12383,6 +12397,10 @@ const userRef = ref(db, `users/${tradeUid}`);
 // ── 포트폴리오 탭 전환 ──────────────────────────────────────
 window.switchPortfolioTab = function(tab) {
     if (tab === 'coins' && !canUseCoinMarket()) return;
+    if (tab === 'ranking' && getClientTradeTier() < 3) {
+        alert('자산 랭킹은 티어3 전용 혜택입니다.\nGoogle 연동 후 유료 회원 + 프리미엄 옵션을 켜 주세요.');
+        return;
+    }
     document.getElementById('portfolio-panel-stocks').style.display   = tab === 'stocks'  ? 'flex' : 'none';
     document.getElementById('portfolio-panel-coins').style.display    = tab === 'coins'  ? 'flex' : 'none';
     document.getElementById('portfolio-panel-ranking').style.display  = tab === 'ranking' ? 'block' : 'none';
@@ -13397,6 +13415,10 @@ window.openStarBalloonGiftForRanking = function() {
 };
 
 window.openLiveRankingAccessModal = function() {
+    if (getClientTradeTier() < 2) {
+        alert('실시간 TOP100 랭킹은 Google 계정 연동(티어2 이상)이 필요합니다.\n화면 상단의 구글로 전환 버튼으로 로그인해 주세요.');
+        return;
+    }
     prepareMobileModalLayer();
     updateLiveRankingPrimaryActionButton();
     document.getElementById('live-ranking-access-modal')?.classList.add('active');
@@ -13901,6 +13923,10 @@ window.setSelectedTitleThemePreset = function(id) {
 // ── 홍보 신청 제출 ───────────────────────────────────────────
 window.openTitlePurchaseModal = async function() {
     if (!chartModalStockId) return;
+    if (getClientTradeTier() < 3) {
+        alert('종목 칭호 스킨은 티어3 전용 혜택입니다.\nGoogle 연동 후 유료 회원 + 프리미엄 옵션을 켜 주세요.');
+        return;
+    }
     const modal = document.getElementById('title-purchase-modal');
     const stockNameEl = document.getElementById('title-preview-stock-name');
     const msgEl = document.getElementById('title-purchase-msg');
