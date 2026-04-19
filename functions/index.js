@@ -4547,6 +4547,92 @@ async function rebuildQuoteAllowlistForUser(db, auth, uid, u) {
   return { ok: true, tier, stockIds: allow };
 }
 
+/** Admin: Auth UserRecord로 구글 Callable 토큰 형태를 맞춰 quoteAllowlist 갱신 (스케줄러·관리 배치용) */
+async function rebuildQuoteAllowlistForUidServer(db, uid) {
+  const u = String(uid || "").trim();
+  if (!u) return { ok: false, skipped: true };
+  let authLike = null;
+  try {
+    const rec = await admin.auth().getUser(u);
+    const google = Array.isArray(rec.providerData) && rec.providerData.some((p) => p && p.providerId === "google.com");
+    if (!google) return { ok: false, skipped: true };
+    authLike = {
+      uid: u,
+      token: {
+        firebase: { sign_in_provider: "google.com" },
+        email: rec.email || "",
+      },
+    };
+  } catch (_) {
+    return { ok: false, skipped: true };
+  }
+  const uSnap = await db.ref(`users/${u}`).get();
+  const userVal = uSnap.exists() ? uSnap.val() || {} : {};
+  return rebuildQuoteAllowlistForUser(db, authLike, u, userVal);
+}
+
+/** 티어3 무료 혜택으로 등록된 랭킹 신청 레코드인지 (포인트 결제 건과 구분) */
+function isTier3BenefitRankingRecord(row) {
+  if (!row || typeof row !== "object") return false;
+  if (String(row.accessSource || "") === "tier3") return true;
+  if (row.tier3Eligibility === true) return true;
+  if (String(row.paymentStatus || "") === "tier3") return true;
+  return false;
+}
+
+/**
+ * 프리미엄 OFF·별포인트 소진 등으로 티어3이 깨졌을 때 서버 상태 정리:
+ * 칭호 스킨, 자산/실시간 Top100 티어3 무료 열람 레코드, quoteAllowlist(티어2 한도로 재계산).
+ */
+async function revokeTier3BenefitsAfterPremiumTurnedOff(db, uid) {
+  const u = String(uid || "").trim();
+  if (!u) return { ok: false };
+  try {
+    await maybeRevokeTier3BenefitTitleSkins(db, u);
+  } catch (e) {
+    console.warn("[revokeTier3BenefitsAfterPremiumTurnedOff] title skins", u, e?.message || e);
+  }
+
+  const updates = {};
+  try {
+    const arSnap = await db.ref(`assetRankingRequests/${u}`).get();
+    if (arSnap.exists()) {
+      const ar = arSnap.val() || {};
+      if (isTier3BenefitRankingRecord(ar)) updates[`assetRankingRequests/${u}`] = null;
+    }
+  } catch (e) {
+    console.warn("[revokeTier3BenefitsAfterPremiumTurnedOff] assetRankingRequests", u, e?.message || e);
+  }
+
+  try {
+    const lrSnap = await db.ref(`liveRankingTop100Requests/${u}`).get();
+    if (lrSnap.exists()) {
+      const lr = lrSnap.val() || {};
+      if (isTier3BenefitRankingRecord(lr)) {
+        updates[`liveRankingTop100Requests/${u}`] = null;
+        updates[`users/${u}/entitlements/liveRankingTop100ExpiresAt`] = null;
+      }
+    }
+  } catch (e) {
+    console.warn("[revokeTier3BenefitsAfterPremiumTurnedOff] liveRankingTop100Requests", u, e?.message || e);
+  }
+
+  if (Object.keys(updates).length) {
+    try {
+      await db.ref().update(updates);
+    } catch (e) {
+      console.warn("[revokeTier3BenefitsAfterPremiumTurnedOff] multi-update", u, e?.message || e);
+    }
+  }
+
+  try {
+    await rebuildQuoteAllowlistForUidServer(db, u);
+  } catch (e) {
+    console.warn("[revokeTier3BenefitsAfterPremiumTurnedOff] quote allowlist", u, e?.message || e);
+  }
+  return { ok: true };
+}
+
 /** 티어 한도에 맞춰 주식 시세 구독 허용 목록(RTD quoteAllowlist) 갱신 — Tier2+ */
 exports.reconcileUserQuoteSubscriptions = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
@@ -4593,11 +4679,9 @@ exports.setPremiumServicesEnabled = onCall({ cors: true, timeoutSeconds: 60, mem
     await db.ref(`users/${uid}/premiumServicesEnabled`).remove();
     await db.ref(`premiumBillingQueue/${uid}`).remove();
     try {
-      const uSnap2 = await db.ref(`users/${uid}`).get();
-      const u2 = uSnap2.exists() ? uSnap2.val() : {};
-      await rebuildQuoteAllowlistForUser(db, request.auth, uid, u2);
+      await revokeTier3BenefitsAfterPremiumTurnedOff(db, uid);
     } catch (e) {
-      console.warn("[setPremiumServicesEnabled] quote allowlist", e?.message || e);
+      console.warn("[setPremiumServicesEnabled] revoke tier3 benefits", e?.message || e);
     }
     return { ok: true, premiumServicesEnabled: false };
   }
@@ -4660,6 +4744,11 @@ exports.adminSetPaidMember = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     await db.ref(`users/${target}/premiumServicesEnabled`).remove();
     await db.ref(`premiumBillingQueue/${target}`).remove();
     try {
+      await revokeTier3BenefitsAfterPremiumTurnedOff(db, target);
+    } catch (e) {
+      console.warn("[adminSetPaidMember] revoke tier3 benefits", e?.message || e);
+    }
+    try {
       await db.ref(`users/${target}/quoteAllowlist`).remove();
     } catch (_) {
       /* noop */
@@ -4689,6 +4778,11 @@ exports.scheduledPremiumTierHourlyDebit = onSchedule(
       const u = uSnap.exists() ? uSnap.val() : {};
       if (!userPremiumServicesEnabledFromDoc(u) || !userPaidMemberFromDoc(u)) {
         await db.ref(`premiumBillingQueue/${uid}`).remove();
+        try {
+          await revokeTier3BenefitsAfterPremiumTurnedOff(db, uid);
+        } catch (e) {
+          console.warn("[scheduledPremiumTierHourlyDebit] revoke tier3 benefits (stale queue)", uid, e?.message || e);
+        }
         continue;
       }
       const cost = 1;
@@ -4702,6 +4796,11 @@ exports.scheduledPremiumTierHourlyDebit = onSchedule(
       if (!tx.committed) {
         await db.ref(`users/${uid}/premiumServicesEnabled`).remove();
         await db.ref(`premiumBillingQueue/${uid}`).remove();
+        try {
+          await revokeTier3BenefitsAfterPremiumTurnedOff(db, uid);
+        } catch (e) {
+          console.warn("[scheduledPremiumTierHourlyDebit] revoke tier3 benefits (insufficient points)", uid, e?.message || e);
+        }
         continue;
       }
       const after = Math.max(0, Math.floor(Number(tx.snapshot.val()?.points || 0)));
@@ -6574,4 +6673,3 @@ exports.dailyAutoRunner = onSchedule(
     }
   }
 );
-
