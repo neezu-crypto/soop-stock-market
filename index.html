@@ -6436,14 +6436,23 @@ function inferStockIdFromQtyInput(el) {
     return raw.slice(4);
 }
 
+const PRIMARY_SITE_ADMIN_EMAIL_LC = 'skftodwocks2@gmail.com';
+/** 메인 앱 관리자 — 모바일 등에서 `email` 대소문자만 달라도 전체 구독·점검 우회·검색 보강이 동작하도록 */
+function isPrimarySiteAdmin(user) {
+    const em = String((user != null ? user : auth.currentUser)?.email || '')
+        .trim()
+        .toLowerCase();
+    return em === PRIMARY_SITE_ADMIN_EMAIL_LC;
+}
+
 /** 관리자만 stocks/ 전체 onValue — 일반 유저는 즐겨찾기·보유 per-path만으로 RTDB 다운로드 대폭 절감 */
 function shouldUseFullStocksTreeListener() {
-    return auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    return isPrimarySiteAdmin();
 }
 
 /** 코인 시장도 주식과 동일: 관리자만 coins/ 전체 onValue — 일반 유저는 coins/{id} per-path만 */
 function shouldUseFullCoinsTreeListener() {
-    return auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    return isPrimarySiteAdmin();
 }
 
 function upsertAllStocksCacheRow(row) {
@@ -7486,7 +7495,7 @@ function isGoogleLinkedFirebaseUser() {
 /** 서버 trade 티어와 동일: 1=익명·비구글, 2=구글(프리미엄 off), 3=유료+프리미엄 on */
 function getClientTradeTier() {
     try {
-        if (auth.currentUser?.email === 'skftodwocks2@gmail.com') return 3;
+        if (isPrimarySiteAdmin()) return 3;
         const u = auth?.currentUser;
         if (!u || u.isAnonymous) return 1;
         if (!isGoogleLinkedFirebaseUser()) return 1;
@@ -7529,8 +7538,7 @@ let mainStocksSyncMode = null; // 'closed' | 'regular' | 'offpeak'
 
 /** siteConfig.marketHours: open/close = 전체 장 운영, regularOpen/regularClose = 정규장(실시간 구간) */
 function getStockSyncMode() {
-    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-    if (isAdmin) return 'regular';
+    if (isPrimarySiteAdmin()) return 'regular';
     const u = auth?.currentUser;
     if (u?.isAnonymous && siteConfigReady && !siteConfig.maintenance) {
         const mh = siteConfig.marketHours;
@@ -7857,7 +7865,7 @@ function isChallengeTournamentModeActive() {
 
 function canUserCreateChallengeRoomInApp() {
     if (!isChallengeTournamentModeActive()) return true;
-    return (auth.currentUser?.email || '').toLowerCase() === 'skftodwocks2@gmail.com';
+    return isPrimarySiteAdmin();
 }
 
 /** 이 카드 종목이 현재 참가 중인 챌린지 방의 종목이고 세션 미종료 */
@@ -8869,8 +8877,7 @@ function setMarketUiReady(ready) {
 
 /** 거래 UI(메인 리스트) 표시 가능 — siteConfig 반영 후 오픈(또는 시간 제한 없음)일 때만 true */
 function isTradingUiUnlocked() {
-    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-    if (isAdmin) return true;
+    if (isPrimarySiteAdmin()) return true;
     if (!siteConfigReady) return false;
     if (siteConfig?.maintenance) return false;
     const mh = siteConfig?.marketHours;
@@ -8901,7 +8908,7 @@ function applyMarketState() {
     const timerEl = document.getElementById('maintenance-timer');
     if (!overlay) return;
 
-    const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    const isAdminUser = isPrimarySiteAdmin();
 
     // ── 1. 관리자: siteConfig 대기 없이 즉시 우회 (실시간 유지) ──
     if (isAdminUser) {
@@ -9079,7 +9086,7 @@ function applyMarketState() {
     } finally {
         try {
             updateSyncStrategy();
-            const admin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+            const admin = isPrimarySiteAdmin();
             if (!admin) {
                 const nr = isRegularMarket();
                 if (lastApplyRegular === false && nr === true) {
@@ -9377,8 +9384,7 @@ function tryCloseIntro() {
     const maintEl       = document.getElementById('maintenance-overlay');
     const maintBlocking = maintEl && window.getComputedStyle(maintEl).display !== 'none';
 
-    const isAdminUser = auth.currentUser?.email === 'skftodwocks2@gmail.com';
-    if (isAdminUser) {
+    if (isPrimarySiteAdmin()) {
         applyMarketState();
         if (introOverlay && !introOverlay.classList.contains('hidden')) {
             setTimeout(() => { introOverlay.classList.add('hidden'); }, 300);
@@ -14768,7 +14774,7 @@ window.addEventListener('blur', () => {
 function applyStocksMode() {
     logAuthTrail('[sync-strategy] applyStocksMode START');
     const mh      = siteConfig.marketHours;
-    const isAdmin = auth.currentUser?.email === 'skftodwocks2@gmail.com';
+    const isAdmin = isPrimarySiteAdmin();
 
     // 마감 시간 → 모든 구독 중단 (관리자 제외)
     if (!isAdmin && mh && mh.enabled && !isMarketOpen()) {
@@ -15735,6 +15741,21 @@ function normalizeSearchKeyword(v) {
     return sharedNormalizeSearchKeyword(v);
 }
 
+/** 인덱스·로컬 캐시가 모바일 등에서 비어도, 관리자는 메모리의 stocks/coins 스냅샷으로 종목명 검색을 보강 */
+function augmentStockNameCacheFromAdminLiveTables() {
+    if (!isPrimarySiteAdmin()) return;
+    (allStocks || []).forEach((row) => {
+        const id = String(row?.id || '').trim();
+        const n = String(row?.name || '').trim();
+        if (id && n && !stockNameCache[id]) stockNameCache[id] = n;
+    });
+    (allCoins || []).forEach((row) => {
+        const id = String(row?.id || '').trim();
+        const n = String(row?.name || '').trim();
+        if (id && n && !stockNameCache[id]) stockNameCache[id] = n;
+    });
+}
+
 // 검색어 입력 처리 — 이름 캐시 기반 검색 후 가격 조회
 async function handleSearch(query) {
     const listDiv  = document.getElementById('stock-list');
@@ -15773,6 +15794,7 @@ async function handleSearch(query) {
             await loadLegacyFullNameCachesIntoMemoryDedup();
         }
         if (myGen !== searchRequestGen) return;
+        augmentStockNameCacheFromAdminLiveTables();
 
         const coinMode = isCoinMarket();
         const rawMatches = [];
