@@ -4470,6 +4470,8 @@ const reconcileUserQuoteSubscriptionsFn = httpsCallable(fns, 'reconcileUserQuote
 const refreshMarketRanksPaidMemberFn = httpsCallable(fns, 'refreshMarketRanksPaidMember');
 const runAssetRankingTier3Fn = httpsCallable(fns, 'runAssetRankingTier3');
 const adminSetPaidMemberFn = httpsCallable(fns, 'adminSetPaidMember');
+/** 점검 모드 등으로 클라이언트 검색 인덱스가 비었을 때 관리자만 서버에서 종목명 매칭 */
+const adminStockSearchSubstringFn = httpsCallable(fns, 'adminStockSearchSubstring');
 let myStarPoints = 0;
 
 function renderStarPointsUi() {
@@ -6437,12 +6439,34 @@ function inferStockIdFromQtyInput(el) {
 }
 
 const PRIMARY_SITE_ADMIN_EMAIL_LC = 'skftodwocks2@gmail.com';
-/** 메인 앱 관리자 — 모바일 등에서 `email` 대소문자만 달라도 전체 구독·점검 우회·검색 보강이 동작하도록 */
+/**
+ * Cloud Functions `ADMIN_UID` 와 동일한 UID를 넣으면, 모바일 JWT에 email 이 비어 있어도 관리자로 인식합니다.
+ * (비워 두면 이메일·providerData 이메일만 사용)
+ */
+const PRIMARY_SITE_ADMIN_UID_FALLBACK = '';
+
+function getPrimarySiteAdminEmailLower(user) {
+    const u = user != null ? user : auth?.currentUser;
+    if (!u) return '';
+    const direct = String(u.email || '').trim().toLowerCase();
+    if (direct) return direct;
+    try {
+        const pd = Array.isArray(u.providerData) ? u.providerData : [];
+        for (let i = 0; i < pd.length; i++) {
+            const em = String(pd[i]?.email || '').trim().toLowerCase();
+            if (em) return em;
+        }
+    } catch (_) { /* noop */ }
+    return '';
+}
+
+/** 메인 앱 관리자 — 모바일 등에서 email 누락·대소문자 대응·선택 UID 폴백 */
 function isPrimarySiteAdmin(user) {
-    const em = String((user != null ? user : auth.currentUser)?.email || '')
-        .trim()
-        .toLowerCase();
-    return em === PRIMARY_SITE_ADMIN_EMAIL_LC;
+    const u = user != null ? user : auth?.currentUser;
+    if (!u) return false;
+    const uid = String(u.uid || '').trim();
+    if (PRIMARY_SITE_ADMIN_UID_FALLBACK && uid === PRIMARY_SITE_ADMIN_UID_FALLBACK) return true;
+    return getPrimarySiteAdminEmailLower(u) === PRIMARY_SITE_ADMIN_EMAIL_LC;
 }
 
 /** 관리자만 stocks/ 전체 onValue — 일반 유저는 즐겨찾기·보유 per-path만으로 RTDB 다운로드 대폭 절감 */
@@ -15800,21 +15824,46 @@ async function handleSearch(query) {
         augmentStockNameCacheFromAdminLiveTables();
 
         const coinMode = isCoinMarket();
-        const rawMatches = [];
-        Object.entries(stockNameCache).forEach(([id, name]) => {
-            const nameNorm = normalizeSearchKeyword(name);
-            if (!nameNorm.includes(q)) return;
-            rawMatches.push({
-                id,
-                name,
-                nameNorm,
-                idx: nameNorm.indexOf(q)
+        const buildRawSearchMatches = () => {
+            const out = [];
+            Object.entries(stockNameCache).forEach(([id, name]) => {
+                const nameNorm = normalizeSearchKeyword(name);
+                if (!nameNorm.includes(q)) return;
+                out.push({
+                    id,
+                    name,
+                    nameNorm,
+                    idx: nameNorm.indexOf(q)
+                });
             });
-        });
-        rawMatches.sort((a, b) => {
-            if (a.idx !== b.idx) return a.idx - b.idx;
-            return a.nameNorm.length - b.nameNorm.length;
-        });
+            out.sort((a, b) => {
+                if (a.idx !== b.idx) return a.idx - b.idx;
+                return a.nameNorm.length - b.nameNorm.length;
+            });
+            return out;
+        };
+
+        let rawMatches = buildRawSearchMatches();
+
+        if (myGen !== searchRequestGen) return;
+
+        if (rawMatches.length === 0 && isPrimarySiteAdmin() && q.length > 0) {
+            try {
+                const { data } = await adminStockSearchSubstringFn({ q: qRaw, market: coinMode ? 'coin' : 'stock' });
+                const arr = Array.isArray(data?.matches) ? data.matches : [];
+                arr.forEach(({ id, name }) => {
+                    const sid = String(id || '').trim();
+                    const nm = String(name || '').trim();
+                    if (sid && nm) stockNameCache[sid] = nm;
+                });
+                augmentStockNameCacheFromAdminLiveTables();
+                rawMatches = buildRawSearchMatches();
+            } catch (admSe) {
+                console.warn('[Search] adminStockSearchSubstring', admSe?.message || admSe);
+            }
+            if (myGen !== searchRequestGen) return;
+        }
+
         searchResults = {};
         rawMatches.slice(0, SEARCH_MATCH_UI_CAP).forEach(({ id, name }) => {
             const cached = coinMode

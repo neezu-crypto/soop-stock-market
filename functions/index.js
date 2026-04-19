@@ -863,6 +863,46 @@ exports.fetchSearchQuotes = onCall(
   }
 );
 
+/**
+ * 관리자 전용 — 클라이언트에서 검색 인덱스·캐시가 비어 있어도(점검 모드·모바일 토큰 등) 서버에서 이름 부분 일치 검색.
+ * JWT에 email이 없어도 Functions `ADMIN_UID` 환경변수와 uid 가 일치하면 허용.
+ */
+exports.adminStockSearchSubstring = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  if (!isAdminAuth(request.auth)) {
+    throw new HttpsError("permission-denied", "Admin only.");
+  }
+  const market = String(request.data?.market || "stock").trim().toLowerCase();
+  const isCoin = market === "coin";
+  const qRaw = String(request.data?.q || "").trim();
+  const q = qRaw.normalize("NFKC").toLowerCase();
+  if (!q) return { matches: [] };
+
+  const db = admin.database();
+  const base = isCoin ? "coinSearchIndex" : "stockSearchIndex";
+  const snap = await db.ref(base).once("value");
+  const val = snap.val() || {};
+  const rawMatches = [];
+  Object.entries(val).forEach(([id, row]) => {
+    const sid = String(id || "").trim();
+    if (!sid) return;
+    const name = row && typeof row === "object" ? String(row.name || "") : "";
+    const nameNorm = name.normalize("NFKC").toLowerCase();
+    if (!nameNorm.includes(q)) return;
+    rawMatches.push({
+      id: sid,
+      name: name || sid,
+      nameNorm,
+      idx: nameNorm.indexOf(q),
+    });
+  });
+  rawMatches.sort((a, b) => {
+    if (a.idx !== b.idx) return a.idx - b.idx;
+    return a.nameNorm.length - b.nameNorm.length;
+  });
+  const matches = rawMatches.slice(0, 40).map(({ id, name }) => ({ id, name }));
+  return { matches };
+});
+
 /** 검색용 stockSearchIndex·coinSearchIndex 재구축 — 클라이언트 RTDB 쓰기 규칙과 무관하게 Admin SDK로 처리 */
 exports.adminRebuildSearchIndexes = onCall(
   { cors: true, timeoutSeconds: 300, memory: "512MiB" },
