@@ -8909,6 +8909,18 @@ function isTradingUiUnlocked() {
     return true;
 }
 
+/**
+ * 종목·코인 이름 검색 + 검색 카드 시세 — 장 마감·비정규장에서도 로그인 사용자(익명·구글) 허용.
+ * (점검 모드·siteConfig 미수신은 거래 UI와 동일하게 차단)
+ */
+function isStockSearchUiUnlocked() {
+    if (isPrimarySiteAdmin()) return true;
+    if (!auth?.currentUser?.uid) return false;
+    if (!siteConfigReady) return false;
+    if (siteConfig?.maintenance) return false;
+    return true;
+}
+
 function setMaintenanceLoading(show) {
     const load = document.getElementById('maintenance-loading');
     const body = document.getElementById('maintenance-body');
@@ -14421,7 +14433,9 @@ function createSparkline(stockId, fallbackPrice, isUp) {
 // 메인 리스트는 계정 유형과 무관하게 즐겨찾기+보유(또는 검색 결과)만 표시 — Top 100 전체 시세 뷰 없음.
 
 function refreshMainStockListView() {
-    if (!isTradingUiUnlocked()) return;
+    const q = document.getElementById('search-input')?.value?.trim() || '';
+    const searchActive = !!q && isStockSearchUiUnlocked();
+    if (!searchActive && !isTradingUiUnlocked()) return;
     try {
         updateChallengeEmptyCopy();
     } catch (_) { /* noop */ }
@@ -14431,7 +14445,6 @@ function refreshMainStockListView() {
     try {
         refreshChallengeLobbyPanels();
     } catch (_) { /* noop */ }
-    const q = document.getElementById('search-input')?.value?.trim() || '';
     if (!q) renderFavoriteList();
     else renderSearchResults();
 }
@@ -15802,7 +15815,7 @@ async function handleSearch(query) {
         return;
     }
 
-    if (!isTradingUiUnlocked()) {
+    if (!isStockSearchUiUnlocked()) {
         listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">⏳ 시장 데이터 준비 중입니다.</div>`;
         if (emptyDiv) emptyDiv.style.display = 'none';
         return;
@@ -15909,7 +15922,7 @@ function renderSearchResults() {
     /* handleSearch는 normalize된 검색어로 매칭함. trim만 쓰면 NFKC·공백 처리 불일치 + await 레이스로 여기서 조기 return → 목록이 "검색 중"에 고정될 수 있음 */
     if (!listDiv) return;
     if (!qNormIn && !hasHits) return;
-    if (!isTradingUiUnlocked()) {
+    if (!isStockSearchUiUnlocked()) {
         listDiv.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-sub);">⏳ 시장 데이터 준비 중입니다.</div>`;
         if (emptyDiv) emptyDiv.style.display = 'none';
         return;

@@ -177,6 +177,10 @@ function isGoogleLinkedTradeAuth(auth) {
   return String(auth?.token?.firebase?.sign_in_provider || "") === "google.com";
 }
 
+function isAnonymousFirebaseAuth(auth) {
+  return String(auth?.token?.firebase?.sign_in_provider || "") === "anonymous";
+}
+
 /**
  * 정규장: 구글 1초 / 익명·기타 30초. 비정규장(장 운영 중): 30초 공통.
  * marketHours 미사용 시에도 동일 티어(구글 1초 / 비구글 30초).
@@ -822,8 +826,8 @@ exports.fetchSearchQuotes = onCall(
     if (!req.auth?.uid) {
       throw new HttpsError("unauthenticated", "Login required.");
     }
-    if (!isAdminAuth(req.auth) && !isGoogleLinkedTradeAuth(req.auth)) {
-      throw new HttpsError("failed-precondition", "Google 계정 연동 후 검색 시세를 이용할 수 있습니다.");
+    if (!isAdminAuth(req.auth) && !isGoogleLinkedTradeAuth(req.auth) && !isAnonymousFirebaseAuth(req.auth)) {
+      throw new HttpsError("failed-precondition", "로그인 후 검색 시세를 이용할 수 있습니다.");
     }
     const market = String(req.data?.market || "stock").trim().toLowerCase();
     const isCoin = market === "coin";
