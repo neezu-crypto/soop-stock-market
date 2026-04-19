@@ -14955,7 +14955,7 @@ async function loadBannersFromFirebase(remoteVer) {
     // 캐시 저장 (버전 포함)
     const cacheData = {};
     Object.entries(allBanners).forEach(([id, b]) => {
-        cacheData[id] = { name: b.name, bannerImg: b.bannerImg, link: b.link, bannerIsPaid: b.bannerIsPaid };
+        cacheData[id] = { name: b.name, bannerImg: b.bannerImg, link: b.link, bannerIsPaid: b.bannerIsPaid, bannerEndDate: b.bannerEndDate };
     });
     const existing = loadStaticCache() || {};
     saveStaticCache({ ...existing, banners: cacheData, bannerCacheVersion: remoteVer });
@@ -15013,7 +15013,7 @@ async function loadBannersFromFirebase(remoteVer) {
                 // name 추가됐으면 캐시 갱신
                 const cacheData = {};
                 Object.entries(allBanners).forEach(([id, b]) => {
-                    cacheData[id] = { name: b.name, bannerImg: b.bannerImg, link: b.link, bannerIsPaid: b.bannerIsPaid };
+                    cacheData[id] = { name: b.name, bannerImg: b.bannerImg, link: b.link, bannerIsPaid: b.bannerIsPaid, bannerEndDate: b.bannerEndDate };
                 });
                 const existing = loadStaticCache() || {};
                 saveStaticCache({ ...existing, banners: cacheData });
