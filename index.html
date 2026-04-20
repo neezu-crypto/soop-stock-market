@@ -7279,6 +7279,12 @@ setTimeout(() => {
 // 점검 모드 실시간 구독
 onValue(ref(db, 'siteConfig/maintenance'), (snap) => {
     siteConfig.maintenance = snap.val() ?? false;
+    if (siteConfig.maintenance) {
+        teardownPresenceSession().catch(() => {});
+        if (presenceCountUnsub) { presenceCountUnsub(); presenceCountUnsub = null; }
+        const el = document.getElementById('online-count');
+        if (el) el.innerText = '-';
+    }
     applyMarketState();
     updateExtendRequestBar();
 });
@@ -9797,6 +9803,10 @@ async function teardownPresenceSession() {
 async function setupPresenceSession(user) {
     if (!user?.uid) {
         logAuthTrail('[Auth] setupPresenceSession skipped — no user.uid');
+        return;
+    }
+    if (siteConfig?.maintenance) {
+        logAuthTrail('[Auth] setupPresenceSession skipped — maintenance mode');
         return;
     }
     if (presenceSetupUid === user.uid && presenceSessionRef) return;
