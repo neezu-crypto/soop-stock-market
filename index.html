@@ -15667,13 +15667,16 @@ async function loadStockNameCache() {
         }
 
         const existing = loadStaticCache() || {};
+        // anyFromIndex = false 이면 폴백 데이터(즐겨찾기·보유 등 불완전)를
+        // 정확한 버전 번호로 저장하지 않는다. 다음 방문 시 null !== remoteVer 이므로
+        // 인덱스를 다시 읽어 완전한 캐시로 복구된다.
         saveStaticCache({
             ...existing,
             searchNames: stockNameCache,
             stockNames: stockNameCache,
-            stockNameIndexVersion: remoteStockVer,
-            coinNameIndexVersion: remoteCoinVer,
-            stockCacheVersion: remoteStockVer
+            stockNameIndexVersion: anyFromIndex ? remoteStockVer : null,
+            coinNameIndexVersion: anyFromIndex ? remoteCoinVer : null,
+            stockCacheVersion: anyFromIndex ? remoteStockVer : null
         });
     } catch (e) {
         console.warn('[Search] loadStockNameCache', e);
