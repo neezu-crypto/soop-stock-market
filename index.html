@@ -9217,8 +9217,7 @@ function renderMyPortfolio() {
     portfolioDiv.innerHTML = "";
     stockIds.forEach(id => {
         const stockData = ownedStocks[id] || favorites[id] || searchResults[id];
-        const name = stockData?.name || stockNameCache[id];
-        if (!name) return; // 이름조차 없으면 스킵
+        const name = stockData?.name || stockNameCache[id] || id;
         const info = userStocks[id];
         const currentPrice = stockData?.price || 0;
         totalStockValue += currentPrice * info.qty;
@@ -9278,8 +9277,7 @@ function renderMyCoinPortfolio() {
     portfolioDiv.innerHTML = '';
     coinIds.forEach((id) => {
         const coinData = ownedCoins[id] || favoriteCoins[id] || searchResults[id];
-        const name = coinData?.name || stockNameCache[id];
-        if (!name) return;
+        const name = coinData?.name || stockNameCache[id] || id;
         const info = userCoins[id];
         const currentPrice = coinData?.price || 0;
         totalCoinValue += currentPrice * info.qty;
@@ -14527,11 +14525,12 @@ function updateCardContent(card, s, userStock) {
     const posUnit = coin ? '코인' : '주';
     let myProfit = 0, profitClass = 'steady';
     const uq = Math.floor(Number(userStock.qty) || 0);
+    const _px = Number(s.price) || 0;
     if (userStock.avg > 0 && uq !== 0) {
         const rawPct =
             uq > 0
-                ? ((s.price - userStock.avg) / userStock.avg) * 100
-                : ((userStock.avg - s.price) / userStock.avg) * 100;
+                ? ((_px - userStock.avg) / userStock.avg) * 100
+                : ((userStock.avg - _px) / userStock.avg) * 100;
         myProfit = rawPct.toFixed(1);
         profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
     }
@@ -15126,6 +15125,7 @@ function subscribeToFavorite(stockId) {
         data.link          = allBanners[stockId].link;
     }
     favorites[stockId] = data;
+    if (data.name) stockNameCache[stockId] = data.name;
     upsertAllStocksCacheRow(data);
     refreshMainStockListView();
 });
@@ -15621,12 +15621,24 @@ async function loadStockNameCache() {
         const localStockVer = cached?.stockNameIndexVersion;
         const localCoinVer = cached?.coinNameIndexVersion;
 
+        // 버전이 일치하더라도 즉시 리턴하지 않고 항상 Firebase에서 최신 이름을 재조회한다.
+        // (캐시 누락·localStorage 손상 시에도 종목 이름이 반드시 표시되도록 하는 긴급 보장 로직)
         if (
             hasUsableNameCache &&
             localStockVer === remoteStockVer &&
-            localCoinVer === remoteCoinVer
+            localCoinVer === remoteCoinVer &&
+            Object.keys(cachedNames).length > 0
         ) {
             stockNameCache = { ...cachedNames };
+            // 캐시가 있어도 Firebase를 추가 조회해 누락된 이름을 보완한다
+            try {
+                const [stockIdxSnap2, coinIdxSnap2] = await Promise.all([
+                    get(ref(db, 'stockSearchIndex/')),
+                    get(ref(db, 'coinSearchIndex/'))
+                ]);
+                takeNamesFromSnap(stockIdxSnap2);
+                takeNamesFromSnap(coinIdxSnap2);
+            } catch (_) { /* noop — 실패해도 기존 캐시 사용 */ }
             return;
         }
 
@@ -16116,6 +16128,7 @@ function subscribeToOwned(stockId) {
         }
 
         ownedStocks[stockId] = data;
+        if (data.name) stockNameCache[stockId] = data.name;
         if (favorites[stockId]) favorites[stockId] = data;
         upsertAllStocksCacheRow(data);
         refreshMainStockListView();
