@@ -3291,9 +3291,116 @@
         }
         .power-save-desc  { font-size: 13px; color: var(--text-sub); }
 
+        /* ── 장기 점검 전면 차단 오버레이 ── */
+        #long-maintenance-overlay {
+            position: fixed; inset: 0; z-index: 999999;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+            background: rgba(7, 11, 20, 0.94);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+        .lm-card {
+            background: #111827;
+            border: 1px solid rgba(251, 191, 36, 0.35);
+            border-radius: 20px;
+            box-shadow: 0 0 60px rgba(251, 191, 36, 0.12), 0 0 0 1px rgba(251, 191, 36, 0.08);
+            padding: 48px 40px 40px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+        }
+        .lm-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(251, 191, 36, 0.12);
+            border: 1px solid rgba(251, 191, 36, 0.4);
+            color: #fbbf24;
+            font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase;
+            padding: 5px 14px; border-radius: 100px; margin-bottom: 24px;
+        }
+        .lm-badge-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #f59e0b;
+            box-shadow: 0 0 6px #f59e0b;
+            animation: lm-pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes lm-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%       { opacity: 0.4; transform: scale(0.75); }
+        }
+        .lm-icon { font-size: 56px; margin-bottom: 16px; line-height: 1; }
+        .lm-title {
+            font-size: 22px; font-weight: 900; color: #f9fafb;
+            margin-bottom: 20px; line-height: 1.35;
+        }
+        .lm-divider {
+            height: 1px; background: rgba(251, 191, 36, 0.15);
+            margin: 0 0 20px;
+        }
+        .lm-desc {
+            color: #9ca3af; font-size: 14px; line-height: 1.85;
+            margin-bottom: 28px;
+        }
+        .lm-desc b { color: #d1d5db; }
+        .lm-links {
+            display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+        }
+        .lm-btn {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 11px 20px; border-radius: 10px;
+            font-size: 13px; font-weight: 700;
+            text-decoration: none; cursor: pointer;
+            transition: filter 0.15s, transform 0.15s;
+        }
+        .lm-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+        .lm-btn-primary {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #111827;
+        }
+        .lm-btn-secondary {
+            background: #1f2937;
+            border: 1px solid rgba(251, 191, 36, 0.25);
+            color: #fbbf24;
+        }
+        .lm-footer {
+            margin-top: 28px; font-size: 11px; color: #4b5563;
+        }
+        @media (max-width: 520px) {
+            .lm-card { padding: 36px 24px 32px; }
+            .lm-title { font-size: 18px; }
+            .lm-icon { font-size: 44px; }
+        }
+
     </style>
 </head>
 <body class="market-state-pending">
+
+<!-- ── 장기 점검 전면 차단 오버레이 (닫기 불가) ── -->
+<div id="long-maintenance-overlay" role="alertdialog" aria-modal="true" aria-labelledby="lm-title-text">
+    <div class="lm-card">
+        <div class="lm-badge"><span class="lm-badge-dot"></span> 시스템 점검 중</div>
+        <div class="lm-icon">🛠️</div>
+        <h1 class="lm-title" id="lm-title-text">시스템 장기 점검 안내</h1>
+        <div class="lm-divider"></div>
+        <p class="lm-desc">
+            더 나은 서비스 환경을 제공하기 위해 <b>시스템 최적화 및 코드 안정화 작업</b>에 돌입합니다.<br><br>
+            현재 예상치 못한 오류로 인해 <b>긴급 수정이 진행 중</b>이며,<br>
+            완료되는 대로 다시 찾아뵙겠습니다.<br><br>
+            불편을 드려 죄송합니다.
+        </p>
+        <div class="lm-links">
+            <a class="lm-btn lm-btn-primary" href="https://www.sooplive.com/station/skftodwocks2" target="_blank" rel="noopener">📡 개발자 방송국 바로가기</a>
+        </div>
+        <div class="lm-footer">SOOP STOCK · 점검 완료 시 자동으로 해제됩니다</div>
+    </div>
+</div>
+<script>
+    /* 장기 점검 모드: 모든 게임 로직보다 먼저 실행 */
+    (function() {
+        var el = document.getElementById('long-maintenance-overlay');
+        if (el) el.style.display = 'flex';
+    })();
+</script>
 
 <!-- ── 계정 초기화 안내 모달 ── -->
 <div id="account-warn-overlay">
