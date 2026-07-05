@@ -1,0 +1,432 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "presence": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      "$uid": {
+        "$sessionId": {
+          ".write": "auth != null && auth.uid === $uid && $sessionId.matches(/^[A-Za-z0-9_-]{8,80}$/)",
+          ".validate": "!newData.exists() || (newData.hasChildren(['connectedAt']) && newData.child('connectedAt').isNumber())"
+        }
+      }
+    },
+
+    "siteStats": {
+      ".read": "auth != null && auth.uid != null",
+      "connectionCount": {
+        ".write": false
+      }
+    },
+
+    "listingRequests": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      ".indexOn": ["status", "createdAt"],
+      "$reqId": {
+        ".write": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (!data.exists() && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('name').isString() && newData.child('soopId').isString() && newData.child('createdAt').isNumber()))"
+      }
+    },
+
+    "relayRequests": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && query.orderByChild == 'status' && query.equalTo == 'approved'))",
+      ".indexOn": ["status", "createdAt"],
+      "$reqId": {
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (!data.exists() && newData.hasChildren(['nickname','soopId','hours','uid','status','createdAt','cost','pointCost','paymentStatus','pointTxnId']) && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('nickname').isString() && newData.child('nickname').val().length > 0 && newData.child('nickname').val().length <= 80 && newData.child('soopId').isString() && newData.child('soopId').val().length > 0 && newData.child('soopId').val().length <= 80 && newData.child('hours').isNumber() && newData.child('hours').val() >= 1 && newData.child('hours').val() <= 24 && newData.child('cost').isNumber() && newData.child('cost').val() >= 1 && newData.child('cost').val() <= 999999 && newData.child('pointCost').isNumber() && newData.child('pointCost').val() === newData.child('cost').val() && newData.child('paymentStatus').val() === 'paid' && newData.child('pointTxnId').isString() && newData.child('pointTxnId').val().length > 0 && newData.child('pointTxnId').val().length <= 120 && newData.child('createdAt').isNumber())"
+      }
+    },
+
+    "subscribeRequests": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      "$uid": {
+        ".read": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.uid === $uid && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+        ".write": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (!data.exists() && auth.uid === $uid))",
+        ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (newData.hasChildren(['nickname','soopId','uid','status','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('nickname').isString() && newData.child('nickname').val().length > 0 && newData.child('nickname').val().length <= 80 && newData.child('soopId').isString() && newData.child('soopId').val().length > 0 && newData.child('soopId').val().length <= 80 && newData.child('createdAt').isNumber())"
+      }
+    },
+
+    "assetRankingRequests": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      ".indexOn": ["status", "createdAt", "uid"],
+      "$uid": {
+        ".read": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.uid === $uid && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (newData.hasChildren(['nickname','soopId','uid','status','createdAt','cost','pointCost','paymentStatus','pointTxnId']) && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('cost').isNumber() && newData.child('cost').val() >= 1 && newData.child('cost').val() <= 999 && newData.child('pointCost').isNumber() && newData.child('pointCost').val() === newData.child('cost').val() && newData.child('paymentStatus').val() === 'paid' && newData.child('pointTxnId').isString() && newData.child('pointTxnId').val().length > 0 && newData.child('pointTxnId').val().length <= 120 && newData.child('nickname').isString() && newData.child('soopId').isString() && newData.child('createdAt').isNumber())"
+      }
+    },
+
+    "liveRankingTop100Requests": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      ".indexOn": ["status", "createdAt", "uid"],
+      "$uid": {
+        ".read": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.uid === $uid && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (newData.hasChildren(['nickname','soopId','uid','status','createdAt','cost','pointCost','paymentStatus','pointTxnId','durationDays']) && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('cost').isNumber() && newData.child('cost').val() >= 1 && newData.child('cost').val() <= 999 && newData.child('pointCost').isNumber() && newData.child('pointCost').val() === newData.child('cost').val() && newData.child('paymentStatus').val() === 'paid' && newData.child('pointTxnId').isString() && newData.child('pointTxnId').val().length > 0 && newData.child('pointTxnId').val().length <= 120 && newData.child('durationDays').isNumber() && newData.child('durationDays').val() >= 1 && newData.child('durationDays').val() <= 365 && newData.child('nickname').isString() && newData.child('soopId').isString() && newData.child('createdAt').isNumber())"
+      }
+    },
+
+    "pointChargeRequests": {
+      ".read": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && query.orderByChild == 'uid' && query.equalTo == auth.uid))",
+      ".indexOn": ["uid", "status", "createdAt"],
+      "$reqId": {
+        ".read": "auth != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (data.child('uid').val() === auth.uid && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (!data.exists() && newData.hasChildren(['uid','nickname','soopId','balloons','points','status','createdAt']) && newData.child('uid').val() === auth.uid && newData.child('nickname').isString() && newData.child('nickname').val().length > 0 && newData.child('nickname').val().length <= 80 && newData.child('soopId').isString() && newData.child('soopId').val().length > 0 && newData.child('soopId').val().length <= 80 && newData.child('balloons').isNumber() && newData.child('balloons').val() >= 0 && newData.child('balloons').val() <= 999999 && newData.child('points').isNumber() && newData.child('points').val() === newData.child('balloons').val() && newData.child('status').val() === 'pending' && newData.child('createdAt').isNumber())"
+      }
+    },
+
+    "pointLedger": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || (auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)))",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        "$txnId": {
+          ".validate": "newData.hasChildren(['uid','type','amount','balanceAfter','createdAt']) && newData.child('uid').val() === $uid && newData.child('type').isString() && newData.child('amount').isNumber() && newData.child('balanceAfter').isNumber() && newData.child('createdAt').isNumber()"
+        }
+      }
+    },
+
+    "chartAdRequests": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      ".indexOn": ["status", "createdAt"],
+      "$reqId": {
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (!data.exists() && newData.hasChildren(['nickname','imgUrl','link','days','uid','status','createdAt','cost','pointCost','paymentStatus','pointTxnId']) && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('nickname').isString() && newData.child('nickname').val().length > 0 && newData.child('nickname').val().length <= 50 && newData.child('imgUrl').isString() && newData.child('imgUrl').val().length >= 8 && newData.child('imgUrl').val().length <= 800 && newData.child('link').isString() && newData.child('link').val().length >= 8 && newData.child('link').val().length <= 800 && newData.child('days').isNumber() && newData.child('days').val() >= 1 && newData.child('days').val() <= 365 && newData.child('cost').isNumber() && newData.child('cost').val() >= 1 && newData.child('cost').val() <= 9999 && newData.child('pointCost').isNumber() && newData.child('pointCost').val() === newData.child('cost').val() && newData.child('paymentStatus').val() === 'paid' && newData.child('pointTxnId').isString() && newData.child('pointTxnId').val().length > 0 && newData.child('pointTxnId').val().length <= 120 && newData.child('createdAt').isNumber())"
+      }
+    },
+
+    "adRequests": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      ".indexOn": ["status", "createdAt"],
+      "$reqId": {
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (!data.exists() && newData.hasChildren(['nickname','imgUrl','soopId','uid','status','createdAt','cost','pointCost','paymentStatus','pointTxnId']) && newData.child('uid').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('nickname').isString() && newData.child('nickname').val().length > 0 && newData.child('nickname').val().length <= 50 && newData.child('imgUrl').isString() && newData.child('imgUrl').val().length >= 8 && newData.child('imgUrl').val().length <= 800 && newData.child('soopId').isString() && newData.child('soopId').val().length > 0 && newData.child('soopId').val().length <= 80 && newData.child('createdAt').isNumber() && newData.child('cost').isNumber() && newData.child('cost').val() >= 1 && newData.child('cost').val() <= 9999 && newData.child('pointCost').isNumber() && newData.child('pointCost').val() === newData.child('cost').val() && newData.child('paymentStatus').val() === 'paid' && newData.child('pointTxnId').isString() && newData.child('pointTxnId').val().length > 0 && newData.child('pointTxnId').val().length <= 120 && (!newData.hasChild('duration') || (newData.child('duration').isNumber() && newData.child('duration').val() >= 1 && newData.child('duration').val() <= 365)))"
+      }
+    },
+
+    "candlesticks": {
+      ".read": false,
+      "$stockId": {
+        "$ts": {
+          ".read": false,
+          ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+        }
+      }
+    },
+
+    "coinCandles": {
+      ".read": false,
+      "$stockId": {
+        "$ts": {
+          ".read": false,
+          ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+        }
+      }
+    },
+
+    "stocks": {
+      ".read": "auth != null && auth.uid != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      "$stockId": {
+        ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com') || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'anonymous'))",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+      }
+    },
+
+    "stockSearchIndex": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com') || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'anonymous'))",
+      "$id": {
+        ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com') || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'anonymous'))",
+        ".write": false
+      }
+    },
+
+    "coins": {
+      ".read": false,
+      "$stockId": {
+        ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+      }
+    },
+
+    "coinSearchIndex": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+      "$id": {
+        ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+        ".write": false
+      }
+    },
+
+    "challengeStocks": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+      "$stockId": {
+        ".write": false
+      }
+    },
+
+    "challengeCoins": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+      "$stockId": {
+        ".write": false
+      }
+    },
+
+    "challengeRooms": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+      "$roomId": {
+        ".write": false
+      }
+    },
+
+    "challengePublic": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+      "recentAssetRank": {
+        ".write": false
+      }
+    },
+
+    "challengeSupporterRequests": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      ".indexOn": ["status", "createdAt", "uid"],
+      "$reqId": {
+        ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+      }
+    },
+
+    "challengeSupporterWhitelist": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      "$uid": {
+        ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".write": false
+      }
+    },
+
+    "stocksBanner": {
+      ".read": "auth != null && auth.uid != null",
+      ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+    },
+
+    "chartBanner": {
+      ".read": "auth != null && auth.uid != null",
+      ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+    },
+
+    "stockTitles": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+      "$stockId": {
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+      }
+    },
+
+    "streamCardLinksByUid": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'",
+        ".write": "auth != null && auth.uid === $uid && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'",
+        ".validate": "newData.hasChildren(['uid','token','updatedAt','active']) && newData.child('uid').val() === auth.uid && newData.child('token').isString() && newData.child('token').val().length >= 24 && newData.child('token').val().length <= 120 && (!data.exists() || newData.child('token').val() === data.child('token').val()) && newData.child('updatedAt').isNumber() && newData.child('active').isBoolean() && (!newData.hasChild('createdAt') || newData.child('createdAt').isNumber()) && (!newData.hasChild('stockId') || newData.child('stockId').isString()) && (!newData.hasChild('market') || (newData.child('market').isString() && (newData.child('market').val() === 'stock' || newData.child('market').val() === 'coin')))"
+      }
+    },
+
+    "publicStreamCardLinks": {
+      "$token": {
+        ".read": "data.exists() && data.child('active').val() === true",
+        ".write": "auth != null && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && root.child('streamCardLinksByUid/' + auth.uid + '/token').val() === $token",
+        ".validate": "newData.hasChildren(['uid','stockId','market','active','updatedAt']) && newData.child('uid').val() === auth.uid && newData.child('stockId').isString() && newData.child('market').isString() && (newData.child('market').val() === 'stock' || newData.child('market').val() === 'coin') && newData.child('active').isBoolean() && newData.child('updatedAt').isNumber()"
+      }
+    },
+
+    "assetRanking": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && ((root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').val() > now) || (root.child('users/' + auth.uid + '/entitlements/dataHeavyAccessExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/dataHeavyAccessExpiresAt').val() > now) || (root.child('assetRankingRequests/' + auth.uid + '/status').val() === 'approved' && root.child('assetRankingRequests/' + auth.uid + '/accessExpiresAt').isNumber() && root.child('assetRankingRequests/' + auth.uid + '/accessExpiresAt').val() > now))))",
+      ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+    },
+
+    "stockHolderRanking": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && ((root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').val() > now) || (root.child('users/' + auth.uid + '/entitlements/dataHeavyAccessExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/dataHeavyAccessExpiresAt').val() > now) || (root.child('assetRankingRequests/' + auth.uid + '/status').val() === 'approved' && root.child('assetRankingRequests/' + auth.uid + '/accessExpiresAt').isNumber() && root.child('assetRankingRequests/' + auth.uid + '/accessExpiresAt').val() > now))))",
+      "$stockId": {
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+      }
+    },
+
+    "coinHolderRanking": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && ((root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').val() > now) || (root.child('users/' + auth.uid + '/entitlements/dataHeavyAccessExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/dataHeavyAccessExpiresAt').val() > now) || (root.child('assetRankingRequests/' + auth.uid + '/status').val() === 'approved' && root.child('assetRankingRequests/' + auth.uid + '/accessExpiresAt').isNumber() && root.child('assetRankingRequests/' + auth.uid + '/accessExpiresAt').val() > now))))",
+      "$stockId": {
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+      }
+    },
+
+    "rankings": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && ((root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').val() > now) || (root.child('users/' + auth.uid + '/entitlements/dataHeavyAccessExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/dataHeavyAccessExpiresAt').val() > now) || (root.child('assetRankingRequests/' + auth.uid + '/status').val() === 'approved' && root.child('assetRankingRequests/' + auth.uid + '/accessExpiresAt').isNumber() && root.child('assetRankingRequests/' + auth.uid + '/accessExpiresAt').val() > now))))",
+      ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+    },
+
+    "marketRank": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+      ".write": false,
+      "top100": {
+        ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && (root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').val() > now)))"
+      },
+      "challenge": {
+        "top100": {
+          "stocks": {
+            ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && ((root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').val() > now) || (root.child('users/' + auth.uid + '/entitlements/challengeSupporterVerified').val() === true))))"
+          },
+          "coins": {
+            ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && ((root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').isNumber() && root.child('users/' + auth.uid + '/entitlements/liveRankingTop100ExpiresAt').val() > now) || (root.child('users/' + auth.uid + '/entitlements/challengeSupporterVerified').val() === true))))"
+          }
+        },
+        "meta": {
+          ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))"
+        }
+      }
+    },
+
+    "siteConfig": {
+      ".read": "auth != null && auth.uid != null",
+      ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      "frozenStocks": {
+        ".write": false
+      },
+      "circuitBreakerLastTrigger": {
+        ".write": false
+      }
+    },
+
+    "titleRequests": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && query.orderByChild == 'uid' && query.equalTo == auth.uid))",
+      ".indexOn": ["uid", "status", "createdAt"],
+      "$reqId": {
+        ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (data.child('uid').val() === auth.uid && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (!data.exists() && newData.child('uid').val() === auth.uid && newData.child('stockId').isString() && newData.child('title').isString() && newData.child('title').val().length >= 2 && newData.child('title').val().length <= 16 && newData.child('theme').isString() && newData.child('status').val() === 'pending' && newData.child('createdAt').isNumber() && newData.child('cost').isNumber() && newData.child('cost').val() >= 1 && newData.child('pointCost').isNumber() && newData.child('pointCost').val() === newData.child('cost').val() && newData.child('paymentStatus').val() === 'paid' && newData.child('pointTxnId').isString() && newData.child('pointTxnId').val().length > 0 && newData.child('pointTxnId').val().length <= 120)"
+      }
+    },
+
+    "assetRequests": {
+      ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com' && query.orderByChild == 'uid' && query.equalTo == auth.uid))",
+      ".indexOn": ["uid", "status"],
+      "$requestId": {
+        ".read": "auth != null && auth.uid != null && ((auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (data.child('uid').val() === auth.uid && auth.token.firebase != null && auth.token.firebase.sign_in_provider === 'google.com'))",
+        ".write": false
+      }
+    },
+
+    "adminLogs": {
+      "grants": {
+        ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        "$logId": {
+          ".validate": "newData.hasChild('adminEmail') && newData.hasChild('targetUid') && newData.hasChild('amount') && newData.hasChild('timestamp') && newData.child('adminEmail').isString() && newData.child('adminEmail').val().matches(/^skftodwocks2@gmail\\.com$/i) && newData.child('targetUid').isString() && newData.child('amount').isNumber() && newData.child('amount').val() > 0 && (!newData.hasChild('requestId') || newData.child('requestId').isString())"
+        }
+      }
+    },
+
+    "adminActivityLogs": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      "$logCategory": {
+        ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        "$logId": {
+          ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+          ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+          "$nested": {
+            ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+            ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+          }
+        }
+      }
+    },
+
+    "tradeHistory": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      ".write": false,
+      ".indexOn": ["createdAt", "uid"]
+    },
+
+    "users": {
+      ".read": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+      "$uid": {
+        ".read": "auth != null && auth.uid != null && (auth.uid === $uid || (auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)))",
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+        "cash": {
+          ".write": false,
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5000000000000"
+        },
+        "summary": {
+          ".write": false,
+          ".validate": "newData.hasChildren(['cash','stockCount','coinCount','updatedAt']) && newData.child('cash').isNumber() && newData.child('stockCount').isNumber() && newData.child('coinCount').isNumber() && newData.child('updatedAt').isNumber()"
+        },
+        "session": {
+          ".write": false
+        },
+        "entitlements": {
+          ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+        },
+        "wallet": {
+          ".read": "auth != null && (auth.uid === $uid || (auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)))",
+          ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+          "points": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999999999"
+          },
+          "updatedAt": {
+            ".validate": "!newData.exists() || newData.isNumber()"
+          }
+        },
+        "moderation": {
+          ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)"
+        },
+        "tradeBlockedUntil": {
+          ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "lastTradeTime": {
+          ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+          ".validate": "!newData.exists() || newData.isNumber()"
+        },
+        "stockTitles": {
+          "$stockId": {
+            ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || (!newData.exists()) || (newData.hasChildren(['title','theme','status']) && newData.child('title').isString() && newData.child('title').val().length >= 2 && newData.child('title').val().length <= 16 && newData.child('theme').isString() && newData.child('status').isString())"
+          }
+        },
+        "stocks": {
+          "$stockId": {
+            ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+            ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || !newData.exists() || (newData.hasChildren(['qty','avg']) && newData.child('qty').isNumber() && newData.child('qty').val() >= 0 && newData.child('qty').val() <= 9007199254740991 && newData.child('avg').isNumber() && newData.child('avg').val() >= 0 && newData.child('avg').val() <= 5000000000000)"
+          }
+        },
+        "coins": {
+          "$stockId": {
+            ".write": "auth != null && auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)",
+            ".validate": "(auth.token.email != null && auth.token.email.matches(/^skftodwocks2@gmail\\.com$/i)) || !newData.exists() || (newData.hasChildren(['qty','avg']) && newData.child('qty').isNumber() && newData.child('qty').val() >= 0 && newData.child('qty').val() <= 9007199254740991 && newData.child('avg').isNumber() && newData.child('avg').val() >= 0 && newData.child('avg').val() <= 5000000000000)"
+          }
+        },
+        "challengeRoomId": {
+          ".read": "auth != null && auth.uid != null && auth.uid === $uid",
+          ".write": false
+        },
+        "portfolioMeta": {
+          ".read": "auth != null && auth.uid != null && auth.uid === $uid",
+          ".write": false
+        },
+        "paidMember": {
+          ".read": "auth != null && auth.uid != null && auth.uid === $uid",
+          ".write": false
+        },
+        "premiumServicesEnabled": {
+          ".read": "auth != null && auth.uid != null && auth.uid === $uid",
+          ".write": false
+        },
+        "tier1QuoteThrottleAt": {
+          ".read": "auth != null && auth.uid != null && auth.uid === $uid",
+          ".write": false
+        },
+        "quoteAllowlist": {
+          ".read": "auth != null && auth.uid != null && auth.uid === $uid",
+          ".write": false,
+          "stockIds": {
+            ".read": "auth != null && auth.uid != null && auth.uid === $uid",
+            ".write": false
+          }
+        }
+      }
+    }
+  }
+}
