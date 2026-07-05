@@ -462,22 +462,16 @@
 
 <div id="maintenance-overlay" style="display:none;">
     <div class="maintenance-content">
-        <div class="maintenance-icon">🔔</div>
-        <div class="maintenance-title">주식 시장 오픈 준비 중</div>
+        <div class="maintenance-icon">🛠️</div>
+        <div class="maintenance-title">주식 시장 장기 점검 중</div>
         <div class="maintenance-desc">
-            현재는 원활한 거래를 위한 <b>장 시작 준비 시간</b>입니다.<br>
-            잠시 후 스트리머 주식시장이 개장됩니다.
-        </div>
-        
-        <div class="maintenance-time-badge">🕒 시장 운영 시간: 09:00 ~ 익일 04:00</div>
-        
-        <div class="maintenance-desc" style="margin-bottom:0; font-size: 13px; color: #94a3b8;">
-            준비 시간 동안에는 거래가 제한되며,<br>
-            개장과 동시에 실시간 차트가 활성화됩니다.
+            더 나은 서비스 제공을 위해 <b>장기 점검 작업</b>을 진행하고 있습니다.<br>
+            점검이 완료되는 대로 다시 찾아뵙겠습니다.
         </div>
 
-        <div class="maintenance-countdown" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
-            장 시작까지 <span id="maintenance-timer" style="color: #ef4444; font-weight: 800;">-</span> 남았습니다
+        <div class="maintenance-desc" style="margin-bottom:0; font-size: 13px; color: #94a3b8;">
+            점검 기간 동안에는 거래 및 접속이 제한됩니다.<br>
+            불편을 드려 죄송합니다.
         </div>
     </div>
 </div>
@@ -748,45 +742,15 @@ import { getAuth, signInAnonymously, onAuthStateChanged }
 (function () {
 
 // ══════════════════════════════════════════════════════════
-// 정기점검 (매일 04:00 ~ 09:00)
+// 장기 점검 (수동 해제 전까지 전면 차단)
 // Firebase 초기화 전에 먼저 체크 → 점검 중이면 연결 자체 차단
 // ══════════════════════════════════════════════════════════
-const MAINTENANCE_START = 4;  // 장 마감시간 (시)
-const MAINTENANCE_END   = 9;  // 장 오픈시간 (시)
+const LONG_MAINTENANCE = true;
 
-function isMaintenanceTime() {
-    const h = new Date().getHours();
-    return h >= MAINTENANCE_START && h < MAINTENANCE_END;
-}
-
-function getTimeUntilOpen() {
-    const now  = new Date();
-    const open = new Date();
-    open.setHours(MAINTENANCE_END, 0, 0, 0);
-    if (now >= open) open.setDate(open.getDate() + 1);
-    const diffMs  = open - now;
-    const hours   = Math.floor(diffMs / 3600000);
-    const minutes = Math.floor((diffMs % 3600000) / 60000);
-    const seconds = Math.floor((diffMs % 60000) / 1000);
-    return `${hours > 0 ? hours + '시간 ' : ''}${minutes}분 ${seconds}초`;
-}
-
-// 점검 시간이면 Firebase 초기화 없이 오버레이만 표시하고 종료
-if (isMaintenanceTime()) {
+// 점검 중이면 Firebase 초기화 없이 오버레이만 표시하고 종료
+if (LONG_MAINTENANCE) {
     const overlay = document.getElementById('maintenance-overlay');
     if (overlay) overlay.style.display = 'flex';
-    const timerEl = document.getElementById('maintenance-timer');
-    if (timerEl) timerEl.innerText = getTimeUntilOpen();
-
-    const tick = setInterval(() => {
-        if (!isMaintenanceTime()) {
-            clearInterval(tick);
-            location.reload(); // 점검 종료 시 자동 새로고침
-            return;
-        }
-        if (timerEl) timerEl.innerText = getTimeUntilOpen();
-    }, 1000);
-
     return; // ← IIFE 여기서 종료, Firebase 초기화 실행 안 됨
 }
 
@@ -859,15 +823,6 @@ let pendingDeltas         = {};
 let lastRankingWriteTime  = 0;
 
 // ── rankings/top5 구독 ──────────────────────────────────────
-
-// 이미 접속 중인 사용자를 위한 점검 시간 주기 체크 (30초마다)
-// 점검 시작 시각이 되면 즉시 오버레이 표시 + Firebase 구독 해제 불가하므로
-// 페이지 새로고침으로 완전 차단 처리
-setInterval(() => {
-    if (isMaintenanceTime()) {
-        location.reload();
-    }
-}, 30000);
 
 onValue(ref(db, 'rankings/top5'), (snap) => {
     if (!snap.exists()) {
