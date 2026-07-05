@@ -748,25 +748,17 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, onAuthStateChanged }
+import { getAuth, signInAnonymously, signInWithPopup, GoogleAuthProvider, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
 (function () {
 
 // ══════════════════════════════════════════════════════════
-// 장기 점검 (수동 해제 전까지 전면 차단)
-// Firebase 초기화 전에 먼저 체크 → 점검 중이면 연결 자체 차단
+// 장기 점검 (관리자 계정으로 로그인하면 점검 화면을 건너뜀)
 // ══════════════════════════════════════════════════════════
 const LONG_MAINTENANCE = true;
+const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정
 
-// 점검 중이면 Firebase 초기화 없이 오버레이만 표시하고 종료
-if (LONG_MAINTENANCE) {
-    const overlay = document.getElementById('maintenance-overlay');
-    if (overlay) overlay.style.display = 'flex';
-    return; // ← IIFE 여기서 종료, Firebase 초기화 실행 안 됨
-}
-
-// ── 점검 시간 외 → Firebase 정상 초기화 ─────────────────
 const firebaseConfig = {
     apiKey:      "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
     authDomain:  "soop-stock-market.firebaseapp.com",
@@ -774,9 +766,46 @@ const firebaseConfig = {
     projectId:   "soop-stock-market",
     appId:       "1:997788925900:web:cb613d438efec019a3a769"
 };
-const app  = initializeApp(firebaseConfig);
-const db   = getDatabase(app);
-const auth = getAuth(app);
+const app      = initializeApp(firebaseConfig);
+const db       = getDatabase(app);
+const auth     = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+let appStarted = false;
+
+function showMaintenanceOverlay() {
+    const overlay = document.getElementById('maintenance-overlay');
+    if (overlay) overlay.style.display = 'flex';
+}
+function hideMaintenanceOverlay() {
+    const overlay = document.getElementById('maintenance-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+// 관리자 계정 로그인 여부에 따라 점검 화면 표시/스킵 결정
+onAuthStateChanged(auth, (user) => {
+    if (user && user.email === ADMIN_EMAIL) {
+        hideMaintenanceOverlay();
+        if (!appStarted) { appStarted = true; startApp(); }
+    } else if (LONG_MAINTENANCE && !appStarted) {
+        showMaintenanceOverlay();
+    }
+});
+
+// Ctrl+Enter → 관리자 인증용 구글 로그인
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        signInWithPopup(auth, provider).catch(err => alert('로그인 실패: ' + err.message));
+    }
+});
+
+if (!LONG_MAINTENANCE && !appStarted) {
+    appStarted = true;
+    startApp();
+}
+
+function startApp() {
 
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
@@ -1734,6 +1763,8 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
     }
 });
+
+}   // ← startApp 종료
 
 })();
 </script>

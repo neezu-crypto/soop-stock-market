@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOOP STOCK 거래소 — 기획서</title>
+<style>
+    :root {
+        --bg: #0f172a; --card: #1e293b; --card-2: #16213a; --border: #334155;
+        --primary: #38bdf8; --up: #ef4444; --down: #3b82f6;
+        --text: #f8fafc; --sub: #94a3b8; --accent: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+        font-family: 'Pretendard', -apple-system, 'Malgun Gothic', sans-serif;
+        background: var(--bg); color: var(--text);
+        margin: 0; padding: 40px 20px 100px;
+        line-height: 1.7;
+    }
+    .doc {
+        max-width: 880px; margin: 0 auto;
+    }
+    .doc-header {
+        text-align: center; padding: 40px 20px 32px; margin-bottom: 40px;
+        border-bottom: 1px solid var(--border);
+    }
+    .doc-header .eyebrow {
+        display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 2px;
+        color: var(--primary); text-transform: uppercase; margin-bottom: 14px;
+    }
+    .doc-header h1 { font-size: 30px; font-weight: 900; margin: 0 0 10px; }
+    .doc-header p { color: var(--sub); font-size: 14px; margin: 0; }
+    .meta-row {
+        display: flex; justify-content: center; gap: 24px; margin-top: 20px;
+        font-size: 12px; color: var(--sub); flex-wrap: wrap;
+    }
+    .meta-row b { color: var(--text); }
+
+    section { margin-bottom: 44px; }
+    h2 {
+        font-size: 20px; font-weight: 800; margin: 0 0 18px;
+        display: flex; align-items: center; gap: 10px;
+        padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    h2 .num {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 26px; height: 26px; border-radius: 8px;
+        background: rgba(56,189,248,0.15); color: var(--primary);
+        font-size: 13px; font-weight: 900;
+    }
+    h3 { font-size: 15px; font-weight: 800; color: var(--primary); margin: 24px 0 10px; }
+    p { color: #cbd5e1; font-size: 14px; }
+    ul, ol { color: #cbd5e1; font-size: 14px; padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    strong { color: var(--text); }
+    code {
+        background: rgba(148,163,184,0.15); padding: 2px 6px; border-radius: 5px;
+        font-size: 12.5px; color: #7dd3fc; font-family: 'SF Mono', Menlo, monospace;
+    }
+
+    .card {
+        background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        padding: 20px 22px; margin-bottom: 14px;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @media (max-width: 640px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0 20px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    th { color: var(--primary); font-weight: 800; background: rgba(56,189,248,0.06); }
+    td { color: #cbd5e1; }
+    td code { white-space: nowrap; }
+
+    .badge {
+        display: inline-block; font-size: 11px; font-weight: 800; padding: 3px 10px;
+        border-radius: 100px; margin-right: 6px;
+    }
+    .badge-up   { background: rgba(239,68,68,0.15); color: #f87171; }
+    .badge-down { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .badge-admin{ background: rgba(251,191,36,0.15); color: var(--accent); }
+    .badge-live { background: rgba(34,197,94,0.15); color: #4ade80; }
+
+    .flow {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0;
+    }
+    .flow-step {
+        background: var(--card-2); border: 1px solid var(--border); border-radius: 10px;
+        padding: 10px 14px; font-size: 12.5px; font-weight: 700; color: var(--text);
+        white-space: nowrap;
+    }
+    .flow-arrow { color: var(--sub); font-size: 16px; }
+
+    .note {
+        border-left: 3px solid var(--accent); background: rgba(251,191,36,0.06);
+        padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: 13px; color: #fde68a;
+        margin: 14px 0;
+    }
+    .note b { color: var(--accent); }
+
+    .todo-list { list-style: none; padding: 0; }
+    .todo-list li {
+        display: flex; align-items: flex-start; gap: 10px; padding: 8px 0;
+        border-bottom: 1px dashed var(--border);
+    }
+    .todo-list li:last-child { border-bottom: none; }
+    .todo-check {
+        flex-shrink: 0; width: 16px; height: 16px; border-radius: 4px;
+        border: 1.5px solid var(--sub); margin-top: 2px;
+    }
+
+    .toc { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px 24px; margin-bottom: 40px; }
+    .toc h2 { border: none; padding: 0; margin-bottom: 12px; }
+    .toc ol { columns: 2; column-gap: 30px; font-size: 13.5px; }
+    .toc a { color: #cbd5e1; text-decoration: none; }
+    .toc a:hover { color: var(--primary); }
+    @media (max-width: 640px) { .toc ol { columns: 1; } }
+
+    footer { text-align: center; color: var(--sub); font-size: 12px; margin-top: 60px; }
+</style>
+</head>
+<body>
+<div class="doc">
+
+    <div class="doc-header">
+        <span class="eyebrow">Planning Document</span>
+        <h1>SOOP STOCK 거래소 — 서비스 기획서</h1>
+        <p>스트리머 가상 주식 거래 웹서비스 (index.html) 기능 및 구조 정리</p>
+        <div class="meta-row">
+            <span>문서 유형: <b>사후 정리 기획서 (As-Is)</b></span>
+            <span>대상 파일: <b>index.html</b></span>
+            <span>작성일: <b>2026-07-06</b></span>
+        </div>
+    </div>
+
+    <div class="toc">
+        <h2>목차</h2>
+        <ol>
+            <li><a href="#sec1">서비스 개요</a></li>
+            <li><a href="#sec2">핵심 컨셉</a></li>
+            <li><a href="#sec3">화면 구성 (UI)</a></li>
+            <li><a href="#sec4">주요 기능</a></li>
+            <li><a href="#sec5">거래(매매) 로직</a></li>
+            <li><a href="#sec6">인증 · 관리자 모드</a></li>
+            <li><a href="#sec7">점검(유지보수) 모드</a></li>
+            <li><a href="#sec8">데이터 구조 (Firebase)</a></li>
+            <li><a href="#sec9">시스템 흐름도</a></li>
+            <li><a href="#sec10">향후 보완 과제</a></li>
+        </ol>
+    </div>
+
+    <section id="sec1">
+        <h2><span class="num">1</span>서비스 개요</h2>
+        <div class="card">
+            <p><strong>SOOP STOCK 거래소</strong>는 SOOP(숲) 스트리머를 하나의 "종목"으로 삼아, 유저가 가상 자산으로 매수·매도하며
+            시세 변동을 즐기는 웹 기반 모의투자 서비스입니다. 실제 화폐가 오가지 않는 <strong>엔터테인먼트 목적의 팬 참여형 미니게임</strong>이며,
+            Firebase Realtime Database를 백엔드로 사용해 모든 유저에게 실시간으로 시세·랭킹이 동기화됩니다.</p>
+            <ul>
+                <li><strong>플랫폼:</strong> 단일 페이지 웹앱 (Vanilla JS + Firebase, 정적 호스팅 / GitHub Pages)</li>
+                <li><strong>대상:</strong> 스트리머 팬덤 커뮤니티, 익명 방문자 포함 누구나 즉시 참여 가능</li>
+                <li><strong>수익 모델:</strong> 배너 홍보(우측 랭킹 배너, 차트 하단 광고 배너) 판매</li>
+            </ul>
+        </div>
+    </section>
+
+    <section id="sec2">
+        <h2><span class="num">2</span>핵심 컨셉</h2>
+        <div class="grid-3">
+            <div class="card">
+                <h3>📈 실시간 가상 시세</h3>
+                <p>매수/매도 체결마다 가격에 즉시 영향(시장 충격)을 주는 방식으로, 실제 주식시장과 유사한 체감을 제공합니다.</p>
+            </div>
+            <div class="card">
+                <h3>🕯️ 분봉 캔들차트</h3>
+                <p>체결 데이터를 1분 단위로 집계해 Chart.js 금융 차트로 시각화, 기간/분봉 단위를 유저가 선택할 수 있습니다.</p>
+            </div>
+            <div class="card">
+                <h3>🏆 실시간 랭킹 · 배너</h3>
+                <p>거래량 상위 5개 종목을 주기적으로 집계해 노출하고, 스트리머 홍보 배너로 수익화합니다.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="sec3">
+        <h2><span class="num">3</span>화면 구성 (UI)</h2>
+        <p>페이지는 하나의 스크롤 화면으로 구성되며, 상단부터 아래 순서로 배치됩니다.</p>
+        <table>
+            <tr><th>영역</th><th>설명</th></tr>
+            <tr><td><strong>인트로 오버레이</strong></td><td>최초 접속 시 로고 · 서비스 소개를 보여주며 Firebase 연결 완료 시 자동으로 사라짐 (5초 초과 시 새로고침 안내)</td></tr>
+            <tr><td><strong>지갑(Wallet) 바</strong></td><td>상단 고정(sticky) 바 — 보유 현금 표시</td></tr>
+            <tr><td><strong>실시간 접속자 수</strong></td><td>presence 데이터를 기반으로 동시 접속자 수 표시</td></tr>
+            <tr><td><strong>랭킹 바 / 홍보 배너</strong></td><td>거래량 TOP5 및 스트리머 홍보 배너(D-Day 뱃지 포함) 노출</td></tr>
+            <tr><td><strong>내 보유 주식 패널</strong></td><td>보유 중인 종목 목록 — 클릭 시 검색창과 연동되어 해당 종목으로 스크롤</td></tr>
+            <tr><td><strong>검색창</strong></td><td>종목(스트리머)명을 실시간 필터링</td></tr>
+            <tr><td><strong>종목 리스트</strong></td><td>카드형 UI — 종목명, 현재가/등락률, 스파크라인 미니차트, 매수/매도 버튼</td></tr>
+            <tr><td><strong>차트 모달</strong></td><td>종목 카드 클릭 시 오픈 — 캔들차트, 기간/분봉 탭, 모달 내 매매, 하단 광고 배너</td></tr>
+            <tr><td><strong>프로모 모달 / 광고 문의 모달</strong></td><td>배너 홍보 상품 안내</td></tr>
+            <tr><td><strong>점검 오버레이</strong></td><td>서비스 점검 시 전면 차단 안내 화면 (전체 화면 최상단 z-index)</td></tr>
+        </table>
+    </section>
+
+    <section id="sec4">
+        <h2><span class="num">4</span>주요 기능</h2>
+        <h3>4.1 종목 리스트 &amp; 검색</h3>
+        <ul>
+            <li>전체 종목을 실시간(onValue) 구독하여 가격 변동 시 카드 UI를 자동 갱신</li>
+            <li>검색창 입력 시 종목명 기준 즉시 필터링</li>
+            <li>등락률에 따라 <span class="badge badge-up">상승(빨강)</span><span class="badge badge-down">하락(파랑)</span> 색상 구분, 카드 내 스파크라인으로 최근 추세 시각화</li>
+        </ul>
+        <h3>4.2 캔들 차트</h3>
+        <ul>
+            <li>체결 시마다 <code>candlesticks/{stockId}/{분단위 timestamp}</code>에 OHLCV 데이터 기록</li>
+            <li>기간 탭(예: 10분/1시간 등)과 분봉 단위 탭을 조합해 조회 범위를 조정</li>
+            <li>최대 <strong>360분</strong> 데이터만 보관, 이전 데이터는 주기적으로 삭제되어 DB 용량 관리</li>
+            <li>차트 호버 시 캔들 정보(시가/고가/저가/종가/거래량) 툴팁 표시</li>
+        </ul>
+        <h3>4.3 랭킹 시스템</h3>
+        <ul>
+            <li>거래 발생 시 거래량 변동치를 누적(디바운싱, 30초 간격)한 뒤 서버에 일괄 반영해 쓰기 횟수를 절약</li>
+            <li>집계된 TOP5는 <code>rankings/top5</code>에 저장되어 모든 유저에게 동일하게 노출</li>
+        </ul>
+        <h3>4.4 홍보 배너 / 광고</h3>
+        <ul>
+            <li><strong>랭킹 배너:</strong> 스트리머 홍보 이미지 + 노출 기간(D-Day) 설정, 기간 만료 시 자동 제외</li>
+            <li><strong>차트 하단 배너:</strong> 720×150px 규격의 별도 광고 슬롯 (<code>chartBanner</code> 노드), 랭킹 배너와 별도 운영/과금</li>
+        </ul>
+    </section>
+
+    <section id="sec5">
+        <h2><span class="num">5</span>거래(매매) 로직</h2>
+        <p>모든 매매는 Firebase <code>runTransaction</code>으로 원자적으로 처리되어 동시 거래 시 정합성을 보장합니다.</p>
+        <div class="grid-2">
+            <div class="card">
+                <h3>가격 결정 공식</h3>
+                <ul>
+                    <li><strong>시장 충격(impact):</strong> <code>0.001 × 수량</code></li>
+                    <li><strong>스프레드(spread):</strong> <code>0.0005</code></li>
+                    <li><strong>매도 수수료(fee):</strong> <code>0.3%</code></li>
+                    <li>매수가 = 신규가 × (1 + spread), 매도가 = 신규가 × (1 − spread)</li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>제한 · 검증</h3>
+                <ul>
+                    <li>거래 쿨다운: <strong>1초</strong> (연속 클릭 방지)</li>
+                    <li>매수 시 잔액 부족 검증, 매도 시 보유 수량 부족 검증</li>
+                    <li>체결 시 평단가(avg) 자동 재계산, 매수/매도 효과음 재생</li>
+                </ul>
+            </div>
+        </div>
+        <p>체결 후에는 유저 데이터(<code>users/{uid}</code>) 갱신 → 분봉 캔들 업데이트 → 랭킹 반영(디바운스 예약) 순으로 후처리가 이어집니다.</p>
+    </section>
+
+    <section id="sec6">
+        <h2><span class="num">6</span>인증 · 관리자 모드</h2>
+        <ul>
+            <li><strong>일반 유저:</strong> 별도 로그인 없이 Firebase <strong>익명 인증(signInAnonymously)</strong>으로 자동 참여, UID 기준으로 자산/보유 종목이 저장됨</li>
+            <li><strong>관리자 인증:</strong> <code>Ctrl + Enter</code> 입력 시 구글 로그인 팝업 실행 → 로그인 계정이 관리자 이메일과 일치하면 <span class="badge badge-admin">관리자 모드</span> 활성화</li>
+            <li>관리자 모드 활성화 시 <strong>점검 오버레이를 스킵</strong>하고 정상 서비스 화면으로 진입 (점검 중에도 관리자 본인은 접속/점검 확인 가능)</li>
+            <li>관리자 계정은 별도 관리자 페이지(<code>soop-stocks-admin-gate16103.html</code>)와 동일 계정을 사용 — 종목 시세 강제 조정, 랭킹 재계산, 배너 등록, 비활성 유저 정리 등은 해당 페이지에서 수행</li>
+        </ul>
+        <div class="note"><b>참고</b> — 관리자 판별은 클라이언트 단에서 이메일 문자열을 비교하는 방식이므로, 실제 데이터 쓰기 권한은 Firebase 보안 규칙(<code>database.rules.json</code>)으로 별도 검증되어야 합니다.</div>
+    </section>
+
+    <section id="sec7">
+        <h2><span class="num">7</span>점검(유지보수) 모드</h2>
+        <div class="flow">
+            <div class="flow-step">페이지 접속</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-step">Firebase Auth 초기화</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-step">관리자 계정 확인</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-step">일치 시: 서비스 진입</div>
+        </div>
+        <div class="flow">
+            <div class="flow-step">&nbsp;</div>
+            <span class="flow-arrow">　</span>
+            <div class="flow-step">&nbsp;</div>
+            <span class="flow-arrow">　</span>
+            <div class="flow-step">불일치/미로그인 시</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-step">점검 오버레이 노출 (전면 차단)</div>
+        </div>
+        <ul>
+            <li>점검 플래그(<code>LONG_MAINTENANCE</code>)는 코드 상수로 on/off — 장기 점검 시 <code>true</code>로 설정</li>
+            <li>점검 중에는 일반 유저의 실시간 데이터 구독·거래 로직 자체가 실행되지 않아 서버 부하 및 오작동을 원천 차단</li>
+            <li>점검 안내창에는 사유 안내와 <strong>개발자 방송국 바로가기</strong> 버튼 제공</li>
+        </ul>
+    </section>
+
+    <section id="sec8">
+        <h2><span class="num">8</span>데이터 구조 (Firebase Realtime Database)</h2>
+        <table>
+            <tr><th>경로</th><th>설명</th></tr>
+            <tr><td><code>stocks/{id}</code></td><td>종목별 현재가, 최근 가격 히스토리, 거래량, 등락률</td></tr>
+            <tr><td><code>users/{uid}</code></td><td>유저 보유 현금(cash), 보유 종목(stocks: qty/avg), 최근 거래 시각</td></tr>
+            <tr><td><code>candlesticks/{stockId}/{분단위 timestamp}</code></td><td>OHLCV 분봉 데이터 (최대 360분 보관)</td></tr>
+            <tr><td><code>rankings/top5</code></td><td>거래량 기준 상위 5개 종목 (디바운스 배치 반영)</td></tr>
+            <tr><td><code>presence/count</code>, <code>presence/users/{uid}</code></td><td>실시간 접속자 수 집계 (접속 시 등록, onDisconnect로 자동 정리)</td></tr>
+            <tr><td><code>chartBanner</code></td><td>차트 모달 하단 광고 배너 이미지/링크</td></tr>
+        </table>
+    </section>
+
+    <section id="sec9">
+        <h2><span class="num">9</span>시스템 흐름도</h2>
+        <h3>일반 유저 접속 흐름</h3>
+        <div class="flow">
+            <div class="flow-step">접속</div><span class="flow-arrow">→</span>
+            <div class="flow-step">인트로 오버레이</div><span class="flow-arrow">→</span>
+            <div class="flow-step">익명 로그인</div><span class="flow-arrow">→</span>
+            <div class="flow-step">유저 데이터 로드</div><span class="flow-arrow">→</span>
+            <div class="flow-step">종목 리스트 실시간 구독 시작</div>
+        </div>
+        <h3>매매 체결 흐름</h3>
+        <div class="flow">
+            <div class="flow-step">매수/매도 클릭</div><span class="flow-arrow">→</span>
+            <div class="flow-step">쿨다운/잔액 검증</div><span class="flow-arrow">→</span>
+            <div class="flow-step">runTransaction 체결</div><span class="flow-arrow">→</span>
+            <div class="flow-step">유저 데이터 갱신</div><span class="flow-arrow">→</span>
+            <div class="flow-step">캔들 업데이트</div><span class="flow-arrow">→</span>
+            <div class="flow-step">랭킹 반영 예약</div>
+        </div>
+    </section>
+
+    <section id="sec10">
+        <h2><span class="num">10</span>향후 보완 과제</h2>
+        <ul class="todo-list">
+            <li><span class="todo-check"></span>Firebase 보안 규칙 기준 관리자 서버측 검증 문서화 (클라이언트 이메일 비교 보완)</li>
+            <li><span class="todo-check"></span>매매 로직(시장충격/스프레드/수수료 수치) 밸런스 정책 문서화 및 변경 이력 관리</li>
+            <li><span class="todo-check"></span>배너/광고 상품 가격표 및 판매 프로세스 별도 문서화</li>
+            <li><span class="todo-check"></span>신규 스트리머(종목) 상장/폐지 기준 정리</li>
+            <li><span class="todo-check"></span>부정 거래(매크로/봇) 방지 정책 검토</li>
+        </ul>
+    </section>
+
+    <footer>SOOP STOCK 거래소 · 기획서 v1.0 · index.html 코드 기준 작성</footer>
+</div>
+</body>
+</html>
