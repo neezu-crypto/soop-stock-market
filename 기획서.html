@@ -130,6 +130,7 @@
             <span>문서 유형: <b>사후 정리 기획서 (As-Is)</b></span>
             <span>대상 파일: <b>index.html</b></span>
             <span>작성일: <b>2026-07-06</b></span>
+            <span>최종 수정일: <b>2026-07-06</b></span>
         </div>
     </div>
 
@@ -188,7 +189,7 @@
             <tr><th>영역</th><th>설명</th></tr>
             <tr><td><strong>인트로 오버레이</strong></td><td>최초 접속 시 로고 · 서비스 소개를 보여주며 Firebase 연결 완료 시 자동으로 사라짐 (5초 초과 시 새로고침 안내)</td></tr>
             <tr><td><strong>지갑(Wallet) 바</strong></td><td>상단 고정(sticky) 바 — 보유 현금 표시</td></tr>
-            <tr><td><strong>실시간 접속자 수</strong></td><td>presence 데이터를 기반으로 동시 접속자 수 표시</td></tr>
+            <tr><td><strong>접속자 수</strong></td><td>presence 데이터를 <strong>페이지 접속 시 1회</strong> 조회해 표시 (이후 주기적 재조회 없음)</td></tr>
             <tr><td><strong>랭킹 바 / 홍보 배너</strong></td><td>거래량 TOP5 및 스트리머 홍보 배너(D-Day 뱃지 포함) 노출</td></tr>
             <tr><td><strong>내 보유 주식 패널</strong></td><td>보유 중인 종목 목록 — 클릭 시 검색창과 연동되어 해당 종목으로 스크롤</td></tr>
             <tr><td><strong>검색창</strong></td><td>종목(스트리머)명을 실시간 필터링</td></tr>
@@ -203,9 +204,17 @@
         <h2><span class="num">4</span>주요 기능</h2>
         <h3>4.1 종목 리스트 &amp; 검색</h3>
         <ul>
-            <li>전체 종목을 실시간(onValue) 구독하여 가격 변동 시 카드 UI를 자동 갱신</li>
-            <li>검색창 입력 시 종목명 기준 즉시 필터링</li>
+            <li>페이지 진입 시 전체 종목을 <strong>1회 조회(get)</strong>해 검색/정렬 기준 데이터(<code>allStocks</code>)를 구성</li>
+            <li>가격순 정렬 후 상위 <strong>100개</strong> 또는 검색어와 일치하는 종목만 카드로 렌더링</li>
+            <li>검색창 입력 시 종목명 기준 즉시 필터링 → 노출 목록이 바뀌면 구독 대상도 함께 갱신</li>
             <li>등락률에 따라 <span class="badge badge-up">상승(빨강)</span><span class="badge badge-down">하락(파랑)</span> 색상 구분, 카드 내 스파크라인으로 최근 추세 시각화</li>
+        </ul>
+        <h3>4.1.1 실시간 구독 최적화 (노출 종목만 갱신)</h3>
+        <ul>
+            <li>전체 종목을 항상 실시간 구독하던 방식에서, <strong>현재 화면에 렌더링된 종목만 개별 구독</strong>하는 방식으로 전환</li>
+            <li>검색/정렬 결과가 바뀌어 화면에서 사라진 종목은 구독을 즉시 해제하고, 새로 노출된 종목만 구독을 추가 (<code>syncStockSubscriptions()</code>)</li>
+            <li><strong>보유 중인 종목</strong>은 목록에 노출되지 않아도 내 보유 주식 패널의 실시간 손익 반영을 위해 예외적으로 항상 구독 유지</li>
+            <li>목적: 종목 수가 많아져도 불필요한 실시간 트래픽/DB 읽기 비용이 늘지 않도록 화면에 보이는 데이터만 최신 상태로 유지</li>
         </ul>
         <h3>4.2 캔들 차트</h3>
         <ul>
@@ -297,7 +306,7 @@
             <tr><td><code>users/{uid}</code></td><td>유저 보유 현금(cash), 보유 종목(stocks: qty/avg), 최근 거래 시각</td></tr>
             <tr><td><code>candlesticks/{stockId}/{분단위 timestamp}</code></td><td>OHLCV 분봉 데이터 (최대 360분 보관)</td></tr>
             <tr><td><code>rankings/top5</code></td><td>거래량 기준 상위 5개 종목 (디바운스 배치 반영)</td></tr>
-            <tr><td><code>presence/count</code>, <code>presence/users/{uid}</code></td><td>실시간 접속자 수 집계 (접속 시 등록, onDisconnect로 자동 정리)</td></tr>
+            <tr><td><code>presence/users/{uid}</code></td><td>접속자 등록 (접속 시 1회 기록, onDisconnect로 자동 정리) — 접속자 수는 이 노드 개수를 접속 시 1회 조회해 표시</td></tr>
             <tr><td><code>chartBanner</code></td><td>차트 모달 하단 광고 배너 이미지/링크</td></tr>
         </table>
     </section>
@@ -334,7 +343,7 @@
         </ul>
     </section>
 
-    <footer>SOOP STOCK 거래소 · 기획서 v1.0 · index.html 코드 기준 작성</footer>
+    <footer>SOOP STOCK 거래소 · 기획서 v1.1 · index.html 코드 기준 작성 (실시간 구독 최적화 반영)</footer>
 </div>
 </body>
 </html>
