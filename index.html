@@ -741,10 +741,12 @@
 ══════════════════════════════════════════ -->
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, runTransaction, get, set, remove, onDisconnect, serverTimestamp }
+import { getDatabase, ref, onValue, get, set, onDisconnect }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, signInWithPopup, GoogleAuthProvider, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+import { getFunctions, httpsCallable }
+                             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 
 (function () {
 
@@ -761,10 +763,12 @@ const firebaseConfig = {
     projectId:   "soop-stock-market",
     appId:       "1:997788925900:web:cb613d438efec019a3a769"
 };
-const app      = initializeApp(firebaseConfig);
-const db       = getDatabase(app);
-const auth     = getAuth(app);
-const provider = new GoogleAuthProvider();
+const app       = initializeApp(firebaseConfig);
+const db        = getDatabase(app);
+const auth      = getAuth(app);
+const provider  = new GoogleAuthProvider();
+const functions = getFunctions(app);
+const tradeCallable = httpsCallable(functions, 'trade');
 
 let appStarted = false;
 
@@ -823,9 +827,6 @@ let candleChartInstance  = null;   // Chart.js 인스턴스
 let candleDataCache      = [];     // Firebase에서 받은 원시 캔들 배열
 let candleUnsubscribe    = null;   // (미사용 — get() 1회 방식으로 전환)
 let chartIsLoading       = false;  // 중복 fetch 방지
-
-// 최대 보관 기간 (분). Firebase에 저장할 최대 캔들 수
-const MAX_CANDLE_MINUTES = 360;
 
 // ── 사운드 ──────────────────────────────────────────────────
 const buySound  = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
@@ -1079,59 +1080,8 @@ async function flushRankingUpdate() {
 // 분봉 차트 로직
 // ══════════════════════════════════════════════════════════════
 
-/**
- * 현재 분(분 단위 UNIX timestamp, 초 단위)을 반환
- * 예: 14:37 → 14:37:00 의 UNIX 초
- */
-function currentMinuteTs() {
-    return Math.floor(Date.now() / 60000) * 60;
-}
-
-/**
- * 거래 발생 시 해당 종목의 분봉 업데이트
- * candlesticks/{stockId}/{minuteTs} = { o, h, l, c, v, t }
- */
-async function updateCandlestick(stockId, tradePrice, qty) {
-    const ts       = currentMinuteTs();
-    const candleRef = ref(db, `candlesticks/${stockId}/${ts}`);
-
-    await runTransaction(candleRef, (current) => {
-        if (!current) {
-            // 새 분봉 시작
-            return { o: tradePrice, h: tradePrice, l: tradePrice, c: tradePrice, v: qty, t: ts };
-        }
-        return {
-            ...current,
-            h: Math.max(current.h, tradePrice),
-            l: Math.min(current.l, tradePrice),
-            c: tradePrice,
-            v: current.v + qty,
-            t: ts
-        };
-    });
-
-    // 6시간(360분) 초과 구간 정리 (오래된 캔들 삭제)
-    pruneOldCandles(stockId);
-}
-
-/**
- * 360분 이전 캔들 삭제
- */
-async function pruneOldCandles(stockId) {
-    const cutoff  = (Math.floor(Date.now() / 60000) - MAX_CANDLE_MINUTES) * 60;
-    const oldRef  = ref(db, `candlesticks/${stockId}`);
-    try {
-        const snap = await get(oldRef);
-        if (!snap.exists()) return;
-        const data = snap.val();
-        const toDelete = Object.keys(data).filter(ts => parseInt(ts) < cutoff);
-        for (const ts of toDelete) {
-            await set(ref(db, `candlesticks/${stockId}/${ts}`), null);
-        }
-    } catch (e) {
-        // 정리 실패는 무시 (다음 거래 때 재시도)
-    }
-}
+// candlesticks/{stockId}/{minuteTs} = { o, h, l, c, v, t }
+// 분봉 기록·정리는 매매 처리(functions/index.js의 trade 콜러블)에서 서버가 수행한다.
 
 /**
  * n분봉으로 집계: 1분봉 배열 → n분봉 배열
@@ -1469,6 +1419,8 @@ window.tradeFromModal = function(type, qty) {
 };
 
 // ── 거래 함수 ────────────────────────────────────────────────
+// 가격 계산·잔고 검증·기록은 전부 Cloud Function(trade)이 서버에서 처리한다.
+// (클라이언트는 stocks/users를 직접 쓸 수 없도록 database.rules.json에서 막혀 있음)
 window.trade = async function (id, type, qty = 1) {
     const currentTime  = Date.now();
     const cooldownTime = 1000;
@@ -1484,87 +1436,23 @@ window.trade = async function (id, type, qty = 1) {
     isTrading = true;
     updateUI(false);
 
-    if (!myData.stocks) myData.stocks = {};
-
-    const stockRef = ref(db, `stocks/${id}`);
-    const userRef  = ref(db, `users/${userUID}`);
-    const impact   = 0.001 * qty;
-    const spread   = 0.0005;
-    const fee      = 0.003;
-
-    let qtyDelta     = 0;
-    let finalPrice   = 0;
-
     try {
-        await runTransaction(stockRef, (currentStock) => {
-            if (!currentStock) return currentStock;
-            if (!myData) throw new Error("데이터 로딩 중");
+        const result = await tradeCallable({ stockId: id, type, qty });
+        const { cash, position } = result.data;
 
-            let finalTradePrice, newPrice;
-
-            if (type === 'buy') {
-                newPrice        = Math.round(currentStock.price * (1 + impact));
-                finalTradePrice = Math.round(newPrice * (1 + spread));
-                const totalBuyPrice = finalTradePrice * qty;
-                if (myData.cash < totalBuyPrice) throw new Error("잔액부족");
-
-                const userStock  = myData.stocks[id] || { qty: 0, avg: 0 };
-                const totalCost  = (userStock.qty * userStock.avg) + totalBuyPrice;
-                userStock.qty   += qty;
-                userStock.avg    = Math.round(totalCost / userStock.qty);
-                myData.cash     -= totalBuyPrice;
-                myData.stocks[id] = userStock;
-                qtyDelta   = qty;
-                finalPrice = finalTradePrice;
-            } else {
-                const userStock = myData.stocks[id] || { qty: 0, avg: 0 };
-                if (userStock.qty < qty) throw new Error("보유부족");
-
-                newPrice        = Math.round(currentStock.price * (1 - impact));
-                finalTradePrice = Math.round(newPrice * (1 - spread));
-                const totalSellAmount = Math.round((finalTradePrice * qty) * (1 - fee));
-
-                myData.cash      += totalSellAmount;
-                userStock.qty    -= qty;
-                if (userStock.qty === 0) userStock.avg = 0;
-                myData.stocks[id] = userStock;
-                qtyDelta   = -qty;
-                finalPrice = finalTradePrice;
-            }
-
-            let history = currentStock.history || [currentStock.price];
-            history.push(newPrice);
-            if (history.length > 20) history.shift();
-
-            return {
-                ...currentStock,
-                price:   newPrice,
-                history: history,
-                volume:  (currentStock.volume || 0) + qty,
-                change:  (((newPrice - history[0]) / history[0]) * 100).toFixed(2)
-            };
-        });
-
-        await set(userRef, { ...myData, lastTradeTime: serverTimestamp() });
-
-        // ── 분봉 업데이트 (신규) ──────────────────────────────
-        if (finalPrice > 0) {
-            updateCandlestick(id, finalPrice, qty).catch(e => {
-                console.warn('[candle] 분봉 업데이트 실패 (무시):', e.message);
-            });
-        }
+        if (!myData.stocks) myData.stocks = {};
+        myData.cash       = cash;
+        myData.stocks[id] = position;
 
         const sound = type === 'buy' ? buySound : sellSound;
         sound.currentTime = 0;
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
-        scheduleRankingUpdate(id, qtyDelta);
+        scheduleRankingUpdate(id, type === 'buy' ? qty : -qty);
 
     } catch (error) {
-        if (error.message === "잔액부족") alert("잔액이 부족합니다!");
-        else if (error.message === "보유부족") alert("보유 주식이 부족합니다!");
-        else alert("거래 중 오류가 발생했습니다.");
+        alert(error?.message || "거래 중 오류가 발생했습니다.");
     } finally {
         setTimeout(() => {
             isTrading = false;

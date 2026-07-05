@@ -244,7 +244,7 @@
 
     <section id="sec5">
         <h2><span class="num">5</span>거래(매매) 로직</h2>
-        <p>모든 매매는 Firebase <code>runTransaction</code>으로 원자적으로 처리되어 동시 거래 시 정합성을 보장합니다.</p>
+        <p>모든 매매는 클라이언트가 아닌 <strong>Cloud Function(<code>trade</code> callable, <code>functions/index.js</code>)</strong>이 Admin SDK로 서버에서 계산·기록합니다. 클라이언트는 종목 id·매수/매도·수량만 전달하고, 가격 계산·잔고 검증·기록은 전부 서버 책임입니다. <code>stocks/{id}</code>·<code>users/{uid}</code>·<code>candlesticks</code>에 대한 클라이언트 직접 쓰기 권한은 <code>database.rules.json</code>에서 막혀 있어 관리자 계정 외에는 이 경로들을 직접 조작할 수 없습니다.</p>
         <div class="grid-2">
             <div class="card">
                 <h3>가격 결정 공식</h3>
@@ -264,7 +264,7 @@
                 </ul>
             </div>
         </div>
-        <p>체결 후에는 유저 데이터(<code>users/{uid}</code>) 갱신 → 분봉 캔들 업데이트 → 랭킹 반영(디바운스 예약) 순으로 후처리가 이어집니다.</p>
+        <p>Cloud Function 내부에서 <strong>① 종목 가격 트랜잭션 → ② 유저 잔고/보유수량 트랜잭션(쿨다운·잔액·보유량 서버 재검증) → ③ 분봉 캔들 기록</strong> 순으로 처리한 뒤, 결과(체결가·잔고·보유수량)를 클라이언트에 반환합니다. 랭킹 반영(디바운스 예약)은 아직 클라이언트 쪽에 남아있는 후처리 단계입니다.</p>
     </section>
 
     <section id="sec6">
@@ -275,7 +275,7 @@
             <li>관리자 모드 활성화 시 <strong>점검 오버레이를 스킵</strong>하고 정상 서비스 화면으로 진입 (점검 중에도 관리자 본인은 접속/점검 확인 가능)</li>
             <li>관리자 계정은 별도 관리자 페이지(<code>soop-stocks-admin-gate16103.html</code>)와 동일 계정을 사용 — 종목 시세 강제 조정, 랭킹 재계산, 배너 등록, 비활성 유저 정리 등은 해당 페이지에서 수행</li>
         </ul>
-        <div class="note"><b>참고</b> — 관리자 판별은 클라이언트 단에서 이메일 문자열을 비교하는 방식이므로, 실제 데이터 쓰기 권한은 Firebase 보안 규칙(<code>database.rules.json</code>)으로 별도 검증되어야 합니다.</div>
+        <div class="note"><b>참고</b> — 관리자 판별은 클라이언트 단에서 이메일 문자열을 비교하는 방식이며, 실제 데이터 쓰기 권한은 <code>database.rules.json</code>에서 <code>auth.token.email</code> 기준으로 서버측에 별도 검증되어 있습니다. 매매 로직은 Cloud Function(<code>trade</code>)으로 이전되어 클라이언트가 <code>stocks</code>/<code>users</code>/<code>candlesticks</code>를 직접 쓸 수 없으므로, 규칙 허용 범위 내에서의 값 조작 문제는 해소되었습니다. 남은 과제는 랭킹(<code>rankings/top5</code>) 집계로, 아직 클라이언트가 직접 계산해 기록합니다.</div>
     </section>
 
     <section id="sec7">
@@ -331,25 +331,24 @@
         <h3>매매 체결 흐름</h3>
         <div class="flow">
             <div class="flow-step">매수/매도 클릭</div><span class="flow-arrow">→</span>
-            <div class="flow-step">쿨다운/잔액 검증</div><span class="flow-arrow">→</span>
-            <div class="flow-step">runTransaction 체결</div><span class="flow-arrow">→</span>
-            <div class="flow-step">유저 데이터 갱신</div><span class="flow-arrow">→</span>
-            <div class="flow-step">캔들 업데이트</div><span class="flow-arrow">→</span>
-            <div class="flow-step">랭킹 반영 예약</div>
+            <div class="flow-step">Cloud Function 호출 (trade)</div><span class="flow-arrow">→</span>
+            <div class="flow-step">서버: 쿨다운/잔액/보유량 검증</div><span class="flow-arrow">→</span>
+            <div class="flow-step">서버: 종목가·유저잔고 트랜잭션</div><span class="flow-arrow">→</span>
+            <div class="flow-step">서버: 캔들 기록</div><span class="flow-arrow">→</span>
+            <div class="flow-step">결과 반환 → 랭킹 반영 예약(클라이언트)</div>
         </div>
     </section>
 
     <section id="sec10">
         <h2><span class="num">10</span>향후 보완 과제</h2>
         <ul class="todo-list">
-            <li><span class="todo-check"></span>Firebase 보안 규칙 기준 관리자 서버측 검증 문서화 (클라이언트 이메일 비교 보완)</li>
             <li><span class="todo-check"></span>매매 로직(시장충격/스프레드/수수료 수치) 밸런스 정책 문서화 및 변경 이력 관리</li>
             <li><span class="todo-check"></span>신규 스트리머(종목) 상장/폐지 기준 정리</li>
             <li><span class="todo-check"></span>부정 거래(매크로/봇) 방지 정책 검토</li>
         </ul>
     </section>
 
-    <footer>SOOP STOCK 거래소 · 기획서 v1.3 · index.html 코드 기준 작성 (배너 광고 단가 표 반영, 무료 체험 폐지)</footer>
+    <footer>SOOP STOCK 거래소 · 기획서 v1.5 · index.html 코드 기준 작성 (매매 로직 Cloud Function 이전 반영)</footer>
 </div>
 </body>
 </html>
