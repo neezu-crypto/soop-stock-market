@@ -140,19 +140,27 @@
         </div>
     </div>
 
-    <!-- 📺 차트 하단 배너 관리 (신규) -->
+    <!-- 📺 차트 하단 배너 관리 (종목별 노출) -->
     <div class="container" style="display:block; border-color: #38bdf8;">
         <h1>📺 차트 하단 배너 관리</h1>
         <div class="info-box">
-            차트창 하단에 단독 노출되는 광고 배너를 설정합니다.<br>
+            차트창 하단 광고는 <b style="color:#38bdf8;">종목(스트리머)별로 개별 노출</b>됩니다. 전체 종목에 공동 노출되지 않고,
+            해당 종목의 차트를 볼 때만 배너가 표시되므로 거래량이 많은 인기 종목일수록 노출 가치가 높아집니다.<br>
             <span style="color:#38bdf8;">배너 사이즈: 720 × 150px · 이미지 및 GIF 지원</span><br>
             <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 무료 체험 없음 · 별풍선 30개/일</span>
         </div>
 
+        <!-- 종목별 조회 -->
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <input type="text" id="cb-lookup-nickname" placeholder="조회할 스트리머 닉네임"
+                style="flex:1; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
+            <button class="btn-success" onclick="loadChartBannerStatus()" style="padding:0 18px;">🔍 조회</button>
+        </div>
+
         <!-- 현재 등록 상태 -->
         <div class="chart-banner-info-row">
-            <span>현재 배너 상태:</span>
-            <span id="chart-banner-status" class="status-chip loading">불러오는 중...</span>
+            <span>배너 상태:</span>
+            <span id="chart-banner-status" class="status-chip none">닉네임을 조회하세요</span>
         </div>
         <div id="chart-banner-current" style="display:none; margin-bottom:15px;">
             <div class="chart-banner-info-row">
@@ -180,6 +188,9 @@
         <!-- 신규 등록 폼 -->
         <div style="border-top: 1px solid #334155; padding-top: 15px; display:flex; flex-direction:column; gap:10px;">
             <div style="font-size:13px; color:#38bdf8; font-weight:700;">새 배너 등록</div>
+
+            <input type="text" id="cb-target-nickname" placeholder="배너를 노출할 대상 스트리머 닉네임 (정확히 입력)"
+                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
 
             <input type="text" id="cb-name" placeholder="광고주 닉네임 (관리용)"
                 style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
@@ -336,14 +347,32 @@
     }
 
     // ══════════════════════════════════════════════════════
-    // 차트 하단 배너 관리
+    // 차트 하단 배너 관리 (종목별 개별 노출)
+    // Firebase: chartBanner/{stockId} = { name, img, link, endDate }
     // ══════════════════════════════════════════════════════
 
-    async function loadChartBannerStatus() {
+    let currentChartBannerStockId = null;
+
+    async function findStockIdByNickname(nickname) {
+        const snap = await get(ref(db, 'stocks/'));
+        const data = snap.val() || {};
+        let targetId = null;
+        Object.entries(data).forEach(([id, s]) => { if (s.name === nickname) targetId = id; });
+        return targetId;
+    }
+
+    window.loadChartBannerStatus = async function() {
+        const nickname  = document.getElementById('cb-lookup-nickname').value.trim();
         const statusEl  = document.getElementById('chart-banner-status');
         const currentEl = document.getElementById('chart-banner-current');
+        if (!nickname) return alert('조회할 스트리머 닉네임을 입력해주세요.');
+
         try {
-            const snap = await get(ref(db, 'chartBanner'));
+            const targetId = await findStockIdByNickname(nickname);
+            if (!targetId) return alert(`❌ '${nickname}'을 찾을 수 없습니다.`);
+            currentChartBannerStockId = targetId;
+
+            const snap = await get(ref(db, `chartBanner/${targetId}`));
             if (!snap.exists() || !snap.val().img) {
                 statusEl.className  = 'status-chip none';
                 statusEl.innerText  = '등록 없음';
@@ -383,14 +412,16 @@
             statusEl.className = 'status-chip unsaved';
             statusEl.innerText = '불러오기 실패';
         }
-    }
+    };
 
     window.saveChartBanner = async function() {
+        const targetNickname = document.getElementById('cb-target-nickname').value.trim();
         const name    = document.getElementById('cb-name').value.trim();
         const img     = document.getElementById('cb-img').value.trim();
         const link    = document.getElementById('cb-link').value.trim();
         const days    = parseInt(document.getElementById('cb-days').value);
 
+        if (!targetNickname) return alert('배너를 노출할 대상 스트리머 닉네임을 입력해주세요.');
         if (!img)          return alert('배너 이미지 URL을 입력해주세요.');
         if (!link)         return alert('이동 링크를 입력해주세요.');
         if (isNaN(days) || days < 1) return alert('노출 기간(일)을 올바르게 입력해주세요.');
@@ -399,14 +430,17 @@
         endDate.setDate(endDate.getDate() + days);
         const endDateStr = endDate.toISOString().split('T')[0];
 
-        const payload = { name, img, link, endDate: endDateStr };
-
-        if (!confirm(`차트 하단 배너를 등록하시겠습니까?\n\n광고주: ${name || '(없음)'}\n링크: ${link}\n종료일: ${endDateStr}`)) return;
-
         try {
-            await set(ref(db, 'chartBanner'), payload);
-            alert(`✅ 차트 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
+            const targetId = await findStockIdByNickname(targetNickname);
+            if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
+
+            const payload = { name, img, link, endDate: endDateStr };
+            if (!confirm(`'${targetNickname}' 종목의 차트 하단 배너를 등록하시겠습니까?\n\n광고주: ${name || '(없음)'}\n링크: ${link}\n종료일: ${endDateStr}`)) return;
+
+            await set(ref(db, `chartBanner/${targetId}`), payload);
+            alert(`✅ '${targetNickname}' 종목에 차트 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
             // 입력 초기화
+            document.getElementById('cb-target-nickname').value = '';
             document.getElementById('cb-name').value  = '';
             document.getElementById('cb-img').value   = '';
             document.getElementById('cb-link').value  = '';
@@ -414,18 +448,20 @@
             document.getElementById('cb-preview-img').style.display = 'none';
             document.getElementById('cb-preview-empty').style.display = 'flex';
             document.getElementById('cb-enddate-preview').innerText = '';
-            await loadChartBannerStatus();
+
+            if (currentChartBannerStockId === targetId) await window.loadChartBannerStatus();
         } catch (e) {
             alert('저장 실패: ' + e.message);
         }
     };
 
     window.deleteChartBanner = async function() {
-        if (!confirm('현재 차트 배너를 삭제하시겠습니까?\n삭제 시 즉시 모집 안내로 교체됩니다.')) return;
+        if (!currentChartBannerStockId) return alert('먼저 닉네임으로 배너를 조회해주세요.');
+        if (!confirm('현재 조회된 종목의 차트 배너를 삭제하시겠습니까?\n삭제 시 즉시 모집 안내로 교체됩니다.')) return;
         try {
-            await remove(ref(db, 'chartBanner'));
+            await remove(ref(db, `chartBanner/${currentChartBannerStockId}`));
             alert('✅ 차트 배너가 삭제되었습니다.');
-            await loadChartBannerStatus();
+            await window.loadChartBannerStatus();
         } catch (e) {
             alert('삭제 실패: ' + e.message);
         }
@@ -476,7 +512,6 @@
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
             await loadStocksOnce();
             await loadRankingStatus();
-            await loadChartBannerStatus();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';

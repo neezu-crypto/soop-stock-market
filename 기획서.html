@@ -231,7 +231,8 @@
         <h3>4.4 홍보 배너 / 광고</h3>
         <ul>
             <li><strong>랭킹 배너:</strong> 스트리머 홍보 이미지 + 노출 기간(D-Day) 설정, 기간 만료 시 자동 제외</li>
-            <li><strong>차트 하단 배너:</strong> 720×150px 규격의 별도 광고 슬롯 (<code>chartBanner</code> 노드), 랭킹 배너와 별도 운영/과금</li>
+            <li><strong>차트 하단 배너:</strong> 720×150px 규격의 별도 광고 슬롯, 랭킹 배너와 별도 운영/과금</li>
+            <li><strong>종목별 개별 노출:</strong> 전체 종목 공동 노출이 아닌 <code>chartBanner/{stockId}</code> 단위로 종목마다 독립적인 배너를 설정 — 거래량이 많은 인기 종목일수록 노출 가치가 높아져 홍보 신청 유지 유인을 제공</li>
         </ul>
     </section>
 
@@ -307,7 +308,7 @@
             <tr><td><code>candlesticks/{stockId}/{분단위 timestamp}</code></td><td>OHLCV 분봉 데이터 (최대 360분 보관)</td></tr>
             <tr><td><code>rankings/top5</code></td><td>거래량 기준 상위 5개 종목 (디바운스 배치 반영)</td></tr>
             <tr><td><code>presence/users/{uid}</code></td><td>접속자 등록 (접속 시 1회 기록, onDisconnect로 자동 정리) — 접속자 수는 이 노드 개수를 접속 시 1회 조회해 표시</td></tr>
-            <tr><td><code>chartBanner</code></td><td>차트 모달 하단 광고 배너 이미지/링크</td></tr>
+            <tr><td><code>chartBanner/{stockId}</code></td><td>종목별 차트 모달 하단 광고 배너 이미지/링크/종료일 (종목마다 개별 설정, 전체 공동 노출 아님)</td></tr>
         </table>
     </section>
 
@@ -343,7 +344,7 @@
         </ul>
     </section>
 
-    <footer>SOOP STOCK 거래소 · 기획서 v1.1 · index.html 코드 기준 작성 (실시간 구독 최적화 반영)</footer>
+    <footer>SOOP STOCK 거래소 · 기획서 v1.2 · index.html 코드 기준 작성 (실시간 구독 최적화, 차트 배너 종목별 노출 반영)</footer>
 </div>
 </body>
 </html>
