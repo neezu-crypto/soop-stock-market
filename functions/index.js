@@ -577,7 +577,8 @@ exports.adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB"
 // 홍보 배너 신청 (우측 랭킹 배너) — 신청은 누구나, 승인/거절은 관리자만
 // ══════════════════════════════════════════════════════════
 
-const STREAMER_ID_RE = /^[a-z0-9]{2,20}$/;
+const STREAMER_ID_RE     = /^[a-z0-9]{2,20}$/;
+const MAX_BANNER_REQUEST_DAYS = 7; // 신청 시 신청자가 고를 수 있는 노출 기간 상한
 
 function buildBannerPreview(streamerId) {
   const prefix = streamerId.slice(0, 2);
@@ -597,10 +598,14 @@ exports.submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "
 
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
+  const days        = parseInt(request.data?.days, 10);
 
   if (!nickname) throw new HttpsError("invalid-argument", "닉네임을 입력해주세요.");
   if (!STREAMER_ID_RE.test(streamerId)) {
     throw new HttpsError("invalid-argument", "아이디는 영문 소문자/숫자 2~20자여야 합니다.");
+  }
+  if (!Number.isInteger(days) || days < 1 || days > MAX_BANNER_REQUEST_DAYS) {
+    throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이로 입력해주세요.`);
   }
 
   const db  = admin.database();
@@ -612,6 +617,7 @@ exports.submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "
     streamerId,
     previewImg,
     stationLink,
+    days,
     status:       "pending",
     requestedAt:  Date.now(),
     requesterUid: auth.uid,

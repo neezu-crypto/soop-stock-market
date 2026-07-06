@@ -799,11 +799,11 @@
                              onerror="this.style.display='none';">
                         <div style="flex:1;min-width:0;">
                             <div style="font-weight:800;font-size:14px;">${r.nickname}</div>
-                            <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
+                            <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
                         </div>
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;">
-                        <input type="number" min="1" max="365" value="7" id="req-days-${r.id}"
+                        <input type="number" min="1" max="365" value="${r.days || 7}" id="req-days-${r.id}"
                                style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
                         <span style="font-size:12px;color:#94a3b8;">일 노출</span>
                         <button class="btn-success" style="flex:1;padding:8px;" onclick="approveBannerRequest('${r.id}')">✅ 승인</button>
