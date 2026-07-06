@@ -71,7 +71,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 거래소 우측 상단 배너</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
-            <li>💰 <b>비용:</b> 1일 당 별풍선 20개 (선불 결제)</li>
+            <li>💰 <b>비용:</b> 1일 당 게임자산 200만원 (신청 시 보유 현금에서 선차감)</li>
         </ul>
 
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
@@ -94,10 +94,11 @@
                     style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
                 <span style="font-size:13px;color:#94a3b8;">일 (최대 7일)</span>
             </div>
+            <div style="text-align:right;font-size:13px;color:#94a3b8;">차감될 금액: <b id="promo-cost" style="color:#38bdf8;">14,000,000원</b></div>
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청하시면 관리자 검수 후 배너가 등록되며, <b style="color:#38bdf8;">신청과 동시에 후원 창이 열립니다.</b> 별풍선을 보내주시면 더 빠르게 반영됩니다.<br>
+            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, 관리자 검수 후 배너가 등록됩니다. 거절될 경우 차감된 금액은 전액 환불됩니다.<br>
             직접 제작한 이미지를 쓰고 싶다면 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> 으로 문의해주세요. (클릭 시 이메일 주소 복사)
         </div>
 
@@ -976,7 +977,18 @@ window.openPromoModal    = () => document.getElementById('promo-modal').classLis
 window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
 
 // ── 홍보 배너 신청 (닉네임/아이디 입력 → 실시간 미리보기 → 신청) ──
-const DONATION_URL = "https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station";
+const BANNER_COST_PER_DAY = 2000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+
+function updatePromoCost() {
+    const daysInput = document.getElementById('promo-days');
+    const costEl    = document.getElementById('promo-cost');
+    if (!daysInput || !costEl) return;
+    const days = parseInt(daysInput.value, 10);
+    const cost = Number.isInteger(days) && days > 0 ? days * BANNER_COST_PER_DAY : 0;
+    costEl.innerText = `${cost.toLocaleString()}원`;
+}
+document.getElementById('promo-days')?.addEventListener('input', updatePromoCost);
+updatePromoCost();
 
 function updatePromoPreview() {
     const idInput     = document.getElementById('promo-streamer-id');
@@ -1017,13 +1029,13 @@ window.submitBannerRequest = async function() {
     submitBtn.disabled = true;
     submitBtn.innerText = '신청 중...';
     try {
-        await submitBannerRequestCallable({ nickname, streamerId, days });
-        window.open(DONATION_URL, '_blank');
-        alert('✅ 신청이 접수됐습니다! 관리자 검수 후 배너가 등록됩니다.\n방금 열린 후원 창에서 별풍선을 보내주시면 더 빠르게 반영돼요 🙏');
+        const result = await submitBannerRequestCallable({ nickname, streamerId, days });
+        alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 배너가 등록되며, 거절 시 전액 환불됩니다.`);
         nicknameInput.value = '';
         idInput.value       = '';
         daysInput.value      = '7';
         updatePromoPreview();
+        updatePromoCost();
         window.closePromoModal();
     } catch (e) {
         alert(e?.message || '신청 중 오류가 발생했습니다.');

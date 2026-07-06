@@ -578,7 +578,8 @@ exports.adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB"
 // ══════════════════════════════════════════════════════════
 
 const STREAMER_ID_RE     = /^[a-z0-9]{2,20}$/;
-const MAX_BANNER_REQUEST_DAYS = 7; // 신청 시 신청자가 고를 수 있는 노출 기간 상한
+const MAX_BANNER_REQUEST_DAYS = 7;       // 신청 시 신청자가 고를 수 있는 노출 기간 상한
+const BANNER_COST_PER_DAY     = 2000000; // 홍보 배너 신청 1일당 차감되는 게임자산
 
 function buildBannerPreview(streamerId) {
   const prefix = streamerId.slice(0, 2);
@@ -608,7 +609,32 @@ exports.submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "
     throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이로 입력해주세요.`);
   }
 
-  const db  = admin.database();
+  const db      = admin.database();
+  const userRef = db.ref(`users/${auth.uid}`);
+  const cost    = days * BANNER_COST_PER_DAY;
+
+  // 신청 시점에 게임자산을 바로 차감한다 (거절되면 actionRejectBannerRequest에서 환불).
+  // trueUser 선조회는 trade()와 동일한 이유 — Admin SDK 트랜잭션 콜백에 currentUser가
+  // null(캐시 미스)로 들어와도 "신규 유저 기본값"으로 오판하지 않기 위함.
+  const trueUser = (await userRef.get()).val();
+  let insufficient = false;
+
+  const userTx = await userRef.transaction((currentUser) => {
+    const user = currentUser || trueUser || { cash: 1000000, stocks: {} };
+    if ((user.cash || 0) < cost) {
+      insufficient = true;
+      return; // abort
+    }
+    return { ...user, cash: user.cash - cost };
+  });
+
+  if (insufficient) {
+    throw new HttpsError("failed-precondition", `게임자산이 부족합니다! (필요 금액: ${cost.toLocaleString()}원)`);
+  }
+  if (!userTx.committed) {
+    throw new HttpsError("aborted", "신청 처리 중 문제가 발생했습니다. 다시 시도해주세요.");
+  }
+
   const ref = db.ref("bannerRequests").push();
   const { previewImg, stationLink } = buildBannerPreview(streamerId);
 
@@ -618,12 +644,13 @@ exports.submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "
     previewImg,
     stationLink,
     days,
-    status:       "pending",
-    requestedAt:  Date.now(),
-    requesterUid: auth.uid,
+    chargedAmount: cost,
+    status:        "pending",
+    requestedAt:   Date.now(),
+    requesterUid:  auth.uid,
   });
 
-  return { ok: true, id: ref.key };
+  return { ok: true, id: ref.key, chargedAmount: cost };
 });
 
 async function actionListBannerRequests(db) {
@@ -675,6 +702,22 @@ async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
 
 async function actionRejectBannerRequest(db, { requestId }) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
+
+  const reqSnap = await db.ref(`bannerRequests/${requestId}`).get();
+  if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
+  const reqData = reqSnap.val();
+
+  // 신청 시 차감된 게임자산을 전액 환불한다.
+  if (reqData.status === "pending" && reqData.chargedAmount && reqData.requesterUid) {
+    const userRef  = db.ref(`users/${reqData.requesterUid}`);
+    const trueUser = (await userRef.get()).val();
+    await userRef.transaction((currentUser) => {
+      const user = currentUser || trueUser;
+      if (!user) return currentUser; // 환불 대상 유저 데이터가 없으면 그대로 둔다
+      return { ...user, cash: (user.cash || 0) + reqData.chargedAmount };
+    });
+  }
+
   await db.ref(`bannerRequests/${requestId}`).update({
     status:     "rejected",
     reviewedAt: Date.now(),
