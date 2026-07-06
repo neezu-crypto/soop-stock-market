@@ -401,13 +401,7 @@ function playHoverSound() {
     sound.play().catch(() => {});
 }
 
-// ── 랭킹 디바운싱 상태 ──────────────────────────────────────
-const RANKING_DEBOUNCE_MS = 30000;
-let rankingDebounceTimer  = null;
-let pendingDeltas         = {};
-let lastRankingWriteTime  = 0;
-
-// ── rankings/top5 구독 ──────────────────────────────────────
+// ── rankings/top5 구독 (읽기 전용 — 갱신은 서버 trade 함수가 처리) ──
 
 onValue(ref(db, 'rankings/top5'), (snap) => {
     if (!snap.exists()) {
@@ -555,72 +549,6 @@ onAuthStateChanged(auth, async (user) => {
         signInAnonymously(auth);
     }
 });
-
-// ── 랭킹 디바운싱 ────────────────────────────────────────────
-function scheduleRankingUpdate(stockId, qtyDelta) {
-    pendingDeltas[stockId] = (pendingDeltas[stockId] || 0) + qtyDelta;
-    if (rankingDebounceTimer !== null) return;
-    const elapsed  = Date.now() - lastRankingWriteTime;
-    const waitTime = Math.max(0, RANKING_DEBOUNCE_MS - elapsed);
-    rankingDebounceTimer = setTimeout(flushRankingUpdate, waitTime);
-}
-
-async function flushRankingUpdate() {
-    rankingDebounceTimer = null;
-    const deltas = { ...pendingDeltas };
-    pendingDeltas = {};
-    if (Object.keys(deltas).length === 0) return;
-
-    try {
-        const snap    = await get(ref(db, 'rankings/top5'));
-        const current = snap.exists() ? snap.val() : { items: [] };
-        const items   = current.items || [];
-
-        // top5를 id → item 맵으로 변환
-        const itemMap = {};
-        items.forEach(item => { itemMap[item.id] = item; });
-
-        // delta 종목 반영 — Firebase 추가 읽기 없이 allStocks 캐시 사용
-        Object.entries(deltas).forEach(([id, delta]) => {
-            const stockData = allStocks.find(s => s.id === id);
-            if (!stockData) return;
-
-            if (itemMap[id]) {
-                // 이미 top5에 있으면 delta만 가산
-                itemMap[id].totalQty = Math.max(0, itemMap[id].totalQty + delta);
-                itemMap[id].price    = stockData.price;
-                itemMap[id].name     = stockData.name;
-            } else {
-                // top5 밖 신규 진입 후보 — allStocks 캐시의 volume 기준
-                itemMap[id] = {
-                    id,
-                    name:     stockData.name,
-                    price:    stockData.price,
-                    totalQty: stockData.volume || Math.max(0, delta)
-                };
-            }
-        });
-
-        // 전체 후보 정렬 후 상위 5개 추출
-        const newTop5 = Object.values(itemMap)
-            .sort((a, b) => b.totalQty - a.totalQty)
-            .slice(0, 5);
-        newTop5.forEach((item, i) => { item.rank = i + 1; });
-
-        await set(ref(db, 'rankings/top5'), {
-            savedAt: current.savedAt || Date.now(),
-            items:   newTop5
-        });
-
-        lastRankingWriteTime = Date.now();
-
-    } catch (e) {
-        Object.entries(deltas).forEach(([id, delta]) => {
-            pendingDeltas[id] = (pendingDeltas[id] || 0) + delta;
-        });
-        if (rankingDebounceTimer === null) rankingDebounceTimer = setTimeout(flushRankingUpdate, 15000);
-    }
-}
 
 // ══════════════════════════════════════════════════════════════
 // 분봉 차트 로직
@@ -995,7 +923,6 @@ window.trade = async function (id, type, qty = 1) {
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
-        scheduleRankingUpdate(id, type === 'buy' ? qty : -qty);
 
     } catch (error) {
         alert(error?.message || "거래 중 오류가 발생했습니다.");
