@@ -1159,7 +1159,9 @@ window.loginWithKakao = function() {
         return alert('카카오 로그인을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
     }
     Kakao.Auth.login({
-        scope: 'profile_nickname',
+        // 서버는 계정 식별에 카카오 고유 ID만 사용하고 닉네임/프로필은 전혀
+        // 쓰지 않는다 — 스트리머 등 실명 노출을 꺼리는 유저의 진입장벽을
+        // 낮추기 위해 프로필 동의 항목은 아예 요청하지 않는다.
         success: async (authObj) => {
             try {
                 const result = await linkKakaoAccountCallable({ kakaoAccessToken: authObj.access_token });
