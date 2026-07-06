@@ -19,6 +19,7 @@ const SPREAD              = 0.0005; // 매수/매도 스프레드
 const SELL_FEE            = 0.003;  // 매도 수수료
 const MAX_QTY_PER_ORDER   = 10000;  // 1회 주문 최대 수량
 const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
+const RANKING_DEBOUNCE_MS = 30000;  // 랭킹 반영 최소 간격
 
 function currentMinuteTs() {
   return Math.floor(Date.now() / 60000) * 60;
@@ -83,11 +84,19 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
   }
 
   // 2) 유저 잔고/보유수량 갱신 (쿨다운·잔액·보유량 검증 포함)
+  //    Admin SDK는 "활성 리스너가 있는 경로만 캐시하고 영구 캐시는 없음" 이라
+  //    트랜잭션 콜백에 currentUser가 null로 들어올 수 있다(콜드 스타트뿐 아니라
+  //    직전에 .get()으로 캐시를 데워도 트랜잭션 시작 시점엔 이미 비워졌을 수
+  //    있음). 이걸 "신규 유저"로 오인해 기본값(잔액 100만원, 보유 0주)으로
+  //    덮어써버리면 매도 시 보유량 부족으로 잘못 거부된다. 따라서 트랜잭션
+  //    직전에 실제 서버 값을 직접 읽어두고, currentUser가 null일 때는 그 값을
+  //    기본값 대신 사용한다(진짜 신규 유저라 서버 값도 null인 경우에만 기본값).
+  const trueUser = (await userRef.get()).val();
   let abortReason = null;
 
   const userTx = await userRef.transaction((currentUser) => {
     const now  = Date.now();
-    const user = currentUser || { cash: 1000000, stocks: {} };
+    const user = currentUser || trueUser || { cash: 1000000, stocks: {} };
 
     if (user.lastTradeTime && now - user.lastTradeTime < TRADE_COOLDOWN_MS) {
       abortReason = "COOLDOWN";
@@ -169,6 +178,36 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
     }
   } catch (e) {
     // 캔들 갱신 실패는 무시 (다음 거래 때 재시도됨)
+  }
+
+  // 4) 거래량 랭킹 갱신 (best-effort — 실패해도 매매 결과에는 영향 없음)
+  //    클라이언트가 직접 rankings/top5를 덮어쓰던 방식은 조작 가능한 구멍이라
+  //    서버로 이전. totalQty는 델타 누적이 아니라 stocks/{id}.volume(누적 거래량)
+  //    절대값을 그대로 사용해 드리프트가 생기지 않는다. 너무 잦은 쓰기를 막기
+  //    위해 마지막 저장 후 RANKING_DEBOUNCE_MS 이내면 건너뛴다.
+  try {
+    const updatedStock = stockTx.snapshot.val();
+    await db.ref("rankings/top5").transaction((current) => {
+      const now = Date.now();
+      if (current && current.savedAt && now - current.savedAt < RANKING_DEBOUNCE_MS) {
+        return; // 너무 빠름 → 이번 반영은 건너뜀 (abort)
+      }
+      const itemMap = {};
+      ((current && current.items) || []).forEach((item) => { itemMap[item.id] = item; });
+      itemMap[stockId] = {
+        id:       stockId,
+        name:     updatedStock.name,
+        price:    finalTradePrice,
+        totalQty: updatedStock.volume || 0,
+      };
+      const newTop5 = Object.values(itemMap)
+        .sort((a, b) => b.totalQty - a.totalQty)
+        .slice(0, 5);
+      newTop5.forEach((item, i) => { item.rank = i + 1; });
+      return { savedAt: now, items: newTop5 };
+    });
+  } catch (e) {
+    // 랭킹 갱신 실패는 무시 (다음 거래 때 재시도됨)
   }
 
   const finalUser = userTx.snapshot.val();
