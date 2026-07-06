@@ -779,6 +779,10 @@
         }
     };
 
+    function escapeAttr(str) {
+        return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
     async function loadBannerRequests() {
         const listEl = document.getElementById('banner-request-list');
         listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
@@ -798,7 +802,8 @@
                              style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#1e293b;flex-shrink:0;"
                              onerror="this.style.display='none';">
                         <div style="flex:1;min-width:0;">
-                            <div style="font-weight:800;font-size:14px;">${r.nickname}</div>
+                            <input type="text" value="${escapeAttr(r.nickname)}" id="req-nickname-${r.id}"
+                                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;margin-bottom:4px;">
                             <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
                         </div>
                     </div>
@@ -818,10 +823,12 @@
     window.loadBannerRequests = loadBannerRequests;
 
     window.approveBannerRequest = async function(requestId) {
-        const days = document.getElementById(`req-days-${requestId}`).value;
+        const days     = document.getElementById(`req-days-${requestId}`).value;
+        const nickname = document.getElementById(`req-nickname-${requestId}`).value.trim();
         if (!days) return alert('노출 기간(일)을 입력해주세요.');
+        if (!nickname) return alert('닉네임을 입력해주세요.');
         try {
-            const result = await callAdminAction('approveBannerRequest', { requestId, days });
+            const result = await callAdminAction('approveBannerRequest', { requestId, days, nickname });
             alert(`✅ 승인 완료! 종료일: ${result.endDate}`);
             await loadBannerRequests();
         } catch (e) {

@@ -636,7 +636,7 @@ async function actionListBannerRequests(db) {
   return { ok: true, requests };
 }
 
-async function actionApproveBannerRequest(db, { requestId, days }) {
+async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
   const daysNum = parseInt(days, 10);
   if (!Number.isFinite(daysNum) || daysNum < 1) {
@@ -647,11 +647,14 @@ async function actionApproveBannerRequest(db, { requestId, days }) {
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
 
-  let targetId = await findStockIdByName(db, reqData.nickname);
+  // 관리자가 오타 등을 발견해 승인 직전 닉네임을 고칠 수 있다 — 없으면 신청 당시 값 사용
+  const finalNickname = String(nickname || "").trim() || reqData.nickname;
+
+  let targetId = await findStockIdByName(db, finalNickname);
   if (!targetId) {
     // 아직 상장되지 않은 닉네임 — 배너 노출을 위해 자동 상장
     targetId = `id_${Date.now()}_0`;
-    await db.ref(`stocks/${targetId}`).set({ name: reqData.nickname, price: 10000 });
+    await db.ref(`stocks/${targetId}`).set({ name: finalNickname, price: 10000 });
   }
 
   const endDate = new Date();
@@ -662,6 +665,7 @@ async function actionApproveBannerRequest(db, { requestId, days }) {
     [`stocks/${targetId}/bannerImg`]:     reqData.previewImg,
     [`stocks/${targetId}/bannerEndDate`]: endDateStr,
     [`stocks/${targetId}/link`]:          reqData.stationLink,
+    [`bannerRequests/${requestId}/nickname`]:   finalNickname,
     [`bannerRequests/${requestId}/status`]:     "approved",
     [`bannerRequests/${requestId}/reviewedAt`]: Date.now(),
   });
