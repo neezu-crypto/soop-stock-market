@@ -53,13 +53,36 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
   const userRef  = db.ref(`users/${uid}`);
   const impact   = IMPACT_PER_QTY * qty;
 
+  // 0) 사전 검증 (쿨다운 · 매도 보유량 — 가격과 무관하게 판정 가능한 것만)
+  //    종목 가격 트랜잭션은 무거운 데다 실패 시 되돌려야 하므로, 가격을 몰라도
+  //    확정적으로 판단 가능한 위반은 가격을 건드리기 전에 미리 걸러낸다.
+  //    Admin SDK는 활성 리스너가 없는 경로는 캐시하지 않아 트랜잭션 콜백에
+  //    currentUser가 null로 들어올 수 있어, 여기서 미리 읽어둔 실제 값을
+  //    콜백 안에서도 기본값 대신 사용한다(진짜 신규 유저라 서버 값도 null인
+  //    경우에만 기본값 사용).
+  const trueUser = (await userRef.get()).val();
+  {
+    const now      = Date.now();
+    const preUser  = trueUser || { cash: 1000000, stocks: {} };
+    if (preUser.lastTradeTime && now - preUser.lastTradeTime < TRADE_COOLDOWN_MS) {
+      throw new HttpsError("resource-exhausted", "거래가 너무 빠릅니다! 잠시 후 다시 시도해주세요.");
+    }
+    if (type === "sell") {
+      const pos = (preUser.stocks || {})[stockId] || { qty: 0 };
+      if (pos.qty < qty) {
+        throw new HttpsError("failed-precondition", "보유 주식이 부족합니다!");
+      }
+    }
+  }
+
   // 1) 종목 가격/거래량 갱신 (경합 시 자동 재시도되는 RTDB 트랜잭션)
-  //    이 시점에는 아직 유저의 잔액/보유량이 검증되지 않았다. 실제로 거래가
-  //    체결되지 못하면(2단계에서 abort) 아래에서 이 변경을 반드시 되돌린다 —
-  //    안 그러면 보유하지도 않은 종목을 매도 시도만으로 시세를 움직일 수 있다.
-  //    되돌릴 때는 절대값이 아니라 우리가 적용한 배율의 역수를 나누고 수량을
-  //    빼는 상대적 보정을 사용한다 — 그래야 되돌리는 사이 다른 유저의 거래가
-  //    같은 종목에 끼어들어도 그 변화를 지우지 않고 우리 몫만 정확히 걷어낸다.
+  //    위 사전 검증을 통과했더라도, 매수 잔액처럼 가격이 확정돼야 정확히
+  //    판정되는 조건은 여전히 2단계(유저 트랜잭션)에서 최종 검증한다. 거기서
+  //    실패하면(주로 사전검증 이후 끼어든 드문 동시성 충돌) 아래에서 이 변경을
+  //    반드시 되돌린다 — 되돌릴 때는 절대값이 아니라 우리가 적용한 배율의
+  //    역수를 나누고 수량을 빼는 상대적 보정을 사용해, 되돌리는 사이 다른
+  //    유저의 거래가 같은 종목에 끼어들어도 그 변화를 지우지 않고 우리 몫만
+  //    정확히 걷어낸다.
   let finalTradePrice = 0;
 
   const stockTx = await stockRef.transaction((currentStock) => {
@@ -97,15 +120,9 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
     });
   }
 
-  // 2) 유저 잔고/보유수량 갱신 (쿨다운·잔액·보유량 검증 포함)
-  //    Admin SDK는 "활성 리스너가 있는 경로만 캐시하고 영구 캐시는 없음" 이라
-  //    트랜잭션 콜백에 currentUser가 null로 들어올 수 있다(콜드 스타트뿐 아니라
-  //    직전에 .get()으로 캐시를 데워도 트랜잭션 시작 시점엔 이미 비워졌을 수
-  //    있음). 이걸 "신규 유저"로 오인해 기본값(잔액 100만원, 보유 0주)으로
-  //    덮어써버리면 매도 시 보유량 부족으로 잘못 거부된다. 따라서 트랜잭션
-  //    직전에 실제 서버 값을 직접 읽어두고, currentUser가 null일 때는 그 값을
-  //    기본값 대신 사용한다(진짜 신규 유저라 서버 값도 null인 경우에만 기본값).
-  const trueUser = (await userRef.get()).val();
+  // 2) 유저 잔고/보유수량 갱신 (쿨다운·잔액·보유량 최종 검증 및 반영)
+  //    trueUser는 0단계에서 이미 읽어둔 값 — currentUser가 null(캐시 미스)일
+  //    때 기본값 대신 사용한다.
   let abortReason = null;
 
   const userTx = await userRef.transaction((currentUser) => {
