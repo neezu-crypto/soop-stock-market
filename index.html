@@ -11,6 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
     <!-- 스타일은 styles.css로 분리됨 -->
 </head>
 <body>
@@ -262,6 +263,11 @@
             <div style="font-size:12px;color:var(--text-sub);">
                 🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
             </div>
+            <button id="kakao-login-btn" onclick="loginWithKakao()"
+                style="display:none;align-items:center;gap:6px;background:#FEE500;color:#181600;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                💬 카카오로 내 계정 지키기
+            </button>
+            <span id="kakao-linked-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;">✅ 카카오 연동됨</span>
         </div>
     </div>
     <header>
@@ -291,7 +297,7 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, get, set, onDisconnect }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, signInWithPopup, GoogleAuthProvider, onAuthStateChanged }
+import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, GoogleAuthProvider, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
@@ -319,6 +325,11 @@ const functions = getFunctions(app);
 const tradeCallable              = httpsCallable(functions, 'trade');
 const submitBannerRequestCallable = httpsCallable(functions, 'submitBannerRequest');
 const submitChartBannerRequestCallable = httpsCallable(functions, 'submitChartBannerRequest');
+const linkKakaoAccountCallable = httpsCallable(functions, 'linkKakaoAccount');
+
+if (typeof Kakao !== 'undefined' && !Kakao.isInitialized()) {
+    Kakao.init('ed4f01d6903ca41d5dc0ab32b6ae143c');
+}
 
 let appStarted = false;
 
@@ -566,6 +577,7 @@ onAuthStateChanged(auth, async (user) => {
             } else {
                 if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
             }
+            updateKakaoLinkUI();
             updateUI(true);
         });
     } else {
@@ -1130,6 +1142,42 @@ window.copyAdminEmail = async function(e) {
     }
     target.innerText = '복사 완료! ✅';
     setTimeout(() => { target.innerText = original; }, 1500);
+};
+
+// ── 카카오 계정 연동 (익명 계정에 카카오 ID를 매핑해 자산 보호) ──
+function updateKakaoLinkUI() {
+    const btn   = document.getElementById('kakao-login-btn');
+    const badge = document.getElementById('kakao-linked-badge');
+    if (!btn || !badge) return;
+    const linked = !!(myData && myData.kakaoLinked);
+    btn.style.display   = linked ? 'none'  : 'flex';
+    badge.style.display = linked ? 'inline' : 'none';
+}
+
+window.loginWithKakao = function() {
+    if (typeof Kakao === 'undefined' || !Kakao.isInitialized()) {
+        return alert('카카오 로그인을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+    }
+    Kakao.Auth.login({
+        scope: 'profile_nickname',
+        success: async (authObj) => {
+            try {
+                const result = await linkKakaoAccountCallable({ kakaoAccessToken: authObj.access_token });
+                if (result.data.action === 'switch') {
+                    if (!confirm('이 카카오 계정은 이미 다른 기기에서 연동돼 있습니다.\n그 계정으로 전환하시겠습니까? (현재 진행 상황은 사라집니다)')) return;
+                    await signInWithCustomToken(auth, result.data.customToken);
+                    alert('✅ 기존 계정으로 전환됐습니다.');
+                } else {
+                    alert('✅ 카카오 계정이 연동됐습니다! 이제 이 계정의 자산이 보호됩니다.');
+                }
+            } catch (e) {
+                alert('카카오 연동 중 오류가 발생했습니다: ' + (e?.message || e));
+            }
+        },
+        fail: (err) => {
+            alert('카카오 로그인이 취소되었거나 실패했습니다.');
+        },
+    });
 };
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
