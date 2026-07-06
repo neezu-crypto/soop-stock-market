@@ -565,7 +565,109 @@ exports.adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB"
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);
     case "cleanupInactiveUsers":   return actionCleanupInactiveUsers(db);
+    case "listBannerRequests":     return actionListBannerRequests(db);
+    case "approveBannerRequest":   return actionApproveBannerRequest(db, payload);
+    case "rejectBannerRequest":    return actionRejectBannerRequest(db, payload);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }
 });
+
+// ══════════════════════════════════════════════════════════
+// 홍보 배너 신청 (우측 랭킹 배너) — 신청은 누구나, 승인/거절은 관리자만
+// ══════════════════════════════════════════════════════════
+
+const STREAMER_ID_RE = /^[a-z0-9]{2,20}$/;
+
+function buildBannerPreview(streamerId) {
+  const prefix = streamerId.slice(0, 2);
+  return {
+    previewImg:  `https://stimg.sooplive.com/LOGO/${prefix}/${streamerId}/${streamerId}.jpg`,
+    stationLink: `https://www.sooplive.com/station/${streamerId}`,
+  };
+}
+
+/**
+ * 홍보 배너 신청 접수. 로그인(익명 포함)한 누구나 호출 가능 — 실제 반영은
+ * 관리자 승인(actionApproveBannerRequest) 후에만 이뤄진다.
+ */
+exports.submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+
+  const nickname   = String(request.data?.nickname || "").trim();
+  const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
+
+  if (!nickname) throw new HttpsError("invalid-argument", "닉네임을 입력해주세요.");
+  if (!STREAMER_ID_RE.test(streamerId)) {
+    throw new HttpsError("invalid-argument", "아이디는 영문 소문자/숫자 2~20자여야 합니다.");
+  }
+
+  const db  = admin.database();
+  const ref = db.ref("bannerRequests").push();
+  const { previewImg, stationLink } = buildBannerPreview(streamerId);
+
+  await ref.set({
+    nickname,
+    streamerId,
+    previewImg,
+    stationLink,
+    status:       "pending",
+    requestedAt:  Date.now(),
+    requesterUid: auth.uid,
+  });
+
+  return { ok: true, id: ref.key };
+});
+
+async function actionListBannerRequests(db) {
+  const snap = await db.ref("bannerRequests").get();
+  const data = snap.val() || {};
+  const requests = Object.entries(data)
+    .map(([id, r]) => ({ id, ...r }))
+    .filter((r) => r.status === "pending")
+    .sort((a, b) => (a.requestedAt || 0) - (b.requestedAt || 0));
+  return { ok: true, requests };
+}
+
+async function actionApproveBannerRequest(db, { requestId, days }) {
+  if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
+  const daysNum = parseInt(days, 10);
+  if (!Number.isFinite(daysNum) || daysNum < 1) {
+    throw new HttpsError("invalid-argument", "노출 기간(일)을 올바르게 입력해주세요.");
+  }
+
+  const reqSnap = await db.ref(`bannerRequests/${requestId}`).get();
+  if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
+  const reqData = reqSnap.val();
+
+  let targetId = await findStockIdByName(db, reqData.nickname);
+  if (!targetId) {
+    // 아직 상장되지 않은 닉네임 — 배너 노출을 위해 자동 상장
+    targetId = `id_${Date.now()}_0`;
+    await db.ref(`stocks/${targetId}`).set({ name: reqData.nickname, price: 10000 });
+  }
+
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + daysNum);
+  const endDateStr = endDate.toISOString().split("T")[0];
+
+  await db.ref().update({
+    [`stocks/${targetId}/bannerImg`]:     reqData.previewImg,
+    [`stocks/${targetId}/bannerEndDate`]: endDateStr,
+    [`stocks/${targetId}/link`]:          reqData.stationLink,
+    [`bannerRequests/${requestId}/status`]:     "approved",
+    [`bannerRequests/${requestId}/reviewedAt`]: Date.now(),
+  });
+
+  return { ok: true, endDate: endDateStr };
+}
+
+async function actionRejectBannerRequest(db, { requestId }) {
+  if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
+  await db.ref(`bannerRequests/${requestId}`).update({
+    status:     "rejected",
+    reviewedAt: Date.now(),
+  });
+  return { ok: true };
+}

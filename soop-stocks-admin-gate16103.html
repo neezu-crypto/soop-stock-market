@@ -273,6 +273,14 @@
         </div>
     </div>
 
+    <!-- 📝 홍보 배너 신청 검수 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>📝 홍보 배너 신청 검수</h1>
+        <div class="info-box">유저가 메인페이지에서 직접 신청한 홍보 배너 목록입니다. 승인하면 즉시 배너가 등록됩니다(닉네임이 상장돼 있지 않으면 자동으로 상장됩니다).</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadBannerRequests()">🔄 신청 목록 새로고침</button>
+        <div id="banner-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <!-- 📺 방송국 배너 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
         <h1>📺 방송국 배너 관리</h1>
@@ -524,6 +532,7 @@
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
             await loadStocksOnce();
             await loadRankingStatus();
+            await loadBannerRequests();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -767,6 +776,66 @@
             document.getElementById('banner-days').value     = "";
         } catch (e) {
             alert("배너 추가 중 오류 발생: " + e.message);
+        }
+    };
+
+    async function loadBannerRequests() {
+        const listEl = document.getElementById('banner-request-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { requests } = await callAdminAction('listBannerRequests');
+            if (!requests || requests.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            requests.forEach(r => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+                row.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <img src="${r.previewImg}" alt="${r.nickname}"
+                             style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#1e293b;flex-shrink:0;"
+                             onerror="this.style.display='none';">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:800;font-size:14px;">${r.nickname}</div>
+                            <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="number" min="1" max="365" value="7" id="req-days-${r.id}"
+                               style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                        <span style="font-size:12px;color:#94a3b8;">일 노출</span>
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveBannerRequest('${r.id}')">✅ 승인</button>
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectBannerRequest('${r.id}')">🚫 거절</button>
+                    </div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+    window.loadBannerRequests = loadBannerRequests;
+
+    window.approveBannerRequest = async function(requestId) {
+        const days = document.getElementById(`req-days-${requestId}`).value;
+        if (!days) return alert('노출 기간(일)을 입력해주세요.');
+        try {
+            const result = await callAdminAction('approveBannerRequest', { requestId, days });
+            alert(`✅ 승인 완료! 종료일: ${result.endDate}`);
+            await loadBannerRequests();
+        } catch (e) {
+            alert('승인 중 오류 발생: ' + e.message);
+        }
+    };
+
+    window.rejectBannerRequest = async function(requestId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await callAdminAction('rejectBannerRequest', { requestId });
+            await loadBannerRequests();
+        } catch (e) {
+            alert('거절 중 오류 발생: ' + e.message);
         }
     };
 </script>
