@@ -281,6 +281,14 @@
         <div id="banner-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
+    <!-- 📝 차트 하단 배너 신청 검수 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>📝 차트 하단 배너 신청 검수</h1>
+        <div class="info-box">유저가 메인페이지에서 직접 입력한 배너 이미지/링크입니다. 오타나 부적절한 내용이 있으면 승인 전에 직접 수정할 수 있습니다.</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadChartBannerRequests()">🔄 신청 목록 새로고침</button>
+        <div id="chart-banner-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <!-- 📺 방송국 배너 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
         <h1>📺 방송국 배너 관리</h1>
@@ -533,6 +541,7 @@
             await loadStocksOnce();
             await loadRankingStatus();
             await loadBannerRequests();
+            await loadChartBannerRequests();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -841,6 +850,81 @@
         try {
             await callAdminAction('rejectBannerRequest', { requestId });
             await loadBannerRequests();
+        } catch (e) {
+            alert('거절 중 오류 발생: ' + e.message);
+        }
+    };
+
+    async function loadChartBannerRequests() {
+        const listEl = document.getElementById('chart-banner-request-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { requests } = await callAdminAction('listChartBannerRequests');
+            if (!requests || requests.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            requests.forEach(r => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+                row.innerHTML = `
+                    <div class="chart-banner-preview" id="chart-req-preview-${r.id}">
+                        <img src="${escapeAttr(r.bannerImg)}" alt="${escapeAttr(r.nickname)}"
+                             onload="this.style.display='block';"
+                             onerror="this.style.display='none';">
+                        <div class="preview-empty">🖼 이미지 로드 실패</div>
+                    </div>
+                    <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원</div>
+                    <input type="text" value="${escapeAttr(r.nickname)}" id="chart-req-nickname-${r.id}" placeholder="닉네임"
+                           style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:13px;font-weight:800;box-sizing:border-box;">
+                    <input type="text" value="${escapeAttr(r.bannerImg)}" id="chart-req-img-${r.id}" placeholder="배너 이미지 링크"
+                           style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
+                    <input type="text" value="${escapeAttr(r.promoLink)}" id="chart-req-link-${r.id}" placeholder="홍보 페이지 링크"
+                           style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="number" min="1" max="365" value="${r.days || 7}" id="chart-req-days-${r.id}"
+                               style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                        <span style="font-size:12px;color:#94a3b8;">일 노출</span>
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveChartBannerRequest('${r.id}')">✅ 승인</button>
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectChartBannerRequest('${r.id}')">🚫 거절</button>
+                    </div>`;
+                listEl.appendChild(row);
+                // 관리자가 이미지 링크를 수정하면 미리보기도 갱신
+                document.getElementById(`chart-req-img-${r.id}`).addEventListener('input', (e) => {
+                    const previewImg = document.querySelector(`#chart-req-preview-${r.id} img`);
+                    if (previewImg) previewImg.src = e.target.value.trim();
+                });
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+    window.loadChartBannerRequests = loadChartBannerRequests;
+
+    window.approveChartBannerRequest = async function(requestId) {
+        const days      = document.getElementById(`chart-req-days-${requestId}`).value;
+        const nickname  = document.getElementById(`chart-req-nickname-${requestId}`).value.trim();
+        const bannerImg = document.getElementById(`chart-req-img-${requestId}`).value.trim();
+        const promoLink = document.getElementById(`chart-req-link-${requestId}`).value.trim();
+        if (!days) return alert('노출 기간(일)을 입력해주세요.');
+        if (!nickname) return alert('닉네임을 입력해주세요.');
+        if (!bannerImg) return alert('배너 이미지 링크를 입력해주세요.');
+        if (!promoLink) return alert('홍보 페이지 링크를 입력해주세요.');
+        try {
+            const result = await callAdminAction('approveChartBannerRequest', { requestId, days, nickname, bannerImg, promoLink });
+            alert(`✅ 승인 완료! 종료일: ${result.endDate}`);
+            await loadChartBannerRequests();
+        } catch (e) {
+            alert('승인 중 오류 발생: ' + e.message);
+        }
+    };
+
+    window.rejectChartBannerRequest = async function(requestId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await callAdminAction('rejectChartBannerRequest', { requestId });
+            await loadChartBannerRequests();
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
         }
