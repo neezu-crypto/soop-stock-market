@@ -21,9 +21,40 @@ const MAX_QTY_PER_ORDER   = 10000;  // 1회 주문 최대 수량
 const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
 const RANKING_DEBOUNCE_MS = 30000;  // 랭킹 반영 최소 간격
 
+// ── 신규 유저 초기 자산 / 카카오 연동 보너스 ──────────────────
+const INITIAL_CASH     = 200000; // 익명 최초 접속 시 지급되는 시작 자금
+const KAKAO_LINK_BONUS = 800000; // 카카오 최초 연동 시 추가 지급 (합산 시 기존 100만원과 동일)
+
 function currentMinuteTs() {
   return Math.floor(Date.now() / 60000) * 60;
 }
+
+/**
+ * 신규 유저 초기 자산 지급. 클라이언트는 로그인 직후(대개 익명 로그인 직후)
+ * 이 함수를 호출한다 — users/{uid}가 아직 없을 때만 INITIAL_CASH를 지급하고,
+ * 이미 있으면 아무 것도 하지 않는(idempotent) 안전한 동작이라 여러 번
+ * 호출돼도 문제없다.
+ */
+exports.initializeUser = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+
+  const db      = admin.database();
+  const userRef = db.ref(`users/${auth.uid}`);
+
+  // trade()와 동일한 이유로 진짜 값을 먼저 읽어둔다 — 트랜잭션 콜백의
+  // currentUser가 캐시 미스로 null이 들어와도 "신규 유저"로 오판해 기존
+  // 데이터를 덮어쓰지 않도록 하기 위함.
+  const trueUser = (await userRef.get()).val();
+
+  const userTx = await userRef.transaction((currentUser) => {
+    const user = currentUser || trueUser;
+    if (user) return user; // 이미 있으면 그대로 둔다
+    return { cash: INITIAL_CASH, stocks: {} };
+  });
+
+  return { ok: true, cash: userTx.snapshot.val()?.cash ?? INITIAL_CASH };
+});
 
 /**
  * 매매 체결 (buy/sell)
@@ -63,7 +94,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
   const trueUser = (await userRef.get()).val();
   {
     const now      = Date.now();
-    const preUser  = trueUser || { cash: 1000000, stocks: {} };
+    const preUser  = trueUser || { cash: INITIAL_CASH, stocks: {} };
     if (preUser.lastTradeTime && now - preUser.lastTradeTime < TRADE_COOLDOWN_MS) {
       throw new HttpsError("resource-exhausted", "거래가 너무 빠릅니다! 잠시 후 다시 시도해주세요.");
     }
@@ -127,7 +158,7 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
 
   const userTx = await userRef.transaction((currentUser) => {
     const now  = Date.now();
-    const user = currentUser || trueUser || { cash: 1000000, stocks: {} };
+    const user = currentUser || trueUser || { cash: INITIAL_CASH, stocks: {} };
 
     if (user.lastTradeTime && now - user.lastTradeTime < TRADE_COOLDOWN_MS) {
       abortReason = "COOLDOWN";
@@ -534,7 +565,7 @@ async function actionSaveRankings(db) {
 }
 
 function isInactiveUser(user) {
-  const isDefaultCash = (user.cash ?? 1000000) === 1000000;
+  const isDefaultCash = (user.cash ?? INITIAL_CASH) === INITIAL_CASH;
   const hasNoStocks   = !user.stocks || Object.keys(user.stocks).length === 0;
   const hasZeroStocks = user.stocks && Object.values(user.stocks).every((s) => (s.qty || 0) === 0);
   return isDefaultCash && (hasNoStocks || hasZeroStocks);
@@ -632,7 +663,7 @@ async function chargeUserCash(db, uid, cost) {
   let insufficient = false;
 
   const userTx = await userRef.transaction((currentUser) => {
-    const user = currentUser || trueUser || { cash: 1000000, stocks: {} };
+    const user = currentUser || trueUser || { cash: INITIAL_CASH, stocks: {} };
     if ((user.cash || 0) < cost) {
       insufficient = true;
       return; // abort
@@ -649,13 +680,14 @@ async function chargeUserCash(db, uid, cost) {
 }
 
 /** 거절된 신청의 차감액을 유저에게 환불한다. */
-async function refundUserCash(db, uid, amount) {
+/** 유저 게임자산(cash)에 amount만큼 더한다 (배너 신청 환불, 카카오 연동 보너스 등에 재사용). */
+async function creditUserCash(db, uid, amount) {
   if (!uid || !amount) return;
   const userRef  = db.ref(`users/${uid}`);
   const trueUser = (await userRef.get()).val();
   await userRef.transaction((currentUser) => {
     const user = currentUser || trueUser;
-    if (!user) return currentUser; // 환불 대상 유저 데이터가 없으면 그대로 둔다
+    if (!user) return currentUser; // 지급 대상 유저 데이터가 없으면 그대로 둔다
     return { ...user, cash: (user.cash || 0) + amount };
   });
 }
@@ -771,7 +803,7 @@ async function actionRejectBannerRequest(db, { requestId }) {
 
   // 신청 시 차감된 게임자산을 전액 환불한다.
   if (reqData.status === "pending") {
-    await refundUserCash(db, reqData.requesterUid, reqData.chargedAmount);
+    await creditUserCash(db, reqData.requesterUid, reqData.chargedAmount);
   }
 
   await db.ref(`bannerRequests/${requestId}`).update({
@@ -901,7 +933,7 @@ async function actionRejectChartBannerRequest(db, { requestId }) {
   const reqData = reqSnap.val();
 
   if (reqData.status === "pending") {
-    await refundUserCash(db, reqData.requesterUid, reqData.chargedAmount);
+    await creditUserCash(db, reqData.requesterUid, reqData.chargedAmount);
   }
 
   await db.ref(`chartBannerRequests/${requestId}`).update({
@@ -949,10 +981,11 @@ exports.linkKakaoAccount = onCall({ cors: true, timeoutSeconds: 30, memory: "256
   const existingUid = (await linkRef.get()).val();
 
   if (!existingUid) {
-    // 처음 연동 — 지금 uid에 매핑하고 기존 자산은 그대로 둔다.
+    // 처음 연동 — 지금 uid에 매핑하고, 기존 자산은 유지한 채 보너스만 추가 지급한다.
     await linkRef.set(auth.uid);
     await db.ref(`users/${auth.uid}/kakaoLinked`).set(true);
-    return { ok: true, action: "linked" };
+    await creditUserCash(db, auth.uid, KAKAO_LINK_BONUS);
+    return { ok: true, action: "linked", bonus: KAKAO_LINK_BONUS };
   }
 
   if (existingUid === auth.uid) {

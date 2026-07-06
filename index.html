@@ -259,13 +259,13 @@
     <div class="wallet-bar">
         <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-            <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
+            <div style="font-size:12px;color:var(--text-sub);">초기 자산 200,000원 지급됨</div>
             <div style="font-size:12px;color:var(--text-sub);">
                 🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
             </div>
             <button id="kakao-login-btn" onclick="loginWithKakao()"
                 style="display:none;align-items:center;gap:6px;background:#FEE500;color:#181600;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
-                💬 카카오로 내 계정 지키기
+                💬 카카오 연결하고 +80만원 받기
             </button>
             <span id="kakao-linked-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;">✅ 카카오 연동됨</span>
         </div>
@@ -326,6 +326,9 @@ const tradeCallable              = httpsCallable(functions, 'trade');
 const submitBannerRequestCallable = httpsCallable(functions, 'submitBannerRequest');
 const submitChartBannerRequestCallable = httpsCallable(functions, 'submitChartBannerRequest');
 const linkKakaoAccountCallable = httpsCallable(functions, 'linkKakaoAccount');
+const initializeUserCallable   = httpsCallable(functions, 'initializeUser');
+
+const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
 if (typeof Kakao !== 'undefined' && !Kakao.isInitialized()) {
     Kakao.init('ed4f01d6903ca41d5dc0ab32b6ae143c');
@@ -552,7 +555,11 @@ onAuthStateChanged(auth, async (user) => {
     if (user) {
         userUID = user.uid;
         const userRef  = ref(db, `users/${userUID}`);
-        if (!myData) myData = { cash: 1000000, stocks: {} };
+        if (!myData) myData = { cash: INITIAL_CASH, stocks: {} };
+
+        // 신규 유저 초기 자산 지급 — 서버가 users/{uid}가 없을 때만 지급하는
+        // idempotent 호출이라 재접속 시 반복 호출돼도 안전하다.
+        initializeUserCallable().catch(() => {});
 
         try {
             // 유저별 전용 노드에 접속 표시 → 퇴장 시 자동 삭제
@@ -573,9 +580,9 @@ onAuthStateChanged(auth, async (user) => {
         onValue(userRef, (snapshot) => {
             if (snapshot.exists()) {
                 const serverData = snapshot.val();
-                myData = { cash: serverData.cash ?? 1000000, stocks: serverData.stocks || {}, ...serverData };
+                myData = { cash: serverData.cash ?? INITIAL_CASH, stocks: serverData.stocks || {}, ...serverData };
             } else {
-                if (!myData || myData.cash === undefined) myData = { cash: 1000000, stocks: {} };
+                if (!myData || myData.cash === undefined) myData = { cash: INITIAL_CASH, stocks: {} };
             }
             updateKakaoLinkUI();
             updateUI(true);
@@ -1169,8 +1176,11 @@ window.loginWithKakao = function() {
                     if (!confirm('이 카카오 계정은 이미 다른 기기에서 연동돼 있습니다.\n그 계정으로 전환하시겠습니까? (현재 진행 상황은 사라집니다)')) return;
                     await signInWithCustomToken(auth, result.data.customToken);
                     alert('✅ 기존 계정으로 전환됐습니다.');
+                } else if (result.data.action === 'linked') {
+                    const bonus = result.data.bonus || 0;
+                    alert(`✅ 카카오 계정이 연동됐습니다! 보너스 ${bonus.toLocaleString()}원이 지급되고, 이제 이 계정의 자산이 보호됩니다.`);
                 } else {
-                    alert('✅ 카카오 계정이 연동됐습니다! 이제 이 계정의 자산이 보호됩니다.');
+                    alert('✅ 이미 연동된 계정입니다.');
                 }
             } catch (e) {
                 alert('카카오 연동 중 오류가 발생했습니다: ' + (e?.message || e));
