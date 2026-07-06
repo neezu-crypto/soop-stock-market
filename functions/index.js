@@ -729,13 +729,24 @@ async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
   const finalNickname = String(nickname || "").trim() || reqData.nickname;
 
   let targetId = await findStockIdByName(db, finalNickname);
+  let existingStock = null;
   if (!targetId) {
     // 아직 상장되지 않은 닉네임 — 배너 노출을 위해 자동 상장
     targetId = `id_${Date.now()}_0`;
     await db.ref(`stocks/${targetId}`).set({ name: finalNickname, price: 10000 });
+  } else {
+    existingStock = (await db.ref(`stocks/${targetId}`).get()).val();
   }
 
-  const endDate = new Date();
+  // 이미 홍보 중(만료 전)인 아이디로 재신청한 경우, 오늘부터 새로 계산하지 않고
+  // 남은 기간에 이어서 연장한다.
+  let baseDate = new Date();
+  if (existingStock?.bannerImg && existingStock.bannerEndDate) {
+    const existingEnd = new Date(existingStock.bannerEndDate);
+    existingEnd.setHours(23, 59, 59, 999);
+    if (existingEnd > baseDate) baseDate = existingEnd;
+  }
+  const endDate = new Date(baseDate);
   endDate.setDate(endDate.getDate() + daysNum);
   const endDateStr = endDate.toISOString().split("T")[0];
 
