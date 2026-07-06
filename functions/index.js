@@ -54,6 +54,12 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
   const impact   = IMPACT_PER_QTY * qty;
 
   // 1) 종목 가격/거래량 갱신 (경합 시 자동 재시도되는 RTDB 트랜잭션)
+  //    이 시점에는 아직 유저의 잔액/보유량이 검증되지 않았다. 실제로 거래가
+  //    체결되지 못하면(2단계에서 abort) 아래에서 이 변경을 반드시 되돌린다 —
+  //    안 그러면 보유하지도 않은 종목을 매도 시도만으로 시세를 움직일 수 있다.
+  //    되돌릴 때는 절대값이 아니라 우리가 적용한 배율의 역수를 나누고 수량을
+  //    빼는 상대적 보정을 사용한다 — 그래야 되돌리는 사이 다른 유저의 거래가
+  //    같은 종목에 끼어들어도 그 변화를 지우지 않고 우리 몫만 정확히 걷어낸다.
   let finalTradePrice = 0;
 
   const stockTx = await stockRef.transaction((currentStock) => {
@@ -75,6 +81,20 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
 
   if (!stockTx.committed || !stockTx.snapshot.exists()) {
     throw new HttpsError("not-found", "종목을 찾을 수 없습니다.");
+  }
+
+  async function revertStockChange() {
+    await stockRef.transaction((currentStock) => {
+      if (!currentStock) return currentStock;
+      const revertedPrice = type === "buy"
+        ? Math.round(currentStock.price / (1 + impact))
+        : Math.round(currentStock.price / (1 - impact));
+      return {
+        ...currentStock,
+        price:  revertedPrice,
+        volume: Math.max(0, (currentStock.volume || 0) - qty),
+      };
+    });
   }
 
   // 2) 유저 잔고/보유수량 갱신 (쿨다운·잔액·보유량 검증 포함)
@@ -128,6 +148,9 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
     return user;
   });
 
+  if (abortReason || !userTx.committed) {
+    await revertStockChange();
+  }
   if (abortReason === "COOLDOWN") {
     throw new HttpsError("resource-exhausted", "거래가 너무 빠릅니다! 잠시 후 다시 시도해주세요.");
   }
