@@ -231,6 +231,16 @@
         </div>
     </div>
 
+    <!-- ♻️ 전 종목 주가 초기화 -->
+    <div class="container" style="display:block; border-color: #f97316;">
+        <h1>♻️ 전 종목 주가 초기화</h1>
+        <div class="info-box" style="color:#fed7aa;">
+            모든 종목의 주가를 <b>10,000원</b>으로 초기화하고 가격 히스토리/등락률도 함께 리셋합니다.<br>
+            <span style="color:#fca5a5;">되돌릴 수 없는 작업이니 신중히 사용하세요.</span>
+        </div>
+        <button class="btn-primary" style="background:#f97316; color:white;" onclick="resetAllPrices()">전 종목 10,000원으로 초기화</button>
+    </div>
+
     <!-- 🧹 데이터 무결성 관리 -->
     <div class="container" style="display:block; border-color: #ef4444;">
         <h1>🧹 데이터 무결성 관리</h1>
@@ -292,8 +302,9 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get, update, set, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
@@ -302,11 +313,20 @@
         projectId: "soop-stock-market",
         appId: "1:997788925900:web:cb613d438efec019a3a769"
     };
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const auth = getAuth(app);
-    const provider = new GoogleAuthProvider();
+    const app       = initializeApp(firebaseConfig);
+    const db        = getDatabase(app);
+    const auth      = getAuth(app);
+    const provider  = new GoogleAuthProvider();
+    const functions = getFunctions(app);
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
+
+    // 관리자 쓰기·users 읽기는 전부 이 콜러블(functions/index.js의 adminAction)이
+    // Admin SDK로 처리한다 — RTDB 규칙의 이메일 매칭에 의존하지 않는다.
+    const adminActionCallable = httpsCallable(functions, 'adminAction');
+    async function callAdminAction(action, payload = {}) {
+        const result = await adminActionCallable({ action, payload });
+        return result.data;
+    }
 
     let allStocksData = {};
 
@@ -426,19 +446,11 @@
         if (!link)         return alert('이동 링크를 입력해주세요.');
         if (isNaN(days) || days < 1) return alert('노출 기간(일)을 올바르게 입력해주세요.');
 
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + days);
-        const endDateStr = endDate.toISOString().split('T')[0];
+        if (!confirm(`'${targetNickname}' 종목의 차트 하단 배너를 등록하시겠습니까?\n\n광고주: ${name || '(없음)'}\n링크: ${link}\n노출 기간: ${days}일`)) return;
 
         try {
-            const targetId = await findStockIdByNickname(targetNickname);
-            if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
-
-            const payload = { name, img, link, endDate: endDateStr };
-            if (!confirm(`'${targetNickname}' 종목의 차트 하단 배너를 등록하시겠습니까?\n\n광고주: ${name || '(없음)'}\n링크: ${link}\n종료일: ${endDateStr}`)) return;
-
-            await set(ref(db, `chartBanner/${targetId}`), payload);
-            alert(`✅ '${targetNickname}' 종목에 차트 배너가 등록되었습니다!\n📅 종료일: ${endDateStr}`);
+            const result = await callAdminAction('saveChartBanner', { nickname: targetNickname, name, img, link, days });
+            alert(`✅ '${targetNickname}' 종목에 차트 배너가 등록되었습니다!\n📅 종료일: ${result.endDate}`);
             // 입력 초기화
             document.getElementById('cb-target-nickname').value = '';
             document.getElementById('cb-name').value  = '';
@@ -449,7 +461,7 @@
             document.getElementById('cb-preview-empty').style.display = 'flex';
             document.getElementById('cb-enddate-preview').innerText = '';
 
-            if (currentChartBannerStockId === targetId) await window.loadChartBannerStatus();
+            if (currentChartBannerStockId === result.stockId) await window.loadChartBannerStatus();
         } catch (e) {
             alert('저장 실패: ' + e.message);
         }
@@ -459,7 +471,7 @@
         if (!currentChartBannerStockId) return alert('먼저 닉네임으로 배너를 조회해주세요.');
         if (!confirm('현재 조회된 종목의 차트 배너를 삭제하시겠습니까?\n삭제 시 즉시 모집 안내로 교체됩니다.')) return;
         try {
-            await remove(ref(db, `chartBanner/${currentChartBannerStockId}`));
+            await callAdminAction('deleteChartBanner', { stockId: currentChartBannerStockId });
             alert('✅ 차트 배너가 삭제되었습니다.');
             await window.loadChartBannerStatus();
         } catch (e) {
@@ -519,37 +531,13 @@
         }
     });
 
-    // ── 랭킹 TOP5 ───────────────────────────────────────────
-    async function calcTop5() {
-        const [usersSnap, stocksSnap] = await Promise.all([
-            get(ref(db, 'users/')),
-            get(ref(db, 'stocks/'))
-        ]);
-        const usersData  = usersSnap.val()  || {};
-        const stocksData = stocksSnap.val() || {};
-        const ownership  = {};
-        Object.values(usersData).forEach(user => {
-            if (!user.stocks) return;
-            Object.entries(user.stocks).forEach(([stockId, info]) => {
-                const qty = parseInt(info.qty) || 0;
-                if (qty > 0) ownership[stockId] = (ownership[stockId] || 0) + qty;
-            });
-        });
-        return Object.entries(ownership)
-            .map(([id, totalQty]) => {
-                const stock = stocksData[id] || {};
-                return { id, name: stock.name || id, price: stock.price || 0, totalQty };
-            })
-            .sort((a, b) => b.totalQty - a.totalQty)
-            .slice(0, 5);
-    }
-
+    // ── 랭킹 TOP5 (users/ 집계는 서버(adminAction)에서 처리) ──
     window.previewRankings = async function() {
         const statusEl = document.getElementById('ranking-status');
         statusEl.className = 'status-chip loading';
         statusEl.innerText = '집계 중...';
         try {
-            const top5 = await calcTop5();
+            const { top5 } = await callAdminAction('previewRankings');
             renderPreviewTable(top5);
             statusEl.className = 'status-chip unsaved';
             statusEl.innerText = '⚠️ 미리보기 (아직 저장 안 됨)';
@@ -565,14 +553,7 @@
         statusEl.className = 'status-chip loading';
         statusEl.innerText = '저장 중...';
         try {
-            const top5 = await calcTop5();
-            const payload = {
-                savedAt: new Date().toISOString(),
-                items: top5.map((s, i) => ({
-                    rank: i + 1, id: s.id, name: s.name, price: s.price, totalQty: s.totalQty
-                }))
-            };
-            await set(ref(db, 'rankings/top5'), payload);
+            const { top5 } = await callAdminAction('saveRankings');
             renderPreviewTable(top5);
             if (!silent) {
                 alert(`✅ /rankings/top5 저장 완료!\n\n` +
@@ -604,26 +585,13 @@
         tableWrap.style.display = 'block';
     }
 
-    // ── 미거래 유저 정리 ─────────────────────────────────────
-    async function getInactiveUsers() {
-        const snap = await get(ref(db, 'users/'));
-        const data = snap.val() || {};
-        const inactive = [];
-        Object.entries(data).forEach(([uid, user]) => {
-            const isDefaultCash = (user.cash ?? 1000000) === 1000000;
-            const hasNoStocks   = !user.stocks || Object.keys(user.stocks).length === 0;
-            const hasZeroStocks = user.stocks && Object.values(user.stocks).every(s => (s.qty || 0) === 0);
-            if (isDefaultCash && (hasNoStocks || hasZeroStocks)) inactive.push(uid);
-        });
-        return inactive;
-    }
-
+    // ── 미거래 유저 정리 (users/ 조회·삭제는 서버(adminAction)에서 처리) ──
     window.previewInactiveUsers = async function() {
         const statusEl = document.getElementById('cleanup-status');
         statusEl.innerText = '집계 중...';
         try {
-            const inactive = await getInactiveUsers();
-            statusEl.innerText = `미거래 유저 ${inactive.length.toLocaleString()}명 발견`;
+            const { count } = await callAdminAction('previewInactiveUsers');
+            statusEl.innerText = `미거래 유저 ${count.toLocaleString()}명 발견`;
         } catch(e) {
             statusEl.innerText = '집계 실패: ' + e.message;
         }
@@ -631,22 +599,13 @@
 
     window.cleanupInactiveUsers = async function() {
         const statusEl = document.getElementById('cleanup-status');
-        statusEl.innerText = '집계 중...';
+        if (!confirm('미거래 유저를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+        statusEl.innerText = '삭제 처리 중... (유저 수에 따라 시간이 걸릴 수 있습니다)';
         try {
-            const inactive = await getInactiveUsers();
-            if (inactive.length === 0) { statusEl.innerText = '삭제할 미거래 유저가 없습니다.'; return; }
-            if (!confirm(`미거래 유저 ${inactive.length.toLocaleString()}명을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
-            const BATCH = 500;
-            let deleted = 0;
-            for (let i = 0; i < inactive.length; i += BATCH) {
-                const batch   = inactive.slice(i, i + BATCH);
-                const updates = {};
-                batch.forEach(uid => { updates[`users/${uid}`] = null; });
-                await update(ref(db), updates);
-                deleted += batch.length;
-                statusEl.innerText = `삭제 중... (${deleted}/${inactive.length})`;
-            }
-            statusEl.innerText = `✅ ${inactive.length.toLocaleString()}명 삭제 완료`;
+            const { count } = await callAdminAction('cleanupInactiveUsers');
+            statusEl.innerText = count === 0
+                ? '삭제할 미거래 유저가 없습니다.'
+                : `✅ ${count.toLocaleString()}명 삭제 완료`;
         } catch(e) {
             statusEl.innerText = '삭제 실패: ' + e.message;
         }
@@ -677,19 +636,12 @@
         const newPrice = parseInt(document.getElementById(`input-${id}`).value);
         if (isNaN(newPrice)) return alert("정확한 가격을 입력해주세요.");
         const oldStock = allStocksData[id];
-        let history = oldStock.history || [oldStock.price];
-        history.push(newPrice);
-        if (history.length > 10) history.shift();
-        const updates = {};
-        updates[`stocks/${id}/price`]   = newPrice;
-        updates[`stocks/${id}/history`] = history;
-        updates[`stocks/${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
         try {
-            await update(ref(db), updates);
-            allStocksData[id].price = newPrice;
-            alert(`✅ ${oldStock.name}의 가격이 ${newPrice.toLocaleString()}원으로 수정되었습니다.`);
+            const result = await callAdminAction('updateSinglePrice', { stockId: id, price: newPrice });
+            allStocksData[id].price = result.price;
+            alert(`✅ ${result.name}의 가격이 ${result.price.toLocaleString()}원으로 수정되었습니다.`);
         } catch (e) {
-            alert("수정 실패: 권한을 확인하세요.");
+            alert("수정 실패: " + e.message);
         }
     };
 
@@ -726,12 +678,9 @@
         const newDate   = document.getElementById('edit-stock-date').value.trim();
         if (isNaN(newPrice)) return alert("가격은 숫자여야 합니다.");
         try {
-            const updates = {};
-            updates[`stocks/${stockId}/price`]         = newPrice;
-            updates[`stocks/${stockId}/bannerImg`]     = newBanner;
-            updates[`stocks/${stockId}/link`]          = newLink;
-            updates[`stocks/${stockId}/bannerEndDate`] = newDate;
-            await update(ref(db), updates);
+            await callAdminAction('updateStockData', {
+                stockId, price: newPrice, bannerImg: newBanner, link: newLink, bannerEndDate: newDate,
+            });
             alert("✅ 종목 정보가 성공적으로 수정되었습니다!");
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-search-name').value = "";
@@ -744,43 +693,10 @@
 
     window.cleanupDuplicateStocks = async function() {
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
-            const data = snapshot.val();
-            if (!data) return alert("데이터가 없습니다.");
-            const deleteUpdates = {};
-            let duplicateFoundCount = 0;
-            const commonTags = ['BJ', 'TV', 'S2', 'H_', 'T1', 'DK', '공식', 'S', 'P'];
-            const stockList = Object.entries(data).map(([id, stock]) => {
-                const name = stock.name.trim();
-                let pureName = name;
-                commonTags.forEach(tag => { pureName = pureName.replace(new RegExp(tag, 'gi'), ''); });
-                pureName = pureName.replace(/[^ㄱ-ㅎ가-힣a-zA-Z0-9]/g, '').toLowerCase();
-                return { id, originalName: name, pureName };
-            }).sort((a, b) => a.id.localeCompare(b.id));
-            for (let i = 0; i < stockList.length; i++) {
-                const master = stockList[i];
-                if (deleteUpdates[`stocks/${master.id}`] === null) continue;
-                if (master.pureName.length < 2) continue;
-                for (let j = i + 1; j < stockList.length; j++) {
-                    const target = stockList[j];
-                    if (deleteUpdates[`stocks/${target.id}`] === null) continue;
-                    let isMatch = false;
-                    if (master.pureName === target.pureName) isMatch = true;
-                    else if (target.originalName.includes(master.originalName)) {
-                        const diffLength = target.originalName.length - master.originalName.length;
-                        if (diffLength > 0 && diffLength <= 4) isMatch = true;
-                    }
-                    if (isMatch && master.pureName !== target.pureName) {
-                        if (master.originalName.includes('BJ') && target.originalName.includes('BJ')) isMatch = false;
-                    }
-                    if (isMatch) { deleteUpdates[`stocks/${target.id}`] = null; duplicateFoundCount++; }
-                }
-            }
-            if (duplicateFoundCount === 0) return alert("✅ 중복이 없습니다.");
-            if (confirm(`${duplicateFoundCount}개의 중복 종목을 삭제하시겠습니까?`)) {
-                await update(ref(db), deleteUpdates);
-                alert(`🔥 총 ${duplicateFoundCount}개의 중복 데이터를 정리했습니다!`);
-            }
+            const { count } = await callAdminAction('cleanupDuplicateStocks');
+            if (count === 0) return alert("✅ 중복이 없습니다.");
+            alert(`🔥 총 ${count}개의 중복 데이터를 정리했습니다!`);
+            await loadStocksOnce();
         } catch (e) {
             alert("오류 발생: " + e.message);
         }
@@ -790,18 +706,13 @@
         const text = document.getElementById('list').value;
         if (!text.trim()) return alert("이름을 입력해주세요.");
         const uniqueNames = [...new Set(text.split('\n').map(n => n.trim()))].filter(n => n !== "");
-        const stocks = {};
-        uniqueNames.forEach((name, i) => {
-            stocks[`id_${Date.now()}_${i}`] = { name, price: 10000, change: 0, history: [10000, 10000] };
-        });
-        if (confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) {
-            try {
-                await update(ref(db, 'stocks/'), stocks);
-                alert("🎉 상장이 완료되었습니다!");
-                document.getElementById('list').value = "";
-                await loadStocksOnce();
-            } catch (e) { alert("오류 발생: " + e.message); }
-        }
+        if (!confirm(`${uniqueNames.length}명을 상장하시겠습니까?`)) return;
+        try {
+            const { count } = await callAdminAction('uploadStocks', { names: uniqueNames });
+            alert(`🎉 ${count}명 상장이 완료되었습니다!`);
+            document.getElementById('list').value = "";
+            await loadStocksOnce();
+        } catch (e) { alert("오류 발생: " + e.message); }
     };
 
     window.deleteStocks = async function() {
@@ -809,21 +720,12 @@
         if (!text.trim()) return alert("삭제할 이름을 입력해주세요.");
         const namesToDelete = text.split('\n').map(n => n.trim()).filter(n => n !== "");
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
-            const data = snapshot.val();
-            if (!data) return alert("데이터가 없습니다.");
-            const deleteUpdates = {};
-            let foundCount = 0;
-            Object.entries(data).forEach(([id, stock]) => {
-                if (namesToDelete.includes(stock.name)) { deleteUpdates[`stocks/${id}`] = null; foundCount++; }
-            });
-            if (foundCount === 0) return alert("❌ 일치하는 종목이 없습니다.");
-            if (confirm(`${foundCount}명을 삭제하시겠습니까?`)) {
-                await update(ref(db), deleteUpdates);
-                alert(`🔥 총 ${foundCount}개의 종목을 삭제했습니다!`);
-                document.getElementById('list').value = "";
-                await loadStocksOnce();
-            }
+            const { count } = await callAdminAction('deleteStocks', { names: namesToDelete });
+            if (count === 0) return alert("❌ 일치하는 종목이 없습니다.");
+            if (!confirm(`${count}명을 삭제하시겠습니까?`)) return;
+            alert(`🔥 총 ${count}개의 종목을 삭제했습니다!`);
+            document.getElementById('list').value = "";
+            await loadStocksOnce();
         } catch (e) {
             alert("삭제 중 오류 발생: " + e.message);
         }
@@ -833,25 +735,19 @@
         const percent = parseFloat(document.getElementById('percent-input').value);
         if (isNaN(percent)) return alert("숫자를 입력해주세요.");
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
-            const data = snapshot.val();
-            if (!data) return;
-            const updates = {};
-            const multiplier = 1 + (percent / 100);
-            Object.keys(data).forEach(id => {
-                const oldPrice = data[id].price;
-                const newPrice = Math.round(oldPrice * multiplier);
-                let history = data[id].history || [oldPrice];
-                history.push(newPrice);
-                if (history.length > 10) history.shift();
-                updates[`stocks/${id}/price`]   = newPrice;
-                updates[`stocks/${id}/history`] = history;
-                updates[`stocks/${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
-            });
-            await update(ref(db), updates);
-            alert(`🔥 전 종목 주가가 ${percent}% 조정되었습니다!`);
+            const { count } = await callAdminAction('adjustAllPrices', { percent });
+            alert(`🔥 전 종목(${count}개) 주가가 ${percent}% 조정되었습니다!`);
             await loadStocksOnce();
         } catch (e) { alert("오류 발생: " + e.message); }
+    };
+
+    window.resetAllPrices = async function() {
+        if (!confirm("정말로 전 종목 주가를 10,000원으로 초기화하시겠습니까?\n가격 히스토리와 등락률도 함께 리셋되며, 되돌릴 수 없습니다.")) return;
+        try {
+            const { count } = await callAdminAction('resetAllPrices');
+            alert(`♻️ 전 종목(${count}개) 주가가 10,000원으로 초기화되었습니다!`);
+            await loadStocksOnce();
+        } catch (e) { alert("초기화 중 오류 발생: " + e.message); }
     };
 
     window.addBannerToStock = async function() {
@@ -860,22 +756,11 @@
         const linkUrl        = document.getElementById('banner-link-url').value.trim();
         const daysInput      = document.getElementById('banner-days').value;
         if (!targetNickname || !imgUrl || !daysInput) return alert("닉네임, 이미지 주소, 노출 기간(일)은 필수 입력 항목입니다.");
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + parseInt(daysInput));
-        const endDateStr = endDate.toISOString().split('T')[0];
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
-            const data = snapshot.val();
-            if (!data) return alert("데이터가 없습니다.");
-            let targetId = null;
-            Object.entries(data).forEach(([id, stock]) => { if (stock.name === targetNickname) targetId = id; });
-            if (!targetId) return alert(`❌ '${targetNickname}'을 찾을 수 없습니다.`);
-            const updates = {};
-            updates[`stocks/${targetId}/bannerImg`]     = imgUrl;
-            updates[`stocks/${targetId}/bannerEndDate`] = endDateStr;
-            updates[`stocks/${targetId}/link`] = linkUrl || `https://www.sooplive.co.kr/station/${targetId}`;
-            await update(ref(db), updates);
-            alert(`✅ ${targetNickname} 종목에 배너가 적용되었습니다!\n📅 종료일: ${endDateStr}`);
+            const result = await callAdminAction('addBannerToStock', {
+                nickname: targetNickname, imgUrl, linkUrl, days: daysInput,
+            });
+            alert(`✅ ${targetNickname} 종목에 배너가 적용되었습니다!\n📅 종료일: ${result.endDate}`);
             document.getElementById('banner-nickname').value = "";
             document.getElementById('banner-img-url').value  = "";
             document.getElementById('banner-link-url').value = "";

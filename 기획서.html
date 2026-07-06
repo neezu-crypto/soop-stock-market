@@ -244,7 +244,7 @@
 
     <section id="sec5">
         <h2><span class="num">5</span>거래(매매) 로직</h2>
-        <p>모든 매매는 클라이언트가 아닌 <strong>Cloud Function(<code>trade</code> callable, <code>functions/index.js</code>)</strong>이 Admin SDK로 서버에서 계산·기록합니다. 클라이언트는 종목 id·매수/매도·수량만 전달하고, 가격 계산·잔고 검증·기록은 전부 서버 책임입니다. <code>stocks/{id}</code>·<code>users/{uid}</code>·<code>candlesticks</code>에 대한 클라이언트 직접 쓰기 권한은 <code>database.rules.json</code>에서 막혀 있어 관리자 계정 외에는 이 경로들을 직접 조작할 수 없습니다.</p>
+        <p>모든 매매는 클라이언트가 아닌 <strong>Cloud Function(<code>trade</code> callable, <code>functions/index.js</code>)</strong>이 Admin SDK로 서버에서 계산·기록합니다. 클라이언트는 종목 id·매수/매도·수량만 전달하고, 가격 계산·잔고 검증·기록은 전부 서버 책임입니다. <code>stocks/{id}</code>·<code>users/{uid}</code>·<code>candlesticks</code>에 대한 클라이언트 직접 쓰기는 <code>database.rules.json</code>에서 전부 <code>false</code>로 막혀 있어, 관리자 페이지를 포함해 어떤 클라이언트도 이 경로들을 직접 조작할 수 없고 오직 Cloud Function(Admin SDK)만 기록합니다.</p>
         <div class="grid-2">
             <div class="card">
                 <h3>가격 결정 공식</h3>
@@ -273,9 +273,22 @@
             <li><strong>일반 유저:</strong> 별도 로그인 없이 Firebase <strong>익명 인증(signInAnonymously)</strong>으로 자동 참여, UID 기준으로 자산/보유 종목이 저장됨</li>
             <li><strong>관리자 인증:</strong> <code>Ctrl + Enter</code> 입력 시 구글 로그인 팝업 실행 → 로그인 계정이 관리자 이메일과 일치하면 <span class="badge badge-admin">관리자 모드</span> 활성화</li>
             <li>관리자 모드 활성화 시 <strong>점검 오버레이를 스킵</strong>하고 정상 서비스 화면으로 진입 (점검 중에도 관리자 본인은 접속/점검 확인 가능)</li>
-            <li>관리자 계정은 별도 관리자 페이지(<code>soop-stocks-admin-gate16103.html</code>)와 동일 계정을 사용 — 종목 시세 강제 조정, 랭킹 재계산, 배너 등록, 비활성 유저 정리 등은 해당 페이지에서 수행</li>
+            <li>관리자 계정은 별도 관리자 페이지(<code>soop-stocks-admin-gate16103.html</code>)와 동일 계정을 사용</li>
         </ul>
-        <div class="note"><b>참고</b> — 관리자 판별은 클라이언트 단에서 이메일 문자열을 비교하는 방식이며, 실제 데이터 쓰기 권한은 <code>database.rules.json</code>에서 <code>auth.token.email</code> 기준으로 서버측에 별도 검증되어 있습니다. 매매 로직은 Cloud Function(<code>trade</code>)으로 이전되어 클라이언트가 <code>stocks</code>/<code>users</code>/<code>candlesticks</code>를 직접 쓸 수 없으므로, 규칙 허용 범위 내에서의 값 조작 문제는 해소되었습니다. 남은 과제는 랭킹(<code>rankings/top5</code>) 집계로, 아직 클라이언트가 직접 계산해 기록합니다.</div>
+
+        <h3>관리자 페이지 기능 — 전부 Cloud Function 경유 (<code>adminAction</code> callable)</h3>
+        <p>종목 시세 조정, 랭킹 재계산, 배너 등록, 비활성 유저 정리 등 관리자 페이지의 모든 쓰기·민감 읽기 작업은 클라이언트가 <code>{action, payload}</code>만 전달하고, 실제 처리는 <code>functions/index.js</code>의 <code>adminAction</code> 콜러블이 Admin SDK로 수행합니다. 함수 진입 시 <code>auth.token.email === 관리자 이메일</code>을 서버에서 재검증합니다.</p>
+        <table>
+            <tr><th>action</th><th>기능</th></tr>
+            <tr><td><code>updateSinglePrice</code> / <code>updateStockData</code></td><td>개별 종목 가격·배너·링크 수정</td></tr>
+            <tr><td><code>adjustAllPrices</code> / <code>resetAllPrices</code></td><td>전 종목 가격 일괄 조정 / 10,000원 초기화</td></tr>
+            <tr><td><code>uploadStocks</code> / <code>deleteStocks</code></td><td>종목 상장 / 삭제</td></tr>
+            <tr><td><code>cleanupDuplicateStocks</code></td><td>중복 종목 정리</td></tr>
+            <tr><td><code>addBannerToStock</code> / <code>saveChartBanner</code> / <code>deleteChartBanner</code></td><td>랭킹 배너 / 차트 하단 배너 등록·삭제</td></tr>
+            <tr><td><code>previewRankings</code> / <code>saveRankings</code></td><td><code>users/</code> 전체를 서버에서 집계해 TOP5 미리보기·저장</td></tr>
+            <tr><td><code>previewInactiveUsers</code> / <code>cleanupInactiveUsers</code></td><td>미거래 유저 집계·일괄 삭제</td></tr>
+        </table>
+        <div class="note"><b>참고</b> — 이 이전 덕분에 <code>database.rules.json</code>에는 더 이상 <code>auth.token.email</code> 문자열 매칭 규칙이 전혀 없습니다. <code>stocks</code>·<code>candlesticks</code>·<code>chartBanner</code>·<code>users/{uid}</code> 쓰기는 전부 <code>false</code>(클라이언트 직접 쓰기 완전 차단)이고, 실제 쓰기는 Admin SDK를 쓰는 Cloud Function(<code>trade</code>, <code>adminAction</code>)만 수행합니다 — 관리자 판별도 규칙이 아니라 함수 코드 안에서 이뤄집니다. 유일하게 남은 예외는 <code>rankings/top5</code>로, 일반 유저의 거래 후 랭킹 반영(디바운스)이 아직 클라이언트에서 직접 기록되어 구조 검증만 규칙에 남아있습니다.</div>
     </section>
 
     <section id="sec7">
@@ -348,7 +361,7 @@
         </ul>
     </section>
 
-    <footer>SOOP STOCK 거래소 · 기획서 v1.5 · index.html 코드 기준 작성 (매매 로직 Cloud Function 이전 반영)</footer>
+    <footer>SOOP STOCK 거래소 · 기획서 v1.6 · index.html 코드 기준 작성 (관리자 페이지 기능 Cloud Function 이전 반영)</footer>
 </div>
 </body>
 </html>
