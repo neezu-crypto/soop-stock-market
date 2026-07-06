@@ -66,16 +66,10 @@ exports.trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, asy
       ? Math.round(newPrice * (1 + SPREAD))
       : Math.round(newPrice * (1 - SPREAD));
 
-    let history = currentStock.history || [currentStock.price];
-    history = [...history, newPrice];
-    if (history.length > 20) history.shift();
-
     return {
       ...currentStock,
       price:  newPrice,
-      history,
       volume: (currentStock.volume || 0) + qty,
-      change: (((newPrice - history[0]) / history[0]) * 100).toFixed(2),
     };
   });
 
@@ -248,14 +242,8 @@ async function actionUpdateSinglePrice(db, { stockId, price }) {
   if (!snap.exists()) throw new HttpsError("not-found", "종목을 찾을 수 없습니다.");
   const stock = snap.val();
 
-  let history = stock.history || [stock.price];
-  history = [...history, newPrice];
-  if (history.length > 10) history.shift();
-
   await db.ref().update({
-    [`stocks/${stockId}/price`]:   newPrice,
-    [`stocks/${stockId}/history`]: history,
-    [`stocks/${stockId}/change`]:  (((newPrice - history[0]) / history[0]) * 100).toFixed(2),
+    [`stocks/${stockId}/price`]: newPrice,
   });
   return { ok: true, name: stock.name, price: newPrice };
 }
@@ -287,12 +275,7 @@ async function actionAdjustAllPrices(db, { percent }) {
   Object.keys(data).forEach((id) => {
     const oldPrice = data[id].price;
     const newPrice = Math.round(oldPrice * multiplier);
-    let history = data[id].history || [oldPrice];
-    history = [...history, newPrice];
-    if (history.length > 10) history.shift();
-    updates[`stocks/${id}/price`]   = newPrice;
-    updates[`stocks/${id}/history`] = history;
-    updates[`stocks/${id}/change`]  = (((newPrice - history[0]) / history[0]) * 100).toFixed(2);
+    updates[`stocks/${id}/price`] = newPrice;
   });
   await db.ref().update(updates);
   return { ok: true, count: Object.keys(data).length };
@@ -306,9 +289,7 @@ async function actionResetAllPrices(db) {
   const RESET_PRICE = 10000;
   const updates = {};
   Object.keys(data).forEach((id) => {
-    updates[`stocks/${id}/price`]   = RESET_PRICE;
-    updates[`stocks/${id}/history`] = [RESET_PRICE, RESET_PRICE];
-    updates[`stocks/${id}/change`]  = "0.00";
+    updates[`stocks/${id}/price`] = RESET_PRICE;
   });
   await db.ref().update(updates);
   return { ok: true, count: Object.keys(data).length };
@@ -323,7 +304,7 @@ async function actionUploadStocks(db, { names }) {
 
   const stocks = {};
   uniqueNames.forEach((name, i) => {
-    stocks[`id_${Date.now()}_${i}`] = { name, price: 10000, change: 0, history: [10000, 10000] };
+    stocks[`id_${Date.now()}_${i}`] = { name, price: 10000 };
   });
   await db.ref("stocks").update(stocks);
   return { ok: true, count: uniqueNames.length };
