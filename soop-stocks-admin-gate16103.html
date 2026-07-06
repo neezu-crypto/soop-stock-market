@@ -66,6 +66,18 @@
         }
         .chart-banner-info-row span { color: #94a3b8; }
         .chart-banner-info-row b   { color: #f8fafc; }
+
+        /* 배너 통합 관리 탭 */
+        .banner-tab-btn {
+            flex: 1; background: #0f172a; border: 1px solid #334155; color: #94a3b8;
+            padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .banner-tab-btn.active { background: #1e3a5f; border-color: #38bdf8; color: #38bdf8; }
+        .banner-tab-badge {
+            background: #ef4444; color: white; font-size: 11px; font-weight: 800;
+            padding: 1px 7px; border-radius: 20px; min-width: 16px; text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -140,86 +152,6 @@
         </div>
     </div>
 
-    <!-- 📺 차트 하단 배너 관리 (종목별 노출) -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
-        <h1>📺 차트 하단 배너 관리</h1>
-        <div class="info-box">
-            차트창 하단 광고는 <b style="color:#38bdf8;">종목(스트리머)별로 개별 노출</b>됩니다. 전체 종목에 공동 노출되지 않고,
-            해당 종목의 차트를 볼 때만 배너가 표시되므로 거래량이 많은 인기 종목일수록 노출 가치가 높아집니다.<br>
-            <span style="color:#38bdf8;">배너 사이즈: 720 × 150px · 이미지 및 GIF 지원</span><br>
-            <span style="color:#f59e0b;">※ 우측 배너와 완전히 별도 운영 · 별풍선 40개/일</span>
-        </div>
-
-        <!-- 종목별 조회 -->
-        <div style="display:flex; gap:8px; margin-bottom:12px;">
-            <input type="text" id="cb-lookup-nickname" placeholder="조회할 스트리머 닉네임"
-                style="flex:1; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-            <button class="btn-success" onclick="loadChartBannerStatus()" style="padding:0 18px;">🔍 조회</button>
-        </div>
-
-        <!-- 현재 등록 상태 -->
-        <div class="chart-banner-info-row">
-            <span>배너 상태:</span>
-            <span id="chart-banner-status" class="status-chip none">닉네임을 조회하세요</span>
-        </div>
-        <div id="chart-banner-current" style="display:none; margin-bottom:15px;">
-            <div class="chart-banner-info-row">
-                <span>광고주</span>
-                <b id="cb-current-name">-</b>
-            </div>
-            <div class="chart-banner-info-row">
-                <span>이동 링크</span>
-                <b id="cb-current-link" style="font-size:12px; word-break:break-all;">-</b>
-            </div>
-            <div class="chart-banner-info-row">
-                <span>종료일</span>
-                <b id="cb-current-enddate">-</b>
-            </div>
-            <!-- 현재 배너 미리보기 -->
-            <div class="chart-banner-preview">
-                <img id="cb-current-img" src="" alt="현재 배너">
-                <div class="preview-empty" id="cb-current-empty">
-                    <span>🖼</span><span>이미지 없음</span>
-                </div>
-            </div>
-            <button class="btn-danger" style="width:100%; margin-top:5px;" onclick="deleteChartBanner()">🗑 현재 배너 삭제</button>
-        </div>
-
-        <!-- 신규 등록 폼 -->
-        <div style="border-top: 1px solid #334155; padding-top: 15px; display:flex; flex-direction:column; gap:10px;">
-            <div style="font-size:13px; color:#38bdf8; font-weight:700;">새 배너 등록</div>
-
-            <input type="text" id="cb-target-nickname" placeholder="배너를 노출할 대상 스트리머 닉네임 (정확히 입력)"
-                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-
-            <input type="text" id="cb-name" placeholder="광고주 닉네임 (관리용)"
-                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-
-            <input type="text" id="cb-img" placeholder="배너 이미지 URL (720×150px · GIF 가능)"
-                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-
-            <!-- 이미지 입력 시 미리보기 -->
-            <div class="chart-banner-preview" id="cb-preview-wrap">
-                <img id="cb-preview-img" src="" alt="미리보기">
-                <div class="preview-empty" id="cb-preview-empty">
-                    <span>🖼</span><span>이미지 URL 입력 시 미리보기</span>
-                </div>
-            </div>
-
-            <input type="text" id="cb-link" placeholder="클릭 시 이동할 링크 URL"
-                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-
-            <div style="display:flex; align-items:center; gap:10px; background:#0f172a; padding:10px; border-radius:8px; border:1px solid #475569;">
-                <label style="font-size:13px; color:#94a3b8; white-space:nowrap;">노출 기간:</label>
-                <input type="number" id="cb-days" placeholder="예: 7" min="1" max="365"
-                    style="flex:1; background:transparent; border:none; color:#38bdf8; font-size:15px; outline:none; padding:0;">
-                <span style="color:#94a3b8; font-size:13px;">일</span>
-            </div>
-            <div style="font-size:12px; color:#64748b; text-align:right; margin-top:-6px;" id="cb-enddate-preview"></div>
-
-            <button class="btn-primary" onclick="saveChartBanner()" style="margin-top:5px;">📺 차트 배너 등록 / 교체</button>
-        </div>
-    </div>
 
     <!-- 📈 주가 일괄 조정 -->
     <div class="container" style="display:block">
@@ -273,44 +205,24 @@
         </div>
     </div>
 
-    <!-- 📝 홍보 배너 신청 검수 -->
+    <!-- 📢 배너 광고 통합 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
-        <h1>📝 홍보 배너 신청 검수</h1>
-        <div class="info-box">유저가 메인페이지에서 직접 신청한 홍보 배너 목록입니다. 승인하면 즉시 배너가 등록됩니다(닉네임이 상장돼 있지 않으면 자동으로 상장됩니다).</div>
-        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadBannerRequests()">🔄 신청 목록 새로고침</button>
-        <div id="banner-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-    </div>
+        <h1>📢 배너 광고 통합 관리</h1>
+        <div class="info-box">우측 랭킹 배너와 차트 하단 배너의 신청·진행·만료 내역을 한 곳에서 관리합니다.</div>
 
-    <!-- 📝 차트 하단 배너 신청 검수 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
-        <h1>📝 차트 하단 배너 신청 검수</h1>
-        <div class="info-box">유저가 메인페이지에서 직접 입력한 배너 이미지/링크입니다. 오타나 부적절한 내용이 있으면 승인 전에 직접 수정할 수 있습니다.</div>
-        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadChartBannerRequests()">🔄 신청 목록 새로고침</button>
-        <div id="chart-banner-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-    </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button class="banner-tab-btn active" id="banner-tab-btn-new" onclick="switchBannerTab('new')">
+                🆕 신규 신청 <span class="banner-tab-badge" id="banner-tab-badge-new" style="display:none;">0</span>
+            </button>
+            <button class="banner-tab-btn" id="banner-tab-btn-active" onclick="switchBannerTab('active')">▶️ 진행중인 홍보</button>
+            <button class="banner-tab-btn" id="banner-tab-btn-expired" onclick="switchBannerTab('expired')">⏰ 만료된 홍보</button>
+        </div>
 
-    <!-- 📺 방송국 배너 관리 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
-        <h1>📺 방송국 배너 관리</h1>
-        <div class="info-box">
-            닉네임이 일치하는 종목에 배너와 <b>노출 기간</b>을 설정합니다.<br>
-            <span style="color: #38bdf8;">* 입력한 일수(Day)만큼 노출 후 자동으로 사라집니다.</span>
-        </div>
-        <div style="flex-direction: column; gap: 10px; display: flex;">
-            <input type="text" id="banner-nickname" placeholder="대상 스트리머 닉네임 (정확히 입력)"
-                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-            <input type="text" id="banner-img-url" placeholder="배너 이미지(GIF/PNG) 주소"
-                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-            <input type="text" id="banner-link-url" placeholder="클릭 시 이동할 링크 (미입력 시 기본 방송국)"
-                style="width:100%; background:#0f172a; border:1px solid #475569; color:white; padding:12px; border-radius:8px; box-sizing:border-box;">
-            <div style="display: flex; align-items: center; gap: 10px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #475569;">
-                <label for="banner-days" style="font-size: 13px; color: #94a3b8; white-space: nowrap;">노출 기간 설정:</label>
-                <input type="number" id="banner-days" placeholder="예: 7" min="1" max="365"
-                    style="flex: 1; background: transparent; border: none; color: #38bdf8; font-size: 15px; outline: none;">
-                <span style="color: #94a3b8; font-size: 13px; margin-left: 5px;">일 동안</span>
-            </div>
-            <button class="btn-primary" onclick="window.addBannerToStock()">배너 및 노출 기간 적용</button>
-        </div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadAllBannerData()">🔄 전체 새로고침</button>
+
+        <div id="banner-tab-new" class="banner-tab-panel" style="display:flex;flex-direction:column;gap:10px;"></div>
+        <div id="banner-tab-active" class="banner-tab-panel" style="display:none;flex-direction:column;gap:10px;"></div>
+        <div id="banner-tab-expired" class="banner-tab-panel" style="display:none;flex-direction:column;gap:10px;"></div>
     </div>
 
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
@@ -382,153 +294,6 @@
         }
     }
 
-    // ══════════════════════════════════════════════════════
-    // 차트 하단 배너 관리 (종목별 개별 노출)
-    // Firebase: chartBanner/{stockId} = { name, img, link, endDate }
-    // ══════════════════════════════════════════════════════
-
-    let currentChartBannerStockId = null;
-
-    async function findStockIdByNickname(nickname) {
-        const snap = await get(ref(db, 'stocks/'));
-        const data = snap.val() || {};
-        let targetId = null;
-        Object.entries(data).forEach(([id, s]) => { if (s.name === nickname) targetId = id; });
-        return targetId;
-    }
-
-    window.loadChartBannerStatus = async function() {
-        const nickname  = document.getElementById('cb-lookup-nickname').value.trim();
-        const statusEl  = document.getElementById('chart-banner-status');
-        const currentEl = document.getElementById('chart-banner-current');
-        if (!nickname) return alert('조회할 스트리머 닉네임을 입력해주세요.');
-
-        try {
-            const targetId = await findStockIdByNickname(nickname);
-            if (!targetId) return alert(`❌ '${nickname}'을 찾을 수 없습니다.`);
-            currentChartBannerStockId = targetId;
-
-            const snap = await get(ref(db, `chartBanner/${targetId}`));
-            if (!snap.exists() || !snap.val().img) {
-                statusEl.className  = 'status-chip none';
-                statusEl.innerText  = '등록 없음';
-                currentEl.style.display = 'none';
-                return;
-            }
-            const data = snap.val();
-
-            // 만료 여부 확인
-            let isExpired = false;
-            if (data.endDate) {
-                const end = new Date(data.endDate);
-                end.setHours(23, 59, 59, 999);
-                isExpired = end < new Date();
-            }
-
-            statusEl.className = isExpired ? 'status-chip expired' : 'status-chip active';
-            statusEl.innerText = isExpired
-                ? `⚠️ 만료됨 (${data.endDate})`
-                : `✅ 노출 중 (${data.endDate || '기간 없음'} 까지)`;
-
-            // 현재 배너 정보 표시
-            document.getElementById('cb-current-name').innerText    = data.name    || '-';
-            document.getElementById('cb-current-link').innerText    = data.link    || '-';
-            document.getElementById('cb-current-enddate').innerText = data.endDate || '무기한';
-
-            const imgEl    = document.getElementById('cb-current-img');
-            const emptyEl  = document.getElementById('cb-current-empty');
-            if (data.img) {
-                imgEl.src             = data.img;
-                imgEl.style.display   = 'block';
-                emptyEl.style.display = 'none';
-            }
-            currentEl.style.display = 'block';
-
-        } catch (e) {
-            statusEl.className = 'status-chip unsaved';
-            statusEl.innerText = '불러오기 실패';
-        }
-    };
-
-    window.saveChartBanner = async function() {
-        const targetNickname = document.getElementById('cb-target-nickname').value.trim();
-        const name    = document.getElementById('cb-name').value.trim();
-        const img     = document.getElementById('cb-img').value.trim();
-        const link    = document.getElementById('cb-link').value.trim();
-        const days    = parseInt(document.getElementById('cb-days').value);
-
-        if (!targetNickname) return alert('배너를 노출할 대상 스트리머 닉네임을 입력해주세요.');
-        if (!img)          return alert('배너 이미지 URL을 입력해주세요.');
-        if (!link)         return alert('이동 링크를 입력해주세요.');
-        if (isNaN(days) || days < 1) return alert('노출 기간(일)을 올바르게 입력해주세요.');
-
-        if (!confirm(`'${targetNickname}' 종목의 차트 하단 배너를 등록하시겠습니까?\n\n광고주: ${name || '(없음)'}\n링크: ${link}\n노출 기간: ${days}일`)) return;
-
-        try {
-            const result = await callAdminAction('saveChartBanner', { nickname: targetNickname, name, img, link, days });
-            alert(`✅ '${targetNickname}' 종목에 차트 배너가 등록되었습니다!\n📅 종료일: ${result.endDate}`);
-            // 입력 초기화
-            document.getElementById('cb-target-nickname').value = '';
-            document.getElementById('cb-name').value  = '';
-            document.getElementById('cb-img').value   = '';
-            document.getElementById('cb-link').value  = '';
-            document.getElementById('cb-days').value  = '';
-            document.getElementById('cb-preview-img').style.display = 'none';
-            document.getElementById('cb-preview-empty').style.display = 'flex';
-            document.getElementById('cb-enddate-preview').innerText = '';
-
-            if (currentChartBannerStockId === result.stockId) await window.loadChartBannerStatus();
-        } catch (e) {
-            alert('저장 실패: ' + e.message);
-        }
-    };
-
-    window.deleteChartBanner = async function() {
-        if (!currentChartBannerStockId) return alert('먼저 닉네임으로 배너를 조회해주세요.');
-        if (!confirm('현재 조회된 종목의 차트 배너를 삭제하시겠습니까?\n삭제 시 즉시 모집 안내로 교체됩니다.')) return;
-        try {
-            await callAdminAction('deleteChartBanner', { stockId: currentChartBannerStockId });
-            alert('✅ 차트 배너가 삭제되었습니다.');
-            await window.loadChartBannerStatus();
-        } catch (e) {
-            alert('삭제 실패: ' + e.message);
-        }
-    };
-
-    // 이미지 URL 입력 시 실시간 미리보기
-    document.getElementById('cb-img')?.addEventListener('input', function() {
-        const url      = this.value.trim();
-        const imgEl    = document.getElementById('cb-preview-img');
-        const emptyEl  = document.getElementById('cb-preview-empty');
-        if (url) {
-            imgEl.src             = url;
-            imgEl.style.display   = 'block';
-            emptyEl.style.display = 'none';
-            imgEl.onerror = () => {
-                imgEl.style.display   = 'none';
-                emptyEl.style.display = 'flex';
-                emptyEl.innerHTML     = '<span>⚠️</span><span>이미지를 불러올 수 없습니다</span>';
-            };
-        } else {
-            imgEl.style.display   = 'none';
-            emptyEl.style.display = 'flex';
-            emptyEl.innerHTML     = '<span>🖼</span><span>이미지 URL 입력 시 미리보기</span>';
-        }
-    });
-
-    // 노출 기간 입력 시 종료일 미리보기
-    document.getElementById('cb-days')?.addEventListener('input', function() {
-        const days    = parseInt(this.value);
-        const previewEl = document.getElementById('cb-enddate-preview');
-        if (!isNaN(days) && days > 0) {
-            const end = new Date();
-            end.setDate(end.getDate() + days);
-            previewEl.innerText = `📅 종료일: ${end.toISOString().split('T')[0]}`;
-        } else {
-            previewEl.innerText = '';
-        }
-    });
-
     // ── 인증 ────────────────────────────────────────────────
     window.login  = () => signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
     window.logout = () => signOut(auth);
@@ -540,8 +305,7 @@
             document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
             await loadStocksOnce();
             await loadRankingStatus();
-            await loadBannerRequests();
-            await loadChartBannerRequests();
+            await loadAllBannerData();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -768,68 +532,117 @@
         } catch (e) { alert("초기화 중 오류 발생: " + e.message); }
     };
 
-    window.addBannerToStock = async function() {
-        const targetNickname = document.getElementById('banner-nickname').value.trim();
-        const imgUrl         = document.getElementById('banner-img-url').value.trim();
-        const linkUrl        = document.getElementById('banner-link-url').value.trim();
-        const daysInput      = document.getElementById('banner-days').value;
-        if (!targetNickname || !imgUrl || !daysInput) return alert("닉네임, 이미지 주소, 노출 기간(일)은 필수 입력 항목입니다.");
-        try {
-            const result = await callAdminAction('addBannerToStock', {
-                nickname: targetNickname, imgUrl, linkUrl, days: daysInput,
-            });
-            alert(`✅ ${targetNickname} 종목에 배너가 적용되었습니다!\n📅 종료일: ${result.endDate}`);
-            document.getElementById('banner-nickname').value = "";
-            document.getElementById('banner-img-url').value  = "";
-            document.getElementById('banner-link-url').value = "";
-            document.getElementById('banner-days').value     = "";
-        } catch (e) {
-            alert("배너 추가 중 오류 발생: " + e.message);
-        }
-    };
-
     function escapeAttr(str) {
         return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     }
 
-    async function loadBannerRequests() {
-        const listEl = document.getElementById('banner-request-list');
-        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+    // ══════════════════════════════════════════════════════
+    // 배너 광고 통합 관리 — 🆕 신규 신청 / ▶️ 진행중 / ⏰ 만료 탭
+    // ══════════════════════════════════════════════════════
+
+    window.switchBannerTab = function(tab) {
+        ['new', 'active', 'expired'].forEach(t => {
+            document.getElementById(`banner-tab-btn-${t}`).classList.toggle('active', t === tab);
+            document.getElementById(`banner-tab-${t}`).style.display = t === tab ? 'flex' : 'none';
+        });
+    };
+
+    window.loadAllBannerData = async function() {
+        await Promise.all([loadNewBannerRequests(), loadActiveExpiredBanners()]);
+    };
+
+    function updateBannerTabBadge(count) {
+        const badge = document.getElementById('banner-tab-badge-new');
+        if (count > 0) { badge.style.display = 'inline-block'; badge.innerText = count; }
+        else { badge.style.display = 'none'; }
+    }
+
+    function renderRankingRequestRow(r) {
+        const row = document.createElement('div');
+        row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+        row.innerHTML = `
+            <div style="display:flex;align-items:center;gap:12px;">
+                <img src="${escapeAttr(r.previewImg)}" alt="${escapeAttr(r.nickname)}"
+                     style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#1e293b;flex-shrink:0;"
+                     onerror="this.style.display='none';">
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                        <span class="status-chip active" style="flex-shrink:0;">우측 배너</span>
+                        <input type="text" value="${escapeAttr(r.nickname)}" id="req-nickname-${r.id}"
+                               style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
+                    </div>
+                    <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="number" min="1" max="365" value="${r.days || 7}" id="req-days-${r.id}"
+                       style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                <span style="font-size:12px;color:#94a3b8;">일 노출</span>
+                <button class="btn-success" style="flex:1;padding:8px;" onclick="approveBannerRequest('${r.id}')">✅ 승인</button>
+                <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectBannerRequest('${r.id}')">🚫 거절</button>
+            </div>`;
+        return row;
+    }
+
+    function renderChartRequestRow(r) {
+        const row = document.createElement('div');
+        row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+        row.innerHTML = `
+            <div class="chart-banner-preview" id="chart-req-preview-${r.id}">
+                <img src="${escapeAttr(r.bannerImg)}" alt="${escapeAttr(r.nickname)}"
+                     onload="this.style.display='block';"
+                     onerror="this.style.display='none';">
+                <div class="preview-empty">🖼 이미지 로드 실패</div>
+            </div>
+            <div style="font-size:12px;color:#94a3b8;">
+                <span class="status-chip saved" style="margin-right:4px;">차트 배너</span>
+                @${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원
+            </div>
+            <input type="text" value="${escapeAttr(r.nickname)}" id="chart-req-nickname-${r.id}" placeholder="닉네임"
+                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:13px;font-weight:800;box-sizing:border-box;">
+            <input type="text" value="${escapeAttr(r.bannerImg)}" id="chart-req-img-${r.id}" placeholder="배너 이미지 링크"
+                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
+            <input type="text" value="${escapeAttr(r.promoLink)}" id="chart-req-link-${r.id}" placeholder="홍보 페이지 링크"
+                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="number" min="1" max="365" value="${r.days || 7}" id="chart-req-days-${r.id}"
+                       style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                <span style="font-size:12px;color:#94a3b8;">일 노출</span>
+                <button class="btn-success" style="flex:1;padding:8px;" onclick="approveChartBannerRequest('${r.id}')">✅ 승인</button>
+                <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectChartBannerRequest('${r.id}')">🚫 거절</button>
+            </div>`;
+        row.querySelector(`#chart-req-img-${r.id}`).addEventListener('input', (e) => {
+            const previewImg = row.querySelector(`#chart-req-preview-${r.id} img`);
+            if (previewImg) previewImg.src = e.target.value.trim();
+        });
+        return row;
+    }
+
+    async function loadNewBannerRequests() {
+        const panel = document.getElementById('banner-tab-new');
+        panel.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
         try {
-            const { requests } = await callAdminAction('listBannerRequests');
-            if (!requests || requests.length === 0) {
-                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+            const [rankingRes, chartRes] = await Promise.all([
+                callAdminAction('listBannerRequests'),
+                callAdminAction('listChartBannerRequests'),
+            ]);
+            const all = [
+                ...(rankingRes.requests || []).map(r => ({ ...r, bannerType: 'ranking' })),
+                ...(chartRes.requests   || []).map(r => ({ ...r, bannerType: 'chart' })),
+            ].sort((a, b) => (a.requestedAt || 0) - (b.requestedAt || 0));
+
+            updateBannerTabBadge(all.length);
+
+            if (all.length === 0) {
+                panel.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
                 return;
             }
-            listEl.innerHTML = '';
-            requests.forEach(r => {
-                const row = document.createElement('div');
-                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
-                row.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:12px;">
-                        <img src="${r.previewImg}" alt="${r.nickname}"
-                             style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#1e293b;flex-shrink:0;"
-                             onerror="this.style.display='none';">
-                        <div style="flex:1;min-width:0;">
-                            <input type="text" value="${escapeAttr(r.nickname)}" id="req-nickname-${r.id}"
-                                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;margin-bottom:4px;">
-                            <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <input type="number" min="1" max="365" value="${r.days || 7}" id="req-days-${r.id}"
-                               style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
-                        <span style="font-size:12px;color:#94a3b8;">일 노출</span>
-                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveBannerRequest('${r.id}')">✅ 승인</button>
-                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectBannerRequest('${r.id}')">🚫 거절</button>
-                    </div>`;
-                listEl.appendChild(row);
-            });
+            panel.innerHTML = '';
+            all.forEach(r => panel.appendChild(r.bannerType === 'chart' ? renderChartRequestRow(r) : renderRankingRequestRow(r)));
         } catch (e) {
-            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+            panel.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
         }
     }
-    window.loadBannerRequests = loadBannerRequests;
 
     window.approveBannerRequest = async function(requestId) {
         const days     = document.getElementById(`req-days-${requestId}`).value;
@@ -839,7 +652,7 @@
         try {
             const result = await callAdminAction('approveBannerRequest', { requestId, days, nickname });
             alert(`✅ 승인 완료! 종료일: ${result.endDate}`);
-            await loadBannerRequests();
+            await window.loadAllBannerData();
         } catch (e) {
             alert('승인 중 오류 발생: ' + e.message);
         }
@@ -849,58 +662,11 @@
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
             await callAdminAction('rejectBannerRequest', { requestId });
-            await loadBannerRequests();
+            await window.loadAllBannerData();
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
         }
     };
-
-    async function loadChartBannerRequests() {
-        const listEl = document.getElementById('chart-banner-request-list');
-        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
-        try {
-            const { requests } = await callAdminAction('listChartBannerRequests');
-            if (!requests || requests.length === 0) {
-                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
-                return;
-            }
-            listEl.innerHTML = '';
-            requests.forEach(r => {
-                const row = document.createElement('div');
-                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
-                row.innerHTML = `
-                    <div class="chart-banner-preview" id="chart-req-preview-${r.id}">
-                        <img src="${escapeAttr(r.bannerImg)}" alt="${escapeAttr(r.nickname)}"
-                             onload="this.style.display='block';"
-                             onerror="this.style.display='none';">
-                        <div class="preview-empty">🖼 이미지 로드 실패</div>
-                    </div>
-                    <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원</div>
-                    <input type="text" value="${escapeAttr(r.nickname)}" id="chart-req-nickname-${r.id}" placeholder="닉네임"
-                           style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:13px;font-weight:800;box-sizing:border-box;">
-                    <input type="text" value="${escapeAttr(r.bannerImg)}" id="chart-req-img-${r.id}" placeholder="배너 이미지 링크"
-                           style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
-                    <input type="text" value="${escapeAttr(r.promoLink)}" id="chart-req-link-${r.id}" placeholder="홍보 페이지 링크"
-                           style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <input type="number" min="1" max="365" value="${r.days || 7}" id="chart-req-days-${r.id}"
-                               style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
-                        <span style="font-size:12px;color:#94a3b8;">일 노출</span>
-                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveChartBannerRequest('${r.id}')">✅ 승인</button>
-                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectChartBannerRequest('${r.id}')">🚫 거절</button>
-                    </div>`;
-                listEl.appendChild(row);
-                // 관리자가 이미지 링크를 수정하면 미리보기도 갱신
-                document.getElementById(`chart-req-img-${r.id}`).addEventListener('input', (e) => {
-                    const previewImg = document.querySelector(`#chart-req-preview-${r.id} img`);
-                    if (previewImg) previewImg.src = e.target.value.trim();
-                });
-            });
-        } catch (e) {
-            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
-        }
-    }
-    window.loadChartBannerRequests = loadChartBannerRequests;
 
     window.approveChartBannerRequest = async function(requestId) {
         const days      = document.getElementById(`chart-req-days-${requestId}`).value;
@@ -914,7 +680,7 @@
         try {
             const result = await callAdminAction('approveChartBannerRequest', { requestId, days, nickname, bannerImg, promoLink });
             alert(`✅ 승인 완료! 종료일: ${result.endDate}`);
-            await loadChartBannerRequests();
+            await window.loadAllBannerData();
         } catch (e) {
             alert('승인 중 오류 발생: ' + e.message);
         }
@@ -924,9 +690,94 @@
         if (!confirm('이 신청을 거절하시겠습니까?')) return;
         try {
             await callAdminAction('rejectChartBannerRequest', { requestId });
-            await loadChartBannerRequests();
+            await window.loadAllBannerData();
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ── 진행중 / 만료 배너 (양쪽 타입 통합, 직접 수정·삭제 가능) ──
+
+    function renderActiveBannerRow(b, isExpired) {
+        const uid = `${b.type}-${b.stockId}`;
+        const daysLabel = b.daysLeft === null ? '무기한'
+            : isExpired ? `${Math.abs(b.daysLeft)}일 전 만료`
+            : `${b.daysLeft}일 남음`;
+        const row = document.createElement('div');
+        row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+        row.innerHTML = `
+            <div class="chart-banner-preview" id="active-preview-${uid}">
+                <img src="${escapeAttr(b.img)}" alt="${escapeAttr(b.name)}"
+                     onload="this.style.display='block';"
+                     onerror="this.style.display='none';">
+                <div class="preview-empty">🖼 이미지 없음</div>
+            </div>
+            <div style="font-size:12px;color:#94a3b8;">
+                <span class="status-chip ${b.type === 'ranking' ? 'active' : 'saved'}" style="margin-right:4px;">${b.type === 'ranking' ? '우측 배너' : '차트 배너'}</span>
+                ${escapeAttr(b.name)} · <span style="color:${isExpired ? '#fca5a5' : '#4ade80'};font-weight:700;">${daysLabel}</span>
+            </div>
+            ${b.type === 'chart' ? `<input type="text" value="${escapeAttr(b.name)}" id="active-name-${uid}" placeholder="광고주 닉네임 (관리용)"
+                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:13px;box-sizing:border-box;">` : ''}
+            <input type="text" value="${escapeAttr(b.img)}" id="active-img-${uid}" placeholder="배너 이미지 링크"
+                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
+            <input type="text" value="${escapeAttr(b.link)}" id="active-link-${uid}" placeholder="이동 링크"
+                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
+            <input type="text" value="${escapeAttr(b.endDate)}" id="active-enddate-${uid}" placeholder="종료일 YYYY-MM-DD (비우면 무기한)"
+                   style="width:100%;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
+            <div style="display:flex;gap:8px;">
+                <button class="btn-success" style="flex:1;padding:8px;" onclick="saveActiveBanner('${b.type}','${b.stockId}')">💾 저장</button>
+                <button class="btn-danger" style="flex:1;padding:8px;" onclick="deleteActiveBanner('${b.type}','${b.stockId}')">🗑 삭제</button>
+            </div>`;
+        const imgInput = row.querySelector(`#active-img-${uid}`);
+        imgInput.addEventListener('input', (e) => {
+            const previewImg = row.querySelector(`#active-preview-${uid} img`);
+            if (previewImg) previewImg.src = e.target.value.trim();
+        });
+        return row;
+    }
+
+    async function loadActiveExpiredBanners() {
+        const activePanel  = document.getElementById('banner-tab-active');
+        const expiredPanel = document.getElementById('banner-tab-expired');
+        activePanel.innerHTML  = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        expiredPanel.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { active, expired } = await callAdminAction('listActiveBanners');
+
+            activePanel.innerHTML = active.length ? '' : '<div class="info-box" style="margin:0;">진행 중인 배너가 없습니다.</div>';
+            active.forEach(b => activePanel.appendChild(renderActiveBannerRow(b, false)));
+
+            expiredPanel.innerHTML = expired.length ? '' : '<div class="info-box" style="margin:0;">만료된 배너가 없습니다.</div>';
+            expired.forEach(b => expiredPanel.appendChild(renderActiveBannerRow(b, true)));
+        } catch (e) {
+            activePanel.innerHTML  = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+            expiredPanel.innerHTML = '';
+        }
+    }
+
+    window.saveActiveBanner = async function(type, stockId) {
+        const uid = `${type}-${stockId}`;
+        const nameEl  = document.getElementById(`active-name-${uid}`);
+        const img     = document.getElementById(`active-img-${uid}`).value.trim();
+        const link    = document.getElementById(`active-link-${uid}`).value.trim();
+        const endDate = document.getElementById(`active-enddate-${uid}`).value.trim();
+        if (!img) return alert('배너 이미지 링크를 입력해주세요.');
+        try {
+            await callAdminAction('updateBanner', { type, stockId, name: nameEl ? nameEl.value.trim() : undefined, img, link, endDate });
+            alert('✅ 저장되었습니다.');
+            await loadActiveExpiredBanners();
+        } catch (e) {
+            alert('저장 실패: ' + e.message);
+        }
+    };
+
+    window.deleteActiveBanner = async function(type, stockId) {
+        if (!confirm('이 배너를 삭제하시겠습니까?')) return;
+        try {
+            await callAdminAction('deleteBanner', { type, stockId });
+            await loadActiveExpiredBanners();
+        } catch (e) {
+            alert('삭제 실패: ' + e.message);
         }
     };
 </script>

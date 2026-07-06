@@ -410,59 +410,88 @@ async function actionCleanupDuplicateStocks(db) {
   return { ok: true, count: duplicateFoundCount };
 }
 
-async function actionAddBannerToStock(db, { nickname, imgUrl, linkUrl, days }) {
-  const targetNickname = String(nickname || "").trim();
-  const img            = String(imgUrl || "").trim();
-  const daysNum         = parseInt(days, 10);
-  if (!targetNickname || !img || !daysNum) {
-    throw new HttpsError("invalid-argument", "닉네임, 이미지 주소, 노출 기간(일)은 필수 입력 항목입니다.");
-  }
-  const targetId = await findStockIdByName(db, targetNickname);
-  if (!targetId) throw new HttpsError("not-found", `'${targetNickname}'을 찾을 수 없습니다.`);
-
-  const endDate = new Date();
-  endDate.setDate(endDate.getDate() + daysNum);
-  const endDateStr = endDate.toISOString().split("T")[0];
-
-  await db.ref().update({
-    [`stocks/${targetId}/bannerImg`]:     img,
-    [`stocks/${targetId}/bannerEndDate`]: endDateStr,
-    [`stocks/${targetId}/link`]:          String(linkUrl || "").trim() || `https://www.sooplive.co.kr/station/${targetId}`,
-  });
-  return { ok: true, endDate: endDateStr };
+/** endDate 문자열로 활성/만료 여부와 남은 일수를 계산한다. 빈 값이면 무기한(항상 활성). */
+function bannerStatus(endDateStr) {
+  if (!endDateStr) return { active: true, daysLeft: null };
+  const end = new Date(endDateStr);
+  end.setHours(23, 59, 59, 999);
+  const daysLeft = Math.ceil((end - new Date()) / 86400000);
+  return { active: daysLeft >= 0, daysLeft };
 }
 
-async function actionSaveChartBanner(db, { nickname, name, img, link, days }) {
-  const targetNickname = String(nickname || "").trim();
-  const bannerImg       = String(img || "").trim();
-  const bannerLink      = String(link || "").trim();
-  const daysNum         = parseInt(days, 10);
-  if (!targetNickname) throw new HttpsError("invalid-argument", "배너를 노출할 대상 스트리머 닉네임을 입력해주세요.");
-  if (!bannerImg)      throw new HttpsError("invalid-argument", "배너 이미지 URL을 입력해주세요.");
-  if (!bannerLink)     throw new HttpsError("invalid-argument", "이동 링크를 입력해주세요.");
-  if (!Number.isFinite(daysNum) || daysNum < 1) {
-    throw new HttpsError("invalid-argument", "노출 기간(일)을 올바르게 입력해주세요.");
-  }
+/**
+ * 우측 랭킹 배너(stocks/{id})와 차트 하단 배너(chartBanner/{id})를 한데 모아
+ * 진행중/만료 목록으로 분류한다. 관리자 페이지의 통합 배너 관리 탭에서 사용.
+ */
+async function actionListActiveBanners(db) {
+  const [stocksSnap, chartSnap] = await Promise.all([
+    db.ref("stocks").get(),
+    db.ref("chartBanner").get(),
+  ]);
+  const stocksData = stocksSnap.val() || {};
+  const chartData  = chartSnap.val()  || {};
 
-  const targetId = await findStockIdByName(db, targetNickname);
-  if (!targetId) throw new HttpsError("not-found", `'${targetNickname}'을 찾을 수 없습니다.`);
-
-  const endDate = new Date();
-  endDate.setDate(endDate.getDate() + daysNum);
-  const endDateStr = endDate.toISOString().split("T")[0];
-
-  await db.ref(`chartBanner/${targetId}`).set({
-    name: String(name || "").trim(),
-    img:  bannerImg,
-    link: bannerLink,
-    endDate: endDateStr,
+  const items = [];
+  Object.entries(stocksData).forEach(([id, s]) => {
+    if (!s.bannerImg) return;
+    const { active, daysLeft } = bannerStatus(s.bannerEndDate);
+    items.push({
+      type: "ranking", stockId: id, name: s.name || id,
+      img: s.bannerImg, link: s.link || "", endDate: s.bannerEndDate || "",
+      active, daysLeft,
+    });
   });
-  return { ok: true, stockId: targetId, endDate: endDateStr };
+  Object.entries(chartData).forEach(([id, c]) => {
+    const { active, daysLeft } = bannerStatus(c.endDate);
+    items.push({
+      type: "chart", stockId: id, name: c.name || (stocksData[id] && stocksData[id].name) || id,
+      img: c.img, link: c.link || "", endDate: c.endDate || "",
+      active, daysLeft,
+    });
+  });
+
+  return {
+    ok: true,
+    active:  items.filter((i) => i.active).sort((a, b) => (a.daysLeft ?? Infinity) - (b.daysLeft ?? Infinity)),
+    expired: items.filter((i) => !i.active).sort((a, b) => (b.daysLeft ?? -Infinity) - (a.daysLeft ?? -Infinity)),
+  };
 }
 
-async function actionDeleteChartBanner(db, { stockId }) {
+/** 진행중/만료 탭에서 배너 내용을 직접 수정(연장 포함)한다. */
+async function actionUpdateBanner(db, { type, stockId, name, img, link, endDate }) {
   if (!stockId) throw new HttpsError("invalid-argument", "stockId가 필요합니다.");
-  await db.ref(`chartBanner/${stockId}`).remove();
+  const bannerImg = String(img || "").trim();
+  if (!bannerImg) throw new HttpsError("invalid-argument", "배너 이미지 링크를 입력해주세요.");
+
+  if (type === "chart") {
+    await db.ref(`chartBanner/${stockId}`).set({
+      name:    String(name || "").trim(),
+      img:     bannerImg,
+      link:    String(link || "").trim(),
+      endDate: String(endDate || "").trim(),
+    });
+  } else {
+    await db.ref().update({
+      [`stocks/${stockId}/bannerImg`]:     bannerImg,
+      [`stocks/${stockId}/link`]:          String(link || "").trim(),
+      [`stocks/${stockId}/bannerEndDate`]: String(endDate || "").trim(),
+    });
+  }
+  return { ok: true };
+}
+
+/** 진행중/만료 탭에서 배너를 완전히 제거한다. */
+async function actionDeleteBanner(db, { type, stockId }) {
+  if (!stockId) throw new HttpsError("invalid-argument", "stockId가 필요합니다.");
+  if (type === "chart") {
+    await db.ref(`chartBanner/${stockId}`).remove();
+  } else {
+    await db.ref().update({
+      [`stocks/${stockId}/bannerImg`]:     null,
+      [`stocks/${stockId}/link`]:          null,
+      [`stocks/${stockId}/bannerEndDate`]: null,
+    });
+  }
   return { ok: true };
 }
 
@@ -558,9 +587,9 @@ exports.adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB"
     case "uploadStocks":           return actionUploadStocks(db, payload);
     case "deleteStocks":           return actionDeleteStocks(db, payload);
     case "cleanupDuplicateStocks": return actionCleanupDuplicateStocks(db);
-    case "addBannerToStock":       return actionAddBannerToStock(db, payload);
-    case "saveChartBanner":        return actionSaveChartBanner(db, payload);
-    case "deleteChartBanner":      return actionDeleteChartBanner(db, payload);
+    case "listActiveBanners":      return actionListActiveBanners(db);
+    case "updateBanner":           return actionUpdateBanner(db, payload);
+    case "deleteBanner":           return actionDeleteBanner(db, payload);
     case "previewRankings":        return actionPreviewRankings(db);
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);
