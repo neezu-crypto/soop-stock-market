@@ -1178,7 +1178,7 @@ window.loginWithKakao = function() {
                     alert('✅ 기존 계정으로 전환됐습니다.');
                 } else if (result.data.action === 'linked') {
                     const bonus = result.data.bonus || 0;
-                    alert(`✅ 카카오 계정이 연동됐습니다! 보너스 ${bonus.toLocaleString()}원이 지급되고, 이제 이 계정의 자산이 보호됩니다.`);
+                    alert(`🎉 카카오 연동 완료!\n\n💰 보너스 ${bonus.toLocaleString()}원이 지급됐습니다!\n이제 이 계정의 자산은 안전하게 보호됩니다.`);
                 } else {
                     alert('✅ 이미 연동된 계정입니다.');
                 }
