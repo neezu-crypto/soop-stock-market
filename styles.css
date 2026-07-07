@@ -72,6 +72,20 @@
         .rank-name { color: var(--text-main); }
         .rank-vol  { color: var(--text-sub); font-size: 11px; }
 
+        /* ── 중계방 (현재 플레이 중인 스트리머 홍보) ── */
+        .relay-room-bar {
+            background: var(--card-bg); width: 100%; padding: 12px 20px; border-radius: 12px;
+            margin-bottom: 20px; border: 1px dashed #334155; box-sizing: border-box;
+        }
+        .relay-room-title { font-weight: 800; color: #fbbf24; margin-bottom: 10px; font-size: 14px; }
+        .relay-room-scroll {
+            display: flex; gap: 18px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .relay-room-scroll::-webkit-scrollbar { display: none; }
+        .relay-room-scroll .banner-circle { width: 60px; height: 60px; border-color: #fbbf24; }
+        .relay-room-scroll .banner-item { flex-shrink: 0; }
+        .relay-room-scroll .banner-name { font-size: 11px; }
+
         /* ── 배너 ── */
         .banner-container { 
             position: fixed; 

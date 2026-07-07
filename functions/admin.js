@@ -21,6 +21,13 @@ const {
   actionRejectPinRequest,
   actionDeletePin,
 } = require("./pinRequests");
+const {
+  actionListRelayRoomRequests,
+  actionListActiveRelayRooms,
+  actionApproveRelayRoomRequest,
+  actionRejectRelayRoomRequest,
+  actionDeleteRelayRoom,
+} = require("./relayRoom");
 
 // ══════════════════════════════════════════════════════════
 // 관리자 페이지 기능 — 전부 Admin SDK로 처리해 RTDB 규칙의
@@ -343,6 +350,11 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "approvePinRequest":  return actionApprovePinRequest(db, payload);
     case "rejectPinRequest":   return actionRejectPinRequest(db, payload);
     case "deletePin":          return actionDeletePin(db, payload);
+    case "listRelayRoomRequests":    return actionListRelayRoomRequests(db);
+    case "listActiveRelayRooms":     return actionListActiveRelayRooms(db);
+    case "approveRelayRoomRequest":  return actionApproveRelayRoomRequest(db, payload);
+    case "rejectRelayRoomRequest":   return actionRejectRelayRoomRequest(db, payload);
+    case "deleteRelayRoom":          return actionDeleteRelayRoom(db, payload);
     case "previewRankings":        return actionPreviewRankings(db);
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);

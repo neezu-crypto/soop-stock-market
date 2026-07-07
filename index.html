@@ -388,6 +388,55 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     중계방 홍보 신청 모달 (현재 플레이 중인 스트리머 소개)
+══════════════════════════════════════════ -->
+<div id="relay-room-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content">
+        <div class="promo-modal-header"><h2>🎥 중계방 홍보 신청</h2></div>
+        <ul class="promo-info-list" style="margin-bottom:16px;">
+            <li>📍 <b>위치:</b> 종목 리스트 위 "중계방" 영역</li>
+            <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
+            <li>💰 <b>비용:</b> 1시간 당 게임자산 30만원 (신청 시 보유 현금에서 선차감)</li>
+            <li>⏱ <b>기간:</b> 최소 1시간 ~ 최대 8시간</li>
+            <li>🚫 <b>중복:</b> 이미 진행 중인 아이디는 종료 후에만 재신청 가능</li>
+        </ul>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+            <input type="text" id="relay-nickname" placeholder="닉네임"
+                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+            <input type="text" id="relay-streamer-id" placeholder="스트리머 아이디 (예: skftodwocks2)"
+                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+
+            <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.03);border:1px dashed #475569;border-radius:8px;padding:10px;">
+                <div id="relay-preview-box" style="width:56px;height:56px;border-radius:50%;overflow:hidden;background:#1e293b;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <span id="relay-preview-placeholder" style="font-size:10px;color:#64748b;text-align:center;">미리보기</span>
+                    <img id="relay-preview-img" style="display:none;width:100%;height:100%;object-fit:cover;">
+                </div>
+                <div style="font-size:12px;color:#94a3b8;">아이디를 입력하면 프로필 이미지가 자동으로 표시됩니다.</div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid #475569;border-radius:8px;padding:10px 12px;">
+                <label for="relay-hours" style="font-size:13px;color:#94a3b8;white-space:nowrap;">홍보 희망 시간:</label>
+                <input type="number" id="relay-hours" value="1" min="1" max="8"
+                    style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
+                <span style="font-size:13px;color:#94a3b8;">시간 (최대 8시간)</span>
+            </div>
+            <div style="text-align:right;font-size:13px;color:#94a3b8;">차감될 금액: <b id="relay-cost" style="color:#38bdf8;">300,000원</b></div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
+            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, 관리자 검수 후 중계방에 등록됩니다. 거절될 경우 차감된 금액은 전액 환불됩니다.<br>
+            문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
+        </div>
+
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
+            <button onclick="closeRelayRoomModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button id="relay-submit-btn" class="btn-confirm-contact" onclick="submitRelayRoomRequest()" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청하기</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
     <div class="wallet-bar">
@@ -429,6 +478,10 @@
     <div class="ranking-bar">
         <div class="ranking-title">🔥 인기 TOP 5</div>
         <div id="top-rankers" class="ranking-list">불러오는 중...</div>
+    </div>
+    <div class="relay-room-bar" id="relay-room-bar">
+        <div class="relay-room-title">🎥 중계방 — 지금 플레이 중인 스트리머</div>
+        <div id="relay-room-scroll" class="relay-room-scroll"></div>
     </div>
     <main id="stock-list"></main>
     <div class="banner-container" id="banner-list">
@@ -480,6 +533,7 @@ const submitCashChargeRequestCallable = httpsCallable(functions, 'submitCashChar
 const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
 const heartbeatCallable = httpsCallable(functions, 'heartbeat');
 const buyPlayTimeCallable = httpsCallable(functions, 'buyPlayTime');
+const submitRelayRoomRequestCallable = httpsCallable(functions, 'submitRelayRoomRequest');
 
 const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
@@ -1469,6 +1523,54 @@ window.openChartAdModal  = () => {
 };
 window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
 
+// ── 중계방 홍보 신청 (닉네임/아이디 입력 → 실시간 미리보기 → 신청) ──
+const RELAY_ROOM_COST_PER_HOUR = 300000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
+
+window.openRelayRoomModal  = () => document.getElementById('relay-room-modal').classList.add('active');
+window.closeRelayRoomModal = () => document.getElementById('relay-room-modal').classList.remove('active');
+
+const updateRelayCost = setupCostCalculator({ unitInputId: 'relay-hours', costElId: 'relay-cost', pricePerDay: RELAY_ROOM_COST_PER_HOUR });
+
+const updateRelayPreview = setupImagePreview({
+    inputId: 'relay-streamer-id',
+    placeholderId: 'relay-preview-placeholder',
+    imgId: 'relay-preview-img',
+    displayStyle: 'block',
+    buildUrl: (streamerId) => isValidSoopId(streamerId)
+        ? `https://stimg.sooplive.com/LOGO/${streamerId.slice(0, 2)}/${streamerId}/${streamerId}.jpg`
+        : null,
+    invalidText: '미리보기',
+    errorText: '이미지 없음',
+});
+
+window.submitRelayRoomRequest = async function() {
+    await submitRequestForm({
+        submitBtnId: 'relay-submit-btn',
+        submitLabel: '신청하기',
+        validateAndBuild() {
+            const nickname   = document.getElementById('relay-nickname').value.trim();
+            const streamerId = document.getElementById('relay-streamer-id').value.trim().toLowerCase();
+            const hours      = parseInt(document.getElementById('relay-hours').value, 10);
+            if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+            if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+            if (!Number.isInteger(hours) || hours < 1 || hours > 8) { alert('홍보 시간은 1~8시간 사이로 입력해주세요.'); return null; }
+            return { nickname, streamerId, hours };
+        },
+        callable: submitRelayRoomRequestCallable,
+        onSuccess(result) {
+            alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 중계방에 등록되며, 거절 시 전액 환불됩니다.`);
+        },
+        resetFn() {
+            document.getElementById('relay-nickname').value = '';
+            document.getElementById('relay-streamer-id').value = '';
+            document.getElementById('relay-hours').value = '1';
+            updateRelayPreview();
+            updateRelayCost();
+        },
+        closeFn: window.closeRelayRoomModal,
+    });
+};
+
 // ── 최상단 고정 노출 신청 (기존 상장 종목 검색 → 시간 선택 → 신청) ──
 // 배너 신청과 달리 미상장 스트리머를 새로 등록하는 게 아니라 "이미 리스트에
 // 있는 종목 카드"를 맨 위로 올리는 기능이므로, 닉네임/아이디 대신 종목명
@@ -1702,6 +1804,37 @@ window.loginWithKakao = function() {
 };
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
+// 중계방 (현재 플레이 중인 스트리머 홍보) — 페이지 로드 시 1회만 조회해 렌더링
+function renderRelayRooms(data) {
+    const scrollEl = document.getElementById('relay-room-scroll');
+    if (!scrollEl) return;
+    const now = Date.now();
+
+    const activeRooms = Object.entries(data)
+        .map(([streamerId, r]) => ({ streamerId, ...r }))
+        .filter(r => r.endAt > now)
+        .sort((a, b) => a.endAt - b.endAt);
+
+    scrollEl.innerHTML = `
+        <div onclick="openRelayRoomModal()" class="banner-item" style="cursor:pointer;">
+            <div class="banner-circle"><div class="banner-no-img">중계방 신청</div></div>
+            <div class="banner-name">신청하기</div>
+        </div>`;
+
+    activeRooms.forEach(r => {
+        const a = document.createElement('a');
+        a.href = r.stationLink;
+        a.target = "_blank";
+        a.className = "banner-item";
+        a.innerHTML = `
+            <div class="banner-circle">
+                <img src="${r.previewImg}" alt="${r.nickname}" onload="this.style.display='block';this.style.opacity='1';" onerror="this.style.display='none';">
+            </div>
+            <div class="banner-name">${r.nickname}</div>`;
+        scrollEl.appendChild(a);
+    });
+}
+
 function renderBanners() {
     const bannerList = document.getElementById('banner-list');
     if (!bannerList) return;
@@ -1925,6 +2058,11 @@ get(ref(db, 'stocks/')).then((snap) => {
     }
 });
 
+// ── 중계방 최초 1회 로드 (배너와 동일하게 페이지 로드 시 1회만 조회) ──
+get(ref(db, 'relayRooms')).then((snap) => {
+    renderRelayRooms(snap.val() || {});
+});
+
 // ── 검색창 ───────────────────────────────────────────────────
 document.getElementById('search-input')?.addEventListener('input', () => updateUI(true));
 
@@ -1937,6 +2075,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
         if (document.getElementById('pin-modal').classList.contains('active')) closePinModal();
         if (document.getElementById('playtime-modal').classList.contains('active')) closePlayTimeModal();
+        if (document.getElementById('relay-room-modal').classList.contains('active')) closeRelayRoomModal();
     }
 });
 

@@ -246,6 +246,19 @@
         <div id="pin-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
+    <!-- 🎥 중계방 홍보 관리 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>🎥 중계방 홍보 관리</h1>
+        <div class="info-box">지금 플레이 중인 스트리머를 소개하는 중계방 홍보를 관리합니다. 같은 아이디는 진행 중일 때 재신청/재승인이 자동으로 막힙니다.</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadAllRelayRoomData()">🔄 전체 새로고침</button>
+
+        <div style="font-size:13px;color:#38bdf8;font-weight:700;margin-bottom:8px;">▶️ 진행 중인 중계방</div>
+        <div id="relay-active-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;"></div>
+
+        <div style="font-size:13px;color:#38bdf8;font-weight:700;margin-bottom:8px;">🆕 신규 신청</div>
+        <div id="relay-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -329,6 +342,7 @@
             await loadAllBannerData();
             await loadCashChargeRequests();
             await loadAllPinData();
+            await loadAllRelayRoomData();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -965,6 +979,112 @@
         try {
             await callAdminAction('rejectPinRequest', { requestId });
             await loadPinRequests();
+        } catch (e) {
+            alert('거절 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ══════════════════════════════════════════════════════
+    // 중계방 홍보 관리
+    // ══════════════════════════════════════════════════════
+
+    window.loadAllRelayRoomData = async function() {
+        await Promise.all([loadActiveRelayRooms(), loadRelayRoomRequests()]);
+    };
+
+    async function loadActiveRelayRooms() {
+        const listEl = document.getElementById('relay-active-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { rooms } = await callAdminAction('listActiveRelayRooms');
+            if (!rooms || rooms.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">현재 진행 중인 중계방이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            rooms.forEach(r => {
+                const remainMs = r.endAt - Date.now();
+                const remainH  = Math.max(0, Math.floor(remainMs / 3600000));
+                const remainM  = Math.max(0, Math.floor((remainMs % 3600000) / 60000));
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">🎥 ${escapeAttr(r.nickname)}</div>
+                        <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.streamerId)} · 남은 시간: ${remainH}시간 ${remainM}분</div>
+                    </div>
+                    <button class="btn-danger" style="padding:8px 14px;" onclick="deleteRelayRoom('${r.streamerId}')">🗑 종료</button>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+
+    window.deleteRelayRoom = async function(streamerId) {
+        if (!confirm('이 중계방을 지금 종료하시겠습니까?')) return;
+        try {
+            await callAdminAction('deleteRelayRoom', { streamerId });
+            await loadActiveRelayRooms();
+        } catch (e) {
+            alert('종료 중 오류 발생: ' + e.message);
+        }
+    };
+
+    async function loadRelayRoomRequests() {
+        const listEl = document.getElementById('relay-request-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { requests } = await callAdminAction('listRelayRoomRequests');
+            if (!requests || requests.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            requests.forEach(r => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+                row.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <img src="${escapeAttr(r.previewImg)}" alt="${escapeAttr(r.nickname)}"
+                             style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#1e293b;flex-shrink:0;">
+                        <input type="text" value="${escapeAttr(r.nickname)}" id="relay-req-nickname-${r.id}"
+                               style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
+                    </div>
+                    <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.streamerId)} · 신청 시간 ${r.hours}시간 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="number" min="1" max="8" value="${r.hours || 1}" id="relay-req-hours-${r.id}"
+                               style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                        <span style="font-size:12px;color:#94a3b8;">시간 노출</span>
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveRelayRoomRequest('${r.id}')">✅ 승인</button>
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectRelayRoomRequest('${r.id}')">🚫 거절</button>
+                    </div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+
+    window.approveRelayRoomRequest = async function(requestId) {
+        const hours    = document.getElementById(`relay-req-hours-${requestId}`).value;
+        const nickname = document.getElementById(`relay-req-nickname-${requestId}`).value.trim();
+        if (!hours) return alert('홍보 시간을 입력해주세요.');
+        if (!nickname) return alert('닉네임을 입력해주세요.');
+        try {
+            await callAdminAction('approveRelayRoomRequest', { requestId, hours, nickname });
+            alert('✅ 승인 완료! 중계방에 등록됩니다.');
+            await window.loadAllRelayRoomData();
+        } catch (e) {
+            alert('승인 중 오류 발생: ' + e.message);
+        }
+    };
+
+    window.rejectRelayRoomRequest = async function(requestId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await callAdminAction('rejectRelayRoomRequest', { requestId });
+            await loadRelayRoomRequests();
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
         }
