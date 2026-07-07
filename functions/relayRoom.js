@@ -4,6 +4,7 @@ const {
   STREAMER_ID_RE,
   MAX_RELAY_ROOM_HOURS,
   RELAY_ROOM_COST_PER_HOUR,
+  MAX_RELAY_ROOMS,
   chargeUserCash,
   creditUserCash,
 } = require("./common");
@@ -101,7 +102,7 @@ async function actionListActiveRelayRooms(db) {
     .filter(([, r]) => r.endAt > now)
     .map(([streamerId, r]) => ({ streamerId, ...r }))
     .sort((a, b) => a.endAt - b.endAt);
-  return { ok: true, rooms };
+  return { ok: true, rooms, maxRooms: MAX_RELAY_ROOMS };
 }
 
 async function actionApproveRelayRoomRequest(db, { requestId, hours, nickname }) {
@@ -123,6 +124,17 @@ async function actionApproveRelayRoomRequest(db, { requestId, hours, nickname })
   const activeSnap = await db.ref(`relayRooms/${streamerId}`).get();
   if (activeSnap.exists() && activeSnap.val().endAt > now) {
     throw new HttpsError("already-exists", "이미 진행 중인 중계방입니다. 먼저 종료하거나 만료를 기다려주세요.");
+  }
+
+  // 최대 등록 인원(3명) 확인 — 이 아이디가 새로 슬롯을 차지하는 경우에만 검사.
+  const allRoomsSnap = await db.ref("relayRooms").get();
+  const allRooms = allRoomsSnap.val() || {};
+  const activeCount = Object.values(allRooms).filter((r) => r.endAt > now).length;
+  if (activeCount >= MAX_RELAY_ROOMS) {
+    throw new HttpsError(
+      "resource-exhausted",
+      `중계방은 최대 ${MAX_RELAY_ROOMS}명까지만 등록할 수 있습니다. 기존 중계방이 종료된 뒤 승인해주세요.`
+    );
   }
 
   const endAt = now + hoursNum * 3600000;

@@ -396,6 +396,7 @@
         <div class="promo-modal-header"><h2>🎥 중계방 홍보 신청</h2></div>
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 종목 리스트 위 "중계방" 영역</li>
+            <li>🔢 <b>인원:</b> 동시 최대 3명까지만 등록 가능</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
             <li>💰 <b>비용:</b> 1시간 당 게임자산 30만원 (신청 시 보유 현금에서 선차감)</li>
             <li>⏱ <b>기간:</b> 최소 1시간 ~ 최대 8시간</li>
@@ -480,8 +481,11 @@
         <div id="top-rankers" class="ranking-list">불러오는 중...</div>
     </div>
     <div class="relay-room-bar" id="relay-room-bar">
-        <div class="relay-room-title">🎥 중계방 — 지금 플레이 중인 스트리머</div>
-        <div id="relay-room-scroll" class="relay-room-scroll"></div>
+        <div class="relay-room-title">
+            <span>🎥 중계방 — 지금 플레이 중인 스트리머 (최대 3명)</span>
+            <button class="relay-room-apply-btn" onclick="openRelayRoomModal()">📝 신청하기</button>
+        </div>
+        <div id="relay-room-row" class="relay-room-row"></div>
     </div>
     <main id="stock-list"></main>
     <div class="banner-container" id="banner-list">
@@ -1804,10 +1808,12 @@ window.loginWithKakao = function() {
 };
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
-// 중계방 (현재 플레이 중인 스트리머 홍보) — 페이지 로드 시 1회만 조회해 렌더링
+// 중계방 (현재 플레이 중인 스트리머 홍보, 최대 3명) — 페이지 로드 시 1회만
+// 조회해 렌더링한다. 등록 인원(1~3명)에 따라 각 카드가 flex-grow로 균등
+// 분배돼 100% / 50% / 33% 너비로 자동 조정된다 (styles.css .relay-room-row).
 function renderRelayRooms(data) {
-    const scrollEl = document.getElementById('relay-room-scroll');
-    if (!scrollEl) return;
+    const rowEl = document.getElementById('relay-room-row');
+    if (!rowEl) return;
     const now = Date.now();
 
     const activeRooms = Object.entries(data)
@@ -1815,23 +1821,21 @@ function renderRelayRooms(data) {
         .filter(r => r.endAt > now)
         .sort((a, b) => a.endAt - b.endAt);
 
-    scrollEl.innerHTML = `
-        <div onclick="openRelayRoomModal()" class="banner-item" style="cursor:pointer;">
-            <div class="banner-circle"><div class="banner-no-img">중계방 신청</div></div>
-            <div class="banner-name">신청하기</div>
-        </div>`;
+    if (activeRooms.length === 0) {
+        rowEl.innerHTML = `<div class="relay-room-empty">아직 등록된 중계방이 없습니다. "신청하기"로 첫 자리를 채워보세요!</div>`;
+        return;
+    }
 
+    rowEl.innerHTML = "";
     activeRooms.forEach(r => {
         const a = document.createElement('a');
         a.href = r.stationLink;
         a.target = "_blank";
-        a.className = "banner-item";
+        a.className = "relay-room-card";
         a.innerHTML = `
-            <div class="banner-circle">
-                <img src="${r.previewImg}" alt="${r.nickname}" onload="this.style.display='block';this.style.opacity='1';" onerror="this.style.display='none';">
-            </div>
-            <div class="banner-name">${r.nickname}</div>`;
-        scrollEl.appendChild(a);
+            <img src="${r.previewImg}" alt="${r.nickname}">
+            <div class="relay-room-name">${r.nickname}</div>`;
+        rowEl.appendChild(a);
     });
 }
 

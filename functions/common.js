@@ -24,6 +24,7 @@ const MAX_HEARTBEAT_GAP_SECONDS = 90;      // 하트비트 1회당 인정되는 
 
 const MAX_RELAY_ROOM_HOURS     = 8;        // 중계방 홍보 신청 시 고를 수 있는 시간 상한 (최소 1시간)
 const RELAY_ROOM_COST_PER_HOUR = 300000;   // 중계방 홍보 1시간당 차감되는 게임자산
+const MAX_RELAY_ROOMS          = 3;        // 동시에 등록 가능한 최대 중계방 수
 
 function requireAdmin(auth) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -110,6 +111,7 @@ module.exports = {
   MAX_HEARTBEAT_GAP_SECONDS,
   MAX_RELAY_ROOM_HOURS,
   RELAY_ROOM_COST_PER_HOUR,
+  MAX_RELAY_ROOMS,
   requireAdmin,
   findStockIdByName,
   bannerStatus,
