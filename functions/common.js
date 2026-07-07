@@ -38,9 +38,9 @@ const STOCK_FREEZE_CANDLE_COUNT  = 5;              // 연속 몇 개의 1분봉 
 const STOCK_UNFREEZE_PRICE       = 500000;         // 해제 시 강제로 낮추는 가격
 const STOCK_FREEZE_COOLDOWN_MS   = 5 * 60 * 1000;  // 동결 직후 해제 자체가 불가능한 유예시간(드라마/경쟁 유도)
 const STOCK_DELIST_DEADLINE_MS   = 12 * 60 * 60 * 1000; // 유예시간 내 미해제 시 상장폐지까지 걸리는 시간
-const UNFREEZE_CASH_COST         = 2500000;        // 게임자산으로 해제 시 차감액
-const UNFREEZE_CASH_REWARD       = 5000000;        // 게임자산으로 해제한 유저에게 지급되는 보상(순이익 250만원)
-const UNFREEZE_DONATION_REWARD   = 2500000;        // 방송 후원으로 해제한 유저에게 지급되는 보상
+const UNFREEZE_CASH_COST         = 1000000;        // 게임자산으로 해제 시 차감액
+const UNFREEZE_CASH_REWARD       = 2000000;        // 게임자산으로 해제한 유저에게 지급되는 보상(해제비용의 2배, 순이익 100만원)
+const UNFREEZE_DONATION_REWARD   = 1000000;        // 방송 후원으로 해제한 유저에게 지급되는 보상
 const UNFREEZE_DONATION_BALLOONS = 50;             // 안내용 — 방송 후원 시 필요한 별풍선 개수(별도 실행은 방송에서)
 
 function requireAdmin(auth) {

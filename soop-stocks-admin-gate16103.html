@@ -1244,7 +1244,7 @@
                     <div style="font-weight:800;font-size:14px;">🥶 ${escapeAttr(r.stockName)}</div>
                     <div style="font-size:12px;color:#94a3b8;">신청자: ${escapeAttr(r.nickname)} (@${escapeAttr(r.soopId)})</div>
                     <div style="display:flex;gap:8px;">
-                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveUnfreezeDonationRequest('${r.id}')">✅ 승인 (250만원 지급)</button>
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveUnfreezeDonationRequest('${r.id}')">✅ 승인 (100만원 지급)</button>
                         <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectUnfreezeDonationRequest('${r.id}')">🚫 거절</button>
                     </div>`;
                 listEl.appendChild(row);
@@ -1255,7 +1255,7 @@
     }
 
     window.approveUnfreezeDonationRequest = async function(requestId) {
-        if (!confirm('방송 후원을 확인하셨습니까? 승인 시 250만원이 지급되고 동결이 해제됩니다.')) return;
+        if (!confirm('방송 후원을 확인하셨습니까? 승인 시 100만원이 지급되고 동결이 해제됩니다.')) return;
         try {
             await callAdminAction('approveUnfreezeDonationRequest', { requestId });
             alert('✅ 승인 완료! 동결이 해제됐습니다.');

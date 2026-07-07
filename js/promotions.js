@@ -444,7 +444,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
 
     window.unfreezeWithCash = async function() {
         if (!pendingUnfreezeStockId) return alert('대상 종목을 찾을 수 없습니다.');
-        if (!confirm('게임자산 250만원을 내고 즉시 해제하시겠습니까? (성공 시 500만원이 지급됩니다)')) return;
+        if (!confirm('게임자산 100만원을 내고 즉시 해제하시겠습니까? (성공 시 200만원이 지급됩니다)')) return;
 
         const btn = document.getElementById('unfreeze-cash-btn');
         btn.disabled = true;
@@ -457,7 +457,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             alert(e?.message || '해제 중 오류가 발생했습니다.');
         } finally {
             btn.disabled = false;
-            btn.innerText = '게임자산 250만원으로 해제';
+            btn.innerText = '게임자산 100만원으로 해제';
         }
     };
 
