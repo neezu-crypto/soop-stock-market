@@ -13,7 +13,7 @@
  * @param {() => void} deps.closeChartModal - 차트 하단 배너 신청 모달을 열 때 차트창을 먼저 닫기 위함
  * @param {object} deps.callables - httpsCallable로 미리 생성된 콜러블 참조 모음
  */
-export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, closeChartModal, callables }) {
+export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, closeChartModal, getCurrentChartStockId, callables }) {
     const {
         submitBannerRequestCallable,
         submitChartBannerRequestCallable,
@@ -21,6 +21,12 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         submitRelayRoomRequestCallable,
         submitCashChargeRequestCallable,
     } = callables;
+
+    // 차트 하단 배너는 "지금 열어둔 그 종목"에 붙이는 게 목적이라, 모달을 여는
+    // 순간(=차트가 열려 있는 순간) 종목ID를 붙잡아둔다. 닉네임 입력값으로 종목을
+    // 찾거나 새로 상장하던 예전 방식은 닉네임이 종목명과 다르면 의도치 않은
+    // 새 종목이 생기는 문제가 있었다.
+    let pendingChartAdStockId = null;
 
     // ── 모달 ─────────────────────────────────────────────────────
     window.openPromoModal    = () => { if (requireLoginOrPrompt()) document.getElementById('promo-modal').classList.add('active'); };
@@ -153,6 +159,11 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     };
     window.openChartAdModal  = () => {
         if (!requireLoginOrPrompt()) return;
+        const stockId = getCurrentChartStockId(); // closeChartModal()이 초기화하기 전에 먼저 붙잡아둔다
+        if (!stockId) { alert('종목의 차트를 먼저 열어주세요.'); return; }
+        const stock = getAllStocks().find(s => s.id === stockId);
+        pendingChartAdStockId = stockId;
+        document.getElementById('chart-ad-target-stock').innerText = stock?.name || stockId;
         closeChartModal();   // 차트창 먼저 닫기
         document.getElementById('chart-ad-modal').classList.add('active');
     };
@@ -320,6 +331,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             submitBtnId: 'chart-ad-submit-btn',
             submitLabel: '신청하기',
             validateAndBuild() {
+                if (!pendingChartAdStockId) { alert('종목의 차트를 먼저 열어주세요.'); return null; }
                 const nickname   = document.getElementById('chart-ad-nickname').value.trim();
                 const streamerId = document.getElementById('chart-ad-streamer-id').value.trim().toLowerCase();
                 const bannerImg  = document.getElementById('chart-ad-img-url').value.trim();
@@ -330,7 +342,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 if (!isValidUrl(bannerImg)) { alert('배너 이미지 링크를 올바르게 입력해주세요.'); return null; }
                 if (!isValidUrl(promoLink)) { alert('홍보 페이지 링크를 올바르게 입력해주세요.'); return null; }
                 if (!Number.isInteger(days) || days < 1 || days > 7) { alert('노출 기간은 1~7일 사이로 입력해주세요.'); return null; }
-                return { nickname, streamerId, bannerImg, promoLink, days };
+                return { stockId: pendingChartAdStockId, nickname, streamerId, bannerImg, promoLink, days };
             },
             callable: submitChartBannerRequestCallable,
             onSuccess(result) {
@@ -344,6 +356,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 document.getElementById('chart-ad-days').value = '7';
                 updateChartAdPreview();
                 updateChartAdCost();
+                pendingChartAdStockId = null;
             },
             closeFn: window.closeChartAdModal,
         });

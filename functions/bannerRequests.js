@@ -153,8 +153,13 @@ async function actionRejectBannerRequest(db, { requestId }) {
 // ══════════════════════════════════════════════════════════
 
 /**
- * 차트 하단 배너 신청 접수. 우측 랭킹 배너와 달리 이미지·링크를 신청자가
- * 직접 입력한다(자동 프로필 이미지가 아니라 720x150 커스텀 배너이므로).
+ * 차트 하단 배너 신청 접수. 이 배너는 신청자가 지금 열어둔 "그 종목"의
+ * 차트 하단에 붙는 것이 목적이므로, 대상은 클라이언트가 넘긴 stockId로
+ * 고정한다 — 닉네임은 신청자 확인용 정보일 뿐 종목 식별에는 쓰지 않는다
+ * (예전엔 닉네임으로 종목을 찾거나 없으면 새로 상장해버려서, 신청자가
+ * 입력한 닉네임과 종목명이 다르면 의도치 않은 새 종목이 생성됐다).
+ * 우측 랭킹 배너와 달리 이미지·링크도 신청자가 직접 입력한다(자동
+ * 프로필 이미지가 아니라 720x150 커스텀 배너이므로).
  * 실제 반영은 관리자 승인(actionApproveChartBannerRequest) 후에만 이뤄진다.
  */
 const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
@@ -164,12 +169,14 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
 
+  const stockId    = String(request.data?.stockId || "").trim();
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
   const bannerImg  = String(request.data?.bannerImg || "").trim();
   const promoLink  = String(request.data?.promoLink || "").trim();
   const days        = parseInt(request.data?.days, 10);
 
+  if (!stockId) throw new HttpsError("invalid-argument", "배너를 등록할 종목의 차트를 먼저 열어주세요.");
   if (!nickname) throw new HttpsError("invalid-argument", "닉네임을 입력해주세요.");
   if (!STREAMER_ID_RE.test(streamerId)) {
     throw new HttpsError("invalid-argument", "아이디는 영문 소문자/숫자 2~20자여야 합니다.");
@@ -184,6 +191,12 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
     throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이로 입력해주세요.`);
   }
 
+  const stockSnap = await db.ref(`stocks/${stockId}`).get();
+  if (!stockSnap.exists()) {
+    throw new HttpsError("not-found", "종목을 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.");
+  }
+  const stockName = stockSnap.val().name || stockId;
+
   const cost = days * CHART_BANNER_COST_PER_DAY;
 
   // 신청 시점에 게임자산을 바로 차감한다 (거절되면 actionRejectChartBannerRequest에서 환불).
@@ -191,6 +204,8 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
 
   const ref = db.ref("chartBannerRequests").push();
   await ref.set({
+    stockId,
+    stockName, // 신청 시점 종목명 스냅샷 (관리자 목록 표시용 — 승인 대상은 항상 stockId 기준)
     nickname,
     streamerId,
     bannerImg,
@@ -231,11 +246,15 @@ async function actionApproveChartBannerRequest(db, { requestId, days, nickname, 
   const finalBannerImg = String(bannerImg || "").trim() || reqData.bannerImg;
   const finalPromoLink = String(promoLink || "").trim() || reqData.promoLink;
 
-  let targetId = await findStockIdByName(db, finalNickname);
+  // 대상 종목은 신청 시점에 고정된 stockId 그대로 사용한다 — 닉네임으로 종목을
+  // 찾거나 새로 상장하지 않는다(닉네임은 신청자 확인용일 뿐 종목 식별용이 아님).
+  const targetId = reqData.stockId;
   if (!targetId) {
-    // 아직 상장되지 않은 닉네임 — 배너 노출을 위해 자동 상장
-    targetId = `id_${Date.now()}_0`;
-    await db.ref(`stocks/${targetId}`).set({ name: finalNickname, price: 10000 });
+    throw new HttpsError("failed-precondition", "이 신청은 대상 종목 정보가 없는 예전 방식 신청입니다. 거절 후 다시 신청받아주세요.");
+  }
+  const stockSnap = await db.ref(`stocks/${targetId}`).get();
+  if (!stockSnap.exists()) {
+    throw new HttpsError("not-found", "대상 종목이 삭제됐습니다. 거절해주세요.");
   }
 
   const endDate = new Date();

@@ -45,7 +45,8 @@ function filterByTimeframe(candles, timeframeMin) {
  * @param {import('firebase/database').Database} deps.db
  * @param {() => Array} deps.getAllStocks - 현재 allStocks 배열을 반환하는 접근자(재할당에도 항상 최신값)
  * @param {(id: string) => string} deps.getChangePercent
- * @returns {{ closeChartModal: () => void }} 다른 모듈(promotions.js)에서 차트 모달을 닫아야 할 때 사용
+ * @returns {{ closeChartModal: () => void, getCurrentStockId: () => string|null }} 다른 모듈(promotions.js)에서
+ *   차트 모달을 닫거나, 현재 열려 있는 종목(차트 하단 배너 신청 대상)을 알아야 할 때 사용
  */
 export function initChartModal({ db, getAllStocks, getChangePercent }) {
 
@@ -366,5 +367,5 @@ export function initChartModal({ db, getAllStocks, getChangePercent }) {
         window.trade(chartModalStockId, type, qty);
     };
 
-    return { closeChartModal };
+    return { closeChartModal, getCurrentStockId: () => chartModalStockId };
 }

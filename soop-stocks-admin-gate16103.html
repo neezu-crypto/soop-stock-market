@@ -631,9 +631,10 @@
                      onerror="this.style.display='none';">
                 <div class="preview-empty">🖼 이미지 로드 실패</div>
             </div>
+            <div style="font-size:13px;font-weight:800;color:#38bdf8;">📊 종목: ${escapeAttr(r.stockName || '(예전 방식 신청 — 정보 없음)')}</div>
             <div style="font-size:12px;color:#94a3b8;">
                 <span class="status-chip saved" style="margin-right:4px;">차트 배너</span>
-                @${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원
+                신청자 @${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원
             </div>
             <input type="text" value="${escapeAttr(r.nickname)}" id="chart-req-nickname-${r.id}" placeholder="닉네임"
                    style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:13px;font-weight:800;box-sizing:border-box;">

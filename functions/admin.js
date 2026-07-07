@@ -125,7 +125,11 @@ async function actionDeleteStocks(db, { names }) {
   const updates = {};
   let foundCount = 0;
   Object.entries(data).forEach(([id, stock]) => {
-    if (namesToDelete.includes(stock.name)) { updates[`stocks/${id}`] = null; foundCount++; }
+    if (namesToDelete.includes(stock.name)) {
+      updates[`stocks/${id}`] = null;
+      updates[`chartBanner/${id}`] = null; // 종목 삭제 시 연결된 차트 배너도 함께 삭제(orphan 방지)
+      foundCount++;
+    }
   });
   if (foundCount > 0) await db.ref().update(updates);
   return { ok: true, count: foundCount };
@@ -165,7 +169,11 @@ async function actionCleanupDuplicateStocks(db) {
       if (isMatch && master.pureName !== target.pureName) {
         if (master.originalName.includes("BJ") && target.originalName.includes("BJ")) isMatch = false;
       }
-      if (isMatch) { deleteUpdates[`stocks/${target.id}`] = null; duplicateFoundCount++; }
+      if (isMatch) {
+        deleteUpdates[`stocks/${target.id}`] = null;
+        deleteUpdates[`chartBanner/${target.id}`] = null; // 종목 삭제 시 연결된 차트 배너도 함께 삭제(orphan 방지)
+        duplicateFoundCount++;
+      }
     }
   }
 

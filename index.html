@@ -199,6 +199,10 @@
             <h2>📺 차트 하단 배너 광고 신청</h2>
         </div>
 
+        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;text-align:center;">
+            📊 신청 대상 종목: <b id="chart-ad-target-stock" style="color:#38bdf8;">-</b>
+        </div>
+
         <!-- 배너 미리보기 영역 -->
         <div style="margin-bottom:16px;">
             <!-- 사이즈 태그 -->
@@ -217,9 +221,9 @@
         </div>
 
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-            <input type="text" id="chart-ad-nickname" placeholder="닉네임"
+            <input type="text" id="chart-ad-nickname" placeholder="신청자 닉네임 (관리용 — 배너가 붙는 종목과는 무관)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
-            <input type="text" id="chart-ad-streamer-id" placeholder="스트리머 아이디 (예: skftodwocks2)"
+            <input type="text" id="chart-ad-streamer-id" placeholder="신청자 아이디 (예: skftodwocks2)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
             <input type="text" id="chart-ad-img-url" placeholder="배너 이미지 링크 (720×150px 권장, 사진/GIF)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
@@ -1014,7 +1018,7 @@ window.buyPlayTime = async function() {
 // 있어 안전하게 분리 가능한 범위였음). getAllStocks/getChangePercent를
 // 접근자로 넘겨 allStocks 재할당 이후에도 항상 최신값을 참조하게 한다.
 // ══════════════════════════════════════════════════════════════
-const { closeChartModal } = initChartModal({ db, getAllStocks: () => allStocks, getChangePercent });
+const { closeChartModal, getCurrentStockId } = initChartModal({ db, getAllStocks: () => allStocks, getChangePercent });
 
 // ── 거래 함수 ────────────────────────────────────────────────
 // 가격 계산·잔고 검증·기록은 전부 Cloud Function(trade)이 서버에서 처리한다.
@@ -1079,6 +1083,7 @@ initPromotions({
     auth,
     ADMIN_EMAIL,
     closeChartModal,
+    getCurrentChartStockId: getCurrentStockId,
     callables: {
         submitBannerRequestCallable,
         submitChartBannerRequestCallable,
