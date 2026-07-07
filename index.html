@@ -353,6 +353,34 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     종목 상장 신청 모달 (검색해도 없는 스트리머를 새 종목으로 상장 요청)
+══════════════════════════════════════════ -->
+<div id="listing-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>🏷 종목 상장 신청</h2></div>
+        <ul class="promo-info-list" style="margin-bottom:16px;">
+            <li>🔍 <b>대상:</b> 검색해도 나오지 않는, 아직 상장되지 않은 스트리머</li>
+            <li>💰 <b>비용:</b> 무료 (관리자 검수 후 상장)</li>
+        </ul>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+            <input type="text" id="listing-stock-name" placeholder="상장을 원하는 종목명(스트리머 닉네임)"
+                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
+            신청 시 아무 것도 차감되지 않으며, <b style="color:#38bdf8;">관리자 검수를 거쳐 새 종목으로 상장</b>됩니다. 이미 상장된 이름이거나 부적절한 이름은 거절될 수 있어요.<br>
+            문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button onclick="closeListingModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button id="listing-submit-btn" onclick="submitListingRequest()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청하기</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      플레이 시간 충전 모달 (게임머니로 자기서비스 즉시 충전)
 ══════════════════════════════════════════ -->
 <div id="playtime-modal" class="promo-modal-overlay" style="z-index:4000;">
@@ -627,6 +655,7 @@ const buyPlayTimeCallable = httpsCallable(functions, 'buyPlayTime');
 const submitRelayRoomRequestCallable = httpsCallable(functions, 'submitRelayRoomRequest');
 const unfreezeWithCashCallable = httpsCallable(functions, 'unfreezeWithCash');
 const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUnfreezeDonationRequest');
+const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequest');
 
 const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
@@ -1196,6 +1225,7 @@ initPromotions({
         submitCashChargeRequestCallable,
         unfreezeWithCashCallable,
         submitUnfreezeDonationRequestCallable,
+        submitListingRequestCallable,
     },
 });
 
@@ -1397,6 +1427,7 @@ function renderStocks(filter = "") {
     listDiv.innerHTML = "";
     stockElements = {};
     if (!filter) listDiv.appendChild(createPinPromoCard()); // 검색 중이 아닐 때만 리스트 최상단에 노출
+    if (filter && filtered.length === 0) listDiv.appendChild(createListingPromoCard(filter)); // 검색 결과가 없으면 상장 신청 유도
     filtered.forEach(s => {
         const card = createStockCard(s);
         stockElements[s.id] = card;
@@ -1461,6 +1492,39 @@ function createPinPromoCard() {
             </div>
             <button class="btn" style="background:#fbbf24;color:#1e293b;padding:8px 14px;flex-shrink:0;" onclick="event.stopPropagation();openPinModal();">신청하기</button>
         </div>`;
+    return card;
+}
+
+// 검색 결과가 없을 때 그 검색어로 바로 상장 신청을 유도하는 카드.
+// textContent만 사용해 검색어(사용자 입력)를 그대로 innerHTML에 넣지 않는다.
+function createListingPromoCard(name) {
+    const card = document.createElement('div');
+    card.className = 'stock-card';
+    card.style.cssText = 'cursor:pointer;border-color:#38bdf8;';
+    card.addEventListener('click', () => window.openListingModal(name));
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;';
+
+    const left = document.createElement('div');
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:800;font-size:14px;color:#38bdf8;';
+    title.textContent = `🏷 "${name}" 종목이 없어요`;
+    const sub = document.createElement('div');
+    sub.style.cssText = 'font-size:12px;color:var(--text-sub);margin-top:2px;';
+    sub.textContent = '찾는 스트리머가 아직 상장되지 않았다면, 이 이름으로 상장을 신청해보세요 (무료)';
+    left.appendChild(title);
+    left.appendChild(sub);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.style.cssText = 'background:#38bdf8;color:#0f172a;padding:8px 14px;flex-shrink:0;';
+    btn.textContent = '상장 신청';
+    btn.addEventListener('click', (e) => { e.stopPropagation(); window.openListingModal(name); });
+
+    wrap.appendChild(left);
+    wrap.appendChild(btn);
+    card.appendChild(wrap);
     return card;
 }
 
@@ -1552,6 +1616,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
         if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
         if (document.getElementById('pin-modal').classList.contains('active')) closePinModal();
+        if (document.getElementById('listing-modal').classList.contains('active')) closeListingModal();
         if (document.getElementById('playtime-modal').classList.contains('active')) closePlayTimeModal();
         if (document.getElementById('relay-room-modal').classList.contains('active')) closeRelayRoomModal();
         if (document.getElementById('unfreeze-modal').classList.contains('active')) closeUnfreezeModal();

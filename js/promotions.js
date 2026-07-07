@@ -23,6 +23,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         submitCashChargeRequestCallable,
         unfreezeWithCashCallable,
         submitUnfreezeDonationRequestCallable,
+        submitListingRequestCallable,
     } = callables;
 
     // 차트 하단 배너는 "지금 열어둔 그 종목"에 붙이는 게 목적이라, 모달을 여는
@@ -269,6 +270,40 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 updatePinCost();
             },
             closeFn: window.closePinModal,
+        });
+    };
+
+    // ── 종목 상장 신청 (검색해도 없는 스트리머를 검색어로 바로 신청) ──
+    // 무료 기능이라 비용 계산이 없고, 신청 즉시 상장되지 않고 관리자 승인 후
+    // 상장되는 건 최상단 고정 노출 등 다른 셀프 신청과 동일한 원칙.
+    window.openListingModal = (prefillName = '') => {
+        if (!requireLoginOrPrompt()) return;
+        document.getElementById('listing-stock-name').value = prefillName;
+        document.getElementById('listing-modal').classList.add('active');
+    };
+    window.closeListingModal = () => document.getElementById('listing-modal').classList.remove('active');
+
+    window.submitListingRequest = async function() {
+        await submitRequestForm({
+            submitBtnId: 'listing-submit-btn',
+            submitLabel: '신청하기',
+            validateAndBuild() {
+                const stockName = document.getElementById('listing-stock-name').value.trim();
+                if (!stockName) { alert('상장을 원하는 종목명을 입력해주세요.'); return null; }
+                if (getAllStocks().some(s => s.name === stockName)) {
+                    alert('이미 상장된 종목명입니다.');
+                    return null;
+                }
+                return { stockName };
+            },
+            callable: submitListingRequestCallable,
+            onSuccess() {
+                alert('✅ 상장 신청이 접수됐습니다!\n관리자 검수 후 새 종목으로 상장됩니다.');
+            },
+            resetFn() {
+                document.getElementById('listing-stock-name').value = '';
+            },
+            closeFn: window.closeListingModal,
         });
     };
 

@@ -246,6 +246,14 @@
         <div id="pin-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
+    <!-- 🏷 종목 상장 신청 관리 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>🏷 종목 상장 신청 관리</h1>
+        <div class="info-box">유저가 검색창에서 없는 종목명으로 신청한 신규 상장 요청입니다. 승인하면 즉시 새 종목(시작가 10,000원)으로 상장됩니다.</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadListingRequests()">🔄 신청 목록 새로고침</button>
+        <div id="listing-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <!-- 🎥 중계방 홍보 관리 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
         <h1>🎥 중계방 홍보 관리</h1>
@@ -355,6 +363,7 @@
             await loadAllBannerData();
             await loadCashChargeRequests();
             await loadAllPinData();
+            await loadListingRequests();
             await loadAllRelayRoomData();
             await loadAllFreezeData();
         } else {
@@ -996,6 +1005,64 @@
         try {
             await callAdminAction('rejectPinRequest', { requestId });
             await loadPinRequests();
+        } catch (e) {
+            alert('거절 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ══════════════════════════════════════════════════════
+    // 종목 상장 신청 관리
+    // ══════════════════════════════════════════════════════
+
+    async function loadListingRequests() {
+        const listEl = document.getElementById('listing-request-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { requests } = await callAdminAction('listListingRequests');
+            if (!requests || requests.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            requests.forEach(r => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+                row.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input type="text" value="${escapeAttr(r.stockName)}" id="listing-req-stockname-${r.id}"
+                               style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
+                    </div>
+                    <div style="font-size:12px;color:#94a3b8;">신청 시각 ${new Date(r.requestedAt || 0).toLocaleString('ko-KR')}</div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveListingRequest('${r.id}')">✅ 승인 (상장)</button>
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectListingRequest('${r.id}')">🚫 거절</button>
+                    </div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+    window.loadListingRequests = loadListingRequests;
+
+    window.approveListingRequest = async function(requestId) {
+        const stockName = document.getElementById(`listing-req-stockname-${requestId}`).value.trim();
+        if (!stockName) return alert('종목명을 입력해주세요.');
+        if (!confirm(`"${stockName}"(으)로 새 종목을 상장하시겠습니까?`)) return;
+        try {
+            await callAdminAction('approveListingRequest', { requestId, stockName });
+            alert('✅ 승인 완료! 새 종목으로 상장됐습니다.');
+            await loadListingRequests();
+        } catch (e) {
+            alert('승인 중 오류 발생: ' + e.message);
+        }
+    };
+
+    window.rejectListingRequest = async function(requestId) {
+        if (!confirm('이 상장 신청을 거절하시겠습니까?')) return;
+        try {
+            await callAdminAction('rejectListingRequest', { requestId });
+            await loadListingRequests();
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
         }

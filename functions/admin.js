@@ -35,6 +35,11 @@ const {
   actionListFrozenStocks,
   actionForceUnfreezeStock,
 } = require("./stockFreeze");
+const {
+  actionListListingRequests,
+  actionApproveListingRequest,
+  actionRejectListingRequest,
+} = require("./listingRequests");
 
 // ══════════════════════════════════════════════════════════
 // 관리자 페이지 기능 — 전부 Admin SDK로 처리해 RTDB 규칙의
@@ -386,6 +391,9 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "rejectUnfreezeDonationRequest":  return actionRejectUnfreezeDonationRequest(db, payload);
     case "listFrozenStocks":               return actionListFrozenStocks(db);
     case "forceUnfreezeStock":             return actionForceUnfreezeStock(db, payload);
+    case "listListingRequests":    return actionListListingRequests(db);
+    case "approveListingRequest":  return actionApproveListingRequest(db, payload);
+    case "rejectListingRequest":   return actionRejectListingRequest(db, payload);
     case "previewRankings":        return actionPreviewRankings(db);
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);
