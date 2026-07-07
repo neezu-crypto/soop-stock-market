@@ -9,6 +9,9 @@ const URL_RE                   = /^https?:\/\/.+/i;
 const MAX_BANNER_REQUEST_DAYS  = 7;        // 신청 시 신청자가 고를 수 있는 노출 기간 상한
 const BANNER_COST_PER_DAY      = 2000000;  // 우측 랭킹 배너 신청 1일당 차감되는 게임자산
 const CHART_BANNER_COST_PER_DAY = 4000000; // 차트 하단 배너 신청 1일당 차감되는 게임자산
+const MAX_PIN_HOURS            = 12;       // 최상단 고정 노출 신청 시 고를 수 있는 시간 상한
+const PIN_COST_PER_HOUR        = 500000;   // 최상단 고정 노출 1시간당 차감되는 게임자산
+const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 최대 종목 수
 
 function requireAdmin(auth) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -83,6 +86,9 @@ module.exports = {
   MAX_BANNER_REQUEST_DAYS,
   BANNER_COST_PER_DAY,
   CHART_BANNER_COST_PER_DAY,
+  MAX_PIN_HOURS,
+  PIN_COST_PER_HOUR,
+  MAX_PINNED_SLOTS,
   requireAdmin,
   findStockIdByName,
   bannerStatus,

@@ -233,6 +233,19 @@
         <div id="cash-charge-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
+    <!-- 📌 최상단 고정 노출 관리 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>📌 최상단 고정 노출 관리</h1>
+        <div class="info-box">종목 리스트 최상단에 고정 노출되는 종목(최대 3개 슬롯)을 관리합니다. 신규 신청 승인 시 슬롯이 가득 차 있으면 자동으로 거부됩니다.</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadAllPinData()">🔄 전체 새로고침</button>
+
+        <div style="font-size:13px;color:#38bdf8;font-weight:700;margin-bottom:8px;">🔢 현재 고정 슬롯 <span id="pin-slot-status">-</span></div>
+        <div id="pin-active-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;"></div>
+
+        <div style="font-size:13px;color:#38bdf8;font-weight:700;margin-bottom:8px;">🆕 신규 신청</div>
+        <div id="pin-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -315,6 +328,7 @@
             await loadRankingStatus();
             await loadAllBannerData();
             await loadCashChargeRequests();
+            await loadAllPinData();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -845,6 +859,112 @@
         try {
             await callAdminAction('rejectCashChargeRequest', { requestId });
             await loadCashChargeRequests();
+        } catch (e) {
+            alert('거절 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ══════════════════════════════════════════════════════
+    // 최상단 고정 노출 관리
+    // ══════════════════════════════════════════════════════
+
+    window.loadAllPinData = async function() {
+        await Promise.all([loadActivePins(), loadPinRequests()]);
+    };
+
+    async function loadActivePins() {
+        const statusEl = document.getElementById('pin-slot-status');
+        const listEl   = document.getElementById('pin-active-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { pins, maxSlots } = await callAdminAction('listActivePins');
+            statusEl.innerText = `${pins.length} / ${maxSlots}`;
+            if (pins.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">현재 고정 노출 중인 종목이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            pins.forEach(p => {
+                const remainMs = p.pinnedUntil - Date.now();
+                const remainH  = Math.max(0, Math.floor(remainMs / 3600000));
+                const remainM  = Math.max(0, Math.floor((remainMs % 3600000) / 60000));
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">📌 ${escapeAttr(p.name)}</div>
+                        <div style="font-size:12px;color:#94a3b8;">남은 시간: ${remainH}시간 ${remainM}분</div>
+                    </div>
+                    <button class="btn-danger" style="padding:8px 14px;" onclick="deletePin('${p.stockId}')">🗑 해제</button>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+
+    window.deletePin = async function(stockId) {
+        if (!confirm('이 종목의 고정 노출을 지금 해제하시겠습니까?')) return;
+        try {
+            await callAdminAction('deletePin', { stockId });
+            await loadActivePins();
+        } catch (e) {
+            alert('해제 중 오류 발생: ' + e.message);
+        }
+    };
+
+    async function loadPinRequests() {
+        const listEl = document.getElementById('pin-request-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { requests } = await callAdminAction('listPinRequests');
+            if (!requests || requests.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            requests.forEach(r => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+                row.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input type="text" value="${escapeAttr(r.nickname)}" id="pin-req-nickname-${r.id}"
+                               style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
+                    </div>
+                    <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.streamerId)} · 신청 시간 ${r.hours}시간 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원</div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="number" min="1" max="365" value="${r.hours || 1}" id="pin-req-hours-${r.id}"
+                               style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                        <span style="font-size:12px;color:#94a3b8;">시간 노출</span>
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approvePinRequest('${r.id}')">✅ 승인</button>
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectPinRequest('${r.id}')">🚫 거절</button>
+                    </div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+
+    window.approvePinRequest = async function(requestId) {
+        const hours    = document.getElementById(`pin-req-hours-${requestId}`).value;
+        const nickname = document.getElementById(`pin-req-nickname-${requestId}`).value.trim();
+        if (!hours) return alert('노출 시간을 입력해주세요.');
+        if (!nickname) return alert('닉네임을 입력해주세요.');
+        try {
+            await callAdminAction('approvePinRequest', { requestId, hours, nickname });
+            alert('✅ 승인 완료! 최상단에 고정 노출됩니다.');
+            await window.loadAllPinData();
+        } catch (e) {
+            alert('승인 중 오류 발생: ' + e.message);
+        }
+    };
+
+    window.rejectPinRequest = async function(requestId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await callAdminAction('rejectPinRequest', { requestId });
+            await loadPinRequests();
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
         }

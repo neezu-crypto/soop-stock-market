@@ -298,6 +298,45 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     최상단 고정 노출 모달 (종목 리스트 최상위 최대 3슬롯)
+══════════════════════════════════════════ -->
+<div id="pin-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>📌 최상단 고정 노출</h2></div>
+        <ul class="promo-info-list" style="margin-bottom:16px;">
+            <li>📍 <b>위치:</b> 종목 리스트 최상단 (가격순 정렬과 무관하게 항상 맨 위)</li>
+            <li>🔢 <b>슬롯:</b> 동시 최대 3개 종목만 고정 가능</li>
+            <li>⏱ <b>기간:</b> 시간 단위 신청, 최대 12시간</li>
+        </ul>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+            <input type="text" id="pin-nickname" placeholder="닉네임"
+                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+            <input type="text" id="pin-streamer-id" placeholder="스트리머 아이디 (예: skftodwocks2)"
+                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+
+            <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid #475569;border-radius:8px;padding:10px 12px;">
+                <label for="pin-hours" style="font-size:13px;color:#94a3b8;white-space:nowrap;">노출 희망 시간:</label>
+                <input type="number" id="pin-hours" value="1" min="1" max="12"
+                    style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
+                <span style="font-size:13px;color:#94a3b8;">시간 (최대 12시간)</span>
+            </div>
+            <div style="text-align:right;font-size:13px;color:#94a3b8;">차감될 금액: <b id="pin-cost" style="color:#38bdf8;">500,000원</b></div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
+            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, 관리자 검수 후 최상단에 고정 노출됩니다. 슬롯(3개)이 가득 찬 경우 승인이 늦어질 수 있고, 거절 시 차감된 금액은 전액 환불됩니다.<br>
+            문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button onclick="closePinModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button id="pin-submit-btn" onclick="submitPinRequest()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청하기</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
     <div class="wallet-bar">
@@ -327,6 +366,10 @@
             종목 카드를 클릭하면 분봉 차트를 확인할 수 있습니다.
         </p>
         <input type="text" id="search-input" placeholder="스트리머 검색...">
+        <button onclick="openPinModal()"
+            style="margin-top:8px;background:#334155;color:#f8fafc;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+            📌 최상단 고정 노출 신청
+        </button>
     </header>
     <div class="ranking-bar">
         <div class="ranking-title">🔥 인기 TOP 5</div>
@@ -379,6 +422,7 @@ const submitChartBannerRequestCallable = httpsCallable(functions, 'submitChartBa
 const linkKakaoAccountCallable = httpsCallable(functions, 'linkKakaoAccount');
 const initializeUserCallable   = httpsCallable(functions, 'initializeUser');
 const submitCashChargeRequestCallable = httpsCallable(functions, 'submitCashChargeRequest');
+const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
 
 const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
@@ -432,6 +476,7 @@ let stockElements    = {};
 let lastTradeTime    = 0;
 let stockSubscriptions = {};        // id -> unsubscribe (개별 종목 실시간 구독 핸들)
 let visibleStockIds    = new Set(); // 현재 화면에 노출되어 구독 중인 종목 id
+let pinnedStockIds     = new Set(); // 최상단 고정 노출 종목 id (pinnedStocks/ 실시간 구독으로 갱신)
 
 // ── 스파크라인/등락률용 클라이언트 가격 이력 (서버 저장 없이 관측치만 누적) ──
 const PRICE_HISTORY_MAX = 20;
@@ -499,6 +544,15 @@ onValue(ref(db, 'rankings/top5'), (snap) => {
         return;
     }
     renderRankingFromCache(snap.val().items || []);
+});
+
+// ── pinnedStocks 구독 (최상단 고정 노출 종목 id 집합 — 상시 실시간 유지) ──
+// 종목 자체가 top100 가격순위 밖에 있어도 고정 노출은 항상 보여야 하므로,
+// 이 id 목록만 별도로 가볍게 구독해 syncStockSubscriptions()의 "항상 구독"
+// 대상에 포함시킨다.
+onValue(ref(db, 'pinnedStocks'), (snap) => {
+    pinnedStockIds = new Set(snap.exists() ? Object.keys(snap.val()) : []);
+    updateUI(true);
 });
 
 function renderRankingFromCache(items) {
@@ -1049,16 +1103,16 @@ const isValidSoopId = (v) => SOOP_ID_RE.test(v);
 const isValidUrl    = (v) => /^https?:\/\/.+/i.test(v);
 
 // 기간(일) 입력에 맞춰 "일수 × 단가" 비용을 실시간으로 표시
-function setupCostCalculator({ daysInputId, costElId, pricePerDay }) {
+function setupCostCalculator({ unitInputId, costElId, pricePerDay }) {
     function update() {
-        const daysInput = document.getElementById(daysInputId);
+        const unitInput = document.getElementById(unitInputId);
         const costEl    = document.getElementById(costElId);
-        if (!daysInput || !costEl) return;
-        const days = parseInt(daysInput.value, 10);
-        const cost = Number.isInteger(days) && days > 0 ? days * pricePerDay : 0;
+        if (!unitInput || !costEl) return;
+        const units = parseInt(unitInput.value, 10);
+        const cost = Number.isInteger(units) && units > 0 ? units * pricePerDay : 0;
         costEl.innerText = `${cost.toLocaleString()}원`;
     }
-    document.getElementById(daysInputId)?.addEventListener('input', update);
+    document.getElementById(unitInputId)?.addEventListener('input', update);
     update();
     return update;
 }
@@ -1114,7 +1168,7 @@ async function submitRequestForm({ submitBtnId, submitLabel, validateAndBuild, c
 // ── 홍보 배너 신청 (닉네임/아이디 입력 → 실시간 미리보기 → 신청) ──
 const BANNER_COST_PER_DAY = 2000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
-const updatePromoCost = setupCostCalculator({ daysInputId: 'promo-days', costElId: 'promo-cost', pricePerDay: BANNER_COST_PER_DAY });
+const updatePromoCost = setupCostCalculator({ unitInputId: 'promo-days', costElId: 'promo-cost', pricePerDay: BANNER_COST_PER_DAY });
 
 const updatePromoPreview = setupImagePreview({
     inputId: 'promo-streamer-id',
@@ -1161,6 +1215,40 @@ window.openChartAdModal  = () => {
 };
 window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
 
+// ── 최상단 고정 노출 신청 (닉네임/아이디 입력 → 시간 선택 → 신청) ──
+window.openPinModal  = () => document.getElementById('pin-modal').classList.add('active');
+window.closePinModal = () => document.getElementById('pin-modal').classList.remove('active');
+
+const PIN_COST_PER_HOUR = 500000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
+const updatePinCost = setupCostCalculator({ unitInputId: 'pin-hours', costElId: 'pin-cost', pricePerDay: PIN_COST_PER_HOUR });
+
+window.submitPinRequest = async function() {
+    await submitRequestForm({
+        submitBtnId: 'pin-submit-btn',
+        submitLabel: '신청하기',
+        validateAndBuild() {
+            const nickname   = document.getElementById('pin-nickname').value.trim();
+            const streamerId = document.getElementById('pin-streamer-id').value.trim().toLowerCase();
+            const hours      = parseInt(document.getElementById('pin-hours').value, 10);
+            if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+            if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+            if (!Number.isInteger(hours) || hours < 1 || hours > 12) { alert('노출 시간은 1~12시간 사이로 입력해주세요.'); return null; }
+            return { nickname, streamerId, hours };
+        },
+        callable: submitPinRequestCallable,
+        onSuccess(result) {
+            alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 최상단에 고정 노출되며, 거절 시 전액 환불됩니다.`);
+        },
+        resetFn() {
+            document.getElementById('pin-nickname').value = '';
+            document.getElementById('pin-streamer-id').value = '';
+            document.getElementById('pin-hours').value = '1';
+            updatePinCost();
+        },
+        closeFn: window.closePinModal,
+    });
+};
+
 // ── 자산 충전 모달 (라이브 방송 후원 → 신청 → 관리자 승인) ──
 window.openCashChargeModal = () => {
     document.getElementById('cash-charge-modal').classList.add('active');
@@ -1205,7 +1293,7 @@ window.submitCashChargeRequest = async function() {
 // ── 차트 하단 배너 신청 (이미지/링크 직접 입력 → 실시간 미리보기 → 신청) ──
 const CHART_BANNER_COST_PER_DAY = 4000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
-const updateChartAdCost = setupCostCalculator({ daysInputId: 'chart-ad-days', costElId: 'chart-ad-cost', pricePerDay: CHART_BANNER_COST_PER_DAY });
+const updateChartAdCost = setupCostCalculator({ unitInputId: 'chart-ad-days', costElId: 'chart-ad-cost', pricePerDay: CHART_BANNER_COST_PER_DAY });
 
 const updateChartAdPreview = setupImagePreview({
     inputId: 'chart-ad-img-url',
@@ -1416,10 +1504,23 @@ function createSparkline(history, isUp) {
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
     if (!listDiv || !myData) return;
-    const filtered = allStocks
-        .filter(s => s.name && s.name.includes(filter))
-        .sort((a, b) => (b.price || 0) - (a.price || 0))
-        .slice(0, 100);
+    const now = Date.now();
+
+    const matched = allStocks.filter(s => s.name && s.name.includes(filter));
+
+    // 최상단 고정 노출 종목(최대 3개, 만료 전인 것만)을 가격순 정렬과 무관하게 맨 위로
+    const pinned = matched
+        .filter(s => s.pinnedUntil && s.pinnedUntil > now)
+        .sort((a, b) => (b.pinnedUntil || 0) - (a.pinnedUntil || 0))
+        .slice(0, 3);
+    const pinnedIds = new Set(pinned.map(s => s.id));
+
+    const rest = matched
+        .filter(s => !pinnedIds.has(s.id))
+        .sort((a, b) => (b.price || 0) - (a.price || 0));
+
+    const filtered = [...pinned, ...rest].slice(0, 100);
+
     listDiv.innerHTML = "";
     stockElements = {};
     filtered.forEach(s => {
@@ -1437,11 +1538,17 @@ function subscribeStock(id) {
         if (!snap.exists()) return;
         const ns  = { ...snap.val(), id };
         recordPriceTick(id, ns.price);
-        const idx = allStocks.findIndex(s => s.id === id);
+        const idx    = allStocks.findIndex(s => s.id === id);
+        const isNew  = idx < 0;
         if (idx >= 0) allStocks[idx] = ns; else allStocks.push(ns);
 
         const card = stockElements[id];
-        if (card) updateCardContent(card, ns, (myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+        if (card) {
+            updateCardContent(card, ns, (myData?.stocks || {})[id] || { qty: 0, avg: 0 });
+        } else if (isNew && pinnedStockIds.has(id)) {
+            // 새로 고정 노출된 종목이 기존 목록(top100)에 없었다면 전체 재렌더링해 최상단에 노출
+            renderStocks(document.getElementById('search-input')?.value || "");
+        }
         renderMyPortfolio();
     });
 }
@@ -1458,6 +1565,8 @@ function syncStockSubscriptions(idsToShow) {
     Object.keys(myData?.stocks || {}).forEach(id => {
         if (myData.stocks[id]?.qty > 0) nextIds.add(id);
     });
+    // 최상단 고정 노출 종목도 가격순 정렬상 화면 밖(top100 밖)일 수 있으므로 항상 구독
+    pinnedStockIds.forEach(id => nextIds.add(id));
 
     visibleStockIds.forEach(id => { if (!nextIds.has(id)) unsubscribeStock(id); });
     nextIds.forEach(id => { if (!visibleStockIds.has(id)) subscribeStock(id); });
@@ -1483,8 +1592,10 @@ function createStockCard(s) {
 }
 
 function updateCardContent(card, s, userStock) {
-    const change = getChangePercent(s.id);
-    const isUp   = parseFloat(change) >= 0;
+    const change  = getChangePercent(s.id);
+    const isUp    = parseFloat(change) >= 0;
+    const isPinned = !!(s.pinnedUntil && s.pinnedUntil > Date.now());
+    card.style.border = isPinned ? '2px solid #fbbf24' : '';
     let myProfit = 0, profitClass = 'steady';
     if (userStock.qty > 0 && userStock.avg > 0) {
         myProfit    = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
@@ -1492,7 +1603,7 @@ function updateCardContent(card, s, userStock) {
     }
     card.innerHTML = `
         <div class="info-group">
-            <div class="stock-name">${s.name}</div>
+            <div class="stock-name">${isPinned ? '<span style="color:#fbbf24;">📌</span> ' : ''}${s.name}</div>
             <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
         </div>
         <div>${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}</div>
@@ -1534,6 +1645,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
         if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
+        if (document.getElementById('pin-modal').classList.contains('active')) closePinModal();
     }
 });
 

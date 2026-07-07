@@ -14,6 +14,13 @@ const {
   actionApproveCashChargeRequest,
   actionRejectCashChargeRequest,
 } = require("./cashCharge");
+const {
+  actionListPinRequests,
+  actionListActivePins,
+  actionApprovePinRequest,
+  actionRejectPinRequest,
+  actionDeletePin,
+} = require("./pinRequests");
 
 // ══════════════════════════════════════════════════════════
 // 관리자 페이지 기능 — 전부 Admin SDK로 처리해 RTDB 규칙의
@@ -331,6 +338,11 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "listCashChargeRequests":   return actionListCashChargeRequests(db);
     case "approveCashChargeRequest": return actionApproveCashChargeRequest(db, payload);
     case "rejectCashChargeRequest":  return actionRejectCashChargeRequest(db, payload);
+    case "listPinRequests":    return actionListPinRequests(db);
+    case "listActivePins":     return actionListActivePins(db);
+    case "approvePinRequest":  return actionApprovePinRequest(db, payload);
+    case "rejectPinRequest":   return actionRejectPinRequest(db, payload);
+    case "deletePin":          return actionDeletePin(db, payload);
     case "previewRankings":        return actionPreviewRankings(db);
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);
