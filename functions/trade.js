@@ -13,7 +13,7 @@ const TRADE_COOLDOWN_MS   = 1000;   // 연속 거래 최소 간격
 const IMPACT_PER_QTY      = 0.001;  // 수량당 시장 충격
 const SPREAD              = 0.0005; // 매수/매도 스프레드
 const SELL_FEE            = 0.003;  // 매도 수수료
-const MAX_QTY_PER_ORDER   = 10000;  // 1회 주문 최대 수량
+const MAX_QTY_PER_ORDER   = 10;     // 1회 주문 최대 수량 (클라이언트 매수/매도 버튼이 1주/10주 단위뿐이라 서버도 동일하게 제한 — API 직접 호출로 대량 주문을 넣는 것을 막는다)
 const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
 const RANKING_DEBOUNCE_MS = 30000;  // 랭킹 반영 최소 간격
 
