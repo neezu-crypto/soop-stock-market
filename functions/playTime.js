@@ -168,7 +168,10 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
     cost += Math.round(basePrice * (1 + surcharge));
   }
 
-  await chargeUserCash(db, uid, cost);
+  // 플레이타임 충전은 총자산(현금+평가금액) 기준으로 단가가 매겨지므로,
+  // 구매 시점의 현금 잔액이 그보다 적을 수 있다. 이 경우에도 구매를 막지 않고
+  // 그대로 차감해 마이너스 자산(미수금)이 되도록 허용한다.
+  const { resultingCash } = await chargeUserCash(db, uid, cost, { allowNegative: true });
 
   const userRef  = db.ref(`users/${uid}`);
   const trueUser = (await userRef.get()).val();
@@ -187,7 +190,13 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
     };
   });
 
-  return { ok: true, chargedAmount: cost, addedSeconds };
+  return {
+    ok: true,
+    chargedAmount: cost,
+    addedSeconds,
+    resultingCash: resultingCash,
+    negativeCashWarning: resultingCash < 0,
+  };
 });
 
 module.exports = { heartbeat, buyPlayTime, checkPlayQuota, getQuotaState };

@@ -203,6 +203,10 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     const pos    = stocks[stockId] || { qty: 0, avg: 0 };
 
     if (type === "buy") {
+      if ((user.cash || 0) < 0) {
+        abortReason = "NEGATIVE_CASH";
+        return;
+      }
       const totalCost = finalTradePrice * qty;
       if ((user.cash || 0) < totalCost) {
         abortReason = "INSUFFICIENT_CASH";
@@ -235,6 +239,9 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   }
   if (abortReason === "COOLDOWN") {
     throw new HttpsError("resource-exhausted", "거래가 너무 빠릅니다! 잠시 후 다시 시도해주세요.");
+  }
+  if (abortReason === "NEGATIVE_CASH") {
+    throw new HttpsError("failed-precondition", "미수금(마이너스 자산) 상태에서는 주식을 매수할 수 없습니다. 매도로 자산을 회복한 뒤 다시 시도해주세요.");
   }
   if (abortReason === "INSUFFICIENT_CASH") {
     throw new HttpsError("failed-precondition", "잔액이 부족합니다!");

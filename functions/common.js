@@ -90,19 +90,24 @@ function bannerStatus(endDateStr) {
  * trueUser 선조회는 Admin SDK 트랜잭션 콜백에 currentUser가 null(캐시 미스)로
  * 들어와도 "신규 유저 기본값"으로 오판하지 않기 위함 — 트랜잭션 콜백이 활성
  * 리스너 없는 경로는 캐시하지 않는 Admin SDK 특성 때문에 null을 받을 수 있다.
+ *
+ * allowNegative가 true이면(플레이타임 충전 전용) 잔액이 모자라도 막지 않고
+ * 그대로 cost만큼 차감해 마이너스 자산(미수금)이 되도록 허용한다.
+ * 반환값의 resultingCash로 차감 후 잔액(음수 여부)을 호출자가 알 수 있다.
  */
-async function chargeUserCash(db, uid, cost) {
+async function chargeUserCash(db, uid, cost, { allowNegative = false } = {}) {
   const userRef  = db.ref(`users/${uid}`);
   const trueUser = (await userRef.get()).val();
   let insufficient = false;
 
   const userTx = await userRef.transaction((currentUser) => {
-    const user = currentUser || trueUser || { cash: INITIAL_CASH, stocks: {} };
-    if ((user.cash || 0) < cost) {
+    const user    = currentUser || trueUser || { cash: INITIAL_CASH, stocks: {} };
+    const newCash = (user.cash || 0) - cost;
+    if (newCash < 0 && !allowNegative) {
       insufficient = true;
       return; // abort
     }
-    return { ...user, cash: user.cash - cost };
+    return { ...user, cash: newCash };
   });
 
   if (insufficient) {
@@ -111,6 +116,8 @@ async function chargeUserCash(db, uid, cost) {
   if (!userTx.committed) {
     throw new HttpsError("aborted", "신청 처리 중 문제가 발생했습니다. 다시 시도해주세요.");
   }
+
+  return { resultingCash: userTx.snapshot.val()?.cash ?? 0 };
 }
 
 /** 유저 게임자산(cash)에 amount만큼 더한다 (배너 신청 환불, 카카오 연동 보너스, 자산 충전 승인 등에 재사용). */

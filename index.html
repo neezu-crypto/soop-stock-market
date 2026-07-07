@@ -1102,7 +1102,11 @@ window.buyPlayTime = async function() {
     buyBtn.innerText = '충전 중...';
     try {
         const result = await buyPlayTimeCallable({ hours });
-        alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 ${hours}시간이 충전됐습니다!`);
+        let msg = `✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 ${hours}시간이 충전됐습니다!`;
+        if (result.data.negativeCashWarning) {
+            msg += `\n\n⚠️ 미수금 발생 안내: 잔액이 부족한 상태로 결제되어 게임자산이 ${result.data.resultingCash.toLocaleString()}원(마이너스)이 됐습니다. 미수금 상태에서는 주식을 매수할 수 없으니, 보유 주식을 매도하거나 자산을 회복해 미수금을 해소해주세요.`;
+        }
+        alert(msg);
         window.closePlayTimeModal();
         await runHeartbeat(); // 잔여시간 즉시 반영 + 잠겨 있었다면 자동 해제
     } catch (e) {
