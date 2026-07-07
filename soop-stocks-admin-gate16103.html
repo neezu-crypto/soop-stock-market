@@ -928,10 +928,10 @@
                 row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
                 row.innerHTML = `
                     <div style="display:flex;align-items:center;gap:6px;">
-                        <input type="text" value="${escapeAttr(r.nickname)}" id="pin-req-nickname-${r.id}"
+                        <input type="text" value="${escapeAttr(r.stockName)}" id="pin-req-stockname-${r.id}"
                                style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
                     </div>
-                    <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.streamerId)} · 신청 시간 ${r.hours}시간 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원</div>
+                    <div style="font-size:12px;color:#94a3b8;">신청 시간 ${r.hours}시간 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원</div>
                     <div style="display:flex;gap:8px;align-items:center;">
                         <input type="number" min="1" max="365" value="${r.hours || 1}" id="pin-req-hours-${r.id}"
                                style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
@@ -947,12 +947,12 @@
     }
 
     window.approvePinRequest = async function(requestId) {
-        const hours    = document.getElementById(`pin-req-hours-${requestId}`).value;
-        const nickname = document.getElementById(`pin-req-nickname-${requestId}`).value.trim();
+        const hours     = document.getElementById(`pin-req-hours-${requestId}`).value;
+        const stockName = document.getElementById(`pin-req-stockname-${requestId}`).value.trim();
         if (!hours) return alert('노출 시간을 입력해주세요.');
-        if (!nickname) return alert('닉네임을 입력해주세요.');
+        if (!stockName) return alert('종목명을 입력해주세요.');
         try {
-            await callAdminAction('approvePinRequest', { requestId, hours, nickname });
+            await callAdminAction('approvePinRequest', { requestId, hours, stockName });
             alert('✅ 승인 완료! 최상단에 고정 노출됩니다.');
             await window.loadAllPinData();
         } catch (e) {

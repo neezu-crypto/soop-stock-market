@@ -311,10 +311,9 @@
         </ul>
 
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-            <input type="text" id="pin-nickname" placeholder="닉네임"
+            <input type="text" id="pin-stock-name" list="pin-stock-datalist" placeholder="종목명 검색 (이미 상장된 종목만 고정 가능)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
-            <input type="text" id="pin-streamer-id" placeholder="스트리머 아이디 (예: skftodwocks2)"
-                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+            <datalist id="pin-stock-datalist"></datalist>
 
             <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid #475569;border-radius:8px;padding:10px 12px;">
                 <label for="pin-hours" style="font-size:13px;color:#94a3b8;white-space:nowrap;">노출 희망 시간:</label>
@@ -1215,8 +1214,24 @@ window.openChartAdModal  = () => {
 };
 window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
 
-// ── 최상단 고정 노출 신청 (닉네임/아이디 입력 → 시간 선택 → 신청) ──
-window.openPinModal  = () => document.getElementById('pin-modal').classList.add('active');
+// ── 최상단 고정 노출 신청 (기존 상장 종목 검색 → 시간 선택 → 신청) ──
+// 배너 신청과 달리 미상장 스트리머를 새로 등록하는 게 아니라 "이미 리스트에
+// 있는 종목 카드"를 맨 위로 올리는 기능이므로, 닉네임/아이디 대신 종목명
+// 검색(datalist 자동완성)으로 대상을 고른다.
+function populatePinStockDatalist() {
+    const datalist = document.getElementById('pin-stock-datalist');
+    if (!datalist) return;
+    datalist.innerHTML = allStocks
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(s => `<option value="${s.name.replace(/"/g, '&quot;')}"></option>`)
+        .join('');
+}
+
+window.openPinModal = () => {
+    populatePinStockDatalist();
+    document.getElementById('pin-modal').classList.add('active');
+};
 window.closePinModal = () => document.getElementById('pin-modal').classList.remove('active');
 
 const PIN_COST_PER_HOUR = 500000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
@@ -1227,21 +1242,22 @@ window.submitPinRequest = async function() {
         submitBtnId: 'pin-submit-btn',
         submitLabel: '신청하기',
         validateAndBuild() {
-            const nickname   = document.getElementById('pin-nickname').value.trim();
-            const streamerId = document.getElementById('pin-streamer-id').value.trim().toLowerCase();
-            const hours      = parseInt(document.getElementById('pin-hours').value, 10);
-            if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
-            if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+            const stockName = document.getElementById('pin-stock-name').value.trim();
+            const hours     = parseInt(document.getElementById('pin-hours').value, 10);
+            if (!stockName) { alert('고정할 종목명을 입력해주세요.'); return null; }
+            if (!allStocks.some(s => s.name === stockName)) {
+                alert('해당 종목명을 찾을 수 없습니다. 목록에서 정확한 종목명을 선택해주세요.');
+                return null;
+            }
             if (!Number.isInteger(hours) || hours < 1 || hours > 12) { alert('노출 시간은 1~12시간 사이로 입력해주세요.'); return null; }
-            return { nickname, streamerId, hours };
+            return { stockName, hours };
         },
         callable: submitPinRequestCallable,
         onSuccess(result) {
             alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 최상단에 고정 노출되며, 거절 시 전액 환불됩니다.`);
         },
         resetFn() {
-            document.getElementById('pin-nickname').value = '';
-            document.getElementById('pin-streamer-id').value = '';
+            document.getElementById('pin-stock-name').value = '';
             document.getElementById('pin-hours').value = '1';
             updatePinCost();
         },
