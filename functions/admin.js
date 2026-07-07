@@ -190,7 +190,7 @@ async function actionListActiveBanners(db) {
     if (!s.bannerImg) return;
     const { active, daysLeft } = bannerStatus(s.bannerEndDate);
     items.push({
-      type: "ranking", stockId: id, name: s.name || id,
+      type: "ranking", stockId: id, name: s.name || id, stockName: s.name || id,
       img: s.bannerImg, link: s.link || "", endDate: s.bannerEndDate || "",
       active, daysLeft,
     });
@@ -201,8 +201,13 @@ async function actionListActiveBanners(db) {
     // 섞여 들어올 수 있다 — 실제 종목별 배너 객체가 아니면 건너뛴다.
     if (!c || typeof c !== "object") return;
     const { active, daysLeft } = bannerStatus(c.endDate);
+    // name(광고주 닉네임, 관리자가 자유롭게 수정 가능)과 stockName(실제 종목의
+    // 현재 표시명, stocks/{id}.name)을 분리해서 넘긴다 — 닉네임을 나중에
+    // 수정해도 "실제 어느 종목에 붙어있는지"는 항상 정확히 알 수 있도록.
     items.push({
-      type: "chart", stockId: id, name: c.name || (stocksData[id] && stocksData[id].name) || id,
+      type: "chart", stockId: id,
+      name: c.name || (stocksData[id] && stocksData[id].name) || id,
+      stockName: (stocksData[id] && stocksData[id].name) || "(삭제된 종목)",
       img: c.img, link: c.link || "", endDate: c.endDate || "",
       active, daysLeft,
     });

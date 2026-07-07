@@ -753,7 +753,9 @@
                 <span class="status-chip ${b.type === 'ranking' ? 'active' : 'saved'}" style="margin-right:4px;">${b.type === 'ranking' ? '우측 배너' : '차트 배너'}</span>
                 ${escapeAttr(b.name)} · <span style="color:${isExpired ? '#fca5a5' : '#4ade80'};font-weight:700;">${daysLabel}</span>
             </div>
-            ${b.type === 'chart' ? `<input type="text" value="${escapeAttr(b.name)}" id="active-name-${uid}" placeholder="광고주 닉네임 (관리용)"
+            ${b.type === 'chart' ? `
+            <div style="font-size:13px;font-weight:800;color:#38bdf8;">📊 종목: ${escapeAttr(b.stockName)}</div>
+            <input type="text" value="${escapeAttr(b.name)}" id="active-name-${uid}" placeholder="광고주 닉네임 (관리용)"
                    style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:13px;box-sizing:border-box;">` : ''}
             <input type="text" value="${escapeAttr(b.img)}" id="active-img-${uid}" placeholder="배너 이미지 링크"
                    style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
