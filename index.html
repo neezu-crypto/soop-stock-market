@@ -485,6 +485,7 @@ function renderMyPortfolio() {
     if (stockIds.length === 0) {
         portfolioDiv.innerHTML = '<div class="no-stock-msg">보유 중인 주식이 없습니다.</div>';
         if (totalAssetsDisplay) totalAssetsDisplay.innerText = "0원";
+        checkKakaoAssetMilestone(myData.cash || 0);
         return;
     }
 
@@ -512,6 +513,7 @@ function renderMyPortfolio() {
         portfolioDiv.appendChild(item);
     });
     if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
+    checkKakaoAssetMilestone((myData.cash || 0) + totalStockValue);
 }
 
 function selectStockForSearch(stockName) {
@@ -1182,6 +1184,23 @@ function updateKakaoLinkUI() {
     note.style.display  = linked ? 'none'  : 'block';
     badge.style.display = linked ? 'inline' : 'none';
     badge.innerText      = '✅ 카카오 연동중';
+}
+
+// 보유 자산(현금+평가액)이 100만원을 처음 넘는 순간 1회만 카카오 연동을 유도한다.
+// "지킬 자산이 생긴" 시점이라 손실회피 프레이밍이 자연스럽게 먹히는 타이밍.
+function checkKakaoAssetMilestone(totalAssets) {
+    if (!userUID) return;
+    if (auth.currentUser?.email === ADMIN_EMAIL) return; // 관리자는 대상 아님
+    if (myData?.kakaoLinked) return;                      // 이미 연동된 유저는 대상 아님
+    if (totalAssets <= 1000000) return;
+
+    const flagKey = `kakaoNudge_1m_${userUID}`;
+    if (localStorage.getItem(flagKey)) return; // 계정당 1회만
+    localStorage.setItem(flagKey, '1');
+
+    if (confirm('🎉 보유 자산이 100만원을 넘었어요!\n\n💬 카카오로 연결하면 80만원 보너스까지 받고, 지금까지 쌓은 자산을 안전하게 지킬 수 있어요.\n지금 연결하시겠어요?')) {
+        window.loginWithKakao();
+    }
 }
 
 window.loginWithKakao = function() {
