@@ -1166,10 +1166,22 @@ function updateKakaoLinkUI() {
     const badge = document.getElementById('kakao-linked-badge');
     const note  = document.getElementById('kakao-privacy-note');
     if (!btn || !badge || !note) return;
+
+    // 관리자(구글) 계정으로 로그인 중이면 카카오 유도 UI는 의미가 없으니
+    // 숨기고, 이미 구글로 연동돼있다는 배지만 보여준다.
+    if (auth.currentUser?.email === ADMIN_EMAIL) {
+        btn.style.display   = 'none';
+        note.style.display  = 'none';
+        badge.style.display = 'inline';
+        badge.innerText     = '✅ 구글 연동됨';
+        return;
+    }
+
     const linked = !!(myData && myData.kakaoLinked);
     btn.style.display   = linked ? 'none'  : 'flex';
     note.style.display  = linked ? 'none'  : 'block';
     badge.style.display = linked ? 'inline' : 'none';
+    badge.innerText      = '✅ 카카오 연동중';
 }
 
 window.loginWithKakao = function() {
