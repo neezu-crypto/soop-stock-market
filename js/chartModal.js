@@ -153,6 +153,20 @@ export function initChartModal({ db, getAllStocks, getChangePercent }) {
         const nearFreezeBanner = document.getElementById('cm-near-freeze-banner');
         if (frozenBanner)     frozenBanner.style.display     = isFrozen ? 'block' : 'none';
         if (nearFreezeBanner) nearFreezeBanner.style.display = isNearFreeze ? 'block' : 'none';
+
+        if (isFrozen) {
+            const deadlineEl = document.getElementById('cm-frozen-deadline');
+            if (deadlineEl) {
+                const msLeft = (s.freezeDeadline || 0) - Date.now();
+                if (msLeft > 0) {
+                    const hoursLeft = Math.floor(msLeft / 3600000);
+                    const minsLeft  = Math.floor((msLeft % 3600000) / 60000);
+                    deadlineEl.textContent = `⏰ ${hoursLeft}시간 ${minsLeft}분 내에 해제되지 않으면 상장폐지되어 보유 주식이 전액 소멸됩니다.`;
+                } else {
+                    deadlineEl.textContent = '⏰ 상장폐지 처리 대기 중입니다.';
+                }
+            }
+        }
         ['cm-buy10', 'cm-buy1', 'cm-sell1', 'cm-sell10'].forEach(id => {
             const btn = document.getElementById(id);
             if (btn) btn.disabled = isFrozen;
