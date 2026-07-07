@@ -143,10 +143,16 @@ export function initChartModal({ db, getAllStocks, getChangePercent }) {
         changeEl.textContent = `${isUp ? '+' : ''}${change}%`;
         changeEl.className   = `stock-title-change ${isUp ? 'up' : 'down'}`;
 
-        // 동결 상태에 따라 안내 배너 표시 + 거래 버튼 비활성화
-        const isFrozen  = !!s.frozenAt;
-        const banner    = document.getElementById('cm-frozen-banner');
-        if (banner) banner.style.display = isFrozen ? 'block' : 'none';
+        // 동결/동결임박 상태에 따라 안내 배너 표시 + 거래 버튼 비활성화
+        // (임박 판정 기준값은 index.html 카드 뱃지와 동일하게 유지 — 실제
+        // 동결 판정(연속 5개 1분봉)은 서버에서만 하고, 여기서는 근접 여부만
+        // 근사치로 보여준다.)
+        const isFrozen     = !!s.frozenAt;
+        const isNearFreeze = !isFrozen && (s.price || 0) >= 1000000;
+        const frozenBanner     = document.getElementById('cm-frozen-banner');
+        const nearFreezeBanner = document.getElementById('cm-near-freeze-banner');
+        if (frozenBanner)     frozenBanner.style.display     = isFrozen ? 'block' : 'none';
+        if (nearFreezeBanner) nearFreezeBanner.style.display = isNearFreeze ? 'block' : 'none';
         ['cm-buy10', 'cm-buy1', 'cm-sell1', 'cm-sell10'].forEach(id => {
             const btn = document.getElementById(id);
             if (btn) btn.disabled = isFrozen;
