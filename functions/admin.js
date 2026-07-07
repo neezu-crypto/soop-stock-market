@@ -90,8 +90,10 @@ async function actionResetAllPrices(db) {
   const RESET_PRICE = 10000;
   const updates = {};
   Object.keys(data).forEach((id) => {
-    updates[`stocks/${id}/price`] = RESET_PRICE;
+    updates[`stocks/${id}/price`]  = RESET_PRICE;
+    updates[`stocks/${id}/volume`] = 0; // 누적 거래량도 함께 리셋 — 안 지우면 랭킹(top5)에 리셋 이전 거래량이 그대로 남는다
   });
+  updates["rankings/top5"] = null; // 위 volume 리셋과 함께 캐시된 랭킹도 비워 다음 거래부터 새로 집계되게 한다
   await db.ref().update(updates);
   return { ok: true, count: Object.keys(data).length };
 }
