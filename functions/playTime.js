@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const {
+  TEST_PERIOD_ACTIVE,
   ADMIN_EMAIL,
   ANON_DAILY_SECONDS,
   KAKAO_DAILY_SECONDS,
@@ -137,6 +138,11 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
 const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+
+  // 테스트 기간 동안은 관리자를 제외한 모두의 플레이 시간 충전(유료)을 막는다.
+  if (TEST_PERIOD_ACTIVE && auth.token?.email !== ADMIN_EMAIL) {
+    throw new HttpsError("failed-precondition", "테스트 기간 중에는 플레이 시간 충전을 이용할 수 없습니다.");
+  }
 
   const hours = parseInt(request.data?.hours, 10);
   if (!Number.isInteger(hours) || hours < 1 || hours > MAX_PLAYTIME_BUY_HOURS) {

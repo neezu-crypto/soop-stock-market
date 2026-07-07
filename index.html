@@ -382,12 +382,13 @@
             시간을 충전하거나, 카카오 연동으로 매일 더 오래 이용해보세요.<br>
             자정(한국시간)이 지나면 자동으로 초기화됩니다.
         </p>
+        <p id="playtime-expired-test-note" style="display:none;font-size:12px;color:#fbbf24;margin-top:-12px;margin-bottom:16px;">🧪 테스트 기간 중에는 시간 충전을 이용할 수 없습니다.</p>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
             <button id="playtime-expired-kakao-btn" onclick="loginWithKakao()"
                 style="display:none;flex:1;min-width:140px;background:#FEE500;color:#181600;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
                 💬 카카오 연동하고 시간 늘리기
             </button>
-            <button onclick="openPlayTimeModal()" class="btn-confirm-contact" style="flex:1;min-width:140px;font-weight:bold;font-size:14px;">⏱ 시간 충전하기</button>
+            <button id="playtime-expired-buy-btn" onclick="openPlayTimeModal()" class="btn-confirm-contact" style="flex:1;min-width:140px;font-weight:bold;font-size:14px;">⏱ 시간 충전하기</button>
         </div>
     </div>
 </div>
@@ -442,6 +443,11 @@
     </div>
 </div>
 
+<!-- ── 테스트 기간 안내 배너 (TEST_PERIOD_ACTIVE가 꺼지면 자동으로 숨겨짐) ── -->
+<div id="test-period-banner" style="display:none;background:repeating-linear-gradient(135deg,#f59e0b,#f59e0b 12px,#fbbf24 12px,#fbbf24 24px);color:#1e293b;text-align:center;padding:9px 12px;font-size:13px;font-weight:800;letter-spacing:0.3px;">
+    🧪 테스트 기간 운영 중입니다 — 일부 유료 기능(플레이 시간 충전)은 테스트 기간 종료 후 이용 가능합니다
+</div>
+
 <!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
     <div class="wallet-bar">
@@ -454,7 +460,7 @@
             <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 관리자 — 이용시간 무제한</div>
             <div id="playtime-bar" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">
                 ⏱ 오늘 <span id="playtime-display">--:-- / --:--</span>
-                <button onclick="openPlayTimeModal()"
+                <button id="playtime-wallet-buy-btn" onclick="openPlayTimeModal()"
                     style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;vertical-align:middle;">
                     충전
                 </button>
@@ -527,6 +533,13 @@ import { initPromotions } from "./js/promotions.js";
 // ══════════════════════════════════════════════════════════
 const LONG_MAINTENANCE = true;
 const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정
+
+// 테스트 기간 동안 플레이 시간 충전(유료)만 막는다 — 서버(functions/common.js의
+// TEST_PERIOD_ACTIVE)에서도 동일하게 차단하므로, 여기서는 UI를 미리 맞춰두는
+// 용도(버튼을 눌러 신청까지 갔다가 서버에서 막히는 답답함을 줄이기 위함).
+// 테스트 기간이 끝나면 이 값을 false로 바꾸고(서버 쪽도 함께) 배포한다.
+const TEST_PERIOD_ACTIVE = true;
+document.getElementById('test-period-banner').style.display = TEST_PERIOD_ACTIVE ? 'block' : 'none';
 
 const firebaseConfig = {
     apiKey:      "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
@@ -898,6 +911,16 @@ window.showPlayTimeExpired = function() {
     document.getElementById('playtime-expired-modal')?.classList.add('active');
 };
 
+// 테스트 기간에는 플레이 시간 충전(유료)만 막는다 — 카카오 연동 유도는 그대로 유지.
+if (TEST_PERIOD_ACTIVE) {
+    const walletBuyBtn  = document.getElementById('playtime-wallet-buy-btn');
+    const expiredBuyBtn = document.getElementById('playtime-expired-buy-btn');
+    const expiredNote   = document.getElementById('playtime-expired-test-note');
+    if (walletBuyBtn)  walletBuyBtn.style.display  = 'none';
+    if (expiredBuyBtn) expiredBuyBtn.style.display = 'none';
+    if (expiredNote)   expiredNote.style.display   = 'block';
+}
+
 function unlockPlaytimeIfNeeded() {
     if (!playtimeLocked) return;
     playtimeLocked = false;
@@ -987,6 +1010,7 @@ function updatePlaytimeCostEstimate() {
 document.getElementById('playtime-hours')?.addEventListener('input', updatePlaytimeCostEstimate);
 
 window.openPlayTimeModal = () => {
+    if (TEST_PERIOD_ACTIVE) return alert('🧪 테스트 기간 중에는 플레이 시간 충전을 이용할 수 없습니다.');
     updatePlaytimeCostEstimate();
     document.getElementById('playtime-modal').classList.add('active');
 };

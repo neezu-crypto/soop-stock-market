@@ -1,6 +1,9 @@
 const { HttpsError } = require("firebase-functions/v2/https");
 
 // ── 전역 공통 상수 ────────────────────────────────────────────
+// 테스트 기간 동안 플레이 시간 충전(유료)만 막는다 — 클라이언트(index.html)에도
+// 동일한 이름의 상수가 있으니, 테스트 기간이 끝나면 둘 다 false로 바꾸고 배포한다.
+const TEST_PERIOD_ACTIVE       = true;
 const ADMIN_EMAIL              = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정
 const INITIAL_CASH             = 200000;   // 익명 최초 접속 시 지급되는 시작 자금
 const KAKAO_LINK_BONUS         = 800000;   // 카카오 최초 연동 시 추가 지급 (합산 시 기존 100만원과 동일)
@@ -109,6 +112,7 @@ async function creditUserCash(db, uid, amount) {
 }
 
 module.exports = {
+  TEST_PERIOD_ACTIVE,
   ADMIN_EMAIL,
   INITIAL_CASH,
   KAKAO_LINK_BONUS,
