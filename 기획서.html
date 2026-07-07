@@ -192,11 +192,14 @@
             <tr><td><strong>접속자 수</strong></td><td>presence 데이터를 <strong>페이지 접속 시 1회</strong> 조회해 표시 (이후 주기적 재조회 없음)</td></tr>
             <tr><td><strong>랭킹 바 / 홍보 배너</strong></td><td>거래량 TOP5 및 스트리머 홍보 배너(D-Day 뱃지 포함) 노출</td></tr>
             <tr><td><strong>내 보유 주식 패널</strong></td><td>보유 중인 종목 목록 — 클릭 시 검색창과 연동되어 해당 종목으로 스크롤</td></tr>
+            <tr><td><strong>중계방 영역</strong></td><td>지금 플레이 중인 스트리머 소개(최대 3명) — 등록 인원에 따라 카드 너비가 100%/50%/33%로 자동 분배</td></tr>
             <tr><td><strong>검색창</strong></td><td>종목(스트리머)명을 실시간 필터링</td></tr>
-            <tr><td><strong>종목 리스트</strong></td><td>카드형 UI — 종목명, 현재가/등락률, 스파크라인 미니차트, 매수/매도 버튼</td></tr>
+            <tr><td><strong>종목 리스트</strong></td><td>카드형 UI — 종목명, 현재가/등락률, 스파크라인 미니차트, 매수/매도 버튼. 최상단엔 고정 노출 종목(최대 3개)과 신청 안내 카드가 항상 먼저 표시됨</td></tr>
             <tr><td><strong>차트 모달</strong></td><td>종목 카드 클릭 시 오픈 — 캔들차트, 기간/분봉 탭, 모달 내 매매, 하단 광고 배너</td></tr>
             <tr><td><strong>프로모 모달 / 광고 문의 모달</strong></td><td>배너 홍보 상품 안내</td></tr>
+            <tr><td><strong>플레이타임 표시</strong></td><td>지갑 바에 상시 타이머(<code>MM:SS / MM:SS</code>) 표시, 소진 시 카카오연동/시간충전 선택 모달</td></tr>
             <tr><td><strong>점검 오버레이</strong></td><td>서비스 점검 시 전면 차단 안내 화면 (전체 화면 최상단 z-index)</td></tr>
+            <tr><td><strong>푸터</strong></td><td>이용약관(<code>terms.html</code>)·개인정보 처리방침(<code>privacy.html</code>) 링크 — 메인페이지가 아닌 별도 페이지로 이동</td></tr>
         </table>
     </section>
 
@@ -235,11 +238,12 @@
         <ul>
             <li><strong>우측 랭킹 배너:</strong> 닉네임·스트리머 아이디 입력 → 아이디 기반 프로필 이미지(<code>stimg.sooplive.com/LOGO/...</code>)를 실시간 미리보기로 자동 표시 → 노출 기간(최대 7일) 선택</li>
             <li><strong>차트 하단 배너:</strong> 닉네임·스트리머 아이디·배너 이미지 링크·홍보 페이지 링크를 직접 입력(720×150px 커스텀 이미지) → 이미지 링크 입력 시 실시간 미리보기 → 노출 기간(최대 7일) 선택</li>
+            <li><strong>차트 하단 배너의 대상 종목 = "지금 열어둔 그 종목":</strong> 종목 카드를 클릭해 차트 모달을 연 상태에서 "차트 하단 배너 신청"을 눌러야만 신청서가 열리며, 그 시점의 종목ID가 신청서에 고정된다. 닉네임은 <strong>신청자 확인용 정보일 뿐 종목 식별에는 전혀 관여하지 않는다</strong> — 과거엔 닉네임으로 종목을 찾거나(못 찾으면 자동 상장)하는 방식이라, 닉네임이 실제 종목명과 다르면 의도치 않은 새 종목이 생성되는 문제가 있었다(수정됨)</li>
             <li><strong>실시간 견적:</strong> 선택한 기간에 따라 차감될 금액이 신청 폼에 즉시 계산되어 표시됨</li>
             <li><strong>결제:</strong> 신청 시점에 서버(Cloud Function)가 신청자의 보유 게임자산(현금)에서 <code>기간 × 단가</code>를 바로 차감 — 실제 결제 수단이 아닌 게임 내 자산으로 결제</li>
-            <li><strong>검수:</strong> 신청 내역은 <code>bannerRequests</code>/<code>chartBannerRequests</code>에 대기(pending) 상태로 접수되며, 관리자 페이지에서 신청자가 입력한 닉네임·이미지·링크·기간을 <strong>승인 전에 직접 수정</strong>할 수 있음</li>
-            <li><strong>승인/거절:</strong> 승인 시 즉시 배너 등록(닉네임이 미상장 종목이면 자동 상장), 거절 시 차감된 금액 전액 환불</li>
-            <li><strong>종목별 개별 노출(차트 배너):</strong> 전체 종목 공동 노출이 아닌 <code>chartBanner/{stockId}</code> 단위로 종목마다 독립적인 배너를 설정 — 거래량이 많은 인기 종목일수록 노출 가치가 높아져 홍보 신청 유지 유인을 제공</li>
+            <li><strong>검수:</strong> 신청 내역은 <code>bannerRequests</code>/<code>chartBannerRequests</code>에 대기(pending) 상태로 접수되며, 관리자 페이지에서 신청자가 입력한 닉네임·이미지·링크·기간을 <strong>승인 전에 직접 수정</strong>할 수 있음. 차트 배너는 신청 시점 종목명 스냅샷(<code>stockName</code>)을 같이 저장해 관리자 목록에 "📊 종목: OOO"로 항상 정확히 표시됨</li>
+            <li><strong>승인/거절:</strong> 우측 배너는 승인 시 닉네임이 미상장 종목이면 자동 상장하지만, 차트 배너는 신청 시 고정된 종목ID만 사용(자동 상장 없음). 거절 시 차감된 금액 전액 환불</li>
+            <li><strong>종목별 개별 노출(차트 배너):</strong> 전체 종목 공동 노출이 아닌 <code>chartBanner/{stockId}</code> 단위로 종목마다 독립적인 배너를 설정 — 거래량이 많은 인기 종목일수록 노출 가치가 높아져 홍보 신청 유지 유인을 제공. 종목이 삭제되면 연결된 <code>chartBanner</code>도 함께 삭제되어 orphan 데이터가 남지 않는다</li>
             <li><strong>기간 만료:</strong> 노출 기간이 지나면 메인페이지에서 자동으로 숨겨지며, 관리자 페이지의 "만료된 홍보" 탭에서 재연장하거나 완전히 삭제할 수 있음</li>
             <li><strong>재신청(우측 배너):</strong> 이미 홍보 중(만료 전)인 아이디로 재신청해 승인하면, 오늘부터 새로 계산하지 않고 <strong>기존 만료일에 이어서 연장</strong>됨 — 차트 배너는 종목별 개별 신청이라 이런 특별 처리 없이 그대로 갱신</li>
         </ul>
@@ -343,13 +347,14 @@
 
         <h3>관리자 페이지 기능 — 전부 Cloud Function 경유 (<code>adminAction</code> callable)</h3>
         <p>종목 시세 조정, 배너 검수/관리, 비활성 유저 정리 등 관리자 페이지의 모든 쓰기·민감 읽기 작업은 클라이언트가 <code>{action, payload}</code>만 전달하고, 실제 처리는 <code>functions/admin.js</code>의 <code>adminAction</code> 콜러블이 Admin SDK로 수행합니다. 함수 진입 시 <code>auth.token.email === 관리자 이메일</code>을 서버에서 재검증합니다.</p>
-        <div class="note"><b>참고 — 서버 코드 구조</b> — 원래 하나였던 <code>functions/index.js</code>(1,000줄+)를 기능 단위로 분리했습니다: <code>trade.js</code>(매매·초기자산), <code>admin.js</code>(관리자 액션 디스패처), <code>bannerRequests.js</code>(우측·차트 배너), <code>pinRequests.js</code>(고정 노출), <code>relayRoom.js</code>(중계방), <code>cashCharge.js</code>(자산 충전), <code>kakao.js</code>(카카오 연동), <code>playTime.js</code>(플레이타임 제한), <code>common.js</code>(공유 상수·헬퍼). <code>index.js</code>는 각 모듈의 Cloud Function을 모아 재노출하는 진입점만 담당합니다.</div>
+        <div class="note"><b>참고 — 서버 코드 구조</b> — 원래 하나였던 <code>functions/index.js</code>(1,000줄+)를 기능 단위로 분리했습니다: <code>trade.js</code>(매매·초기자산), <code>admin.js</code>(관리자 액션 디스패처), <code>bannerRequests.js</code>(우측·차트 배너), <code>pinRequests.js</code>(고정 노출), <code>relayRoom.js</code>(중계방), <code>cashCharge.js</code>(자산 충전), <code>kakao.js</code>(카카오 연동), <code>playTime.js</code>(플레이타임 제한), <code>common.js</code>(공유 상수·헬퍼). <code>index.js</code>는 각 모듈의 Cloud Function을 모아 재노출하는 진입점만 담당합니다. 런타임은 Node.js 20 지원종료(2026-10-30 완전 중단 예정)에 대응해 <strong>Node.js 22</strong>로 마이그레이션했습니다(전부 2세대 콜러블이라 SDK 버전 변경 없이 <code>engines.node</code> 설정만으로 전환 가능했음).</div>
+        <div class="note"><b>참고 — 클라이언트 코드 구조</b> — <code>index.html</code>의 인라인 스크립트(1,600줄+) 중 다른 상태와 얽히지 않고 <strong>읽기 전용으로만 의존하는</strong> 두 부분을 별도 ES 모듈로 분리했습니다: <code>js/chartModal.js</code>(캔들 차트 모달), <code>js/promotions.js</code>(배너 2종·중계방·고정노출·자산충전 신청 폼과 공통 유틸). 로그인·거래·종목 리스트·플레이타임처럼 서로 상태를 직접 주무르는 핵심 로직은 검증 리스크가 커서 그대로 <code>index.html</code>에 남겨뒀습니다. 두 모듈은 <code>initChartModal()</code>/<code>initPromotions()</code> 호출 시 <code>getAllStocks</code>/<code>getMyData</code> 같은 접근자 함수를 전달받는 의존성 주입 방식으로 연결됩니다.</div>
         <table>
             <tr><th>action</th><th>기능</th></tr>
             <tr><td><code>updateSinglePrice</code> / <code>updateStockData</code></td><td>개별 종목 가격·배너·링크 수정</td></tr>
-            <tr><td><code>adjustAllPrices</code> / <code>resetAllPrices</code></td><td>전 종목 가격 일괄 조정 / 10,000원 초기화</td></tr>
-            <tr><td><code>uploadStocks</code> / <code>deleteStocks</code></td><td>종목 상장 / 삭제</td></tr>
-            <tr><td><code>cleanupDuplicateStocks</code></td><td>중복 종목 정리</td></tr>
+            <tr><td><code>adjustAllPrices</code> / <code>resetAllPrices</code></td><td>전 종목 가격 일괄 조정 / 10,000원 초기화(가격과 함께 누적 거래량·랭킹 캐시도 리셋 — 리셋 전 거래량이 랭킹에 계속 반영되던 문제 수정)</td></tr>
+            <tr><td><code>uploadStocks</code> / <code>deleteStocks</code></td><td>종목 상장 / 삭제(삭제 시 연결된 <code>chartBanner</code>도 함께 삭제해 orphan 데이터 방지)</td></tr>
+            <tr><td><code>cleanupDuplicateStocks</code></td><td>중복 종목 정리(삭제되는 중복 종목에 연결된 <code>chartBanner</code>도 함께 삭제)</td></tr>
             <tr><td><code>listBannerRequests</code> / <code>approveBannerRequest</code> / <code>rejectBannerRequest</code></td><td>우측 랭킹 배너 신청 검수 — 목록 조회, 승인(자동 상장 포함, 닉네임 수정 가능), 거절(차감액 환불)</td></tr>
             <tr><td><code>listChartBannerRequests</code> / <code>approveChartBannerRequest</code> / <code>rejectChartBannerRequest</code></td><td>차트 하단 배너 신청 검수 — 이미지·링크·닉네임·기간 전부 승인 전 수정 가능</td></tr>
             <tr><td><code>listActiveBanners</code> / <code>updateBanner</code> / <code>deleteBanner</code></td><td>우측·차트 배너 통합 — 진행중/만료 배너 목록 조회, 내용 수정(연장 포함)·삭제</td></tr>
@@ -403,7 +408,7 @@
             <tr><td><code>presence/users/{uid}</code></td><td>접속자 등록 (접속 시 1회 기록, onDisconnect로 자동 정리) — 접속자 수는 이 노드 개수를 접속 시 1회 조회해 표시</td></tr>
             <tr><td><code>chartBanner/{stockId}</code></td><td>종목별 차트 모달 하단 광고 배너 이미지/링크/종료일 (종목마다 개별 설정, 전체 공동 노출 아님)</td></tr>
             <tr><td><code>bannerRequests/{id}</code></td><td>우측 랭킹 배너 셀프 신청 내역 (닉네임/아이디/기간/차감액/상태 pending·approved·rejected)</td></tr>
-            <tr><td><code>chartBannerRequests/{id}</code></td><td>차트 하단 배너 셀프 신청 내역 (닉네임/아이디/배너 이미지 링크/홍보 페이지 링크/기간/차감액/상태)</td></tr>
+            <tr><td><code>chartBannerRequests/{id}</code></td><td>차트 하단 배너 셀프 신청 내역 (대상 stockId·신청 시점 종목명 스냅샷/닉네임(신청자 확인용)/아이디/배너 이미지 링크/홍보 페이지 링크/기간/차감액/상태)</td></tr>
             <tr><td><code>kakaoLinks/{kakaoId}</code></td><td>카카오 고유 ID → 연동된 uid 매핑 (클라이언트 접근 전면 차단, 서버 전용)</td></tr>
             <tr><td><code>pinRequests/{id}</code></td><td>최상단 고정 노출 셀프 신청 내역 (종목명/시간/차감액/상태)</td></tr>
             <tr><td><code>pinnedStocks/{stockId}</code></td><td>고정 노출 중인 종목 id 마커(true) — 클라이언트가 상시 구독해 top100 밖 종목도 항상 노출되게 함. 실제 만료 시각은 <code>stocks/{id}.pinnedUntil</code>에 저장</td></tr>
@@ -444,7 +449,7 @@
         </ul>
     </section>
 
-    <footer>SOOP STOCK 거래소 · 기획서 v2.0 · index.html 코드 기준 작성 (최상단 고정 노출 · 중계방 홍보 · 자산 충전 · 플레이타임 제한 · 로그인 필수 기능 제한 · 서버 코드 모듈 분리 반영)</footer>
+    <footer>SOOP STOCK 거래소 · 기획서 v2.1 · index.html 코드 기준 작성 (차트 배너 종목 고정 수정 · 종목 삭제 시 배너 연쇄 삭제 · RTDB 데이터 정합성 개선 · 클라이언트 모듈 분리 · 이용약관/개인정보처리방침 · Node.js 22 마이그레이션 반영)</footer>
 </div>
 </body>
 </html>
