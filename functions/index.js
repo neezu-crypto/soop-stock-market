@@ -17,6 +17,7 @@ setGlobalOptions({
 //   kakao.js          — 카카오 로그인 연동
 //   cashCharge.js     — 라이브 방송 후원 자산 충전 신청
 //   pinRequests.js    — 종목 리스트 최상단 고정 노출 셀프 신청
+//   playTime.js       — 하루 무료 이용 시간 제한 + 게임머니 셀프 충전
 //   common.js         — 위 모듈들이 공유하는 상수/헬퍼 (Cloud Function 없음)
 const { initializeUser, trade } = require("./trade");
 const { adminAction } = require("./admin");
@@ -24,6 +25,7 @@ const { submitBannerRequest, submitChartBannerRequest } = require("./bannerReque
 const { linkKakaoAccount } = require("./kakao");
 const { submitCashChargeRequest } = require("./cashCharge");
 const { submitPinRequest } = require("./pinRequests");
+const { heartbeat, buyPlayTime } = require("./playTime");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -33,3 +35,5 @@ exports.submitChartBannerRequest = submitChartBannerRequest;
 exports.linkKakaoAccount        = linkKakaoAccount;
 exports.submitCashChargeRequest = submitCashChargeRequest;
 exports.submitPinRequest        = submitPinRequest;
+exports.heartbeat               = heartbeat;
+exports.buyPlayTime             = buyPlayTime;

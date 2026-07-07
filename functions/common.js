@@ -13,6 +13,15 @@ const MAX_PIN_HOURS            = 12;       // 최상단 고정 노출 신청 시
 const PIN_COST_PER_HOUR        = 500000;   // 최상단 고정 노출 1시간당 차감되는 게임자산
 const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 최대 종목 수
 
+// ── 플레이타임 제한 관련 상수 ──────────────────────────────────
+const ANON_DAILY_SECONDS       = 15 * 60;  // 익명 유저 하루 무료 이용 시간
+const KAKAO_DAILY_SECONDS      = 60 * 60;  // 카카오 연동 유저 하루 무료 이용 시간
+const PLAYTIME_BASE_RATE       = 0.10;     // 기준단가 = 총자산(현금+평가금액) × 이 비율 (1시간, 할증 전)
+const PLAYTIME_SURCHARGE_STEP  = 0.10;     // 당일 n번째 추가 구매마다 할증률 +10%p
+const PLAYTIME_SURCHARGE_MAX   = 0.50;     // 할증률 상한 (5번째 이상은 +50%로 고정)
+const MAX_PLAYTIME_BUY_HOURS   = 12;       // 1회 요청으로 구매 가능한 시간 상한
+const MAX_HEARTBEAT_GAP_SECONDS = 90;      // 하트비트 1회당 인정되는 최대 경과 시간(절전/재접속 등 이상치 방지)
+
 function requireAdmin(auth) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
   if (auth.token?.email !== ADMIN_EMAIL) {
@@ -89,6 +98,13 @@ module.exports = {
   MAX_PIN_HOURS,
   PIN_COST_PER_HOUR,
   MAX_PINNED_SLOTS,
+  ANON_DAILY_SECONDS,
+  KAKAO_DAILY_SECONDS,
+  PLAYTIME_BASE_RATE,
+  PLAYTIME_SURCHARGE_STEP,
+  PLAYTIME_SURCHARGE_MAX,
+  MAX_PLAYTIME_BUY_HOURS,
+  MAX_HEARTBEAT_GAP_SECONDS,
   requireAdmin,
   findStockIdByName,
   bannerStatus,

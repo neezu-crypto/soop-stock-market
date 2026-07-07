@@ -336,6 +336,58 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     플레이 시간 충전 모달 (게임머니로 자기서비스 즉시 충전)
+══════════════════════════════════════════ -->
+<div id="playtime-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>⏱ 플레이 시간 충전</h2></div>
+        <ul class="promo-info-list" style="margin-bottom:16px;">
+            <li>💵 <b>단가:</b> 총자산(현금+보유주식 평가금액) × 10% (1시간 기준)</li>
+            <li>📈 <b>할증:</b> 오늘 이미 구매한 횟수만큼 +10%p씩, 최대 +50%</li>
+            <li>🕛 <b>초기화:</b> 매일 자정(한국시간) 기준 이용시간·할증 모두 초기화</li>
+        </ul>
+
+        <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid #475569;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+            <label for="playtime-hours" style="font-size:13px;color:#94a3b8;white-space:nowrap;">충전 시간:</label>
+            <input type="number" id="playtime-hours" value="1" min="1" max="12"
+                style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
+            <span style="font-size:13px;color:#94a3b8;">시간</span>
+        </div>
+        <div style="text-align:right;font-size:13px;color:#94a3b8;margin-bottom:16px;">예상 차감 금액: <b id="playtime-cost-estimate" style="color:#38bdf8;">-</b></div>
+
+        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
+            실제 차감 금액은 충전 시점의 총자산 기준으로 서버에서 다시 계산되므로 위 예상 금액과 약간 다를 수 있습니다.
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button onclick="closePlayTimeModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button id="playtime-buy-btn" onclick="buyPlayTime()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">충전하기</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     플레이 시간 종료 모달 (닫기 불가 — 충전하거나 카카오 연동해야 계속 이용 가능)
+══════════════════════════════════════════ -->
+<div id="playtime-expired-modal" class="promo-modal-overlay" style="z-index:5000;">
+    <div class="promo-modal-content" style="max-width:400px;text-align:center;">
+        <div class="promo-modal-header"><h2>⏱ 오늘의 이용 시간이 끝났어요</h2></div>
+        <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:20px;">
+            무료 이용 시간을 모두 사용했습니다.<br>
+            시간을 충전하거나, 카카오 연동으로 매일 더 오래 이용해보세요.<br>
+            자정(한국시간)이 지나면 자동으로 초기화됩니다.
+        </p>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button id="playtime-expired-kakao-btn" onclick="loginWithKakao()"
+                style="display:none;flex:1;min-width:140px;background:#FEE500;color:#181600;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
+                💬 카카오 연동하고 시간 늘리기
+            </button>
+            <button onclick="openPlayTimeModal()" class="btn-confirm-contact" style="flex:1;min-width:140px;font-weight:bold;font-size:14px;">⏱ 시간 충전하기</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
     <div class="wallet-bar">
@@ -345,6 +397,14 @@
                 style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
                 💰 자산 충전
             </button>
+            <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 관리자 — 이용시간 무제한</div>
+            <div id="playtime-bar" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">
+                ⏱ 오늘 <span id="playtime-display">--:-- / --:--</span>
+                <button onclick="openPlayTimeModal()"
+                    style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;vertical-align:middle;">
+                    충전
+                </button>
+            </div>
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
             <div style="font-size:12px;color:var(--text-sub);">초기 자산 200,000원 지급됨</div>
@@ -422,6 +482,8 @@ const linkKakaoAccountCallable = httpsCallable(functions, 'linkKakaoAccount');
 const initializeUserCallable   = httpsCallable(functions, 'initializeUser');
 const submitCashChargeRequestCallable = httpsCallable(functions, 'submitCashChargeRequest');
 const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
+const heartbeatCallable = httpsCallable(functions, 'heartbeat');
+const buyPlayTimeCallable = httpsCallable(functions, 'buyPlayTime');
 
 const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
@@ -476,6 +538,15 @@ let lastTradeTime    = 0;
 let stockSubscriptions = {};        // id -> unsubscribe (개별 종목 실시간 구독 핸들)
 let visibleStockIds    = new Set(); // 현재 화면에 노출되어 구독 중인 종목 id
 let pinnedStockIds     = new Set(); // 최상단 고정 노출 종목 id (pinnedStocks/ 실시간 구독으로 갱신)
+
+// ── 플레이타임 제한 상태 (하트비트 응답으로 갱신, 1초마다 로컬에서 카운트다운 표시) ──
+let playtimeUnlimited      = false; // 관리자 계정
+let playtimeRemainingSec   = null;  // 서버가 마지막으로 알려준 남은 초
+let playtimeBaseLimitSec   = null;
+let playtimeLocked         = false; // 소진돼 리스너를 내린 상태인지
+let heartbeatIntervalId    = null;
+let playtimeTickIntervalId = null;
+const HEARTBEAT_INTERVAL_MS = 20000; // 서버 checkPlayQuota MAX_HEARTBEAT_GAP_SECONDS(90s)보다 충분히 짧게
 
 // ── 스파크라인/등락률용 클라이언트 가격 이력 (서버 저장 없이 관측치만 누적) ──
 const PRICE_HISTORY_MAX = 20;
@@ -667,6 +738,7 @@ onAuthStateChanged(auth, async (user) => {
         // 신규 유저 초기 자산 지급 — 서버가 users/{uid}가 없을 때만 지급하는
         // idempotent 호출이라 재접속 시 반복 호출돼도 안전하다.
         initializeUserCallable().catch(() => {});
+        startHeartbeatLoop();
 
         try {
             // 유저별 전용 노드에 접속 표시 → 퇴장 시 자동 삭제
@@ -698,6 +770,191 @@ onAuthStateChanged(auth, async (user) => {
         signInAnonymously(auth);
     }
 });
+
+// ══════════════════════════════════════════════════════════════
+// 플레이타임 제한 — 서버에 주기적으로 하트비트를 보내 이용시간을 알리고,
+// 소진되면 클라이언트가 스스로 실시간 구독을 모두 해제해 비용을 줄인다.
+// 탭이 백그라운드일 땐 하트비트/구독을 모두 멈춰 "보고 있는 시간"만 차감한다.
+// ══════════════════════════════════════════════════════════════
+
+function todayKeyKST() {
+    const kst = new Date(Date.now() + 9 * 3600 * 1000);
+    return kst.toISOString().split('T')[0];
+}
+
+function formatMMSS(totalSeconds) {
+    const s   = Math.max(0, Math.floor(totalSeconds));
+    const m   = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+function updatePlaytimeDisplay() {
+    const bar       = document.getElementById('playtime-bar');
+    const adminNote = document.getElementById('playtime-admin-note');
+    const display   = document.getElementById('playtime-display');
+    if (!bar || !display) return;
+
+    if (playtimeUnlimited) {
+        bar.style.display = 'none';
+        if (adminNote) adminNote.style.display = 'block';
+        return;
+    }
+    if (adminNote) adminNote.style.display = 'none';
+    bar.style.display = 'block';
+    display.innerText = (playtimeRemainingSec === null || playtimeBaseLimitSec === null)
+        ? '--:-- / --:--'
+        : `${formatMMSS(playtimeRemainingSec)} / ${formatMMSS(playtimeBaseLimitSec)}`;
+}
+
+let playtimeWarningShown = false;
+function stopPlaytimeTick() {
+    if (playtimeTickIntervalId) { clearInterval(playtimeTickIntervalId); playtimeTickIntervalId = null; }
+}
+function startPlaytimeTick() {
+    stopPlaytimeTick();
+    playtimeTickIntervalId = setInterval(() => {
+        if (playtimeUnlimited || playtimeRemainingSec === null || playtimeRemainingSec <= 0) return;
+        playtimeRemainingSec -= 1;
+        updatePlaytimeDisplay();
+        if (playtimeRemainingSec === 300 && !playtimeWarningShown) {
+            playtimeWarningShown = true;
+            alert('⏱ 5분 후 오늘의 이용 시간이 종료됩니다.');
+        }
+    }, 1000);
+}
+
+function lockPlaytimeExpired() {
+    if (playtimeLocked) return;
+    playtimeLocked = true;
+    // 실제 비용 절감의 핵심 — 화면에 떠 있는 모든 실시간 구독을 내린다.
+    Object.keys(stockSubscriptions).forEach(id => unsubscribeStock(id));
+    stockSubscriptions = {};
+    visibleStockIds    = new Set();
+    window.showPlayTimeExpired();
+}
+
+window.showPlayTimeExpired = function() {
+    const kakaoBtn = document.getElementById('playtime-expired-kakao-btn');
+    const alreadyCovered = myData?.kakaoLinked || auth.currentUser?.email === ADMIN_EMAIL;
+    if (kakaoBtn) kakaoBtn.style.display = alreadyCovered ? 'none' : 'block';
+    document.getElementById('playtime-expired-modal')?.classList.add('active');
+};
+
+function unlockPlaytimeIfNeeded() {
+    if (!playtimeLocked) return;
+    playtimeLocked = false;
+    playtimeWarningShown = false;
+    document.getElementById('playtime-expired-modal')?.classList.remove('active');
+    renderStocks(document.getElementById('search-input')?.value || ""); // 리스너 복구
+}
+
+async function runHeartbeat() {
+    if (auth.currentUser?.email === ADMIN_EMAIL) {
+        playtimeUnlimited = true;
+        updatePlaytimeDisplay();
+        return;
+    }
+    try {
+        const result = await heartbeatCallable();
+        const { unlimited, allowed, remainingSeconds, baseLimitSeconds } = result.data;
+        playtimeUnlimited = !!unlimited;
+        if (!unlimited) {
+            playtimeRemainingSec = remainingSeconds;
+            playtimeBaseLimitSec = baseLimitSeconds;
+            if (remainingSeconds > 300) playtimeWarningShown = false; // 충전 등으로 다시 여유 생기면 경고 재무장
+            if (!allowed) lockPlaytimeExpired();
+            else if (playtimeLocked) unlockPlaytimeIfNeeded();
+        }
+        updatePlaytimeDisplay();
+    } catch (e) {
+        // 네트워크 오류 등은 조용히 무시 — 다음 하트비트에서 재시도
+    }
+}
+
+function stopHeartbeatLoop() {
+    if (heartbeatIntervalId) { clearInterval(heartbeatIntervalId); heartbeatIntervalId = null; }
+    stopPlaytimeTick();
+}
+function startHeartbeatLoop() {
+    stopHeartbeatLoop();
+    runHeartbeat();
+    heartbeatIntervalId = setInterval(runHeartbeat, HEARTBEAT_INTERVAL_MS);
+    startPlaytimeTick();
+}
+
+// 탭이 백그라운드로 가면 하트비트·구독을 모두 멈추고, 다시 보이면 재개한다.
+document.addEventListener('visibilitychange', () => {
+    if (!userUID) return;
+    if (document.hidden) {
+        stopHeartbeatLoop();
+        Object.keys(stockSubscriptions).forEach(id => unsubscribeStock(id));
+        stockSubscriptions = {};
+        visibleStockIds    = new Set();
+    } else {
+        startHeartbeatLoop();
+        if (!playtimeLocked) renderStocks(document.getElementById('search-input')?.value || "");
+    }
+});
+
+// ── 플레이 시간 충전 모달 (게임머니로 자기서비스 즉시 충전) ──
+function estimateTotalAssetsClient() {
+    const cash = myData?.cash || 0;
+    const stockValue = Object.entries(myData?.stocks || {}).reduce((sum, [id, pos]) => {
+        if (!pos || !pos.qty) return sum;
+        const stock = allStocks.find(s => s.id === id);
+        return sum + (stock ? stock.price * pos.qty : 0);
+    }, 0);
+    return cash + stockValue;
+}
+
+function updatePlaytimeCostEstimate() {
+    const hoursInput = document.getElementById('playtime-hours');
+    const estEl       = document.getElementById('playtime-cost-estimate');
+    if (!hoursInput || !estEl) return;
+    const hours = parseInt(hoursInput.value, 10);
+    if (!Number.isInteger(hours) || hours < 1) { estEl.innerText = '-'; return; }
+
+    const totalAssets = estimateTotalAssetsClient();
+    const basePrice    = totalAssets * 0.10; // 서버 PLAYTIME_BASE_RATE와 동일하게 유지
+    const purchasedTodayBefore = (myData?.playQuotaDate === todayKeyKST()) ? (myData?.purchasedHoursToday || 0) : 0;
+
+    let cost = 0;
+    for (let i = 1; i <= hours; i++) {
+        const n = purchasedTodayBefore + i;
+        const surcharge = Math.min(0.50, 0.10 * n); // 서버 PLAYTIME_SURCHARGE_STEP/MAX와 동일하게 유지
+        cost += Math.round(basePrice * (1 + surcharge));
+    }
+    estEl.innerText = `${cost.toLocaleString()}원 (예상)`;
+}
+document.getElementById('playtime-hours')?.addEventListener('input', updatePlaytimeCostEstimate);
+
+window.openPlayTimeModal = () => {
+    updatePlaytimeCostEstimate();
+    document.getElementById('playtime-modal').classList.add('active');
+};
+window.closePlayTimeModal = () => document.getElementById('playtime-modal').classList.remove('active');
+
+window.buyPlayTime = async function() {
+    const hoursInput = document.getElementById('playtime-hours');
+    const buyBtn      = document.getElementById('playtime-buy-btn');
+    const hours = parseInt(hoursInput.value, 10);
+    if (!Number.isInteger(hours) || hours < 1 || hours > 12) return alert('충전 시간은 1~12시간 사이로 입력해주세요.');
+
+    buyBtn.disabled = true;
+    buyBtn.innerText = '충전 중...';
+    try {
+        const result = await buyPlayTimeCallable({ hours });
+        alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 ${hours}시간이 충전됐습니다!`);
+        window.closePlayTimeModal();
+        await runHeartbeat(); // 잔여시간 즉시 반영 + 잠겨 있었다면 자동 해제
+    } catch (e) {
+        alert(e?.message || '충전 중 오류가 발생했습니다.');
+    } finally {
+        buyBtn.disabled = false;
+        buyBtn.innerText = '충전하기';
+    }
+};
 
 // ══════════════════════════════════════════════════════════════
 // 분봉 차트 로직
@@ -1081,6 +1338,8 @@ window.trade = async function (id, type, qty = 1) {
             if (confirm(`${message}\n\n💬 카카오 연결하면 80만원을 바로 받을 수 있어요!\n지금 연결하시겠어요?`)) {
                 window.loginWithKakao();
             }
+        } else if (message.includes('이용 시간이 모두 소진')) {
+            window.showPlayTimeExpired();
         } else {
             alert(message);
         }
@@ -1520,6 +1779,7 @@ function createSparkline(history, isUp) {
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
     if (!listDiv || !myData) return;
+    if (playtimeLocked) return; // 이용시간 소진 — 리스너 재구독 방지 (화면은 마지막 상태로 고정)
     const now = Date.now();
 
     const matched = allStocks.filter(s => s.name && s.name.includes(filter));
@@ -1662,6 +1922,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
         if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
         if (document.getElementById('pin-modal').classList.contains('active')) closePinModal();
+        if (document.getElementById('playtime-modal').classList.contains('active')) closePlayTimeModal();
     }
 });
 

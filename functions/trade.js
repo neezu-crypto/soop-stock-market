@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { INITIAL_CASH } = require("./common");
+const { checkPlayQuota } = require("./playTime");
 
 // ── 매매 파라미터 (기존 클라이언트 로직과 동일) ──────────────
 const TRADE_COOLDOWN_MS   = 1000;   // 연속 거래 최소 간격
@@ -65,7 +66,9 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     throw new HttpsError("invalid-argument", "수량이 올바르지 않습니다.");
   }
 
-  const db       = admin.database();
+  const db = admin.database();
+  await checkPlayQuota(db, uid, auth);
+
   const stockRef = db.ref(`stocks/${stockId}`);
   const userRef  = db.ref(`users/${uid}`);
   const impact   = IMPACT_PER_QTY * qty;
