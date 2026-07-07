@@ -117,7 +117,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     }
 
     // ── 홍보 배너 신청 (닉네임/아이디 입력 → 실시간 미리보기 → 신청) ──
-    const BANNER_COST_PER_DAY = 2000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const BANNER_COST_PER_DAY = 1000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
     const updatePromoCost = setupCostCalculator({ unitInputId: 'promo-days', costElId: 'promo-cost', pricePerDay: BANNER_COST_PER_DAY });
 
@@ -315,7 +315,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     };
 
     // ── 차트 하단 배너 신청 (이미지/링크 직접 입력 → 실시간 미리보기 → 신청) ──
-    const CHART_BANNER_COST_PER_DAY = 4000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const CHART_BANNER_COST_PER_DAY = 2000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
     const updateChartAdCost = setupCostCalculator({ unitInputId: 'chart-ad-days', costElId: 'chart-ad-cost', pricePerDay: CHART_BANNER_COST_PER_DAY });
 
