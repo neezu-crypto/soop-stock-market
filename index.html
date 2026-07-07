@@ -968,7 +968,15 @@ window.trade = async function (id, type, qty = 1) {
         lastTradeTime = Date.now();
 
     } catch (error) {
-        alert(error?.message || "거래 중 오류가 발생했습니다.");
+        const message = error?.message || "거래 중 오류가 발생했습니다.";
+        // 잔액 부족 = 카카오 연동 보너스로 바로 해결되는 순간 → 그 자리에서 유도
+        if (message.includes('잔액이 부족') && !myData?.kakaoLinked) {
+            if (confirm(`${message}\n\n💬 카카오 연결하면 80만원을 바로 받을 수 있어요!\n지금 연결하시겠어요?`)) {
+                window.loginWithKakao();
+            }
+        } else {
+            alert(message);
+        }
     } finally {
         setTimeout(() => {
             isTrading = false;
