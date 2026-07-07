@@ -12,9 +12,10 @@
         }
         .wallet-info span { color: var(--primary); font-weight: 800; }
         header { padding: 10px 0; border-bottom: 1px solid #1e293b; margin-bottom: 10px; }
+        .search-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
         #search-input {
-            width: 100%; padding: 14px; border-radius: 12px; background: var(--card-bg);
-            border: 1px solid #334155; color: white; margin-top: 10px; box-sizing: border-box;
+            flex: 1; min-width: 0; padding: 14px; border-radius: 12px; background: var(--card-bg);
+            border: 1px solid #334155; color: white; box-sizing: border-box;
         }
         #stock-list { display: grid; gap: 12px; }
         .stock-card {
