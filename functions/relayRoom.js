@@ -7,6 +7,7 @@ const {
   MAX_RELAY_ROOMS,
   chargeUserCash,
   creditUserCash,
+  requireLinkedUser,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -31,6 +32,9 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
+  const db = admin.database();
+  await requireLinkedUser(db, auth.uid, auth);
+
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
   const hours      = parseInt(request.data?.hours, 10);
@@ -43,7 +47,6 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
     throw new HttpsError("invalid-argument", `홍보 시간은 1~${MAX_RELAY_ROOM_HOURS}시간 사이로 입력해주세요.`);
   }
 
-  const db  = admin.database();
   const now = Date.now();
 
   // 이미 진행 중인 중계방이면 신청 자체를 막는다 (연장 없이 단순 거부).

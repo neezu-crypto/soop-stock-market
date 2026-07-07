@@ -7,6 +7,7 @@ const {
   chargeUserCash,
   creditUserCash,
   findStockIdByName,
+  requireLinkedUser,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -28,6 +29,9 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
+  const db = admin.database();
+  await requireLinkedUser(db, auth.uid, auth);
+
   const stockName = String(request.data?.stockName || "").trim();
   const hours     = parseInt(request.data?.hours, 10);
 
@@ -35,8 +39,6 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   if (!Number.isInteger(hours) || hours < 1 || hours > MAX_PIN_HOURS) {
     throw new HttpsError("invalid-argument", `노출 시간은 1~${MAX_PIN_HOURS}시간 사이로 입력해주세요.`);
   }
-
-  const db = admin.database();
 
   // 고정 노출은 이미 상장된 종목만 가능 — 오타로 새 종목이 생기지 않도록 미리 확인.
   const targetId = await findStockIdByName(db, stockName);

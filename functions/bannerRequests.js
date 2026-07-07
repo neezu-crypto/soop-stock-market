@@ -9,10 +9,12 @@ const {
   chargeUserCash,
   creditUserCash,
   findStockIdByName,
+  requireLinkedUser,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
-// 홍보 배너 신청 (우측 랭킹 배너) — 신청은 누구나, 승인/거절은 관리자만
+// 홍보 배너 신청 (우측 랭킹 배너) — 신청은 카카오 연동(또는 관리자) 유저만,
+// 승인/거절은 관리자만
 // ══════════════════════════════════════════════════════════
 
 function buildBannerPreview(streamerId) {
@@ -24,12 +26,15 @@ function buildBannerPreview(streamerId) {
 }
 
 /**
- * 홍보 배너 신청 접수. 로그인(익명 포함)한 누구나 호출 가능 — 실제 반영은
- * 관리자 승인(actionApproveBannerRequest) 후에만 이뤄진다.
+ * 홍보 배너 신청 접수. 카카오 연동된(또는 관리자) 유저만 호출 가능 — 실제
+ * 반영은 관리자 승인(actionApproveBannerRequest) 후에만 이뤄진다.
  */
 const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+
+  const db = admin.database();
+  await requireLinkedUser(db, auth.uid, auth);
 
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
@@ -43,7 +48,6 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
     throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이로 입력해주세요.`);
   }
 
-  const db   = admin.database();
   const cost = days * BANNER_COST_PER_DAY;
 
   // 신청 시점에 게임자산을 바로 차감한다 (거절되면 actionRejectBannerRequest에서 환불).
@@ -157,6 +161,9 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
+  const db = admin.database();
+  await requireLinkedUser(db, auth.uid, auth);
+
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
   const bannerImg  = String(request.data?.bannerImg || "").trim();
@@ -177,7 +184,6 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
     throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이로 입력해주세요.`);
   }
 
-  const db   = admin.database();
   const cost = days * CHART_BANNER_COST_PER_DAY;
 
   // 신청 시점에 게임자산을 바로 차감한다 (거절되면 actionRejectChartBannerRequest에서 환불).

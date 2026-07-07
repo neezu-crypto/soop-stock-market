@@ -33,6 +33,24 @@ function requireAdmin(auth) {
   }
 }
 
+/**
+ * 자산충전/배너/중계방/고정노출 등 "로그인 유저 전용" 셀프 서비스 신청에서
+ * 공통으로 쓰는 게이트. 이 앱의 익명 로그인은 접속 시 자동으로 이뤄지므로,
+ * 여기서 말하는 "로그인"은 실제로는 카카오 연동(또는 관리자 Google 계정)을
+ * 뜻한다 — 매크로/도배성 신청을 어렵게 하고, 실제 신원이 있는 유저만
+ * 게임자산을 실제 홍보 슬롯으로 바꿀 수 있게 하기 위함.
+ */
+async function requireLinkedUser(db, uid, auth) {
+  if (auth.token?.email === ADMIN_EMAIL) return; // 관리자는 이미 Google 로그인 상태
+  const user = (await db.ref(`users/${uid}`).get()).val();
+  if (!user?.kakaoLinked) {
+    throw new HttpsError(
+      "permission-denied",
+      "로그인이 필요한 기능입니다. 카카오 연동 후 이용해주세요."
+    );
+  }
+}
+
 async function findStockIdByName(db, name) {
   const snap = await db.ref("stocks").get();
   const data = snap.val() || {};
@@ -113,6 +131,7 @@ module.exports = {
   RELAY_ROOM_COST_PER_HOUR,
   MAX_RELAY_ROOMS,
   requireAdmin,
+  requireLinkedUser,
   findStockIdByName,
   bannerStatus,
   chargeUserCash,

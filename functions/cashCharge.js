@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { STREAMER_ID_RE, creditUserCash } = require("./common");
+const { STREAMER_ID_RE, creditUserCash, requireLinkedUser } = require("./common");
 
 // ══════════════════════════════════════════════════════════
 // 자산 충전 신청 — 라이브 방송 후원 확인 후 관리자가 지급액을 직접 입력해 승인
@@ -16,6 +16,9 @@ const submitCashChargeRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
+  const db = admin.database();
+  await requireLinkedUser(db, auth.uid, auth);
+
   const nickname = String(request.data?.nickname || "").trim();
   const soopId    = String(request.data?.soopId || "").trim().toLowerCase();
 
@@ -24,7 +27,6 @@ const submitCashChargeRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
     throw new HttpsError("invalid-argument", "아이디는 영문 소문자/숫자 2~20자여야 합니다.");
   }
 
-  const db  = admin.database();
   const ref = db.ref("cashChargeRequests").push();
 
   await ref.set({
