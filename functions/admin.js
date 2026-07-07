@@ -196,6 +196,10 @@ async function actionListActiveBanners(db) {
     });
   });
   Object.entries(chartData).forEach(([id, c]) => {
+    // chartBanner는 예전에 전체 종목 공동 노출용 평면 필드(img/link/endDate/name)로
+    // 쓰이던 경로라, 과거 잔재가 최상위에 남아있으면 문자열 값이 종목ID처럼
+    // 섞여 들어올 수 있다 — 실제 종목별 배너 객체가 아니면 건너뛴다.
+    if (!c || typeof c !== "object") return;
     const { active, daysLeft } = bannerStatus(c.endDate);
     items.push({
       type: "chart", stockId: id, name: c.name || (stocksData[id] && stocksData[id].name) || id,
