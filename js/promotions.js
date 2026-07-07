@@ -1,0 +1,370 @@
+// ══════════════════════════════════════════════════════════════
+// 홍보성 셀프 신청 5종 (우측 배너 / 차트 하단 배너 / 중계방 / 최상단 고정
+// 노출 / 자산 충전) — 전부 myData/allStocks를 읽기만 하고 재할당하지
+// 않으므로(단방향 의존성) index.html의 핵심 상태와 안전하게 분리했다.
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * @param {object} deps
+ * @param {() => object|null} deps.getMyData
+ * @param {() => Array} deps.getAllStocks
+ * @param {import('firebase/auth').Auth} deps.auth
+ * @param {string} deps.ADMIN_EMAIL
+ * @param {() => void} deps.closeChartModal - 차트 하단 배너 신청 모달을 열 때 차트창을 먼저 닫기 위함
+ * @param {object} deps.callables - httpsCallable로 미리 생성된 콜러블 참조 모음
+ */
+export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, closeChartModal, callables }) {
+    const {
+        submitBannerRequestCallable,
+        submitChartBannerRequestCallable,
+        submitPinRequestCallable,
+        submitRelayRoomRequestCallable,
+        submitCashChargeRequestCallable,
+    } = callables;
+
+    // ── 모달 ─────────────────────────────────────────────────────
+    window.openPromoModal    = () => { if (requireLoginOrPrompt()) document.getElementById('promo-modal').classList.add('active'); };
+    window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
+
+    // ── 신청 폼 공통 유틸 (아이디/URL 검증, 이미지 미리보기, 기간→비용 계산, 제출) ──
+    const SOOP_ID_RE = /^[a-z0-9]{2,20}$/;
+    const isValidSoopId = (v) => SOOP_ID_RE.test(v);
+    const isValidUrl    = (v) => /^https?:\/\/.+/i.test(v);
+
+    // 자산충전/홍보/중계방/고정노출 등 로그인(카카오 연동) 유저 전용 기능의
+    // 공통 게이트 — 실제 차단은 서버(requireLinkedUser)가 하지만, 폼을 다
+    // 작성한 뒤에야 막히면 답답하므로 모달을 열기 전에 미리 안내한다.
+    function requireLoginOrPrompt() {
+        const myData = getMyData();
+        const isLinked = myData?.kakaoLinked || auth.currentUser?.email === ADMIN_EMAIL;
+        if (isLinked) return true;
+        if (confirm('로그인이 필요한 기능입니다.\n카카오 연동하고 계속하시겠어요?')) {
+            window.loginWithKakao();
+        }
+        return false;
+    }
+
+    // 기간(일) 입력에 맞춰 "일수 × 단가" 비용을 실시간으로 표시
+    function setupCostCalculator({ unitInputId, costElId, pricePerDay }) {
+        function update() {
+            const unitInput = document.getElementById(unitInputId);
+            const costEl    = document.getElementById(costElId);
+            if (!unitInput || !costEl) return;
+            const units = parseInt(unitInput.value, 10);
+            const cost = Number.isInteger(units) && units > 0 ? units * pricePerDay : 0;
+            costEl.innerText = `${cost.toLocaleString()}원`;
+        }
+        document.getElementById(unitInputId)?.addEventListener('input', update);
+        update();
+        return update;
+    }
+
+    // 입력값(아이디 또는 이미지 URL)에 맞춰 미리보기 이미지를 로드/표시
+    function setupImagePreview({ inputId, placeholderId, imgId, displayStyle, buildUrl, invalidText, errorText }) {
+        function update() {
+            const input       = document.getElementById(inputId);
+            const placeholder = document.getElementById(placeholderId);
+            const img         = document.getElementById(imgId);
+            if (!input || !placeholder || !img) return;
+
+            const url = buildUrl(input.value.trim().toLowerCase());
+            if (!url) {
+                img.style.display = 'none';
+                img.src = '';
+                placeholder.style.display = displayStyle;
+                placeholder.innerHTML = invalidText;
+                return;
+            }
+            placeholder.style.display = displayStyle;
+            placeholder.innerText = '로딩중...';
+            img.onload  = () => { placeholder.style.display = 'none'; img.style.display = 'block'; };
+            img.onerror = () => { placeholder.style.display = displayStyle; placeholder.innerText = errorText; img.style.display = 'none'; };
+            img.src = url;
+        }
+        document.getElementById(inputId)?.addEventListener('input', update);
+        return update;
+    }
+
+    // 검증 → 버튼 비활성화 → 서버 호출 → 안내 → 필드 초기화 → 모달 닫기의 공통 뼈대.
+    // validateAndBuild()는 유효하면 payload 객체를, 무효하면(이미 alert를 띄운 뒤) null을 반환한다.
+    async function submitRequestForm({ submitBtnId, submitLabel, validateAndBuild, callable, onSuccess, resetFn, closeFn }) {
+        const submitBtn = document.getElementById(submitBtnId);
+        const payload = validateAndBuild();
+        if (!payload) return;
+
+        submitBtn.disabled = true;
+        submitBtn.innerText = '신청 중...';
+        try {
+            const result = await callable(payload);
+            onSuccess(result);
+            if (resetFn) resetFn();
+            if (closeFn) closeFn();
+        } catch (e) {
+            alert(e?.message || '신청 중 오류가 발생했습니다.');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = submitLabel;
+        }
+    }
+
+    // ── 홍보 배너 신청 (닉네임/아이디 입력 → 실시간 미리보기 → 신청) ──
+    const BANNER_COST_PER_DAY = 2000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+
+    const updatePromoCost = setupCostCalculator({ unitInputId: 'promo-days', costElId: 'promo-cost', pricePerDay: BANNER_COST_PER_DAY });
+
+    const updatePromoPreview = setupImagePreview({
+        inputId: 'promo-streamer-id',
+        placeholderId: 'promo-preview-placeholder',
+        imgId: 'promo-preview-img',
+        displayStyle: 'block',
+        buildUrl: (streamerId) => isValidSoopId(streamerId)
+            ? `https://stimg.sooplive.com/LOGO/${streamerId.slice(0, 2)}/${streamerId}/${streamerId}.jpg`
+            : null,
+        invalidText: '미리보기',
+        errorText: '이미지 없음',
+    });
+
+    window.submitBannerRequest = async function() {
+        await submitRequestForm({
+            submitBtnId: 'promo-submit-btn',
+            submitLabel: '신청하기',
+            validateAndBuild() {
+                const nickname   = document.getElementById('promo-nickname').value.trim();
+                const streamerId = document.getElementById('promo-streamer-id').value.trim().toLowerCase();
+                const days       = parseInt(document.getElementById('promo-days').value, 10);
+                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+                if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+                if (!Number.isInteger(days) || days < 1 || days > 7) { alert('노출 기간은 1~7일 사이로 입력해주세요.'); return null; }
+                return { nickname, streamerId, days };
+            },
+            callable: submitBannerRequestCallable,
+            onSuccess(result) {
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 배너가 등록되며, 거절 시 전액 환불됩니다.`);
+            },
+            resetFn() {
+                document.getElementById('promo-nickname').value = '';
+                document.getElementById('promo-streamer-id').value = '';
+                document.getElementById('promo-days').value = '7';
+                updatePromoPreview();
+                updatePromoCost();
+            },
+            closeFn: window.closePromoModal,
+        });
+    };
+    window.openChartAdModal  = () => {
+        if (!requireLoginOrPrompt()) return;
+        closeChartModal();   // 차트창 먼저 닫기
+        document.getElementById('chart-ad-modal').classList.add('active');
+    };
+    window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
+
+    // ── 중계방 홍보 신청 (닉네임/아이디 입력 → 실시간 미리보기 → 신청) ──
+    const RELAY_ROOM_COST_PER_HOUR = 300000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
+
+    window.openRelayRoomModal  = () => { if (requireLoginOrPrompt()) document.getElementById('relay-room-modal').classList.add('active'); };
+    window.closeRelayRoomModal = () => document.getElementById('relay-room-modal').classList.remove('active');
+
+    const updateRelayCost = setupCostCalculator({ unitInputId: 'relay-hours', costElId: 'relay-cost', pricePerDay: RELAY_ROOM_COST_PER_HOUR });
+
+    const updateRelayPreview = setupImagePreview({
+        inputId: 'relay-streamer-id',
+        placeholderId: 'relay-preview-placeholder',
+        imgId: 'relay-preview-img',
+        displayStyle: 'block',
+        buildUrl: (streamerId) => isValidSoopId(streamerId)
+            ? `https://stimg.sooplive.com/LOGO/${streamerId.slice(0, 2)}/${streamerId}/${streamerId}.jpg`
+            : null,
+        invalidText: '미리보기',
+        errorText: '이미지 없음',
+    });
+
+    window.submitRelayRoomRequest = async function() {
+        await submitRequestForm({
+            submitBtnId: 'relay-submit-btn',
+            submitLabel: '신청하기',
+            validateAndBuild() {
+                const nickname   = document.getElementById('relay-nickname').value.trim();
+                const streamerId = document.getElementById('relay-streamer-id').value.trim().toLowerCase();
+                const hours      = parseInt(document.getElementById('relay-hours').value, 10);
+                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+                if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+                if (!Number.isInteger(hours) || hours < 1 || hours > 8) { alert('홍보 시간은 1~8시간 사이로 입력해주세요.'); return null; }
+                return { nickname, streamerId, hours };
+            },
+            callable: submitRelayRoomRequestCallable,
+            onSuccess(result) {
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 중계방에 등록되며, 거절 시 전액 환불됩니다.`);
+            },
+            resetFn() {
+                document.getElementById('relay-nickname').value = '';
+                document.getElementById('relay-streamer-id').value = '';
+                document.getElementById('relay-hours').value = '1';
+                updateRelayPreview();
+                updateRelayCost();
+            },
+            closeFn: window.closeRelayRoomModal,
+        });
+    };
+
+    // ── 최상단 고정 노출 신청 (기존 상장 종목 검색 → 시간 선택 → 신청) ──
+    // 배너 신청과 달리 미상장 스트리머를 새로 등록하는 게 아니라 "이미 리스트에
+    // 있는 종목 카드"를 맨 위로 올리는 기능이므로, 닉네임/아이디 대신 종목명
+    // 검색(datalist 자동완성)으로 대상을 고른다.
+    function populatePinStockDatalist() {
+        const datalist = document.getElementById('pin-stock-datalist');
+        if (!datalist) return;
+        datalist.innerHTML = getAllStocks()
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(s => `<option value="${s.name.replace(/"/g, '&quot;')}"></option>`)
+            .join('');
+    }
+
+    window.openPinModal = () => {
+        if (!requireLoginOrPrompt()) return;
+        populatePinStockDatalist();
+        document.getElementById('pin-modal').classList.add('active');
+    };
+    window.closePinModal = () => document.getElementById('pin-modal').classList.remove('active');
+
+    const PIN_COST_PER_HOUR = 500000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const updatePinCost = setupCostCalculator({ unitInputId: 'pin-hours', costElId: 'pin-cost', pricePerDay: PIN_COST_PER_HOUR });
+
+    window.submitPinRequest = async function() {
+        await submitRequestForm({
+            submitBtnId: 'pin-submit-btn',
+            submitLabel: '신청하기',
+            validateAndBuild() {
+                const stockName = document.getElementById('pin-stock-name').value.trim();
+                const hours     = parseInt(document.getElementById('pin-hours').value, 10);
+                if (!stockName) { alert('고정할 종목명을 입력해주세요.'); return null; }
+                if (!getAllStocks().some(s => s.name === stockName)) {
+                    alert('해당 종목명을 찾을 수 없습니다. 목록에서 정확한 종목명을 선택해주세요.');
+                    return null;
+                }
+                if (!Number.isInteger(hours) || hours < 1 || hours > 12) { alert('노출 시간은 1~12시간 사이로 입력해주세요.'); return null; }
+                return { stockName, hours };
+            },
+            callable: submitPinRequestCallable,
+            onSuccess(result) {
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 최상단에 고정 노출되며, 거절 시 전액 환불됩니다.`);
+            },
+            resetFn() {
+                document.getElementById('pin-stock-name').value = '';
+                document.getElementById('pin-hours').value = '1';
+                updatePinCost();
+            },
+            closeFn: window.closePinModal,
+        });
+    };
+
+    // ── 자산 충전 모달 (라이브 방송 후원 → 신청 → 관리자 승인) ──
+    window.openCashChargeModal = () => {
+        if (!requireLoginOrPrompt()) return;
+        document.getElementById('cash-charge-modal').classList.add('active');
+        showCashChargeInfo();
+    };
+    window.closeCashChargeModal = () => document.getElementById('cash-charge-modal').classList.remove('active');
+
+    function showCashChargeInfo() {
+        document.getElementById('cash-charge-step-info').style.display = 'block';
+        document.getElementById('cash-charge-step-form').style.display = 'none';
+    }
+    window.showCashChargeInfo = showCashChargeInfo;
+
+    window.showCashChargeRequestForm = function() {
+        document.getElementById('cash-charge-step-info').style.display = 'none';
+        document.getElementById('cash-charge-step-form').style.display = 'block';
+    };
+
+    window.submitCashChargeRequest = async function() {
+        await submitRequestForm({
+            submitBtnId: 'cash-charge-submit-btn',
+            submitLabel: '신청 완료',
+            validateAndBuild() {
+                const nickname = document.getElementById('cash-charge-nickname').value.trim();
+                const soopId   = document.getElementById('cash-charge-soopid').value.trim().toLowerCase();
+                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+                if (!isValidSoopId(soopId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+                return { nickname, soopId };
+            },
+            callable: submitCashChargeRequestCallable,
+            onSuccess() {
+                alert('✅ 신청이 접수됐습니다! 관리자가 방송에서 후원을 확인한 뒤 자산을 지급합니다.');
+            },
+            resetFn() {
+                document.getElementById('cash-charge-nickname').value = '';
+                document.getElementById('cash-charge-soopid').value = '';
+            },
+            closeFn: window.closeCashChargeModal,
+        });
+    };
+
+    // ── 차트 하단 배너 신청 (이미지/링크 직접 입력 → 실시간 미리보기 → 신청) ──
+    const CHART_BANNER_COST_PER_DAY = 4000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+
+    const updateChartAdCost = setupCostCalculator({ unitInputId: 'chart-ad-days', costElId: 'chart-ad-cost', pricePerDay: CHART_BANNER_COST_PER_DAY });
+
+    const updateChartAdPreview = setupImagePreview({
+        inputId: 'chart-ad-img-url',
+        placeholderId: 'chart-ad-preview-placeholder',
+        imgId: 'chart-ad-preview-img',
+        displayStyle: 'flex',
+        buildUrl: (url) => isValidUrl(url) ? url : null,
+        invalidText: '🖼 배너 이미지 링크를 입력하면<br>여기에 미리보기가 표시됩니다',
+        errorText: '이미지를 불러올 수 없습니다',
+    });
+
+    window.submitChartBannerRequest = async function() {
+        await submitRequestForm({
+            submitBtnId: 'chart-ad-submit-btn',
+            submitLabel: '신청하기',
+            validateAndBuild() {
+                const nickname   = document.getElementById('chart-ad-nickname').value.trim();
+                const streamerId = document.getElementById('chart-ad-streamer-id').value.trim().toLowerCase();
+                const bannerImg  = document.getElementById('chart-ad-img-url').value.trim();
+                const promoLink  = document.getElementById('chart-ad-promo-link').value.trim();
+                const days       = parseInt(document.getElementById('chart-ad-days').value, 10);
+                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+                if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+                if (!isValidUrl(bannerImg)) { alert('배너 이미지 링크를 올바르게 입력해주세요.'); return null; }
+                if (!isValidUrl(promoLink)) { alert('홍보 페이지 링크를 올바르게 입력해주세요.'); return null; }
+                if (!Number.isInteger(days) || days < 1 || days > 7) { alert('노출 기간은 1~7일 사이로 입력해주세요.'); return null; }
+                return { nickname, streamerId, bannerImg, promoLink, days };
+            },
+            callable: submitChartBannerRequestCallable,
+            onSuccess(result) {
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 배너가 등록되며, 거절 시 전액 환불됩니다.`);
+            },
+            resetFn() {
+                document.getElementById('chart-ad-nickname').value = '';
+                document.getElementById('chart-ad-streamer-id').value = '';
+                document.getElementById('chart-ad-img-url').value = '';
+                document.getElementById('chart-ad-promo-link').value = '';
+                document.getElementById('chart-ad-days').value = '7';
+                updateChartAdPreview();
+                updateChartAdCost();
+            },
+            closeFn: window.closeChartAdModal,
+        });
+    };
+    window.copyAdminEmail = async function(e) {
+        const email    = 'skftodwocks2@gmail.com';
+        const target   = e.target;
+        const original = target.innerText;
+        try {
+            await navigator.clipboard.writeText(email);
+        } catch (err) {
+            const textarea = document.createElement('textarea');
+            textarea.value = email;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity  = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
+        target.innerText = '복사 완료! ✅';
+        setTimeout(() => { target.innerText = original; }, 1500);
+    };
+}
