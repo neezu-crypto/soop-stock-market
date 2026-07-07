@@ -11,6 +11,7 @@
  * @param {import('firebase/auth').Auth} deps.auth
  * @param {string} deps.ADMIN_EMAIL
  * @param {() => void} deps.closeChartModal - 차트 하단 배너 신청 모달을 열 때 차트창을 먼저 닫기 위함
+ * @param {() => string|null} deps.getCurrentChartStockId - 지금 열려 있는 차트 모달의 종목ID (없으면 null)
  * @param {object} deps.callables - httpsCallable로 미리 생성된 콜러블 참조 모음
  */
 export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, closeChartModal, getCurrentChartStockId, callables }) {
@@ -20,6 +21,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
         submitCashChargeRequestCallable,
+        unfreezeWithCashCallable,
+        submitUnfreezeDonationRequestCallable,
     } = callables;
 
     // 차트 하단 배너는 "지금 열어둔 그 종목"에 붙이는 게 목적이라, 모달을 여는
@@ -379,5 +382,65 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         }
         target.innerText = '복사 완료! ✅';
         setTimeout(() => { target.innerText = original; }, 1500);
+    };
+
+    // ── 종목 거래 동결 해제 (게임자산 즉시 해제 / 방송 후원 신청) ──
+    // 지금 열어둔 차트의 종목을 대상으로 한다 — 다른 신청과 동일한 패턴.
+    let pendingUnfreezeStockId = null;
+
+    window.openUnfreezeModal = () => {
+        if (!requireLoginOrPrompt()) return;
+        const stockId = getCurrentChartStockId();
+        if (!stockId) { alert('종목의 차트를 먼저 열어주세요.'); return; }
+        const stock = getAllStocks().find(s => s.id === stockId);
+        if (!stock?.frozenAt) { alert('현재 동결된 종목이 아닙니다.'); return; }
+        pendingUnfreezeStockId = stockId;
+        document.getElementById('unfreeze-target-stock').innerText = stock.name || stockId;
+        closeChartModal();
+        document.getElementById('unfreeze-modal').classList.add('active');
+    };
+    window.closeUnfreezeModal = () => document.getElementById('unfreeze-modal').classList.remove('active');
+
+    window.unfreezeWithCash = async function() {
+        if (!pendingUnfreezeStockId) return alert('대상 종목을 찾을 수 없습니다.');
+        if (!confirm('게임자산 250만원을 내고 즉시 해제하시겠습니까? (성공 시 500만원이 지급됩니다)')) return;
+
+        const btn = document.getElementById('unfreeze-cash-btn');
+        btn.disabled = true;
+        btn.innerText = '처리 중...';
+        try {
+            const result = await unfreezeWithCashCallable({ stockId: pendingUnfreezeStockId });
+            alert(`✅ 동결이 해제됐습니다! ${result.data.rewardAmount.toLocaleString()}원이 지급됐습니다.`);
+            window.closeUnfreezeModal();
+        } catch (e) {
+            alert(e?.message || '해제 중 오류가 발생했습니다.');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '게임자산 250만원으로 해제';
+        }
+    };
+
+    window.submitUnfreezeDonationRequest = async function() {
+        if (!pendingUnfreezeStockId) return alert('대상 종목을 찾을 수 없습니다.');
+        const nickname = document.getElementById('unfreeze-donation-nickname').value.trim();
+        const soopId   = document.getElementById('unfreeze-donation-soopid').value.trim().toLowerCase();
+        if (!nickname) return alert('닉네임을 입력해주세요.');
+        if (!isValidSoopId(soopId)) return alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.');
+
+        const btn = document.getElementById('unfreeze-donation-btn');
+        btn.disabled = true;
+        btn.innerText = '신청 중...';
+        try {
+            await submitUnfreezeDonationRequestCallable({ stockId: pendingUnfreezeStockId, nickname, soopId });
+            alert('✅ 신청이 접수됐습니다! 관리자가 방송에서 후원을 확인한 뒤 처리합니다.');
+            document.getElementById('unfreeze-donation-nickname').value = '';
+            document.getElementById('unfreeze-donation-soopid').value = '';
+            window.closeUnfreezeModal();
+        } catch (e) {
+            alert(e?.message || '신청 중 오류가 발생했습니다.');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '신청하기';
+        }
     };
 }

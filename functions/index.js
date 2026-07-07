@@ -19,6 +19,7 @@ setGlobalOptions({
 //   pinRequests.js    — 종목 리스트 최상단 고정 노출 셀프 신청
 //   playTime.js       — 하루 무료 이용 시간 제한 + 게임머니 셀프 충전
 //   relayRoom.js      — 현재 플레이 중인 스트리머 홍보(중계방) 셀프 신청
+//   stockFreeze.js    — 종목 거래 동결(서킷브레이커) 해제 신청 + 상장폐지 스케줄러
 //   common.js         — 위 모듈들이 공유하는 상수/헬퍼 (Cloud Function 없음)
 const { initializeUser, trade } = require("./trade");
 const { adminAction } = require("./admin");
@@ -28,6 +29,11 @@ const { submitCashChargeRequest } = require("./cashCharge");
 const { submitPinRequest } = require("./pinRequests");
 const { heartbeat, buyPlayTime } = require("./playTime");
 const { submitRelayRoomRequest } = require("./relayRoom");
+const {
+  unfreezeWithCash,
+  submitUnfreezeDonationRequest,
+  checkFrozenStockDelistings,
+} = require("./stockFreeze");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -40,3 +46,6 @@ exports.submitPinRequest        = submitPinRequest;
 exports.heartbeat               = heartbeat;
 exports.buyPlayTime             = buyPlayTime;
 exports.submitRelayRoomRequest  = submitRelayRoomRequest;
+exports.unfreezeWithCash             = unfreezeWithCash;
+exports.submitUnfreezeDonationRequest = submitUnfreezeDonationRequest;
+exports.checkFrozenStockDelistings    = checkFrozenStockDelistings;

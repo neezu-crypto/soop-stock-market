@@ -142,6 +142,15 @@ export function initChartModal({ db, getAllStocks, getChangePercent }) {
         const changeEl = document.getElementById('cm-change');
         changeEl.textContent = `${isUp ? '+' : ''}${change}%`;
         changeEl.className   = `stock-title-change ${isUp ? 'up' : 'down'}`;
+
+        // 동결 상태에 따라 안내 배너 표시 + 거래 버튼 비활성화
+        const isFrozen  = !!s.frozenAt;
+        const banner    = document.getElementById('cm-frozen-banner');
+        if (banner) banner.style.display = isFrozen ? 'block' : 'none';
+        ['cm-buy10', 'cm-buy1', 'cm-sell1', 'cm-sell10'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.disabled = isFrozen;
+        });
     }
 
     // ── 차트 모달 닫기 ───────────────────────────────────────────

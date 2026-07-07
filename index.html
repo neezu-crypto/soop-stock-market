@@ -166,6 +166,12 @@
             <div id="cm-data-range">데이터: -</div>
         </div>
 
+        <!-- 동결 상태 안내 (동결 시에만 노출) -->
+        <div id="cm-frozen-banner" style="display:none;background:rgba(56,189,248,0.1);border:1px solid #38bdf8;border-radius:8px;padding:10px 12px;margin-bottom:10px;text-align:center;font-size:13px;">
+            🥶 이 종목은 현재 거래가 동결되어 있습니다.
+            <button onclick="openUnfreezeModal()" class="btn-confirm-contact" style="margin-top:8px;width:100%;font-weight:bold;font-size:13px;padding:8px;">동결 해제하러 가기</button>
+        </div>
+
         <!-- 거래 버튼 -->
         <div class="chart-modal-trade">
             <button class="modal-buy10" id="cm-buy10"  onclick="tradeFromModal('buy',10)">+10 매수</button>
@@ -443,6 +449,51 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     종목 거래 동결 해제 모달 (서킷브레이커)
+══════════════════════════════════════════ -->
+<div id="unfreeze-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>🥶 거래 동결 해제</h2></div>
+        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;text-align:center;">
+            📊 동결 종목: <b id="unfreeze-target-stock" style="color:#38bdf8;">-</b>
+        </div>
+        <ul class="promo-info-list" style="margin-bottom:16px;">
+            <li>⏱ <b>대기:</b> 동결 직후 5분간은 아무도 해제할 수 없습니다</li>
+            <li>🚫 <b>제한:</b> 이 종목을 동결시킨 계정은 본인이 직접 해제할 수 없습니다</li>
+            <li>🥇 <b>선착순 1명:</b> 먼저 해제한 유저만 보상을 받습니다 — 나머지 보유자에게는 해제 사실만 안내됩니다</li>
+        </ul>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+            <div style="background:#0f172a;border:1px solid #475569;border-radius:10px;padding:14px;">
+                <div style="font-weight:800;font-size:14px;margin-bottom:6px;">💰 게임자산으로 즉시 해제</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">250만원을 내면 즉시 해제되고, 500만원을 돌려받습니다 (순이익 250만원)</div>
+                <button id="unfreeze-cash-btn" class="btn-confirm-contact" onclick="unfreezeWithCash()" style="width:100%;font-weight:bold;font-size:14px;">게임자산 250만원으로 해제</button>
+            </div>
+            <div style="background:#0f172a;border:1px solid #475569;border-radius:10px;padding:14px;">
+                <div style="font-weight:800;font-size:14px;margin-bottom:6px;">📡 라이브 방송 후원으로 해제</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">별풍선 50개 후원 후 신청하면, 관리자 확인을 거쳐 250만원이 지급됩니다</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <input type="text" id="unfreeze-donation-nickname" placeholder="닉네임"
+                        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+                    <input type="text" id="unfreeze-donation-soopid" placeholder="아이디 (예: skftodwocks2)"
+                        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="window.open('https://play.sooplive.com/skftodwocks2/295386929','_blank')"
+                            style="flex:1;background:#6366f1;color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:13px;">📡 방송 이동</button>
+                        <button id="unfreeze-donation-btn" onclick="submitUnfreezeDonationRequest()"
+                            style="flex:1.4;background:#334155;color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:13px;">신청하기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:center;">
+            <button onclick="closeUnfreezeModal()" style="flex:1;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── 테스트 기간 안내 배너 (TEST_PERIOD_ACTIVE가 꺼지면 자동으로 숨겨짐) ── -->
 <div id="test-period-banner" style="display:none;background:repeating-linear-gradient(135deg,#f59e0b,#f59e0b 12px,#fbbf24 12px,#fbbf24 24px);color:#1e293b;text-align:center;padding:9px 12px;font-size:13px;font-weight:800;letter-spacing:0.3px;">
     🧪 테스트 기간 운영 중입니다 — 일부 유료 기능(플레이 시간 충전)은 테스트 기간 종료 후 이용 가능합니다
@@ -563,6 +614,8 @@ const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
 const heartbeatCallable = httpsCallable(functions, 'heartbeat');
 const buyPlayTimeCallable = httpsCallable(functions, 'buyPlayTime');
 const submitRelayRoomRequestCallable = httpsCallable(functions, 'submitRelayRoomRequest');
+const unfreezeWithCashCallable = httpsCallable(functions, 'unfreezeWithCash');
+const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUnfreezeDonationRequest');
 
 const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
@@ -693,6 +746,18 @@ onValue(ref(db, 'rankings/top5'), (snap) => {
 onValue(ref(db, 'pinnedStocks'), (snap) => {
     pinnedStockIds = new Set(snap.exists() ? Object.keys(snap.val()) : []);
     updateUI(true);
+});
+
+// ── lastUnfreezeEvent 구독 (동결 해제 공지 — 닉네임 등 개인정보는 담지 않음) ──
+// 페이지를 연 시점 이후에 발생한 이벤트만 알림으로 띄운다(과거 이벤트가
+// 접속 직후 다시 뜨는 것 방지).
+const pageLoadTime = Date.now();
+onValue(ref(db, 'lastUnfreezeEvent'), (snap) => {
+    if (!snap.exists()) return;
+    const event = snap.val();
+    if (!event.at || event.at <= pageLoadTime) return;
+    const methodText = event.method === 'donation' ? '방송 후원' : '게임자산';
+    alert(`🥶 "${event.stockName}" 종목의 거래 동결이 ${methodText}(으)로 해제됐습니다!\n선착순 유저에게 ${event.rewardAmount.toLocaleString()}원이 지급됐습니다.`);
 });
 
 function renderRankingFromCache(items) {
@@ -1114,6 +1179,8 @@ initPromotions({
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
         submitCashChargeRequestCallable,
+        unfreezeWithCashCallable,
+        submitUnfreezeDonationRequestCallable,
     },
 });
 
@@ -1400,19 +1467,29 @@ function createStockCard(s) {
     return card;
 }
 
+// 클라이언트 표시용 근사치 — 실제 동결 판정(연속 5개 1분봉 종가)은 서버가
+// 하므로, 여기서는 "위험 구간에 들어섰다"는 걸 보여주는 용도로만 쓴다.
+const STOCK_FREEZE_THRESHOLD_DISPLAY = 1000000;
+
 function updateCardContent(card, s, userStock) {
     const change  = getChangePercent(s.id);
     const isUp    = parseFloat(change) >= 0;
-    const isPinned = !!(s.pinnedUntil && s.pinnedUntil > Date.now());
-    card.style.border = isPinned ? '2px solid #fbbf24' : '';
+    const isPinned  = !!(s.pinnedUntil && s.pinnedUntil > Date.now());
+    const isFrozen  = !!s.frozenAt;
+    const isNearFreeze = !isFrozen && (s.price || 0) >= STOCK_FREEZE_THRESHOLD_DISPLAY;
+    card.style.border = isFrozen ? '2px solid #38bdf8' : (isNearFreeze ? '2px solid #f97316' : (isPinned ? '2px solid #fbbf24' : ''));
     let myProfit = 0, profitClass = 'steady';
     if (userStock.qty > 0 && userStock.avg > 0) {
         myProfit    = (((s.price - userStock.avg) / userStock.avg) * 100).toFixed(1);
         profitClass = myProfit > 0 ? 'up' : (myProfit < 0 ? 'down' : 'steady');
     }
+    const badge = isFrozen
+        ? '<span style="color:#38bdf8;">🥶 동결중</span> '
+        : (isNearFreeze ? '<span style="color:#f97316;">⚠️ 동결임박</span> ' : (isPinned ? '<span style="color:#fbbf24;">📌</span> ' : ''));
+    const tradeDisabled = isTrading || isFrozen;
     card.innerHTML = `
         <div class="info-group">
-            <div class="stock-name">${isPinned ? '<span style="color:#fbbf24;">📌</span> ' : ''}${s.name}</div>
+            <div class="stock-name">${badge}${s.name}</div>
             <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
         </div>
         <div>${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}</div>
@@ -1421,11 +1498,11 @@ function updateCardContent(card, s, userStock) {
             <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${change}%</div>
         </div>
         <div class="trade-btns">
-            <button class="btn btn-buy-multi"  onclick="trade('${s.id}','buy',10)"  ${isTrading?'disabled':''}>+10</button>
-            <button class="btn btn-buy"         onclick="trade('${s.id}','buy',1)"   ${isTrading?'disabled':''}>매수</button>
+            <button class="btn btn-buy-multi"  onclick="trade('${s.id}','buy',10)"  ${tradeDisabled?'disabled':''}>+10</button>
+            <button class="btn btn-buy"         onclick="trade('${s.id}','buy',1)"   ${tradeDisabled?'disabled':''}>매수</button>
             <div style="width:1px;height:20px;background:#334155;margin:0 4px;"></div>
-            <button class="btn btn-sell"        onclick="trade('${s.id}','sell',1)"  ${isTrading?'disabled':''}>매도</button>
-            <button class="btn btn-sell-multi"  onclick="trade('${s.id}','sell',10)" ${isTrading?'disabled':''}>-10</button>
+            <button class="btn btn-sell"        onclick="trade('${s.id}','sell',1)"  ${tradeDisabled?'disabled':''}>매도</button>
+            <button class="btn btn-sell-multi"  onclick="trade('${s.id}','sell',10)" ${tradeDisabled?'disabled':''}>-10</button>
         </div>
     `;
 }
@@ -1462,6 +1539,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('pin-modal').classList.contains('active')) closePinModal();
         if (document.getElementById('playtime-modal').classList.contains('active')) closePlayTimeModal();
         if (document.getElementById('relay-room-modal').classList.contains('active')) closeRelayRoomModal();
+        if (document.getElementById('unfreeze-modal').classList.contains('active')) closeUnfreezeModal();
     }
 });
 

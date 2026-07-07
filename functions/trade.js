@@ -1,6 +1,11 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { INITIAL_CASH } = require("./common");
+const {
+  INITIAL_CASH,
+  STOCK_FREEZE_THRESHOLD,
+  STOCK_FREEZE_CANDLE_COUNT,
+  STOCK_DELIST_DEADLINE_MS,
+} = require("./common");
 const { checkPlayQuota } = require("./playTime");
 
 // ── 매매 파라미터 (기존 클라이언트 로직과 동일) ──────────────
@@ -14,6 +19,37 @@ const RANKING_DEBOUNCE_MS = 30000;  // 랭킹 반영 최소 간격
 
 function currentMinuteTs() {
   return Math.floor(Date.now() / 60000) * 60;
+}
+
+/**
+ * 동결 판정 — 최근 STOCK_FREEZE_CANDLE_COUNT개의 1분봉 종가가 "전부"
+ * STOCK_FREEZE_THRESHOLD 이상이면 동결한다. 평균이 아니라 "전부 다" 조건을
+ * 쓰는 이유는 순간적인 한 번의 거래(조작)로는 통과할 수 없고, 여러 분에
+ * 걸쳐 값을 유지해야 하므로 단발성 펌프에 강하기 때문이다. 매수로 가격이
+ * 오를 때만 의미가 있으므로 매수 체결 후에만 호출한다.
+ */
+async function maybeFreezeStock(db, stockId, triggerUid) {
+  const candleSnap = await db.ref(`candlesticks/${stockId}`).get();
+  const candles = candleSnap.val();
+  if (!candles) return;
+
+  const sorted = Object.values(candles).sort((a, b) => b.t - a.t); // 최신순
+  if (sorted.length < STOCK_FREEZE_CANDLE_COUNT) return;
+
+  const recentN = sorted.slice(0, STOCK_FREEZE_CANDLE_COUNT);
+  const allAboveThreshold = recentN.every((c) => c.c >= STOCK_FREEZE_THRESHOLD);
+  if (!allAboveThreshold) return;
+
+  const now = Date.now();
+  await db.ref(`stocks/${stockId}`).transaction((currentStock) => {
+    if (!currentStock || currentStock.frozenAt) return currentStock; // 이미 동결됨 → 변경 없음
+    return {
+      ...currentStock,
+      frozenAt:         now,
+      freezeDeadline:   now + STOCK_DELIST_DEADLINE_MS,
+      freezeTriggerUid: triggerUid,
+    };
+  });
 }
 
 /**
@@ -93,6 +129,15 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
         throw new HttpsError("failed-precondition", "보유 주식이 부족합니다!");
       }
     }
+  }
+
+  // 0.5) 동결 상태 확인 — 동결된 종목은 매수/매도 모두 차단
+  const trueStock = (await stockRef.get()).val();
+  if (trueStock?.frozenAt) {
+    throw new HttpsError(
+      "failed-precondition",
+      `"${trueStock.name || stockId}" 종목은 현재 거래가 동결되어 있습니다. 동결 해제 후 다시 시도해주세요.`
+    );
   }
 
   // 1) 종목 가격/거래량 갱신 (경합 시 자동 재시도되는 RTDB 트랜잭션)
@@ -232,6 +277,15 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     }
   } catch (e) {
     // 캔들 갱신 실패는 무시 (다음 거래 때 재시도됨)
+  }
+
+  // 3.5) 동결 판정 (best-effort — 매수로 가격이 오를 때만 의미가 있음)
+  if (type === "buy") {
+    try {
+      await maybeFreezeStock(db, stockId, uid);
+    } catch (e) {
+      // 동결 판정 실패는 무시 (다음 매수 때 재시도됨)
+    }
   }
 
   // 4) 거래량 랭킹 갱신 (best-effort — 실패해도 매매 결과에는 영향 없음)

@@ -29,6 +29,20 @@ const MAX_RELAY_ROOM_HOURS     = 8;        // 중계방 홍보 신청 시 고를
 const RELAY_ROOM_COST_PER_HOUR = 300000;   // 중계방 홍보 1시간당 차감되는 게임자산
 const MAX_RELAY_ROOMS          = 3;        // 동시에 등록 가능한 최대 중계방 수
 
+// ── 종목 거래 동결(서킷브레이커) 관련 상수 ──────────────────────
+// 목적: 유저들이 무작정 주가를 펌핑하는 게 손해라는 걸 경험하게 하고,
+// 목표가 임박 시 패닉셀 심리를, 미해제 시 "공동책임" 심리를 유도한다.
+const STOCK_FREEZE_THRESHOLD     = 1000000;        // 이 가격 이상에서 동결 판정 시작
+const STOCK_FREEZE_CANDLE_COUNT  = 5;              // 연속 몇 개의 1분봉 종가가 기준 이상이어야 실제 동결되는지
+                                                    // (평균이 아니라 "전부 다" 조건 — 단발성 조작에 강함)
+const STOCK_UNFREEZE_PRICE       = 500000;         // 해제 시 강제로 낮추는 가격
+const STOCK_FREEZE_COOLDOWN_MS   = 5 * 60 * 1000;  // 동결 직후 해제 자체가 불가능한 유예시간(드라마/경쟁 유도)
+const STOCK_DELIST_DEADLINE_MS   = 12 * 60 * 60 * 1000; // 유예시간 내 미해제 시 상장폐지까지 걸리는 시간
+const UNFREEZE_CASH_COST         = 2500000;        // 게임자산으로 해제 시 차감액
+const UNFREEZE_CASH_REWARD       = 5000000;        // 게임자산으로 해제한 유저에게 지급되는 보상(순이익 250만원)
+const UNFREEZE_DONATION_REWARD   = 2500000;        // 방송 후원으로 해제한 유저에게 지급되는 보상
+const UNFREEZE_DONATION_BALLOONS = 50;             // 안내용 — 방송 후원 시 필요한 별풍선 개수(별도 실행은 방송에서)
+
 function requireAdmin(auth) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
   if (auth.token?.email !== ADMIN_EMAIL) {
@@ -134,6 +148,15 @@ module.exports = {
   MAX_RELAY_ROOM_HOURS,
   RELAY_ROOM_COST_PER_HOUR,
   MAX_RELAY_ROOMS,
+  STOCK_FREEZE_THRESHOLD,
+  STOCK_FREEZE_CANDLE_COUNT,
+  STOCK_UNFREEZE_PRICE,
+  STOCK_FREEZE_COOLDOWN_MS,
+  STOCK_DELIST_DEADLINE_MS,
+  UNFREEZE_CASH_COST,
+  UNFREEZE_CASH_REWARD,
+  UNFREEZE_DONATION_REWARD,
+  UNFREEZE_DONATION_BALLOONS,
   requireAdmin,
   requireLinkedUser,
   findStockIdByName,

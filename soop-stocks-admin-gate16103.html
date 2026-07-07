@@ -259,6 +259,19 @@
         <div id="relay-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
+    <!-- 🥶 종목 거래 동결 관리 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>🥶 종목 거래 동결 관리</h1>
+        <div class="info-box">주가가 100만원 이상으로 5분 이상 유지되면 자동으로 거래가 동결됩니다. 동결 후 5분간은 해제할 수 없고, 12시간 내 해제되지 않으면 자동으로 상장폐지(보유 주식 전액 소멸)됩니다.</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadAllFreezeData()">🔄 전체 새로고침</button>
+
+        <div style="font-size:13px;color:#38bdf8;font-weight:700;margin-bottom:8px;">🥶 현재 동결 중인 종목</div>
+        <div id="freeze-active-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;"></div>
+
+        <div style="font-size:13px;color:#38bdf8;font-weight:700;margin-bottom:8px;">🆕 방송 후원 해제 신청</div>
+        <div id="freeze-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -343,6 +356,7 @@
             await loadCashChargeRequests();
             await loadAllPinData();
             await loadAllRelayRoomData();
+            await loadAllFreezeData();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -1090,6 +1104,105 @@
         try {
             await callAdminAction('rejectRelayRoomRequest', { requestId });
             await loadRelayRoomRequests();
+        } catch (e) {
+            alert('거절 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ══════════════════════════════════════════════════════
+    // 종목 거래 동결 관리
+    // ══════════════════════════════════════════════════════
+
+    window.loadAllFreezeData = async function() {
+        await Promise.all([loadActiveFreezes(), loadUnfreezeRequests()]);
+    };
+
+    async function loadActiveFreezes() {
+        const listEl = document.getElementById('freeze-active-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { frozen } = await callAdminAction('listFrozenStocks');
+            if (!frozen || frozen.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">현재 동결된 종목이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            frozen.forEach(f => {
+                const canUnfreezeNow = Date.now() >= f.canUnfreezeAt;
+                const hoursLeft = Math.max(0, Math.floor(f.msUntilDelist / 3600000));
+                const minsLeft  = Math.max(0, Math.floor((f.msUntilDelist % 3600000) / 60000));
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">🥶 ${escapeAttr(f.name)}</div>
+                        <div style="font-size:12px;color:#94a3b8;">
+                            현재가 ${(f.price || 0).toLocaleString()}원 ·
+                            ${canUnfreezeNow ? '해제 가능' : '해제 대기 중'} ·
+                            상장폐지까지 ${hoursLeft}시간 ${minsLeft}분
+                        </div>
+                    </div>
+                    <button class="btn-danger" style="padding:8px 14px;" onclick="forceUnfreezeStock('${f.stockId}')">🔓 강제 해제</button>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+
+    window.forceUnfreezeStock = async function(stockId) {
+        if (!confirm('보상 지급 없이 강제로 동결을 해제하시겠습니까?')) return;
+        try {
+            await callAdminAction('forceUnfreezeStock', { stockId });
+            await loadActiveFreezes();
+        } catch (e) {
+            alert('해제 중 오류 발생: ' + e.message);
+        }
+    };
+
+    async function loadUnfreezeRequests() {
+        const listEl = document.getElementById('freeze-request-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { requests } = await callAdminAction('listUnfreezeDonationRequests');
+            if (!requests || requests.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            requests.forEach(r => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;';
+                row.innerHTML = `
+                    <div style="font-weight:800;font-size:14px;">🥶 ${escapeAttr(r.stockName)}</div>
+                    <div style="font-size:12px;color:#94a3b8;">신청자: ${escapeAttr(r.nickname)} (@${escapeAttr(r.soopId)})</div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveUnfreezeDonationRequest('${r.id}')">✅ 승인 (250만원 지급)</button>
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectUnfreezeDonationRequest('${r.id}')">🚫 거절</button>
+                    </div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+
+    window.approveUnfreezeDonationRequest = async function(requestId) {
+        if (!confirm('방송 후원을 확인하셨습니까? 승인 시 250만원이 지급되고 동결이 해제됩니다.')) return;
+        try {
+            await callAdminAction('approveUnfreezeDonationRequest', { requestId });
+            alert('✅ 승인 완료! 동결이 해제됐습니다.');
+            await window.loadAllFreezeData();
+        } catch (e) {
+            alert('승인 중 오류 발생: ' + e.message);
+        }
+    };
+
+    window.rejectUnfreezeDonationRequest = async function(requestId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await callAdminAction('rejectUnfreezeDonationRequest', { requestId });
+            await loadUnfreezeRequests();
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
         }
