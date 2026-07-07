@@ -267,6 +267,7 @@
                 style="display:none;align-items:center;gap:6px;background:#FEE500;color:#181600;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
                 💬 카카오 연결하고 +80만원 받기
             </button>
+            <div id="kakao-privacy-note" style="display:none;font-size:10px;color:#64748b;text-align:right;max-width:220px;">🔒 닉네임 등 개인정보는 수집하지 않아요 (식별용 ID만 사용)</div>
             <span id="kakao-linked-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;">✅ 카카오 연동중</span>
         </div>
     </div>
@@ -1163,9 +1164,11 @@ window.copyAdminEmail = async function(e) {
 function updateKakaoLinkUI() {
     const btn   = document.getElementById('kakao-login-btn');
     const badge = document.getElementById('kakao-linked-badge');
-    if (!btn || !badge) return;
+    const note  = document.getElementById('kakao-privacy-note');
+    if (!btn || !badge || !note) return;
     const linked = !!(myData && myData.kakaoLinked);
     btn.style.display   = linked ? 'none'  : 'flex';
+    note.style.display  = linked ? 'none'  : 'block';
     badge.style.display = linked ? 'inline' : 'none';
 }
 
