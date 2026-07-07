@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>개인정보 처리방침 — SOOP STOCK 거래소</title>
+<style>
+    :root {
+        --bg: #0f172a; --card: #1e293b; --border: #334155;
+        --primary: #38bdf8; --text: #f8fafc; --sub: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+        font-family: 'Pretendard', -apple-system, 'Malgun Gothic', sans-serif;
+        background: var(--bg); color: var(--text);
+        margin: 0; padding: 40px 20px 80px; line-height: 1.8;
+    }
+    .doc { max-width: 720px; margin: 0 auto; }
+    .doc-header { margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+    .doc-header h1 { font-size: 24px; font-weight: 900; margin: 0 0 8px; }
+    .doc-header p { color: var(--sub); font-size: 13px; margin: 0; }
+    h2 { font-size: 16px; font-weight: 800; color: var(--primary); margin: 32px 0 10px; }
+    p, li { color: #cbd5e1; font-size: 14px; }
+    ul, ol { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    strong { color: var(--text); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0 20px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--primary); font-weight: 800; background: rgba(56,189,248,0.06); }
+    td { color: #cbd5e1; }
+    .card {
+        background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        padding: 18px 20px; margin: 16px 0; font-size: 13px; color: var(--sub);
+    }
+    a { color: var(--primary); }
+    .back-link { display: inline-block; margin-bottom: 20px; font-size: 13px; color: var(--sub); text-decoration: none; }
+    .back-link:hover { color: var(--primary); }
+    footer { text-align: center; color: var(--sub); font-size: 12px; margin-top: 60px; }
+</style>
+</head>
+<body>
+<div class="doc">
+    <a class="back-link" href="./index.html">← 거래소로 돌아가기</a>
+
+    <div class="doc-header">
+        <h1>개인정보 처리방침</h1>
+        <p>SOOP STOCK 거래소 (이하 "서비스") · 시행일: 2026-07-07</p>
+    </div>
+
+    <p>SOOP STOCK 거래소는 이용자의 개인정보를 최소한으로만 수집하며, 아래와 같이 처리방침을 안내합니다.</p>
+
+    <div class="card">
+        <strong>🔒 핵심 원칙</strong><br>
+        본 서비스는 닉네임, 실명, 프로필 사진, 이메일 등 <strong>실제 신원을 식별할 수 있는 개인정보를 수집하지
+        않습니다.</strong> 카카오 로그인 연동 시에도 계정을 구분하기 위한 고유 식별 번호만 저장하며, 닉네임·프로필
+        정보에는 접근하거나 저장하지 않습니다.
+    </div>
+
+    <h2>1. 수집하는 정보 및 목적</h2>
+    <table>
+        <tr><th>항목</th><th>수집 시점</th><th>목적</th></tr>
+        <tr><td>Firebase 익명 인증 ID</td><td>접속 시 자동 발급</td><td>기기별 게임 데이터(자산·보유 종목) 구분·저장</td></tr>
+        <tr><td>카카오 고유 회원번호</td><td>이용자가 직접 "카카오 연동"을 선택했을 때만</td><td>기기 변경 시에도 자산을 복구할 수 있도록 계정 보호 (닉네임·프로필 등 다른 정보는 저장하지 않음)</td></tr>
+        <tr><td>게임 데이터(게임머니, 보유 종목, 거래 내역)</td><td>서비스 이용 중</td><td>게임 기능 제공</td></tr>
+        <tr><td>홍보/충전 신청 시 입력한 닉네임·스트리머 아이디</td><td>배너/중계방/자산충전 등 자발적 신청 시</td><td>신청 내용 검수 및 반영 (이용자가 직접 입력한 정보만 저장)</td></tr>
+        <tr><td>접속 기기의 로컬 저장소(localStorage) 플래그</td><td>일부 안내(카카오 연동 유도 등)를 1회만 노출하기 위해</td><td>중복 안내 방지 — 서버로 전송되지 않고 이용자 브라우저에만 저장</td></tr>
+    </table>
+
+    <h2>2. 개인정보의 보유 및 이용 기간</h2>
+    <ul>
+        <li>게임 데이터는 이용자가 서비스를 계속 이용하는 동안 보관되며, 장기간 미접속·미거래한 계정은
+        운영자가 주기적으로 정리할 수 있습니다.</li>
+        <li>홍보/충전 신청 내역은 검수 처리 이력 관리를 위해 일정 기간 보관될 수 있습니다.</li>
+    </ul>
+
+    <h2>3. 개인정보의 제3자 제공 및 처리위탁</h2>
+    <ul>
+        <li>서비스는 <strong>Google Firebase</strong>(인증, 실시간 데이터베이스, 서버 함수)를 인프라로 사용하며,
+        이 과정에서 데이터가 Firebase 서버에 저장됩니다.</li>
+        <li>카카오 로그인 연동 시, 입력한 인증 토큰을 <strong>카카오 API 서버</strong>에 전달해 고유 회원번호만
+        확인하며, 그 외 정보는 조회하지 않습니다.</li>
+        <li>위 두 경우를 제외하고 이용자의 정보를 제3자에게 제공하지 않습니다.</li>
+    </ul>
+
+    <h2>4. 이용자의 권리</h2>
+    <p>이용자는 언제든지 자신의 게임 데이터 삭제를 요청할 수 있습니다. 아래 연락처로 문의해주시면 확인 후
+    처리해드립니다.</p>
+
+    <h2>5. 문의</h2>
+    <p>개인정보 관련 문의는 <a href="mailto:skftodwocks2@gmail.com">skftodwocks2@gmail.com</a>으로 연락해주세요.</p>
+
+    <h2>6. 개정</h2>
+    <p>본 방침은 필요 시 개정될 수 있으며, 개정 시 본 페이지를 통해 안내합니다.</p>
+
+    <footer>SOOP STOCK 거래소 · 개인정보 처리방침</footer>
+</div>
+</body>
+</html>
