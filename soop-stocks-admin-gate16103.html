@@ -225,6 +225,14 @@
         <div id="banner-tab-expired" class="banner-tab-panel" style="display:none;flex-direction:column;gap:10px;"></div>
     </div>
 
+    <!-- 💰 자산 충전 신청 검수 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>💰 자산 충전 신청 검수</h1>
+        <div class="info-box">유저가 라이브 방송에서 후원한 뒤 신청한 목록입니다. 방송 후원 내역과 닉네임/아이디를 대조 확인한 뒤, 지급액을 직접 입력해 승인하세요.</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadCashChargeRequests()">🔄 신청 목록 새로고침</button>
+        <div id="cash-charge-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <button onclick="logout()" style="background:transparent; color:#ef4444; text-decoration:underline; font-size:12px">로그아웃</button>
 </div>
 
@@ -306,6 +314,7 @@
             await loadStocksOnce();
             await loadRankingStatus();
             await loadAllBannerData();
+            await loadCashChargeRequests();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -778,6 +787,66 @@
             await loadActiveExpiredBanners();
         } catch (e) {
             alert('삭제 실패: ' + e.message);
+        }
+    };
+
+    // ══════════════════════════════════════════════════════
+    // 자산 충전 신청 검수
+    // ══════════════════════════════════════════════════════
+
+    async function loadCashChargeRequests() {
+        const listEl = document.getElementById('cash-charge-request-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { requests } = await callAdminAction('listCashChargeRequests');
+            if (!requests || requests.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            requests.forEach(r => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+                const requestedAt = r.requestedAt ? new Date(r.requestedAt).toLocaleString() : '-';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">${escapeAttr(r.nickname)}</div>
+                        <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.soopId)} · 신청 시각 ${requestedAt}</div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="number" min="1" placeholder="지급액(원)" id="charge-amount-${r.id}"
+                               style="flex:1;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveCashChargeRequest('${r.id}')">✅ 승인</button>
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectCashChargeRequest('${r.id}')">🚫 거절</button>
+                    </div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+    window.loadCashChargeRequests = loadCashChargeRequests;
+
+    window.approveCashChargeRequest = async function(requestId) {
+        const amount = document.getElementById(`charge-amount-${requestId}`).value;
+        if (!amount) return alert('지급액을 입력해주세요.');
+        if (!confirm(`${Number(amount).toLocaleString()}원을 지급하시겠습니까?`)) return;
+        try {
+            const result = await callAdminAction('approveCashChargeRequest', { requestId, amount });
+            alert(`✅ ${result.amount.toLocaleString()}원이 지급됐습니다!`);
+            await loadCashChargeRequests();
+        } catch (e) {
+            alert('승인 중 오류 발생: ' + e.message);
+        }
+    };
+
+    window.rejectCashChargeRequest = async function(requestId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await callAdminAction('rejectCashChargeRequest', { requestId });
+            await loadCashChargeRequests();
+        } catch (e) {
+            alert('거절 중 오류 발생: ' + e.message);
         }
     };
 </script>

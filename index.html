@@ -254,10 +254,60 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════════
+     자산 충전 모달 (라이브 방송 후원 → 신청 → 관리자 승인)
+══════════════════════════════════════════ -->
+<div id="cash-charge-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>💰 자산 충전</h2></div>
+
+        <!-- 1단계: 안내 -->
+        <div id="cash-charge-step-info">
+            <ul class="promo-info-list" style="margin-bottom:16px;">
+                <li>📡 <b>방법:</b> 라이브 방송 후원(별풍선)으로 게임자산 충전</li>
+                <li>✅ <b>확인:</b> 관리자가 방송에서 후원을 직접 확인한 뒤 지급</li>
+            </ul>
+            <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.9;">
+                ① 아래 "라이브 방송으로 이동" 버튼으로 방송에서 후원하기<br>
+                ② 후원 완료 후, 다시 이 창을 열어 <b style="color:#38bdf8;">"자산 신청"</b>으로 신청서 작성<br>
+                ③ 관리자가 방송에서 후원을 확인하고 자산을 지급합니다
+            </div>
+            <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
+                <button onclick="closeCashChargeModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+                <button onclick="window.open('https://www.sooplive.com/station/skftodwocks2','_blank')" style="flex:1.4;min-width:120px;background:#6366f1;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">📡 라이브 방송으로 이동</button>
+                <button onclick="showCashChargeRequestForm()" class="btn-confirm-contact" style="flex:1.4;min-width:100px;font-weight:bold;font-size:14px;">📝 자산 신청</button>
+            </div>
+        </div>
+
+        <!-- 2단계: 신청서 -->
+        <div id="cash-charge-step-form" style="display:none;">
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+                <input type="text" id="cash-charge-nickname" placeholder="닉네임"
+                    style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+                <input type="text" id="cash-charge-soopid" placeholder="아이디 (예: skftodwocks2)"
+                    style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+            </div>
+            <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
+                방송에서 후원할 때 사용한 닉네임과 아이디를 정확히 입력해주세요. 관리자가 후원 내역과 대조해 확인 후 자산을 지급합니다.
+            </div>
+            <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
+                <button onclick="showCashChargeInfo()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">뒤로</button>
+                <button id="cash-charge-submit-btn" onclick="submitCashChargeRequest()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청 완료</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
     <div class="wallet-bar">
-        <div class="wallet-info">내 잔고: <span id="my-cash">0</span>원</div>
+        <div class="wallet-info">
+            내 잔고: <span id="my-cash">0</span>원
+            <button onclick="openCashChargeModal()"
+                style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
+                💰 자산 충전
+            </button>
+        </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
             <div style="font-size:12px;color:var(--text-sub);">초기 자산 200,000원 지급됨</div>
             <div style="font-size:12px;color:var(--text-sub);">
@@ -328,6 +378,7 @@ const submitBannerRequestCallable = httpsCallable(functions, 'submitBannerReques
 const submitChartBannerRequestCallable = httpsCallable(functions, 'submitChartBannerRequest');
 const linkKakaoAccountCallable = httpsCallable(functions, 'linkKakaoAccount');
 const initializeUserCallable   = httpsCallable(functions, 'initializeUser');
+const submitCashChargeRequestCallable = httpsCallable(functions, 'submitCashChargeRequest');
 
 const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
@@ -1066,6 +1117,50 @@ window.openChartAdModal  = () => {
 };
 window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
 
+// ── 자산 충전 모달 (라이브 방송 후원 → 신청 → 관리자 승인) ──
+window.openCashChargeModal = () => {
+    document.getElementById('cash-charge-modal').classList.add('active');
+    showCashChargeInfo();
+};
+window.closeCashChargeModal = () => document.getElementById('cash-charge-modal').classList.remove('active');
+
+function showCashChargeInfo() {
+    document.getElementById('cash-charge-step-info').style.display = 'block';
+    document.getElementById('cash-charge-step-form').style.display = 'none';
+}
+window.showCashChargeInfo = showCashChargeInfo;
+
+window.showCashChargeRequestForm = function() {
+    document.getElementById('cash-charge-step-info').style.display = 'none';
+    document.getElementById('cash-charge-step-form').style.display = 'block';
+};
+
+window.submitCashChargeRequest = async function() {
+    const nicknameInput = document.getElementById('cash-charge-nickname');
+    const soopIdInput     = document.getElementById('cash-charge-soopid');
+    const submitBtn        = document.getElementById('cash-charge-submit-btn');
+    const nickname       = nicknameInput.value.trim();
+    const soopId          = soopIdInput.value.trim().toLowerCase();
+
+    if (!nickname) return alert('닉네임을 입력해주세요.');
+    if (!/^[a-z0-9]{2,20}$/.test(soopId)) return alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.');
+
+    submitBtn.disabled = true;
+    submitBtn.innerText = '신청 중...';
+    try {
+        await submitCashChargeRequestCallable({ nickname, soopId });
+        alert('✅ 신청이 접수됐습니다! 관리자가 방송에서 후원을 확인한 뒤 자산을 지급합니다.');
+        nicknameInput.value = '';
+        soopIdInput.value   = '';
+        window.closeCashChargeModal();
+    } catch (e) {
+        alert(e?.message || '신청 중 오류가 발생했습니다.');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = '신청 완료';
+    }
+};
+
 // ── 차트 하단 배너 신청 (이미지/링크 직접 입력 → 실시간 미리보기 → 신청) ──
 const CHART_BANNER_COST_PER_DAY = 4000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
@@ -1425,6 +1520,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
+        if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
     }
 });
 
