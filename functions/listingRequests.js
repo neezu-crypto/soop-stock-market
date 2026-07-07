@@ -9,7 +9,8 @@ const { requireLinkedUser, findStockIdByName } = require("./common");
 // 하고 실제 상장은 관리자 승인 후에 이뤄진다.
 // ══════════════════════════════════════════════════════════
 
-const MAX_STOCK_NAME_LENGTH = 20;
+const MAX_STOCK_NAME_LENGTH        = 12;
+const LISTING_REQUEST_COOLDOWN_MS  = 60 * 1000; // 매크로/도배 방지용 최소 재신청 간격
 
 const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -17,6 +18,21 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
 
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
+
+  // 매크로/도배성 연속 신청을 막기 위한 쿨다운 — 트랜잭션으로 검사와 갱신을
+  // 원자적으로 처리해 동시에 여러 번 호출해도 하나만 통과한다.
+  const now = Date.now();
+  let tooSoon = false;
+  await db.ref(`users/${auth.uid}/lastListingRequestAt`).transaction((last) => {
+    if (last && now - last < LISTING_REQUEST_COOLDOWN_MS) {
+      tooSoon = true;
+      return; // abort, 값 유지
+    }
+    return now;
+  });
+  if (tooSoon) {
+    throw new HttpsError("resource-exhausted", "상장 신청이 너무 빠릅니다. 1분 후 다시 시도해주세요.");
+  }
 
   const stockName = String(request.data?.stockName || "").trim();
   if (!stockName) throw new HttpsError("invalid-argument", "종목명을 입력해주세요.");

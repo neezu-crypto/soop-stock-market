@@ -283,6 +283,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     };
     window.closeListingModal = () => document.getElementById('listing-modal').classList.remove('active');
 
+    const MAX_LISTING_NAME_LENGTH = 12; // 서버 MAX_STOCK_NAME_LENGTH와 동일하게 유지
+
     window.submitListingRequest = async function() {
         await submitRequestForm({
             submitBtnId: 'listing-submit-btn',
@@ -290,6 +292,10 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             validateAndBuild() {
                 const stockName = document.getElementById('listing-stock-name').value.trim();
                 if (!stockName) { alert('상장을 원하는 종목명을 입력해주세요.'); return null; }
+                if (stockName.length > MAX_LISTING_NAME_LENGTH) {
+                    alert(`종목명은 ${MAX_LISTING_NAME_LENGTH}자 이하로 입력해주세요.`);
+                    return null;
+                }
                 if (getAllStocks().some(s => s.name === stockName)) {
                     alert('이미 상장된 종목명입니다.');
                     return null;
