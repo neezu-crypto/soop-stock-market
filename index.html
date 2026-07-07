@@ -425,10 +425,6 @@
             종목 카드를 클릭하면 분봉 차트를 확인할 수 있습니다.
         </p>
         <input type="text" id="search-input" placeholder="스트리머 검색...">
-        <button onclick="openPinModal()"
-            style="margin-top:8px;background:#334155;color:#f8fafc;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
-            📌 최상단 고정 노출 신청
-        </button>
     </header>
     <div class="ranking-bar">
         <div class="ranking-title">🔥 인기 TOP 5</div>
@@ -1799,6 +1795,7 @@ function renderStocks(filter = "") {
 
     listDiv.innerHTML = "";
     stockElements = {};
+    if (!filter) listDiv.appendChild(createPinPromoCard()); // 검색 중이 아닐 때만 리스트 최상단에 노출
     filtered.forEach(s => {
         const card = createStockCard(s);
         stockElements[s.id] = card;
@@ -1847,6 +1844,23 @@ function syncStockSubscriptions(idsToShow) {
     visibleStockIds.forEach(id => { if (!nextIds.has(id)) unsubscribeStock(id); });
     nextIds.forEach(id => { if (!visibleStockIds.has(id)) subscribeStock(id); });
     visibleStockIds = nextIds;
+}
+
+// 종목카드와 같은 스타일로 리스트 최상단에 노출되는 "고정노출 신청" 안내 카드
+function createPinPromoCard() {
+    const card = document.createElement('div');
+    card.className = 'stock-card';
+    card.style.cssText = 'cursor:pointer;border-color:#fbbf24;';
+    card.addEventListener('click', () => window.openPinModal());
+    card.innerHTML = `
+        <div style="grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+                <div style="font-weight:800;font-size:14px;color:#fbbf24;">📌 최상단 고정 노출 신청</div>
+                <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">내 종목을 이 자리(최대 3슬롯)에 노출해보세요 · 시간당 50만원, 최대 12시간</div>
+            </div>
+            <button class="btn" style="background:#fbbf24;color:#1e293b;padding:8px 14px;flex-shrink:0;" onclick="event.stopPropagation();openPinModal();">신청하기</button>
+        </div>`;
+    return card;
 }
 
 function createStockCard(s) {
