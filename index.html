@@ -73,11 +73,16 @@
             <li>📍 <b>위치:</b> 거래소 우측 상단 배너</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
             <li>💰 <b>비용:</b> 1일 당 게임자산 100만원 (신청 시 보유 현금에서 선차감)</li>
+            <li>✅ <b>대상:</b> 이미 상장된 종목만 신청 가능 (검색해서 선택)</li>
         </ul>
 
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-            <input type="text" id="promo-nickname" placeholder="닉네임"
+            <input type="text" id="promo-stock-name" list="promo-stock-datalist" placeholder="종목명 검색 (이미 상장된 종목만 가능)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+            <datalist id="promo-stock-datalist"></datalist>
+            <div id="promo-not-listed-warning" style="display:none;background:rgba(239,68,68,0.1);border:1px solid #ef4444;border-radius:8px;padding:10px 12px;font-size:12px;color:#fca5a5;line-height:1.6;">
+                🔍 상장되지 않은 종목명이에요. <span onclick="openListingModal(document.getElementById('promo-stock-name').value.trim())" style="color:#38bdf8;text-decoration:underline;cursor:pointer;font-weight:700;">먼저 종목 상장 신청을 해주세요</span> — 상장 승인 후 다시 신청할 수 있어요.
+            </div>
             <input type="text" id="promo-streamer-id" placeholder="스트리머 아이디 (예: skftodwocks2)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
 

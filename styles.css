@@ -166,6 +166,7 @@
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
         .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }
         .btn-confirm-contact { width: 100%; background: var(--primary); color: #0f172a; border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 15px; }
+        .btn-confirm-contact:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; opacity: 0.7; }
         @keyframes loading-blink { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
         .banner-circle span[id^="loader-"] { animation: loading-blink 1.5s infinite; }
         .img-loaded { display: block !important; opacity: 1 !important; }

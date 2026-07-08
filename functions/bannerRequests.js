@@ -28,6 +28,13 @@ function buildBannerPreview(streamerId) {
 /**
  * 홍보 배너 신청 접수. 카카오 연동된(또는 관리자) 유저만 호출 가능 — 실제
  * 반영은 관리자 승인(actionApproveBannerRequest) 후에만 이뤄진다.
+ *
+ * nickname은 최상단 고정 노출 신청(pinRequests)과 동일하게 "이미 상장된
+ * 종목명"이어야 한다 — 예전엔 아무 텍스트나 받아 승인 시점에 없으면 새
+ * 종목을 자동 상장해버려서, 관리자가 신청마다 "이 닉네임이 진짜 스트리머가
+ * 맞는지" 직접 검수해야 했다. 이제는 신청 시점에 기존 상장 종목인지 바로
+ * 확인하고, 없으면 먼저 종목 상장 신청을 하도록 안내한다 — 관리자는 노출
+ * 기간/비용만 검수하면 된다.
  */
 const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -40,12 +47,20 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
   const days        = parseInt(request.data?.days, 10);
 
-  if (!nickname) throw new HttpsError("invalid-argument", "닉네임을 입력해주세요.");
+  if (!nickname) throw new HttpsError("invalid-argument", "종목명을 입력해주세요.");
   if (!STREAMER_ID_RE.test(streamerId)) {
     throw new HttpsError("invalid-argument", "아이디는 영문 소문자/숫자 2~20자여야 합니다.");
   }
   if (!Number.isInteger(days) || days < 1 || days > MAX_BANNER_REQUEST_DAYS) {
     throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이로 입력해주세요.`);
+  }
+
+  const targetId = await findStockIdByName(db, nickname);
+  if (!targetId) {
+    throw new HttpsError(
+      "failed-precondition",
+      "현재 상장되지 않은 종목입니다. 먼저 종목 상장 신청을 통해 상장한 뒤 다시 신청해주세요."
+    );
   }
 
   const cost = days * BANNER_COST_PER_DAY;
@@ -58,6 +73,7 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
 
   await ref.set({
     nickname,
+    stockId: targetId,
     streamerId,
     previewImg,
     stationLink,
@@ -95,15 +111,22 @@ async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
   // 관리자가 오타 등을 발견해 승인 직전 닉네임을 고칠 수 있다 — 없으면 신청 당시 값 사용
   const finalNickname = String(nickname || "").trim() || reqData.nickname;
 
-  let targetId = await findStockIdByName(db, finalNickname);
-  let existingStock = null;
+  // 신청 시점에 이미 상장 종목인지 확인했으므로 보통은 reqData.stockId를 그대로 쓰면
+  // 되지만, 관리자가 승인 시 이름을 다른 값으로 고쳤거나(그 이름도 반드시 기존
+  // 상장 종목이어야 함) 신청이 이 검증이 생기기 전(예전 방식)에 접수됐을 수 있어
+  // 이름이 바뀌었으면 다시 조회한다. 더 이상 없는 종목을 자동 상장하지 않는다 —
+  // 상장되지 않은 이름이면 승인 자체를 막아 "검수 없이 아무 이름이나 배너로
+  // 등록되는" 예전 허점을 닫는다.
+  const targetId = (nickname && nickname.trim() && nickname.trim() !== reqData.nickname)
+    ? await findStockIdByName(db, finalNickname)
+    : (reqData.stockId || await findStockIdByName(db, finalNickname));
   if (!targetId) {
-    // 아직 상장되지 않은 닉네임 — 배너 노출을 위해 자동 상장
-    targetId = `id_${Date.now()}_0`;
-    await db.ref(`stocks/${targetId}`).set({ name: finalNickname, price: 10000 });
-  } else {
-    existingStock = (await db.ref(`stocks/${targetId}`).get()).val();
+    throw new HttpsError(
+      "failed-precondition",
+      `"${finalNickname}"은(는) 상장되지 않은 종목입니다. 종목명을 정확히 고치거나, 먼저 상장 신청을 승인한 뒤 다시 시도해주세요.`
+    );
   }
+  const existingStock = (await db.ref(`stocks/${targetId}`).get()).val();
 
   // 이미 홍보 중(만료 전)인 아이디로 재신청한 경우, 오늘부터 새로 계산하지 않고
   // 남은 기간에 이어서 연장한다.

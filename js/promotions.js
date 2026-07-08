@@ -33,7 +33,12 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     let pendingChartAdStockId = null;
 
     // ── 모달 ─────────────────────────────────────────────────────
-    window.openPromoModal    = () => { if (requireLoginOrPrompt()) document.getElementById('promo-modal').classList.add('active'); };
+    window.openPromoModal    = () => {
+        if (!requireLoginOrPrompt()) return;
+        populatePromoStockDatalist();
+        checkPromoStockListed();
+        document.getElementById('promo-modal').classList.add('active');
+    };
     window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
 
     // ── 신청 폼 공통 유틸 (아이디/URL 검증, 이미지 미리보기, 기간→비용 계산, 제출) ──
@@ -117,7 +122,12 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         }
     }
 
-    // ── 홍보 배너 신청 (닉네임/아이디 입력 → 실시간 미리보기 → 신청) ──
+    // ── 홍보 배너 신청 (종목명 검색 + 아이디 입력 → 실시간 미리보기 → 신청) ──
+    // 예전엔 닉네임을 자유 텍스트로 받아 관리자가 신청마다 "진짜 스트리머가
+    // 맞는지" 검수해야 했다. 이제는 최상단 고정 노출 신청과 동일하게 이미
+    // 상장된 종목명만 받고(datalist 자동완성 + 실시간 검증), 상장되지 않은
+    // 이름이면 제출을 막고 종목 상장 신청부터 하도록 안내한다 — 관리자는
+    // 노출 기간/비용만 보면 되므로 검수 부담이 크게 줄어든다.
     const BANNER_COST_PER_DAY = 1000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
     const updatePromoCost = setupCostCalculator({ unitInputId: 'promo-days', costElId: 'promo-cost', pricePerDay: BANNER_COST_PER_DAY });
@@ -134,15 +144,41 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         errorText: '이미지 없음',
     });
 
+    function populatePromoStockDatalist() {
+        const datalist = document.getElementById('promo-stock-datalist');
+        if (!datalist) return;
+        datalist.innerHTML = getAllStocks()
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(s => `<option value="${s.name.replace(/"/g, '&quot;')}"></option>`)
+            .join('');
+    }
+
+    // 입력한 종목명이 실제 상장 종목인지 실시간으로 확인해, 없으면 경고 +
+    // 상장 신청 유도 문구를 보여주고 신청 버튼을 잠근다.
+    function checkPromoStockListed() {
+        const name       = document.getElementById('promo-stock-name')?.value.trim() || '';
+        const warning    = document.getElementById('promo-not-listed-warning');
+        const submitBtn  = document.getElementById('promo-submit-btn');
+        const isListed   = name && getAllStocks().some(s => s.name === name);
+        if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
+        if (submitBtn) submitBtn.disabled    = name ? !isListed : false; // 빈 입력은 제출 시점에 별도 안내
+    }
+    document.getElementById('promo-stock-name')?.addEventListener('input', checkPromoStockListed);
+
     window.submitBannerRequest = async function() {
         await submitRequestForm({
             submitBtnId: 'promo-submit-btn',
             submitLabel: '신청하기',
             validateAndBuild() {
-                const nickname   = document.getElementById('promo-nickname').value.trim();
+                const nickname   = document.getElementById('promo-stock-name').value.trim();
                 const streamerId = document.getElementById('promo-streamer-id').value.trim().toLowerCase();
                 const days       = parseInt(document.getElementById('promo-days').value, 10);
-                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+                if (!nickname) { alert('종목명을 입력해주세요.'); return null; }
+                if (!getAllStocks().some(s => s.name === nickname)) {
+                    alert('상장되지 않은 종목명이에요. 먼저 종목 상장 신청을 해주세요.');
+                    return null;
+                }
                 if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
                 if (!Number.isInteger(days) || days < 1 || days > 7) { alert('노출 기간은 1~7일 사이로 입력해주세요.'); return null; }
                 return { nickname, streamerId, days };
@@ -152,11 +188,12 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 배너가 등록되며, 거절 시 전액 환불됩니다.`);
             },
             resetFn() {
-                document.getElementById('promo-nickname').value = '';
+                document.getElementById('promo-stock-name').value = '';
                 document.getElementById('promo-streamer-id').value = '';
                 document.getElementById('promo-days').value = '7';
                 updatePromoPreview();
                 updatePromoCost();
+                checkPromoStockListed();
             },
             closeFn: window.closePromoModal,
         });
