@@ -139,8 +139,9 @@
                기본 규칙보다 소스 순서상 뒤에 있어야 모바일에서 실제로 적용된다 */
             .banner-container {
                 top: 85px;
+                right: 6px;
                 gap: 12px;
-                padding: 8px;
+                padding: 8px 4px 8px 8px;
             }
             .banner-circle {
                 width: 68px;
@@ -165,7 +166,6 @@
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
         .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }
         .btn-confirm-contact { width: 100%; background: var(--primary); color: #0f172a; border: none; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 15px; }
-        @media (max-width: 1400px) { .banner-container { right: 20px; } }
         @keyframes loading-blink { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
         .banner-circle span[id^="loader-"] { animation: loading-blink 1.5s infinite; }
         .img-loaded { display: block !important; opacity: 1 !important; }
