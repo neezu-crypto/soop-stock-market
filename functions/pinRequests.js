@@ -20,10 +20,11 @@ const {
 // ══════════════════════════════════════════════════════════
 
 /**
- * 최상단 고정 노출 신청 접수. 로그인(익명 포함)한 누구나 호출 가능 — 실제
- * 반영은 관리자 승인(actionApprovePinRequest) 후에만 이뤄진다. 슬롯이
- * 가득 찼는지는 신청 시점이 아니라 승인 시점에 검사한다(신청은 언제든
- * 가능, 승인 가능 여부만 그때 결정).
+ * 최상단 고정 노출 신청. 로그인(익명 포함)한 누구나 호출 가능. 대상은
+ * 반드시 이미 상장된 종목이어야 하며(오타로 새 종목이 생기지 않도록 미리
+ * 확인), 슬롯(최대 3개)에 여유가 있으면 검수 없이 즉시 적용한다 — 신청
+ * 시점에 슬롯 상태를 바로 확인하므로 "승인 시점엔 이미 꽉 찼더라" 같은
+ * 시차 문제도 사라진다.
  */
 const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -46,22 +47,47 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
     throw new HttpsError("not-found", "해당 종목명을 찾을 수 없습니다. 정확한 종목명을 입력해주세요.");
   }
 
-  const cost = hours * PIN_COST_PER_HOUR;
+  const now = Date.now();
+  const existingStock = (await db.ref(`stocks/${targetId}`).get()).val();
+  const isAlreadyPinned = existingStock?.pinnedUntil && existingStock.pinnedUntil > now;
 
-  // 신청 시점에 게임자산을 바로 차감한다 (거절되면 actionRejectPinRequest에서 환불).
+  if (!isAlreadyPinned) {
+    // 새로 슬롯을 차지하는 경우에만 최대 슬롯 수를 확인한다 — 이미 고정
+    // 중인 종목의 재신청(연장)은 슬롯을 새로 차지하는 게 아니므로 제외.
+    const stocksSnap  = await db.ref("stocks").get();
+    const stocksData  = stocksSnap.val() || {};
+    const activeCount = Object.values(stocksData).filter((s) => s.pinnedUntil && s.pinnedUntil > now).length;
+    if (activeCount >= MAX_PINNED_SLOTS) {
+      throw new HttpsError(
+        "resource-exhausted",
+        `최상단 고정 슬롯이 이미 가득 찼습니다 (최대 ${MAX_PINNED_SLOTS}개). 기존 고정이 만료되거나 해제된 뒤 다시 시도해주세요.`
+      );
+    }
+  }
+
+  const cost = hours * PIN_COST_PER_HOUR;
   await chargeUserCash(db, auth.uid, cost);
 
+  // 이미 고정 중인 종목의 재신청은 남은 시간에 이어서 연장한다(우측 배너와 동일한 원칙).
+  const baseTime    = isAlreadyPinned ? existingStock.pinnedUntil : now;
+  const pinnedUntil = baseTime + hours * 3600000;
+
   const ref = db.ref("pinRequests").push();
-  await ref.set({
-    stockName,
-    hours,
-    chargedAmount: cost,
-    status:        "pending",
-    requestedAt:   Date.now(),
-    requesterUid:  auth.uid,
+  await db.ref().update({
+    [`stocks/${targetId}/pinnedUntil`]: pinnedUntil,
+    [`pinnedStocks/${targetId}`]:       true, // 클라이언트가 항상 실시간 구독하도록 하는 마커
+    [`pinRequests/${ref.key}`]: {
+      stockName,
+      hours,
+      chargedAmount: cost,
+      status:        "approved", // 관리자 승인 단계 없이 즉시 적용 — 기록은 이력 확인용으로 남긴다
+      requestedAt:   now,
+      reviewedAt:    now,
+      requesterUid:  auth.uid,
+    },
   });
 
-  return { ok: true, id: ref.key, chargedAmount: cost };
+  return { ok: true, id: ref.key, chargedAmount: cost, pinnedUntil };
 });
 
 async function actionListPinRequests(db) {

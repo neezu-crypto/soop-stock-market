@@ -7,6 +7,7 @@ const {
   MAX_RELAY_ROOMS,
   chargeUserCash,
   creditUserCash,
+  findStockIdByName,
   requireLinkedUser,
 } = require("./common");
 
@@ -25,8 +26,10 @@ function buildRelayPreview(streamerId) {
 }
 
 /**
- * 중계방 홍보 신청 접수. 로그인(익명 포함)한 누구나 호출 가능 — 실제
- * 반영은 관리자 승인(actionApproveRelayRoomRequest) 후에만 이뤄진다.
+ * 중계방 홍보 신청. 로그인(익명 포함)한 누구나 호출 가능. 다른 셀프 신청
+ * (최상단 고정 노출 등)과 동일하게 대상은 반드시 이미 상장된 종목명이어야
+ * 하고, 슬롯(최대 3명) 여유와 중복 진행 여부만 확인되면 검수 없이 즉시
+ * 등록한다.
  */
 const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -35,16 +38,24 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
 
-  const nickname   = String(request.data?.nickname || "").trim();
+  const stockName  = String(request.data?.stockName || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
   const hours      = parseInt(request.data?.hours, 10);
 
-  if (!nickname) throw new HttpsError("invalid-argument", "닉네임을 입력해주세요.");
+  if (!stockName) throw new HttpsError("invalid-argument", "종목명을 입력해주세요.");
   if (!STREAMER_ID_RE.test(streamerId)) {
     throw new HttpsError("invalid-argument", "아이디는 영문 소문자/숫자 2~20자여야 합니다.");
   }
   if (!Number.isInteger(hours) || hours < 1 || hours > MAX_RELAY_ROOM_HOURS) {
     throw new HttpsError("invalid-argument", `홍보 시간은 1~${MAX_RELAY_ROOM_HOURS}시간 사이로 입력해주세요.`);
+  }
+
+  // 중계방도 이미 상장된 종목만 가능 — 오타로 새 종목이 생기지 않도록 미리 확인.
+  if (!(await findStockIdByName(db, stockName))) {
+    throw new HttpsError(
+      "failed-precondition",
+      "현재 상장되지 않은 종목입니다. 먼저 종목 상장 신청을 통해 상장한 뒤 다시 신청해주세요."
+    );
   }
 
   const now = Date.now();
@@ -55,35 +66,47 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
     throw new HttpsError("already-exists", "이미 진행 중인 중계방입니다. 종료된 뒤 다시 신청해주세요.");
   }
 
-  // 같은 아이디로 검토 대기 중인 신청이 이미 있으면 중복 접수를 막는다.
-  const allReqSnap = await db.ref("relayRoomRequests").get();
-  const allReqs = allReqSnap.val() || {};
-  const hasPending = Object.values(allReqs).some((r) => r.streamerId === streamerId && r.status === "pending");
-  if (hasPending) {
-    throw new HttpsError("already-exists", "이미 검토 대기 중인 신청이 있습니다.");
+  // 최대 등록 인원(3명) 확인.
+  const allRoomsSnap = await db.ref("relayRooms").get();
+  const allRooms = allRoomsSnap.val() || {};
+  const activeCount = Object.values(allRooms).filter((r) => r.endAt > now).length;
+  if (activeCount >= MAX_RELAY_ROOMS) {
+    throw new HttpsError(
+      "resource-exhausted",
+      `중계방은 최대 ${MAX_RELAY_ROOMS}명까지만 등록할 수 있습니다. 기존 중계방이 종료된 뒤 다시 시도해주세요.`
+    );
   }
 
   const cost = hours * RELAY_ROOM_COST_PER_HOUR;
-
-  // 신청 시점에 게임자산을 바로 차감한다 (거절되면 actionRejectRelayRoomRequest에서 환불).
   await chargeUserCash(db, auth.uid, cost);
 
-  const ref = db.ref("relayRoomRequests").push();
   const { previewImg, stationLink } = buildRelayPreview(streamerId);
+  const endAt = now + hours * 3600000;
 
-  await ref.set({
-    nickname,
-    streamerId,
-    previewImg,
-    stationLink,
-    hours,
-    chargedAmount: cost,
-    status:        "pending",
-    requestedAt:   now,
-    requesterUid:  auth.uid,
+  const ref = db.ref("relayRoomRequests").push();
+  await db.ref().update({
+    [`relayRooms/${streamerId}`]: {
+      nickname: stockName,
+      previewImg,
+      stationLink,
+      startAt: now,
+      endAt,
+    },
+    [`relayRoomRequests/${ref.key}`]: {
+      nickname: stockName,
+      streamerId,
+      previewImg,
+      stationLink,
+      hours,
+      chargedAmount: cost,
+      status:        "approved", // 관리자 승인 단계 없이 즉시 적용 — 기록은 이력 확인용으로 남긴다
+      requestedAt:   now,
+      reviewedAt:    now,
+      requesterUid:  auth.uid,
+    },
   });
 
-  return { ok: true, id: ref.key, chargedAmount: cost };
+  return { ok: true, id: ref.key, chargedAmount: cost, endAt };
 });
 
 async function actionListRelayRoomRequests(db) {

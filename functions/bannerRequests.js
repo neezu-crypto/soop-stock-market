@@ -25,16 +25,29 @@ function buildBannerPreview(streamerId) {
   };
 }
 
+/** 이미 홍보 중(만료 전)인 종목에 재신청하면, 오늘부터 새로 계산하지 않고 남은 기간에 이어서 연장한다. */
+function computeBannerEndDate(existingStock, days) {
+  let baseDate = new Date();
+  if (existingStock?.bannerImg && existingStock.bannerEndDate) {
+    const existingEnd = new Date(existingStock.bannerEndDate);
+    existingEnd.setHours(23, 59, 59, 999);
+    if (existingEnd > baseDate) baseDate = existingEnd;
+  }
+  const endDate = new Date(baseDate);
+  endDate.setDate(endDate.getDate() + days);
+  return endDate.toISOString().split("T")[0];
+}
+
 /**
- * 홍보 배너 신청 접수. 카카오 연동된(또는 관리자) 유저만 호출 가능 — 실제
- * 반영은 관리자 승인(actionApproveBannerRequest) 후에만 이뤄진다.
+ * 홍보 배너 신청. 카카오 연동된(또는 관리자) 유저만 호출 가능.
  *
  * nickname은 최상단 고정 노출 신청(pinRequests)과 동일하게 "이미 상장된
- * 종목명"이어야 한다 — 예전엔 아무 텍스트나 받아 승인 시점에 없으면 새
- * 종목을 자동 상장해버려서, 관리자가 신청마다 "이 닉네임이 진짜 스트리머가
- * 맞는지" 직접 검수해야 했다. 이제는 신청 시점에 기존 상장 종목인지 바로
- * 확인하고, 없으면 먼저 종목 상장 신청을 하도록 안내한다 — 관리자는 노출
- * 기간/비용만 검수하면 된다.
+ * 종목명"이어야 한다 — 예전엔 아무 텍스트나 받아 관리자가 매번 "이 닉네임이
+ * 진짜 상장된 스트리머가 맞는지" 검수한 뒤 승인해야 했다. 이제는 신청
+ * 시점에 기존 상장 종목인지 바로 확인해 없으면 상장 신청을 먼저 하도록
+ * 안내하고, 있으면 검수 없이 즉시 배너를 적용한다(관리자 승인 단계 자체가
+ * 불필요해짐 — "종목이 실재하는가"가 유일한 검수 포인트였는데, 상장 신청
+ * 승인 시점에 이미 한 번 걸러졌기 때문).
  */
 const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -62,29 +75,36 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
       "현재 상장되지 않은 종목입니다. 먼저 종목 상장 신청을 통해 상장한 뒤 다시 신청해주세요."
     );
   }
+  const existingStock = (await db.ref(`stocks/${targetId}`).get()).val();
+  const endDateStr = computeBannerEndDate(existingStock, days);
 
   const cost = days * BANNER_COST_PER_DAY;
-
-  // 신청 시점에 게임자산을 바로 차감한다 (거절되면 actionRejectBannerRequest에서 환불).
   await chargeUserCash(db, auth.uid, cost);
 
-  const ref = db.ref("bannerRequests").push();
   const { previewImg, stationLink } = buildBannerPreview(streamerId);
+  const ref = db.ref("bannerRequests").push();
+  const now = Date.now();
 
-  await ref.set({
-    nickname,
-    stockId: targetId,
-    streamerId,
-    previewImg,
-    stationLink,
-    days,
-    chargedAmount: cost,
-    status:        "pending",
-    requestedAt:   Date.now(),
-    requesterUid:  auth.uid,
+  await db.ref().update({
+    [`stocks/${targetId}/bannerImg`]:     previewImg,
+    [`stocks/${targetId}/bannerEndDate`]: endDateStr,
+    [`stocks/${targetId}/link`]:          stationLink,
+    [`bannerRequests/${ref.key}`]: {
+      nickname,
+      stockId:       targetId,
+      streamerId,
+      previewImg,
+      stationLink,
+      days,
+      chargedAmount: cost,
+      status:        "approved", // 관리자 승인 단계 없이 즉시 적용 — 기록은 이력 확인용으로 남긴다
+      requestedAt:   now,
+      reviewedAt:    now,
+      requesterUid:  auth.uid,
+    },
   });
 
-  return { ok: true, id: ref.key, chargedAmount: cost };
+  return { ok: true, id: ref.key, chargedAmount: cost, endDate: endDateStr };
 });
 
 async function actionListBannerRequests(db) {
@@ -176,14 +196,15 @@ async function actionRejectBannerRequest(db, { requestId }) {
 // ══════════════════════════════════════════════════════════
 
 /**
- * 차트 하단 배너 신청 접수. 이 배너는 신청자가 지금 열어둔 "그 종목"의
- * 차트 하단에 붙는 것이 목적이므로, 대상은 클라이언트가 넘긴 stockId로
+ * 차트 하단 배너 신청. 이 배너는 신청자가 지금 열어둔 "그 종목"의 차트
+ * 하단에 붙는 것이 목적이므로, 대상은 클라이언트가 넘긴 stockId로
  * 고정한다 — 닉네임은 신청자 확인용 정보일 뿐 종목 식별에는 쓰지 않는다
  * (예전엔 닉네임으로 종목을 찾거나 없으면 새로 상장해버려서, 신청자가
  * 입력한 닉네임과 종목명이 다르면 의도치 않은 새 종목이 생성됐다).
  * 우측 랭킹 배너와 달리 이미지·링크도 신청자가 직접 입력한다(자동
  * 프로필 이미지가 아니라 720x150 커스텀 배너이므로).
- * 실제 반영은 관리자 승인(actionApproveChartBannerRequest) 후에만 이뤄진다.
+ * 대상이 항상 "지금 열려 있는 실존 종목"으로 이미 고정돼 있어 검수할
+ * "존재 여부" 자체가 없으므로 관리자 승인 없이 즉시 적용한다.
  */
 const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -221,26 +242,34 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
   const stockName = stockSnap.val().name || stockId;
 
   const cost = days * CHART_BANNER_COST_PER_DAY;
-
-  // 신청 시점에 게임자산을 바로 차감한다 (거절되면 actionRejectChartBannerRequest에서 환불).
   await chargeUserCash(db, auth.uid, cost);
 
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + days);
+  const endDateStr = endDate.toISOString().split("T")[0];
+
   const ref = db.ref("chartBannerRequests").push();
-  await ref.set({
-    stockId,
-    stockName, // 신청 시점 종목명 스냅샷 (관리자 목록 표시용 — 승인 대상은 항상 stockId 기준)
-    nickname,
-    streamerId,
-    bannerImg,
-    promoLink,
-    days,
-    chargedAmount: cost,
-    status:        "pending",
-    requestedAt:   Date.now(),
-    requesterUid:  auth.uid,
+  const now = Date.now();
+
+  await db.ref().update({
+    [`chartBanner/${stockId}`]: { name: nickname, img: bannerImg, link: promoLink, endDate: endDateStr },
+    [`chartBannerRequests/${ref.key}`]: {
+      stockId,
+      stockName, // 신청 시점 종목명 스냅샷 (관리자 목록 표시용)
+      nickname,
+      streamerId,
+      bannerImg,
+      promoLink,
+      days,
+      chargedAmount: cost,
+      status:        "approved", // 관리자 승인 단계 없이 즉시 적용 — 기록은 이력 확인용으로 남긴다
+      requestedAt:   now,
+      reviewedAt:    now,
+      requesterUid:  auth.uid,
+    },
   });
 
-  return { ok: true, id: ref.key, chargedAmount: cost };
+  return { ok: true, id: ref.key, chargedAmount: cost, stockId, endDate: endDateStr };
 });
 
 async function actionListChartBannerRequests(db) {

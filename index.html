@@ -104,7 +104,7 @@
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, 관리자 검수 후 배너가 등록됩니다. 거절될 경우 차감된 금액은 전액 환불됩니다.<br>
+            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, 상장된 종목이면 <b style="color:#38bdf8;">관리자 검수 없이 즉시</b> 배너가 등록됩니다.<br>
             직접 제작한 이미지를 쓰고 싶다면 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> 으로 문의해주세요. (클릭 시 이메일 주소 복사)
         </div>
 
@@ -258,7 +258,7 @@
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
             📊 해당 종목 차트창을 여는 유저에게 단독 노출되는 배너입니다 (우측 배너와 별도 운영, 1일당 게임자산 200만원).<br>
-            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, 관리자 검수 후 배너가 등록됩니다. 거절될 경우 차감된 금액은 전액 환불됩니다.<br>
+            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, <b style="color:#38bdf8;">관리자 검수 없이 즉시</b> 배너가 등록됩니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 
@@ -346,7 +346,7 @@
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, 관리자 검수 후 최상단에 고정 노출됩니다. 슬롯(3개)이 가득 찬 경우 승인이 늦어질 수 있고, 거절 시 차감된 금액은 전액 환불됩니다.<br>
+            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, <b style="color:#38bdf8;">관리자 검수 없이 즉시</b> 최상단에 고정 노출됩니다. 슬롯(3개)이 가득 찬 경우 신청 자체가 거부됩니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 
@@ -452,11 +452,16 @@
             <li>💰 <b>비용:</b> 1시간 당 게임자산 30만원 (신청 시 보유 현금에서 선차감)</li>
             <li>⏱ <b>기간:</b> 최소 1시간 ~ 최대 8시간</li>
             <li>🚫 <b>중복:</b> 이미 진행 중인 아이디는 종료 후에만 재신청 가능</li>
+            <li>✅ <b>대상:</b> 이미 상장된 종목만 신청 가능 (검색해서 선택)</li>
         </ul>
 
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-            <input type="text" id="relay-nickname" placeholder="닉네임"
+            <input type="text" id="relay-stock-name" list="relay-stock-datalist" placeholder="종목명 검색 (이미 상장된 종목만 가능)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+            <datalist id="relay-stock-datalist"></datalist>
+            <div id="relay-not-listed-warning" style="display:none;background:rgba(239,68,68,0.1);border:1px solid #ef4444;border-radius:8px;padding:10px 12px;font-size:12px;color:#fca5a5;line-height:1.6;">
+                🔍 상장되지 않은 종목명이에요. <span onclick="openListingModal(document.getElementById('relay-stock-name').value.trim())" style="color:#38bdf8;text-decoration:underline;cursor:pointer;font-weight:700;">먼저 종목 상장 신청을 해주세요</span> — 상장 승인 후 다시 신청할 수 있어요.
+            </div>
             <input type="text" id="relay-streamer-id" placeholder="스트리머 아이디 (예: skftodwocks2)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
 
@@ -478,7 +483,7 @@
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, 관리자 검수 후 중계방에 등록됩니다. 거절될 경우 차감된 금액은 전액 환불됩니다.<br>
+            신청 시 <b style="color:#38bdf8;">보유 현금에서 금액이 바로 차감</b>되며, <b style="color:#38bdf8;">관리자 검수 없이 즉시</b> 중계방에 등록됩니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 

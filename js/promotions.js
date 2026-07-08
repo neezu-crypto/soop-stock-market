@@ -185,7 +185,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             },
             callable: submitBannerRequestCallable,
             onSuccess(result) {
-                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 배너가 등록되며, 거절 시 전액 환불됩니다.`);
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 배너가 즉시 등록됐습니다!\n노출 종료일: ${result.data.endDate}`);
             },
             resetFn() {
                 document.getElementById('promo-stock-name').value = '';
@@ -210,10 +210,18 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     };
     window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
 
-    // ── 중계방 홍보 신청 (닉네임/아이디 입력 → 실시간 미리보기 → 신청) ──
+    // ── 중계방 홍보 신청 (종목명 검색 + 아이디 입력 → 실시간 미리보기 → 신청) ──
+    // 우측 홍보 배너와 동일하게 자유 닉네임 대신 이미 상장된 종목명만 받는다
+    // (datalist 자동완성 + 실시간 검증) — 상장 여부가 유일한 검수 포인트였으므로
+    // 신청 시점에 걸러지면 관리자 승인 없이 바로 등록할 수 있다.
     const RELAY_ROOM_COST_PER_HOUR = 300000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
-    window.openRelayRoomModal  = () => { if (requireLoginOrPrompt()) document.getElementById('relay-room-modal').classList.add('active'); };
+    window.openRelayRoomModal  = () => {
+        if (!requireLoginOrPrompt()) return;
+        populateRelayStockDatalist();
+        checkRelayStockListed();
+        document.getElementById('relay-room-modal').classList.add('active');
+    };
     window.closeRelayRoomModal = () => document.getElementById('relay-room-modal').classList.remove('active');
 
     const updateRelayCost = setupCostCalculator({ unitInputId: 'relay-hours', costElId: 'relay-cost', pricePerDay: RELAY_ROOM_COST_PER_HOUR });
@@ -230,29 +238,54 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         errorText: '이미지 없음',
     });
 
+    function populateRelayStockDatalist() {
+        const datalist = document.getElementById('relay-stock-datalist');
+        if (!datalist) return;
+        datalist.innerHTML = getAllStocks()
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(s => `<option value="${s.name.replace(/"/g, '&quot;')}"></option>`)
+            .join('');
+    }
+
+    function checkRelayStockListed() {
+        const name       = document.getElementById('relay-stock-name')?.value.trim() || '';
+        const warning    = document.getElementById('relay-not-listed-warning');
+        const submitBtn  = document.getElementById('relay-submit-btn');
+        const isListed   = name && getAllStocks().some(s => s.name === name);
+        if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
+        if (submitBtn) submitBtn.disabled    = name ? !isListed : false;
+    }
+    document.getElementById('relay-stock-name')?.addEventListener('input', checkRelayStockListed);
+
     window.submitRelayRoomRequest = async function() {
         await submitRequestForm({
             submitBtnId: 'relay-submit-btn',
             submitLabel: '신청하기',
             validateAndBuild() {
-                const nickname   = document.getElementById('relay-nickname').value.trim();
+                const stockName  = document.getElementById('relay-stock-name').value.trim();
                 const streamerId = document.getElementById('relay-streamer-id').value.trim().toLowerCase();
                 const hours      = parseInt(document.getElementById('relay-hours').value, 10);
-                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+                if (!stockName) { alert('종목명을 입력해주세요.'); return null; }
+                if (!getAllStocks().some(s => s.name === stockName)) {
+                    alert('상장되지 않은 종목명이에요. 먼저 종목 상장 신청을 해주세요.');
+                    return null;
+                }
                 if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
                 if (!Number.isInteger(hours) || hours < 1 || hours > 8) { alert('홍보 시간은 1~8시간 사이로 입력해주세요.'); return null; }
-                return { nickname, streamerId, hours };
+                return { stockName, streamerId, hours };
             },
             callable: submitRelayRoomRequestCallable,
             onSuccess(result) {
-                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 중계방에 등록되며, 거절 시 전액 환불됩니다.`);
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 중계방에 즉시 등록됐습니다!`);
             },
             resetFn() {
-                document.getElementById('relay-nickname').value = '';
+                document.getElementById('relay-stock-name').value = '';
                 document.getElementById('relay-streamer-id').value = '';
                 document.getElementById('relay-hours').value = '1';
                 updateRelayPreview();
                 updateRelayCost();
+                checkRelayStockListed();
             },
             closeFn: window.closeRelayRoomModal,
         });
@@ -299,7 +332,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             },
             callable: submitPinRequestCallable,
             onSuccess(result) {
-                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 최상단에 고정 노출되며, 거절 시 전액 환불됩니다.`);
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 최상단에 즉시 고정 노출됐습니다!`);
             },
             resetFn() {
                 document.getElementById('pin-stock-name').value = '';
@@ -427,7 +460,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             },
             callable: submitChartBannerRequestCallable,
             onSuccess(result) {
-                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 신청이 접수됐습니다!\n관리자 검수 후 배너가 등록되며, 거절 시 전액 환불됩니다.`);
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 배너가 즉시 등록됐습니다!\n노출 종료일: ${result.data.endDate}`);
             },
             resetFn() {
                 document.getElementById('chart-ad-nickname').value = '';
