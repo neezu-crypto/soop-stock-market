@@ -709,8 +709,10 @@ let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
 let stockSubscriptions = {};        // id -> unsubscribe (개별 종목 실시간 구독 핸들)
-let visibleStockIds    = new Set(); // 현재 화면에 노출되어 구독 중인 종목 id
+let visibleStockIds    = new Set(); // 현재 실시간 구독 중인 종목 id(뷰포트 안 + 항상구독 대상)
 let pinnedStockIds     = new Set(); // 최상단 고정 노출 종목 id (pinnedStocks/ 실시간 구독으로 갱신)
+let intersectingStockIds = new Set(); // 지금 스크롤 뷰포트 안에 실제로 보이는 카드의 종목 id
+let alwaysSubscribedIds  = new Set(); // 뷰포트 밖이어도 항상 구독해야 하는 종목 id(보유 중 + 고정노출)
 
 // ── 플레이타임 제한 상태 (하트비트 응답으로 갱신, 1초마다 로컬에서 카운트다운 표시) ──
 let playtimeUnlimited      = false; // 관리자 계정
@@ -782,7 +784,7 @@ onValue(ref(db, 'rankings/top5'), (snap) => {
 
 // ── pinnedStocks 구독 (최상단 고정 노출 종목 id 집합 — 상시 실시간 유지) ──
 // 종목 자체가 top100 가격순위 밖에 있어도 고정 노출은 항상 보여야 하므로,
-// 이 id 목록만 별도로 가볍게 구독해 syncStockSubscriptions()의 "항상 구독"
+// 이 id 목록만 별도로 가볍게 구독해 resyncSubscriptions()의 "항상 구독"
 // 대상에 포함시킨다.
 onValue(ref(db, 'pinnedStocks'), (snap) => {
     pinnedStockIds = new Set(snap.exists() ? Object.keys(snap.val()) : []);
@@ -1425,6 +1427,11 @@ function renderStocks(filter = "") {
 
     const filtered = [...pinned, ...rest].slice(0, 100);
 
+    // 카드를 전부 새로 그리므로, 이전 카드에 대한 뷰포트 관찰도 초기화한다
+    // (관찰이 안 끊긴 채로 남으면 이미 DOM에서 떨어져나간 카드가 계속 콜백을 유발함).
+    cardObserver.disconnect();
+    intersectingStockIds = new Set();
+
     listDiv.innerHTML = "";
     stockElements = {};
     if (!filter) listDiv.appendChild(createPinPromoCard()); // 검색 중이 아닐 때만 리스트 최상단에 노출
@@ -1433,11 +1440,18 @@ function renderStocks(filter = "") {
         const card = createStockCard(s);
         stockElements[s.id] = card;
         listDiv.appendChild(card);
+        cardObserver.observe(card);
     });
-    syncStockSubscriptions(filtered.map(s => s.id));
+    resyncSubscriptions(new Set(filtered.map(s => s.id)));
 }
 
-// ── 종목별 실시간 구독 관리 (화면에 노출된 종목만 구독) ──────
+// ── 종목별 실시간 구독 관리 (스크롤 뷰포트 안에 실제로 보이는 카드 + 보유/고정
+// 종목만 구독) ─────────────────────────────────────────────
+// 최대 100장까지 카드를 그리던 예전 방식은 화면 밖 카드까지 전부 실시간
+// 리스너를 걸었다. IntersectionObserver로 각 카드의 노출 여부를 감지해,
+// 실제로 스크롤해서 보이는 동안만 구독하고 벗어나면 즉시 끊는다 — 다시
+// 스크롤해 들어오면 onValue가 최신값을 바로 한 번 내려주므로 자연스럽게
+// 최신화된다.
 function subscribeStock(id) {
     if (stockSubscriptions[id]) return;
     stockSubscriptions[id] = onValue(ref(db, `stocks/${id}`), (snap) => {
@@ -1457,26 +1471,57 @@ function subscribeStock(id) {
         }
         renderMyPortfolio();
     });
+    visibleStockIds.add(id);
 }
 
 function unsubscribeStock(id) {
     const unsub = stockSubscriptions[id];
     if (unsub) { unsub(); delete stockSubscriptions[id]; }
+    visibleStockIds.delete(id);
 }
 
-// 현재 노출 중인 종목(목록 + 보유 종목) 기준으로 실시간 구독을 갱신
-function syncStockSubscriptions(idsToShow) {
-    const nextIds = new Set(idsToShow);
-    // 목록에 없어도 보유 중인 종목은 내 보유 패널 실시간 반영을 위해 항상 구독
-    Object.keys(myData?.stocks || {}).forEach(id => {
-        if (myData.stocks[id]?.qty > 0) nextIds.add(id);
-    });
-    // 최상단 고정 노출 종목도 가격순 정렬상 화면 밖(top100 밖)일 수 있으므로 항상 구독
-    pinnedStockIds.forEach(id => nextIds.add(id));
+// 뷰포트 노출 여부(intersectingStockIds) ∪ 항상구독 대상(alwaysSubscribedIds)에
+// 따라 종목 하나의 구독 상태를 맞춘다.
+function updateStockSubscription(id) {
+    if (playtimeLocked) return; // 이용시간 소진 중엔 전부 내린 상태를 유지
+    const shouldSubscribe = intersectingStockIds.has(id) || alwaysSubscribedIds.has(id);
+    const isSubscribed    = !!stockSubscriptions[id];
+    if (shouldSubscribe && !isSubscribed) subscribeStock(id);
+    else if (!shouldSubscribe && isSubscribed) unsubscribeStock(id);
+}
 
-    visibleStockIds.forEach(id => { if (!nextIds.has(id)) unsubscribeStock(id); });
-    nextIds.forEach(id => { if (!visibleStockIds.has(id)) subscribeStock(id); });
-    visibleStockIds = nextIds;
+// 카드가 뷰포트에 들고날 때마다(200px 여유를 둬 스크롤 중 깜빡임 방지) 구독 상태를 갱신
+const cardObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        const id = entry.target.dataset.id;
+        if (!id) return;
+        if (entry.isIntersecting) intersectingStockIds.add(id);
+        else intersectingStockIds.delete(id);
+        updateStockSubscription(id);
+    });
+}, { rootMargin: '200px 0px' });
+
+// 매 렌더링마다 구독 상태를 정리한다.
+// - 보유 중(qty > 0)이거나 최상단 고정 노출 중인 종목은 화면 밖이어도 항상 구독
+//   (내 보유 패널과 고정 슬롯은 목록 스크롤 위치와 무관하게 실시간이어야 하므로).
+// - 이번에 화면에 그려진 목록(filteredIds)에도 없고 항상구독 대상도 아니게 된
+//   구독은 즉시 정리한다. (filteredIds는 렌더링 시점에 동기적으로 알 수 있어
+//   비동기인 IntersectionObserver 콜백을 기다릴 필요 없이 바로 판단 가능 —
+//   이 시점엔 아직 관찰 콜백이 안 왔을 수 있어 intersectingStockIds로 판단하면
+//   방금 다시 그린, 실제로는 보이는 카드까지 잘못 끊었다 재구독하는 깜빡임이 생긴다.)
+// 화면에 남아있지만 아직 뷰포트 밖인 카드는 여기서 새로 구독하지 않고,
+// IntersectionObserver가 실제로 보이는 순간에 알아서 구독한다.
+function resyncSubscriptions(filteredIds) {
+    alwaysSubscribedIds = new Set();
+    Object.keys(myData?.stocks || {}).forEach(id => {
+        if (myData.stocks[id]?.qty > 0) alwaysSubscribedIds.add(id);
+    });
+    pinnedStockIds.forEach(id => alwaysSubscribedIds.add(id));
+
+    Object.keys(stockSubscriptions).forEach(id => {
+        if (!filteredIds.has(id) && !alwaysSubscribedIds.has(id)) unsubscribeStock(id);
+    });
+    alwaysSubscribedIds.forEach(id => { if (!stockSubscriptions[id]) subscribeStock(id); });
 }
 
 // 종목카드와 같은 스타일로 리스트 최상단에 노출되는 "고정노출 신청" 안내 카드
@@ -1588,7 +1633,8 @@ function updateCardContent(card, s, userStock) {
 }
 
 // ── 주식 목록 최초 1회 로드 (검색/정렬 기준 데이터) ──────────
-// 실시간 갱신은 화면에 노출된 종목만 syncStockSubscriptions()로 개별 구독
+// 실시간 갱신은 뷰포트에 실제로 보이는 종목만 resyncSubscriptions()/
+// cardObserver로 개별 구독(스크롤해서 벗어나면 자동 구독 해제)
 get(ref(db, 'stocks/')).then((snap) => {
     const data = snap.val() || {};
     allStocks  = Object.keys(data).map(key => ({ ...data[key], id: key }));
