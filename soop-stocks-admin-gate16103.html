@@ -5,6 +5,7 @@
     <title>SOOP STOCK - 관리자 센터</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <style>
+        * { box-sizing: border-box; }
         body { font-family: 'Pretendard', sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 600px; background: #1e293b; padding: 30px; border-radius: 16px; border: 1px solid #334155; margin-bottom: 20px; display: none; }
         .login-box { display: flex; flex-direction: column; align-items: center; gap: 20px; background: #1e293b; padding: 40px; border-radius: 16px; border: 1px solid #334155; }
@@ -77,6 +78,26 @@
         .banner-tab-badge {
             background: #ef4444; color: white; font-size: 11px; font-weight: 800;
             padding: 1px 7px; border-radius: 20px; min-width: 16px; text-align: center;
+        }
+
+        /* 승인/거절 등 액션 버튼 행 — 좁은 화면에서 버튼이 짓눌리면 다음 줄로 넘어가게 */
+        .admin-action-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .admin-action-row > input[type="number"] { flex: 1 1 70px; min-width: 60px; }
+        .admin-action-row > button { flex: 1 1 100px; }
+
+        .stock-row-name { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .stock-row-price { width: 100px; }
+
+        /* ── 모바일: 여백을 줄여 화면 너비를 그대로 활용 ── */
+        @media (max-width: 640px) {
+            body { padding: 16px 10px; }
+            .container, .login-box { padding: 16px; border-radius: 12px; }
+            h1 { font-size: 16px; margin-bottom: 14px; padding-bottom: 8px; }
+            .info-box { font-size: 12.5px; }
+            button { padding: 11px 16px; }
+            .stock-row-price { width: 84px; }
+            .data-status-bar, .chart-banner-info-row { flex-wrap: wrap; gap: 6px; }
+            .ranking-preview { overflow-x: auto; }
         }
     </style>
 </head>
@@ -465,8 +486,8 @@
                 item.className = 'batch-control';
                 item.style.cssText = "padding:10px; background:#0f172a; border-radius:8px;";
                 item.innerHTML = `
-                    <div style="flex:1; font-size:14px;">${s.name}</div>
-                    <input type="number" id="input-${id}" value="${s.price}" style="width:100px; flex:none;">
+                    <div class="stock-row-name">${s.name}</div>
+                    <input type="number" id="input-${id}" value="${s.price}" class="stock-row-price" style="flex:none;">
                     <button class="btn-success" onclick="updateSinglePrice('${id}')" style="padding:8px 12px; font-size:12px;">수정</button>
                 `;
                 listDiv.appendChild(item);
@@ -634,7 +655,7 @@
                     <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
                 </div>
             </div>
-            <div style="display:flex;gap:8px;align-items:center;">
+            <div class="admin-action-row">
                 <input type="number" min="1" max="365" value="${r.days || 7}" id="req-days-${r.id}"
                        style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
                 <span style="font-size:12px;color:#94a3b8;">일 노출</span>
@@ -665,7 +686,7 @@
                    style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
             <input type="text" value="${escapeAttr(r.promoLink)}" id="chart-req-link-${r.id}" placeholder="홍보 페이지 링크"
                    style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;">
-            <div style="display:flex;gap:8px;align-items:center;">
+            <div class="admin-action-row">
                 <input type="number" min="1" max="365" value="${r.days || 7}" id="chart-req-days-${r.id}"
                        style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
                 <span style="font-size:12px;color:#94a3b8;">일 노출</span>
@@ -867,7 +888,7 @@
                         <div style="font-weight:800;font-size:14px;">${escapeAttr(r.nickname)}</div>
                         <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.soopId)} · 신청 시각 ${requestedAt}</div>
                     </div>
-                    <div style="display:flex;gap:8px;align-items:center;">
+                    <div class="admin-action-row">
                         <input type="number" min="1" placeholder="지급액(원)" id="charge-amount-${r.id}"
                                style="flex:1;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
                         <button class="btn-success" style="flex:1;padding:8px;" onclick="approveCashChargeRequest('${r.id}')">✅ 승인</button>
@@ -972,7 +993,7 @@
                                style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
                     </div>
                     <div style="font-size:12px;color:#94a3b8;">신청 시간 ${r.hours}시간 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원</div>
-                    <div style="display:flex;gap:8px;align-items:center;">
+                    <div class="admin-action-row">
                         <input type="number" min="1" max="365" value="${r.hours || 1}" id="pin-req-hours-${r.id}"
                                style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
                         <span style="font-size:12px;color:#94a3b8;">시간 노출</span>
@@ -1138,7 +1159,7 @@
                                style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
                     </div>
                     <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.streamerId)} · 신청 시간 ${r.hours}시간 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
-                    <div style="display:flex;gap:8px;align-items:center;">
+                    <div class="admin-action-row">
                         <input type="number" min="1" max="8" value="${r.hours || 1}" id="relay-req-hours-${r.id}"
                                style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
                         <span style="font-size:12px;color:#94a3b8;">시간 노출</span>
