@@ -124,17 +124,6 @@
                 max-height: calc(100vh - 150px);
             } 
         }
-        @media (max-width: 600px) {
-            .banner-container {
-                top: 85px;
-                gap: 15px;
-            }
-            .banner-circle {
-                width: 75px;
-                height: 75px;
-            }
-            .banner-name { font-size: 11px; }
-        }
         .banner-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; cursor: pointer; transition: transform 0.2s; position: relative; }
         .banner-item:hover { transform: scale(1.1); }
         .banner-circle {
@@ -145,6 +134,20 @@
         .banner-circle img { width: 100%; height: 100%; object-fit: cover; display: none; opacity: 0; transition: opacity 0.5s ease; border-radius: 50%; }
         .banner-no-img { font-size: 10px; color: var(--text-sub); line-height: 1.2; }
         .banner-name { margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--text-main); text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        @media (max-width: 600px) {
+            /* 우측 홍보 배너 20% 축소(85px→68px) + 간격 조정 — .banner-circle/.banner-name
+               기본 규칙보다 소스 순서상 뒤에 있어야 모바일에서 실제로 적용된다 */
+            .banner-container {
+                top: 85px;
+                gap: 12px;
+                padding: 8px;
+            }
+            .banner-circle {
+                width: 68px;
+                height: 68px;
+            }
+            .banner-name { font-size: 10px; margin-top: 6px; }
+        }
 
         /* ── 프로모 모달 ── */
         .promo-modal-overlay {
