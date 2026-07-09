@@ -21,6 +21,7 @@ setGlobalOptions({
 //   relayRoom.js      — 현재 플레이 중인 스트리머 홍보(중계방) 셀프 신청
 //   stockFreeze.js    — 종목 거래 동결(서킷브레이커) 해제 신청 + 상장폐지 스케줄러
 //   listingRequests.js — 검색해도 없는 종목의 신규 상장 셀프 신청
+//   profitRanking.js  — 순수 매매 손익 랭킹 확인/갱신
 //   common.js         — 위 모듈들이 공유하는 상수/헬퍼 (Cloud Function 없음)
 const { initializeUser, trade } = require("./trade");
 const { adminAction } = require("./admin");
@@ -36,6 +37,7 @@ const {
   checkFrozenStockDelistings,
 } = require("./stockFreeze");
 const { submitListingRequest } = require("./listingRequests");
+const { checkProfitRanking } = require("./profitRanking");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -52,3 +54,4 @@ exports.unfreezeWithCash             = unfreezeWithCash;
 exports.submitUnfreezeDonationRequest = submitUnfreezeDonationRequest;
 exports.checkFrozenStockDelistings    = checkFrozenStockDelistings;
 exports.submitListingRequest          = submitListingRequest;
+exports.checkProfitRanking            = checkProfitRanking;

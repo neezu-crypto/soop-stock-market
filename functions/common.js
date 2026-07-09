@@ -15,6 +15,8 @@ const CHART_BANNER_COST_PER_DAY = 2000000; // 차트 하단 배너 신청 1일�
 const MAX_PIN_HOURS            = 12;       // 최상단 고정 노출 신청 시 고를 수 있는 시간 상한
 const PIN_COST_PER_HOUR        = 500000;   // 최상단 고정 노출 1시간당 차감되는 게임자산
 const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 최대 종목 수
+const PROFIT_RANKING_CHECK_COST = 500000;  // 손익 랭킹 확인(및 내 순위 갱신) 1회당 차감되는 게임자산
+const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 인원 수
 
 // ── 플레이타임 제한 관련 상수 ──────────────────────────────────
 const ANON_DAILY_SECONDS       = 15 * 60;  // 익명 유저 하루 무료 이용 시간
@@ -145,6 +147,8 @@ module.exports = {
   MAX_PIN_HOURS,
   PIN_COST_PER_HOUR,
   MAX_PINNED_SLOTS,
+  PROFIT_RANKING_CHECK_COST,
+  PROFIT_RANKING_TOP_N,
   ANON_DAILY_SECONDS,
   KAKAO_DAILY_SECONDS,
   PLAYTIME_BASE_RATE,

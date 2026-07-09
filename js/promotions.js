@@ -24,6 +24,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         unfreezeWithCashCallable,
         submitUnfreezeDonationRequestCallable,
         submitListingRequestCallable,
+        checkProfitRankingCallable,
     } = callables;
 
     // 차트 하단 배너는 "지금 열어둔 그 종목"에 붙이는 게 목적이라, 모달을 여는
@@ -600,6 +601,50 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         } finally {
             btn.disabled = false;
             btn.innerText = '신청하기';
+        }
+    };
+
+    // ── 내 손익 랭킹 (순수 매매 손익만, 확인할 때마다 서버가 즉석 재계산) ──
+    window.openProfitRankingModal = () => {
+        if (!requireLoginOrPrompt()) return;
+        document.getElementById('profit-ranking-modal').classList.add('active');
+    };
+    window.closeProfitRankingModal = () => document.getElementById('profit-ranking-modal').classList.remove('active');
+
+    window.checkProfitRanking = async function() {
+        if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
+        const btn = document.getElementById('profit-ranking-check-btn');
+        btn.disabled = true;
+        btn.innerText = '확인 중...';
+        try {
+            const { data } = await checkProfitRankingCallable();
+            const resultEl = document.getElementById('profit-ranking-result');
+            const rankEl   = document.getElementById('profit-ranking-my-rank');
+            const profitEl = document.getElementById('profit-ranking-my-profit');
+            const listEl   = document.getElementById('profit-ranking-list');
+
+            resultEl.style.display = 'block';
+            rankEl.innerText = `${data.myRank.toLocaleString()}위`;
+            const sign = data.myProfit > 0 ? '+' : '';
+            const color = data.myProfit > 0 ? '#4ade80' : data.myProfit < 0 ? '#f87171' : '#94a3b8';
+            profitEl.innerHTML = `${data.myAnonId} · 순수 매매 손익 <b style="color:${color};">${sign}${data.myProfit.toLocaleString()}원</b>`;
+
+            listEl.innerHTML = data.top.map((item, i) => {
+                const isMe = item.anonId === data.myAnonId;
+                const s = item.value > 0 ? '+' : '';
+                const c = item.value > 0 ? '#4ade80' : item.value < 0 ? '#f87171' : '#94a3b8';
+                return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;background:${isMe ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isMe ? '#38bdf8' : 'transparent'};font-size:13px;">
+                        <span style="color:#94a3b8;width:28px;flex-shrink:0;">${i + 1}위</span>
+                        <span style="flex:1;color:${isMe ? '#38bdf8' : 'white'};font-weight:${isMe ? '700' : '400'};">${item.anonId}${isMe ? ' (나)' : ''}</span>
+                        <span style="color:${c};font-weight:700;white-space:nowrap;">${s}${item.value.toLocaleString()}원</span>
+                    </div>`;
+            }).join('');
+        } catch (e) {
+            alert(e?.message || '랭킹 확인 중 오류가 발생했습니다.');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '💰 50만원으로 확인하기';
         }
     };
 }

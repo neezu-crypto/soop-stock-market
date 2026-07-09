@@ -227,6 +227,9 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
       const newQty = pos.qty - qty;
       stocks[stockId] = { qty: newQty, avg: newQty === 0 ? 0 : pos.avg };
       user.cash = (user.cash || 0) + totalSellAmount;
+      // 순수 매매 손익 랭킹용 — 이 매도로 실현된 손익만 누적(원가는 pos.avg 기준).
+      // 보너스/후원 당첨금/승인 환불 등 매매 외 현금흐름은 전혀 섞이지 않는다.
+      user.realizedPL = (user.realizedPL || 0) + (totalSellAmount - pos.avg * qty);
     }
 
     user.stocks        = stocks;
