@@ -372,6 +372,20 @@ async function actionSetMaintenanceMode(db, { active }) {
 }
 
 /**
+ * 손익 랭킹 조회 — 유저가 "내 손익 랭킹" 확인 시마다 갱신되는
+ * rankings/profitEntries를 관리자가 통째로 확인한다. 익명 표시(anonId)
+ * 만으로는 어뷰징 의심 계정을 특정할 수 없으므로 uid를 함께 반환한다.
+ */
+async function actionListProfitRankings(db) {
+  const snap = await db.ref("rankings/profitEntries").get();
+  const data = snap.val() || {};
+  const entries = Object.entries(data)
+    .map(([uid, r]) => ({ uid, ...r }))
+    .sort((a, b) => (b.value || 0) - (a.value || 0));
+  return { ok: true, entries };
+}
+
+/**
  * 관리자 페이지 전용 액션 디스패처.
  * 클라이언트는 { action, payload }만 전달하고, 실제 stocks/users/rankings/
  * chartBanner 쓰기·users 읽기는 전부 여기서 Admin SDK로 처리한다.
@@ -426,6 +440,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "approveChartBannerRequest": return actionApproveChartBannerRequest(db, payload);
     case "rejectChartBannerRequest":  return actionRejectChartBannerRequest(db, payload);
     case "setMaintenanceMode":     return actionSetMaintenanceMode(db, payload);
+    case "listProfitRankings":     return actionListProfitRankings(db);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }

@@ -131,6 +131,18 @@
         </div>
     </div>
 
+    <!-- 💰 손익 랭킹 조회 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>💰 손익 랭킹 조회</h1>
+        <div class="info-box">
+            유저가 "내 손익 랭킹"을 확인할 때마다 갱신되는 목록입니다. 보너스·후원 당첨금 등은 제외한
+            <b style="color:#38bdf8;">순수 매매 손익</b>만 집계되며, 익명 표시(anonId)만으로는 계정을 특정할 수 없어
+            uid를 함께 보여줍니다 — 이상 계정 확인 시 uid로 users/ 경로를 직접 조회하세요.
+        </div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadProfitRankings()">🔄 새로고침</button>
+        <div id="profit-ranking-admin-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
     <!-- 🏆 랭킹 TOP5 관리 -->
     <div class="container" style="display:block; border-color: #a855f7;">
         <h1>🏆 랭킹 TOP5 관리</h1>
@@ -455,6 +467,36 @@
             await callAdminAction('setMaintenanceMode', { active });
         } catch (e) {
             alert('점검모드 변경 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ── 손익 랭킹 조회 (읽기 전용 — 갱신은 유저가 확인할 때마다 서버가 처리) ──
+    window.loadProfitRankings = async function() {
+        const listEl = document.getElementById('profit-ranking-admin-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { entries } = await callAdminAction('listProfitRankings');
+            if (!entries || entries.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">아직 확인한 유저가 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            entries.forEach((r, i) => {
+                const updatedAt = r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '-';
+                const color = r.value > 0 ? '#4ade80' : r.value < 0 ? '#f87171' : '#94a3b8';
+                const sign  = r.value > 0 ? '+' : '';
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">${i + 1}위 · ${escapeAttr(r.anonId)}</div>
+                        <div style="font-size:11px;color:#64748b;">uid: ${escapeAttr(r.uid)} · 갱신 ${updatedAt}</div>
+                    </div>
+                    <div style="font-weight:800;font-size:15px;color:${color};white-space:nowrap;">${sign}${(r.value || 0).toLocaleString()}원</div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
         }
     };
 
