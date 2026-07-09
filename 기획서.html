@@ -391,6 +391,10 @@
             <tr><td><code>previewRankings</code> / <code>saveRankings</code></td><td><code>users/</code> 전체를 서버에서 집계해 TOP5 미리보기·저장(수동 재계산용)</td></tr>
             <tr><td><code>previewInactiveUsers</code> / <code>cleanupInactiveUsers</code></td><td>미거래 유저 집계·일괄 삭제</td></tr>
             <tr><td><code>previewAnonTopUp</code> / <code>applyAnonTopUp</code></td><td>2026-07 정책 변경 이전 생성된 익명 유저 중 실제 거래한 유저에게 초기자산 차액(30만원) 1회 소급 지급 — 미리보기(대상 인원·총액) 후 적용</td></tr>
+            <tr><td><code>previewCrewPrefixMatch</code> / <code>applyCrewPrefix</code></td><td>크루 닉네임 목록을 상장 종목과 매칭해 [크루명] 프리픽스 일괄 적용 또는 미매칭분 신규 상장 — 정확 매칭은 자동, 장식문자 차이는 후보 중 관리자가 선택</td></tr>
+            <tr><td><code>getUserDetail</code></td><td>uid로 자산·카카오 연동 여부·실현손익·보유 종목(현재가 기준 평가손익 포함) 조회</td></tr>
+            <tr><td><code>adjustUserCash</code></td><td>uid 대상 자산 수동 지급/차감(사유 포함) — <code>adminCashAdjustments</code>에 감사 기록 남김</td></tr>
+            <tr><td><code>resetUserProfitRanking</code> / <code>deleteUser</code></td><td>특정 uid의 손익 랭킹 항목 삭제 / 계정 자체 삭제</td></tr>
             <tr><td><code>listPinRequests</code> / <code>approvePinRequest</code> / <code>rejectPinRequest</code></td><td>최상단 고정 노출 신청 검수 — 승인 시 슬롯(최대 3개) 여유 검사</td></tr>
             <tr><td><code>listActivePins</code> / <code>deletePin</code></td><td>현재 고정 중인 종목 목록(N/3 슬롯 현황) 조회 / 조기 해제</td></tr>
             <tr><td><code>listRelayRoomRequests</code> / <code>approveRelayRoomRequest</code> / <code>rejectRelayRoomRequest</code></td><td>중계방 홍보 신청 검수 — 승인 시 인원(최대 3명)·중복 진행 여부 재검사</td></tr>
@@ -473,6 +477,7 @@
             <tr><td><code>listingRequests/{id}</code></td><td>신규 상장 셀프 신청 내역 (종목명/신청자/상태) — 유일하게 관리자 승인이 남아있는 셀프 신청</td></tr>
             <tr><td><code>maintenance</code></td><td>소프트 점검모드 상태 <code>{active, startAt}</code> — 공개 읽기, 클라이언트 직접 쓰기 차단(<code>adminAction</code> 경유)</td></tr>
             <tr><td><code>rankings/profitEntries/{uid}</code></td><td>손익 랭킹 항목 <code>{anonId, value, updatedAt}</code> — <code>value</code>에 <code>.indexOn</code> 인덱스를 걸어 <code>orderByChild('value')</code> 쿼리만으로 상위 N명 조회. 유저가 확인할 때마다 서버가 본인 항목만 갱신</td></tr>
+            <tr><td><code>adminCashAdjustments/{id}</code></td><td>관리자가 유저 상세 조회에서 수동으로 자산을 지급/차감한 감사 기록 <code>{uid, amount, reason, adjustedAt}</code></td></tr>
         </table>
     </section>
 

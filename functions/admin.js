@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, creditUserCash } = require("./common");
+const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, creditUserCash, chargeUserCash } = require("./common");
 const {
   actionListBannerRequests,
   actionApproveBannerRequest,
@@ -517,6 +517,168 @@ async function actionListPurchaseHistory(db) {
   return { ok: true, purchases: purchases.slice(0, PURCHASE_HISTORY_LIMIT), totalCount: purchases.length };
 }
 
+// ── 크루 프리픽스 일괄 적용 ──────────────────────────────────
+// 크루 닉네임 목록을 상장 종목과 매칭해 [크루명] 프리픽스를 일괄 적용하거나,
+// 매칭 안 되는 닉네임은 신규 상장 후보로 표시한다. 정확히 일치하면 자동
+// 매칭되고, 끝 장식문자(∀·_·, 등)만 다른 경우는 부분매칭 후보로 보여줘
+// 관리자가 직접 고르게 한다 — 이 세션에서 사람이 수작업으로 하던 매칭
+// 로직(닉네임 끝 장식문자를 떼고 비교)을 그대로 옮긴 것.
+function stripDecoration(name) {
+  return String(name || "").replace(/[∀_,.!^~*♡♬★☆●▲◆■♥♪]+$/g, "").trim();
+}
+
+async function actionPreviewCrewPrefixMatch(db, { crewName, nicknames }) {
+  const crew = String(crewName || "").trim();
+  if (!crew) throw new HttpsError("invalid-argument", "크루명을 입력해주세요.");
+  const nameList = Array.isArray(nicknames) ? nicknames.map((n) => String(n).trim()).filter(Boolean) : [];
+  if (nameList.length === 0) throw new HttpsError("invalid-argument", "닉네임 목록을 입력해주세요.");
+
+  const snap = await db.ref("stocks").get();
+  const entries = Object.entries(snap.val() || {}).map(([id, s]) => ({ id, name: s.name || "" }));
+  const prefix = `[${crew}] `;
+
+  const results = nameList.map((nickname) => {
+    const exact = entries.find((e) => e.name === nickname);
+    if (exact) {
+      return {
+        nickname,
+        status: exact.name.startsWith(prefix) ? "already" : "exact",
+        candidates: [{ stockId: exact.id, name: exact.name }],
+      };
+    }
+    const base = stripDecoration(nickname);
+    const partial = base
+      ? entries.filter((e) => {
+          const eBase = stripDecoration(e.name);
+          return eBase === base || e.name.includes(base) || (base.length >= 2 && base.includes(eBase) && eBase.length >= 2);
+        })
+      : [];
+    if (partial.length > 0) {
+      return {
+        nickname,
+        status: "partial",
+        candidates: partial.map((e) => ({ stockId: e.id, name: e.name, alreadyPrefixed: e.name.startsWith(prefix) })),
+      };
+    }
+    return { nickname, status: "notfound", candidates: [] };
+  });
+
+  return { ok: true, crewName: crew, results };
+}
+
+/**
+ * assignments: [{ nickname, action: "prefix"|"newListing"|"skip", stockId? }]
+ */
+async function actionApplyCrewPrefix(db, { crewName, assignments }) {
+  const crew = String(crewName || "").trim();
+  if (!crew) throw new HttpsError("invalid-argument", "크루명을 입력해주세요.");
+  if (!Array.isArray(assignments) || assignments.length === 0) {
+    throw new HttpsError("invalid-argument", "적용할 항목이 없습니다.");
+  }
+
+  const prefix  = `[${crew}] `;
+  const updates = {};
+  let prefixedCount = 0;
+  let listedCount   = 0;
+  let idx = 0;
+
+  for (const a of assignments) {
+    if (a.action === "prefix" && a.stockId) {
+      const nameSnap     = await db.ref(`stocks/${a.stockId}/name`).get();
+      const currentName  = nameSnap.val();
+      if (currentName && !currentName.startsWith(prefix)) {
+        updates[`stocks/${a.stockId}/name`] = `${prefix}${currentName}`;
+        prefixedCount++;
+      }
+    } else if (a.action === "newListing") {
+      const nickname = String(a.nickname || "").trim();
+      if (nickname) {
+        updates[`stocks/id_${Date.now()}_crew${idx}`] = { name: `${prefix}${nickname}`, price: 10000 };
+        listedCount++;
+        idx++;
+      }
+    }
+    // action === "skip"은 아무 것도 하지 않는다.
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db.ref().update(updates);
+  }
+  return { ok: true, prefixedCount, listedCount };
+}
+
+// ── 유저 상세 조회 및 수동 조치 ──────────────────────────────
+// 개별 거래는 로그로 남기지 않으므로(체결가/잔고만 갱신), 보여줄 수 있는 건
+// 현재 보유 스냅샷과 손익 누적치까지다.
+async function actionGetUserDetail(db, { uid }) {
+  if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
+  const snap = await db.ref(`users/${uid}`).get();
+  if (!snap.exists()) throw new HttpsError("not-found", "해당 uid의 유저를 찾을 수 없습니다.");
+  const user = snap.val();
+
+  const holdingEntries = Object.entries(user.stocks || {}).filter(([, s]) => (s?.qty || 0) > 0);
+  const stockSnaps = await Promise.all(holdingEntries.map(([id]) => db.ref(`stocks/${id}`).get()));
+  const holdings = holdingEntries.map(([id, pos], i) => {
+    const stock = stockSnaps[i].val() || {};
+    const currentPrice = stock.price || 0;
+    return {
+      stockId: id,
+      name: stock.name || "(삭제된 종목)",
+      qty: pos.qty,
+      avg: pos.avg,
+      currentPrice,
+      unrealizedPL: Math.round((currentPrice - pos.avg) * pos.qty),
+    };
+  });
+
+  return {
+    ok: true,
+    uid,
+    cash: user.cash ?? INITIAL_CASH,
+    kakaoLinked: !!user.kakaoLinked,
+    realizedPL: user.realizedPL || 0,
+    lastTradeTime: user.lastTradeTime || null,
+    holdings,
+  };
+}
+
+/** amount는 양수(지급)/음수(차감) 모두 가능. 조정 사유와 함께 adminCashAdjustments에 기록해 감사 추적을 남긴다. */
+async function actionAdjustUserCash(db, { uid, amount, reason }) {
+  if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
+  const delta = Math.round(Number(amount));
+  if (!Number.isFinite(delta) || delta === 0) {
+    throw new HttpsError("invalid-argument", "조정할 금액을 입력해주세요.");
+  }
+
+  if (delta > 0) {
+    await creditUserCash(db, uid, delta);
+  } else {
+    await chargeUserCash(db, uid, -delta, { allowNegative: true });
+  }
+
+  const ref = db.ref("adminCashAdjustments").push();
+  await ref.set({
+    uid,
+    amount: delta,
+    reason: String(reason || "").trim(),
+    adjustedAt: Date.now(),
+  });
+
+  return { ok: true, id: ref.key };
+}
+
+async function actionResetUserProfitRanking(db, { uid }) {
+  if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
+  await db.ref(`rankings/profitEntries/${uid}`).remove();
+  return { ok: true };
+}
+
+async function actionDeleteUser(db, { uid }) {
+  if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
+  await db.ref(`users/${uid}`).remove();
+  return { ok: true };
+}
+
 /**
  * 관리자 페이지 전용 액션 디스패처.
  * 클라이언트는 { action, payload }만 전달하고, 실제 stocks/users/rankings/
@@ -577,6 +739,12 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "getPendingSummary":      return actionGetPendingSummary(db);
     case "previewAnonTopUp":       return actionPreviewAnonTopUp(db);
     case "applyAnonTopUp":         return actionApplyAnonTopUp(db);
+    case "previewCrewPrefixMatch": return actionPreviewCrewPrefixMatch(db, payload);
+    case "applyCrewPrefix":        return actionApplyCrewPrefix(db, payload);
+    case "getUserDetail":          return actionGetUserDetail(db, payload);
+    case "adjustUserCash":         return actionAdjustUserCash(db, payload);
+    case "resetUserProfitRanking": return actionResetUserProfitRanking(db, payload);
+    case "deleteUser":             return actionDeleteUser(db, payload);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }

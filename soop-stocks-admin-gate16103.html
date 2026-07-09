@@ -292,6 +292,37 @@
         </div>
     </div>
 
+    <!-- 🏴 크루 프리픽스 일괄 적용 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>🏴 크루 프리픽스 일괄 적용</h1>
+        <div class="info-box">
+            크루명과 멤버 닉네임 목록(한 줄에 하나씩)을 넣으면 이미 상장된 종목과 매칭합니다. 정확히 일치하면
+            자동 매칭되고, 끝 장식문자(∀·_·, 등)만 다르면 후보를 보여드리니 직접 골라주세요. 매칭이 안 되면
+            10,000원으로 신규 상장할 수 있습니다.
+        </div>
+        <input type="text" id="crew-name-input" placeholder="크루명 (예: 크로아)"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:14px;margin-bottom:10px;">
+        <textarea id="crew-nicknames-input" placeholder="닉네임1&#10;닉네임2&#10;닉네임3..."></textarea>
+        <button class="btn-primary" onclick="previewCrewPrefixMatch()">🔍 매칭 확인</button>
+        <div id="crew-prefix-result" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;"></div>
+        <button id="crew-prefix-apply-btn" class="btn-primary" style="display:none;background:#f97316;" onclick="applyCrewPrefix()">✅ 일괄 적용</button>
+    </div>
+
+    <!-- 👤 유저 상세 조회 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>👤 유저 상세 조회</h1>
+        <div class="info-box">
+            "손익 랭킹 조회"·"구매 현황" 등에 노출되는 uid를 붙여넣으면 자산·보유종목·손익을 확인할 수 있습니다.
+            개별 거래 로그는 저장하지 않아 현재 보유 스냅샷까지만 보여드립니다.
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <input type="text" id="user-detail-uid-input" placeholder="uid 붙여넣기"
+                style="flex:1;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+            <button class="btn-primary" style="margin-top:0;flex-shrink:0;" onclick="loadUserDetail()">🔍 조회</button>
+        </div>
+        <div id="user-detail-result"></div>
+    </div>
+
     <!-- 📢 배너 광고 통합 관리 -->
     <div id="section-banner" class="container" style="display:block; border-color: #38bdf8;">
         <h1>📢 배너 광고 통합 관리</h1>
@@ -735,6 +766,177 @@
                 : `✅ ${count.toLocaleString()}명에게 총 ${totalCost.toLocaleString()}원 지급 완료`;
         } catch(e) {
             statusEl.innerText = '지급 실패: ' + e.message;
+        }
+    };
+
+    // ── 크루 프리픽스 일괄 적용 ──────────────────────────────
+    let crewPrefixResults = [];
+
+    window.previewCrewPrefixMatch = async function() {
+        const crewName  = document.getElementById('crew-name-input').value.trim();
+        const nicknames = document.getElementById('crew-nicknames-input').value
+            .split('\n').map(s => s.trim()).filter(Boolean);
+        const resultEl  = document.getElementById('crew-prefix-result');
+        const applyBtn  = document.getElementById('crew-prefix-apply-btn');
+        if (!crewName) return alert('크루명을 입력해주세요.');
+        if (nicknames.length === 0) return alert('닉네임 목록을 입력해주세요.');
+
+        resultEl.innerHTML = '<div class="info-box" style="margin:0;">매칭 확인 중...</div>';
+        applyBtn.style.display = 'none';
+        try {
+            const { results } = await callAdminAction('previewCrewPrefixMatch', { crewName, nicknames });
+            crewPrefixResults = results;
+            resultEl.innerHTML = '';
+            results.forEach((r, i) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;';
+
+                if (r.status === 'already') {
+                    row.innerHTML = `<span>✅ ${escapeAttr(r.nickname)}</span><span style="color:#64748b;font-size:12px;">이미 적용됨: ${escapeAttr(r.candidates[0].name)}</span>`;
+                } else if (r.status === 'exact') {
+                    row.innerHTML = `<span>✅ ${escapeAttr(r.nickname)}</span><span style="color:#4ade80;font-size:12px;">매칭: ${escapeAttr(r.candidates[0].name)}</span>`;
+                } else if (r.status === 'partial') {
+                    const options = r.candidates.map(c =>
+                        `<option value="prefix:${c.stockId}">이 종목에 적용: ${escapeAttr(c.name)}${c.alreadyPrefixed ? ' (이미 적용됨)' : ''}</option>`
+                    ).join('');
+                    row.innerHTML = `
+                        <span>⚠️ ${escapeAttr(r.nickname)}</span>
+                        <select data-idx="${i}" style="flex:1;min-width:160px;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:13px;">
+                            ${options}
+                            <option value="newListing">🆕 신규 상장 (10,000원)</option>
+                            <option value="skip">제외</option>
+                        </select>`;
+                } else {
+                    row.innerHTML = `
+                        <span>❌ ${escapeAttr(r.nickname)}</span>
+                        <select data-idx="${i}" style="flex:1;min-width:160px;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:13px;">
+                            <option value="newListing" selected>🆕 신규 상장 (10,000원)</option>
+                            <option value="skip">제외</option>
+                        </select>`;
+                }
+                resultEl.appendChild(row);
+            });
+            applyBtn.style.display = 'block';
+        } catch (e) {
+            resultEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">매칭 확인 실패: ${e.message}</div>`;
+        }
+    };
+
+    window.applyCrewPrefix = async function() {
+        const crewName = document.getElementById('crew-name-input').value.trim();
+        const assignments = [];
+
+        crewPrefixResults.forEach((r, i) => {
+            if (r.status === 'already') return; // 이미 적용됨 — 건드리지 않음
+            if (r.status === 'exact') {
+                assignments.push({ nickname: r.nickname, action: 'prefix', stockId: r.candidates[0].stockId });
+                return;
+            }
+            const select = document.querySelector(`select[data-idx="${i}"]`);
+            if (!select) return;
+            const val = select.value;
+            if (val === 'skip') return;
+            if (val === 'newListing') {
+                assignments.push({ nickname: r.nickname, action: 'newListing' });
+            } else if (val.startsWith('prefix:')) {
+                assignments.push({ nickname: r.nickname, action: 'prefix', stockId: val.slice('prefix:'.length) });
+            }
+        });
+
+        if (assignments.length === 0) return alert('적용할 항목이 없습니다.');
+        if (!confirm(`${assignments.length}건을 적용하시겠습니까?`)) return;
+
+        try {
+            const { prefixedCount, listedCount } = await callAdminAction('applyCrewPrefix', { crewName, assignments });
+            alert(`✅ 프리픽스 적용 ${prefixedCount}건, 신규 상장 ${listedCount}건 완료`);
+            document.getElementById('crew-prefix-result').innerHTML = '';
+            document.getElementById('crew-prefix-apply-btn').style.display = 'none';
+            document.getElementById('crew-nicknames-input').value = '';
+            crewPrefixResults = [];
+        } catch (e) {
+            alert('적용 실패: ' + e.message);
+        }
+    };
+
+    // ── 유저 상세 조회 ────────────────────────────────────────
+    window.loadUserDetail = async function() {
+        const uid = document.getElementById('user-detail-uid-input').value.trim();
+        const resultEl = document.getElementById('user-detail-result');
+        if (!uid) return alert('uid를 입력해주세요.');
+
+        resultEl.innerHTML = '<div class="info-box" style="margin:0;">조회 중...</div>';
+        try {
+            const data = await callAdminAction('getUserDetail', { uid });
+            const holdingsHtml = data.holdings.length === 0
+                ? '<div style="color:#64748b;font-size:13px;">보유 종목 없음</div>'
+                : data.holdings.map(h => {
+                    const color = h.unrealizedPL > 0 ? '#4ade80' : h.unrealizedPL < 0 ? '#f87171' : '#94a3b8';
+                    const sign  = h.unrealizedPL > 0 ? '+' : '';
+                    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #334155;font-size:13px;">
+                        <span>${escapeAttr(h.name)} · ${h.qty}주 (평단 ${h.avg.toLocaleString()}원)</span>
+                        <span style="color:${color};">${sign}${h.unrealizedPL.toLocaleString()}원</span>
+                    </div>`;
+                }).join('');
+
+            resultEl.innerHTML = `
+                <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;margin-top:10px;">
+                    <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:13px;margin-bottom:12px;">
+                        <span>💰 현금 <b style="color:#38bdf8;">${data.cash.toLocaleString()}원</b></span>
+                        <span>${data.kakaoLinked ? '✅ 카카오 연동' : '⚠️ 익명 계정'}</span>
+                        <span>실현손익 <b style="color:${data.realizedPL >= 0 ? '#4ade80' : '#f87171'};">${data.realizedPL.toLocaleString()}원</b></span>
+                        <span style="color:#64748b;">마지막 거래: ${data.lastTradeTime ? new Date(data.lastTradeTime).toLocaleString() : '-'}</span>
+                    </div>
+                    <div style="margin-bottom:14px;">${holdingsHtml}</div>
+                    <div class="admin-action-row">
+                        <input type="number" id="user-detail-cash-amount" placeholder="+지급 / -차감(원)"
+                            style="flex:1;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                        <input type="text" id="user-detail-cash-reason" placeholder="사유"
+                            style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:8px;font-size:13px;">
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="adjustUserCash('${uid}')">💰 자산 조정</button>
+                    </div>
+                    <div class="admin-action-row" style="margin-top:8px;">
+                        <button class="btn-primary" style="flex:1;background:#f97316;" onclick="resetUserProfitRanking('${uid}')">🔄 손익랭킹 초기화</button>
+                        <button class="btn-danger" style="flex:1;" onclick="deleteUserAccount('${uid}')">🗑 계정 삭제</button>
+                    </div>
+                </div>`;
+        } catch (e) {
+            resultEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">조회 실패: ${e.message}</div>`;
+        }
+    };
+
+    window.adjustUserCash = async function(uid) {
+        const amount = parseInt(document.getElementById('user-detail-cash-amount').value, 10);
+        const reason = document.getElementById('user-detail-cash-reason').value.trim();
+        if (!Number.isFinite(amount) || amount === 0) return alert('조정할 금액을 입력해주세요.');
+        if (!confirm(`${uid}에게 ${amount.toLocaleString()}원을 ${amount > 0 ? '지급' : '차감'}하시겠습니까?\n사유: ${reason || '(없음)'}`)) return;
+        try {
+            await callAdminAction('adjustUserCash', { uid, amount, reason });
+            alert('✅ 자산이 조정됐습니다.');
+            loadUserDetail();
+        } catch (e) {
+            alert('조정 실패: ' + e.message);
+        }
+    };
+
+    window.resetUserProfitRanking = async function(uid) {
+        if (!confirm('이 유저의 손익 랭킹 항목을 초기화(삭제)하시겠습니까?')) return;
+        try {
+            await callAdminAction('resetUserProfitRanking', { uid });
+            alert('✅ 손익 랭킹 항목이 초기화됐습니다.');
+        } catch (e) {
+            alert('초기화 실패: ' + e.message);
+        }
+    };
+
+    window.deleteUserAccount = async function(uid) {
+        if (!confirm('이 계정을 완전히 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+        try {
+            await callAdminAction('deleteUser', { uid });
+            alert('✅ 계정이 삭제됐습니다.');
+            document.getElementById('user-detail-result').innerHTML = '';
+            document.getElementById('user-detail-uid-input').value = '';
+        } catch (e) {
+            alert('삭제 실패: ' + e.message);
         }
     };
 
