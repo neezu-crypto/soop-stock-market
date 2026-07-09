@@ -729,9 +729,12 @@ function renderMaintenanceState(data) {
 
 onValue(ref(db, 'maintenance'), (snap) => renderMaintenanceState(snap.val()));
 
-// 거래/홍보 신청 등 "활동" 진입점에서 공통으로 호출 — 점검 중이면 안내하고 true 반환
+// 거래/홍보 신청 등 "활동" 진입점에서 공통으로 호출 — 점검 중이면 안내하고 true 반환.
+// 관리자 계정은 배너는 다른 유저와 동일하게 보되(renderMaintenanceState는 그대로 두고
+// 여기서만 예외), 점검 중에도 직접 확인·테스트할 수 있도록 활동 차단에서는 제외한다.
 function blockIfMaintenance() {
     if (!maintenanceActive) return false;
+    if (auth.currentUser?.email === ADMIN_EMAIL) return false;
     alert('🛠️ 현재 점검 중입니다. 점검이 끝난 후 다시 시도해주세요.');
     return true;
 }
