@@ -4,6 +4,7 @@ const {
   PROFIT_RANKING_CHECK_COST,
   PROFIT_RANKING_TOP_N,
   requireLinkedUser,
+  requireNotInMaintenance,
   chargeUserCash,
 } = require("./common");
 
@@ -30,6 +31,7 @@ const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256
   const db  = admin.database();
 
   await requireLinkedUser(db, uid, auth);
+  await requireNotInMaintenance(db, auth);
 
   const userSnap = await db.ref(`users/${uid}`).get();
   const user     = userSnap.val() || {};

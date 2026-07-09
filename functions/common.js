@@ -70,6 +70,21 @@ async function requireLinkedUser(db, uid, auth) {
   }
 }
 
+/**
+ * 점검모드 중엔 관리자를 제외한 모든 "활동성" 액션(매매/충전/홍보 신청 등)을
+ * 서버에서도 막는다. 클라이언트(index.html)의 blockIfMaintenance()는 UI만
+ * 막을 뿐이라, 개발자도구 등으로 Cloud Function을 직접 호출하면 우회될 수
+ * 있었다 — 카운트다운이 끝나 실제로 active 상태가 된 뒤(startAt 경과)만
+ * 차단하는 것까지 클라이언트와 동일하게 맞춘다.
+ */
+async function requireNotInMaintenance(db, auth) {
+  if (auth?.token?.email === ADMIN_EMAIL) return;
+  const data = (await db.ref("maintenance").get()).val();
+  if (data?.active && Date.now() >= (data.startAt || 0)) {
+    throw new HttpsError("failed-precondition", "현재 점검 중입니다. 점검이 끝난 후 다시 시도해주세요.");
+  }
+}
+
 async function findStockIdByName(db, name) {
   const snap = await db.ref("stocks").get();
   const data = snap.val() || {};
@@ -170,6 +185,7 @@ module.exports = {
   UNFREEZE_DONATION_BALLOONS,
   requireAdmin,
   requireLinkedUser,
+  requireNotInMaintenance,
   findStockIdByName,
   bannerStatus,
   chargeUserCash,

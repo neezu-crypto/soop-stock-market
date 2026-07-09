@@ -5,6 +5,7 @@ const {
   STOCK_FREEZE_THRESHOLD,
   STOCK_FREEZE_CANDLE_COUNT,
   STOCK_DELIST_DEADLINE_MS,
+  requireNotInMaintenance,
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
 
@@ -103,6 +104,7 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   }
 
   const db = admin.database();
+  await requireNotInMaintenance(db, auth);
   await checkPlayQuota(db, uid, auth);
 
   const stockRef = db.ref(`stocks/${stockId}`);

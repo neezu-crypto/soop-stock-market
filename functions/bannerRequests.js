@@ -10,6 +10,7 @@ const {
   creditUserCash,
   findStockIdByName,
   requireLinkedUser,
+  requireNotInMaintenance,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -55,6 +56,7 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
 
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
+  await requireNotInMaintenance(db, auth);
 
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
@@ -219,6 +221,7 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
 
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
+  await requireNotInMaintenance(db, auth);
 
   const stockId    = String(request.data?.stockId || "").trim();
   const nickname   = String(request.data?.nickname || "").trim();

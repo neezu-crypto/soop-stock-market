@@ -9,6 +9,7 @@ const {
   creditUserCash,
   findStockIdByName,
   requireLinkedUser,
+  requireNotInMaintenance,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -37,6 +38,7 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
 
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
+  await requireNotInMaintenance(db, auth);
 
   const stockName  = String(request.data?.stockName || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();

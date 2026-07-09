@@ -11,6 +11,7 @@ const {
   MAX_PLAYTIME_BUY_HOURS,
   MAX_HEARTBEAT_GAP_SECONDS,
   chargeUserCash,
+  requireNotInMaintenance,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -59,11 +60,58 @@ async function getQuotaState(db, uid, auth) {
   return { unlimited: false, today, isNewDay, baseLimitSeconds, usedSeconds, bonusSeconds, remainingSeconds };
 }
 
-/** trade() 등 실제 자산 변경 액션에서 재사용하는 quota 체크 — 소진 시 예외를 던진다. */
+/**
+ * 이용시간 사용량을 실제 경과시간만큼 갱신하는 트랜잭션 — heartbeat()와
+ * checkPlayQuota()가 공유한다. 예전엔 checkPlayQuota가 heartbeat가 미리
+ * 쌓아둔 값만 "읽기"만 했는데, 이 경우 클라이언트가 heartbeat 호출을
+ * 건너뛰고 trade 등을 직접 호출하면 사용량이 영원히 0으로 남아 하루
+ * 이용시간 제한이 무력화되는 문제가 있었다. 이제는 trade() 등 실제
+ * 활동을 유발하는 모든 액션이 이 함수를 직접 호출해 스스로 시계를
+ * 진행시키므로, heartbeat를 아예 호출하지 않아도 우회할 수 없다.
+ */
+async function touchHeartbeat(db, uid) {
+  const now      = Date.now();
+  const userRef  = db.ref(`users/${uid}`);
+  const trueUser = (await userRef.get()).val();
+
+  return userRef.transaction((currentUser) => {
+    const user = currentUser || trueUser;
+    if (!user) return currentUser;
+
+    const today   = todayKeyKST();
+    const isNewDay = user.playQuotaDate !== today;
+    const lastHeartbeatAt = isNewDay ? now : (user.lastHeartbeatAt || now);
+    const elapsedMs = Math.max(0, Math.min(now - lastHeartbeatAt, MAX_HEARTBEAT_GAP_SECONDS * 1000));
+
+    return {
+      ...user,
+      playQuotaDate:        today,
+      playSecondsUsedToday: (isNewDay ? 0 : (user.playSecondsUsedToday || 0)) + Math.floor(elapsedMs / 1000),
+      bonusSecondsToday:    isNewDay ? 0 : (user.bonusSecondsToday || 0),
+      lastHeartbeatAt:      now,
+    };
+  });
+}
+
+/**
+ * trade() 등 실제 자산 변경 액션에서 재사용하는 quota 체크. 단순 조회가
+ * 아니라 touchHeartbeat()로 사용량을 먼저 실제 경과시간만큼 갱신한 뒤
+ * 판정한다 — 그래야 heartbeat 호출 없이 이 함수만 반복 호출해도 우회가
+ * 안 된다(트랜잭션 자체가 시계 역할을 겸함).
+ */
 async function checkPlayQuota(db, uid, auth) {
-  const state = await getQuotaState(db, uid, auth);
-  if (state.unlimited) return;
-  if (state.remainingSeconds <= 0) {
+  if (auth.token?.email === ADMIN_EMAIL) return;
+
+  const userTx = await touchHeartbeat(db, uid);
+  if (!userTx.committed || !userTx.snapshot.exists()) return; // 아직 유저 데이터가 없는 극초반 — initializeUser가 곧 처리
+
+  const updated = userTx.snapshot.val();
+  const baseLimitSeconds = updated.kakaoLinked ? KAKAO_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  const remainingSeconds = Math.max(
+    0,
+    baseLimitSeconds + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
+  );
+  if (remainingSeconds <= 0) {
     throw new HttpsError(
       "resource-exhausted",
       "오늘 이용 시간이 모두 소진됐습니다. 시간을 충전하거나 내일 다시 이용해주세요."
@@ -88,27 +136,7 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
     return { ok: true, unlimited: true, allowed: true };
   }
 
-  const now      = Date.now();
-  const userRef  = db.ref(`users/${auth.uid}`);
-  const trueUser = (await userRef.get()).val();
-
-  const userTx = await userRef.transaction((currentUser) => {
-    const user  = currentUser || trueUser;
-    if (!user) return currentUser;
-
-    const today   = todayKeyKST();
-    const isNewDay = user.playQuotaDate !== today;
-    const lastHeartbeatAt = isNewDay ? now : (user.lastHeartbeatAt || now);
-    const elapsedMs = Math.max(0, Math.min(now - lastHeartbeatAt, MAX_HEARTBEAT_GAP_SECONDS * 1000));
-
-    return {
-      ...user,
-      playQuotaDate:        today,
-      playSecondsUsedToday: (isNewDay ? 0 : (user.playSecondsUsedToday || 0)) + Math.floor(elapsedMs / 1000),
-      bonusSecondsToday:    isNewDay ? 0 : (user.bonusSecondsToday || 0),
-      lastHeartbeatAt:      now,
-    };
-  });
+  const userTx = await touchHeartbeat(db, auth.uid);
 
   if (!userTx.committed || !userTx.snapshot.exists()) {
     return { ok: true, unlimited: false, allowed: true, remainingSeconds: ANON_DAILY_SECONDS };
@@ -150,6 +178,7 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   }
 
   const db   = admin.database();
+  await requireNotInMaintenance(db, auth);
   const uid  = auth.uid;
   const user = (await db.ref(`users/${uid}`).get()).val() || { cash: 0, stocks: {} };
 

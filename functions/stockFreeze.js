@@ -11,6 +11,7 @@ const {
   UNFREEZE_DONATION_REWARD,
   requireAdmin,
   requireLinkedUser,
+  requireNotInMaintenance,
   chargeUserCash,
   creditUserCash,
 } = require("./common");
@@ -68,6 +69,7 @@ const unfreezeWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
 
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
+  await requireNotInMaintenance(db, auth);
 
   const stockId = String(request.data?.stockId || "").trim();
   if (!stockId) throw new HttpsError("invalid-argument", "stockId가 필요합니다.");
@@ -105,6 +107,7 @@ const submitUnfreezeDonationRequest = onCall({ cors: true, timeoutSeconds: 30, m
 
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
+  await requireNotInMaintenance(db, auth);
 
   const stockId  = String(request.data?.stockId || "").trim();
   const nickname = String(request.data?.nickname || "").trim();
