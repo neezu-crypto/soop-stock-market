@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, creditUserCash } = require("./common");
+const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, creditUserCash } = require("./common");
 const {
   actionListBannerRequests,
   actionApproveBannerRequest,
@@ -317,7 +317,11 @@ async function actionSaveRankings(db) {
 }
 
 function isInactiveUser(user) {
-  const isDefaultCash = (user.cash ?? INITIAL_CASH) === INITIAL_CASH;
+  // 지금 기준(INITIAL_CASH)뿐 아니라 예전 지급 기준(LEGACY_INITIAL_CASH)도 함께
+  // 봐야 한다 — 2026-07 정책 변경 이전에 만들어져 20만원만 받고 한 번도 거래하지
+  // 않은 계정도 "미거래 유저"로 계속 잡아내기 위함.
+  const cash = user.cash ?? INITIAL_CASH;
+  const isDefaultCash = cash === INITIAL_CASH || cash === LEGACY_INITIAL_CASH;
   const hasNoStocks   = !user.stocks || Object.keys(user.stocks).length === 0;
   const hasZeroStocks = user.stocks && Object.values(user.stocks).every((s) => (s.qty || 0) === 0);
   return isDefaultCash && (hasNoStocks || hasZeroStocks);

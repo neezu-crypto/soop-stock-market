@@ -13,6 +13,10 @@ const KAKAO_LINK_BONUS         = 500000;   // 카카오 최초 연동 시 추가
 // actionApplyAnonTopUp(admin.js)에서 사용. 이미 카카오 연동된 유저는 예전 기준으로도
 // 합산 100만원을 이미 받았으므로 대상에서 제외된다.
 const ANON_INITIAL_CASH_TOPUP  = 300000;
+// 정책 변경 이전 지급 기준(20만원) — isInactiveUser(admin.js)가 "미거래 유저"를
+// 판정할 때 지금 기준(INITIAL_CASH=50만원)뿐 아니라 이 값과도 비교해야, 예전에
+// 20만원만 받고 한 번도 거래하지 않은 계정도 계속 정상적으로 잡아낼 수 있다.
+const LEGACY_INITIAL_CASH      = 200000;
 const STREAMER_ID_RE           = /^[a-z0-9]{2,20}$/;
 const URL_RE                   = /^https?:\/\/.+/i;
 const MAX_BANNER_REQUEST_DAYS  = 7;        // 신청 시 신청자가 고를 수 있는 노출 기간 상한
@@ -161,6 +165,7 @@ module.exports = {
   INITIAL_CASH,
   KAKAO_LINK_BONUS,
   ANON_INITIAL_CASH_TOPUP,
+  LEGACY_INITIAL_CASH,
   STREAMER_ID_RE,
   URL_RE,
   MAX_BANNER_REQUEST_DAYS,
