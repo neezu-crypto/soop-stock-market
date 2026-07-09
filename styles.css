@@ -4,6 +4,8 @@
             --text-main: #f8fafc; --text-sub: #94a3b8;
         }
         body { font-family: 'Pretendard', sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        #maintenance-banner.countdown { background: repeating-linear-gradient(135deg,#f59e0b,#f59e0b 12px,#fbbf24 12px,#fbbf24 24px); color: #1e293b; }
+        #maintenance-banner.active { background: #7c2d12; color: #fecaca; }
         .wrapper { width: 100%; max-width: 800px; }
         .wallet-bar { 
             position: sticky; top: 0; background: #1e293b; padding: 15px 20px; border-radius: 12px;

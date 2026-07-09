@@ -114,6 +114,23 @@
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
 
+    <!-- 🛠️ 점검모드 관리 -->
+    <div class="container" style="display:block; border-color: #f97316;">
+        <h1>🛠️ 점검모드 관리</h1>
+        <div class="info-box" style="color:#fed7aa;">
+            켜면 30초 후부터 메인 페이지의 거래·홍보 신청 등 활동이 막힙니다(페이지 자체는 그대로 보임).<br>
+            끄면 안내 배너가 즉시 사라지고 바로 정상 이용이 가능합니다.
+        </div>
+        <div class="data-status-bar" style="margin-bottom:12px;">
+            <span>현재 상태</span>
+            <b id="maintenance-status-label" style="color:#94a3b8;">확인 중...</b>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button class="btn-danger" style="flex:1;" onclick="setMaintenanceMode(true)">🛠️ 점검모드 켜기</button>
+            <button class="btn-success" style="flex:1;" onclick="setMaintenanceMode(false)">✅ 점검모드 끄기</button>
+        </div>
+    </div>
+
     <!-- 🏆 랭킹 TOP5 관리 -->
     <div class="container" style="display:block; border-color: #a855f7;">
         <h1>🏆 랭킹 TOP5 관리</h1>
@@ -307,7 +324,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { getDatabase, ref, get, onValue } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 
@@ -388,12 +405,58 @@
             await loadListingRequests();
             await loadAllRelayRoomData();
             await loadAllFreezeData();
+            watchMaintenanceStatus();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
             document.getElementById('admin-section').style.display = 'none';
         }
     });
+
+    // ── 점검모드 (maintenance/ 은 공개 읽기 경로라 클라이언트에서 바로 구독) ──
+    let maintenanceWatched = false;
+    let latestMaintenanceData = null;
+
+    function renderMaintenanceStatusLabel() {
+        const label = document.getElementById('maintenance-status-label');
+        if (!label) return;
+        const data = latestMaintenanceData;
+        if (!data?.active) {
+            label.style.color = '#4ade80';
+            label.innerText = '꺼짐';
+            return;
+        }
+        const remainingMs = (data.startAt || 0) - Date.now();
+        if (remainingMs > 0) {
+            label.style.color = '#fbbf24';
+            label.innerText = `켜짐 — ${Math.max(1, Math.ceil(remainingMs / 1000))}초 후 점검 시작`;
+        } else {
+            label.style.color = '#f87171';
+            label.innerText = '켜짐 — 점검 진행 중';
+        }
+    }
+
+    function watchMaintenanceStatus() {
+        if (maintenanceWatched) return; // 로그인 유지 중 재호출돼도 리스너를 중복으로 걸지 않음
+        maintenanceWatched = true;
+        onValue(ref(db, 'maintenance'), (snap) => {
+            latestMaintenanceData = snap.val();
+            renderMaintenanceStatusLabel();
+        });
+        setInterval(renderMaintenanceStatusLabel, 1000); // 카운트다운 초 단위 갱신
+    }
+
+    window.setMaintenanceMode = async function(active) {
+        const confirmMsg = active
+            ? '점검모드를 켤까요? 30초 후부터 거래·홍보 신청 등 활동이 막힙니다.'
+            : '점검모드를 끌까요? 즉시 정상 이용이 가능해집니다.';
+        if (!confirm(confirmMsg)) return;
+        try {
+            await callAdminAction('setMaintenanceMode', { active });
+        } catch (e) {
+            alert('점검모드 변경 중 오류 발생: ' + e.message);
+        }
+    };
 
     // ── 랭킹 TOP5 (users/ 집계는 서버(adminAction)에서 처리) ──
     window.previewRankings = async function() {

@@ -350,6 +350,27 @@ async function actionCleanupInactiveUsers(db) {
   return { ok: true, count: inactive.length };
 }
 
+// ── 점검모드 ────────────────────────────────────────────────
+// 관리자가 실시간으로 켜고 끌 수 있는 "소프트 점검모드". 코드 배포가
+// 필요한 LONG_MAINTENANCE(index.html의 전체 화면 차단)와 달리, 페이지는
+// 그대로 보여주고 거래·홍보 신청 등 게임 상태를 바꾸는 활동만 클라이언트
+// 단에서 막는다. 켜는 즉시 시작하지 않고 30초의 유예를 둬서 지금 막
+// 거래 중인 유저가 놀라지 않게 한다.
+const MAINTENANCE_COUNTDOWN_MS = 30 * 1000;
+
+async function actionSetMaintenanceMode(db, { active }) {
+  const isActive = !!active;
+  if (isActive) {
+    await db.ref("maintenance").set({
+      active:  true,
+      startAt: Date.now() + MAINTENANCE_COUNTDOWN_MS,
+    });
+  } else {
+    await db.ref("maintenance").set({ active: false });
+  }
+  return { ok: true, active: isActive };
+}
+
 /**
  * 관리자 페이지 전용 액션 디스패처.
  * 클라이언트는 { action, payload }만 전달하고, 실제 stocks/users/rankings/
@@ -404,6 +425,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "listChartBannerRequests":   return actionListChartBannerRequests(db);
     case "approveChartBannerRequest": return actionApproveChartBannerRequest(db, payload);
     case "rejectChartBannerRequest":  return actionRejectChartBannerRequest(db, payload);
+    case "setMaintenanceMode":     return actionSetMaintenanceMode(db, payload);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }

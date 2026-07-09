@@ -103,6 +103,11 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     // 검증 → 버튼 비활성화 → 서버 호출 → 안내 → 필드 초기화 → 모달 닫기의 공통 뼈대.
     // validateAndBuild()는 유효하면 payload 객체를, 무효하면(이미 alert를 띄운 뒤) null을 반환한다.
     async function submitRequestForm({ submitBtnId, submitLabel, validateAndBuild, callable, onSuccess, resetFn, closeFn }) {
+        // 점검모드 중엔 여기 모이는 8종 셀프 신청(배너/차트배너/고정노출/중계방/
+        // 상장신청/자산충전/동결해제 등) 전부를 한 곳에서 막는다 — index.html이
+        // window.blockIfMaintenance를 노출해둔다.
+        if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
+
         const submitBtn = document.getElementById(submitBtnId);
         const payload = validateAndBuild();
         if (!payload) return;
@@ -554,6 +559,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     window.closeUnfreezeModal = () => document.getElementById('unfreeze-modal').classList.remove('active');
 
     window.unfreezeWithCash = async function() {
+        if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
         if (!pendingUnfreezeStockId) return alert('대상 종목을 찾을 수 없습니다.');
         if (!confirm('게임자산 100만원을 내고 즉시 해제하시겠습니까? (성공 시 200만원이 지급됩니다)')) return;
 
@@ -573,6 +579,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     };
 
     window.submitUnfreezeDonationRequest = async function() {
+        if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
         if (!pendingUnfreezeStockId) return alert('대상 종목을 찾을 수 없습니다.');
         const nickname = document.getElementById('unfreeze-donation-nickname').value.trim();
         const soopId   = document.getElementById('unfreeze-donation-soopid').value.trim().toLowerCase();

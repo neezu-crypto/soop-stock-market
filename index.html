@@ -550,6 +550,9 @@
     🧪 테스트 기간 운영 중입니다 — 일부 유료 기능(플레이 시간 충전)은 테스트 기간 종료 후 이용 가능합니다
 </div>
 
+<!-- ── 점검모드 안내 배너 (관리자가 실시간으로 켜고 끔 — maintenance/ 구독) ── -->
+<div id="maintenance-banner" style="display:none;text-align:center;padding:9px 12px;font-size:13px;font-weight:800;letter-spacing:0.3px;"></div>
+
 <!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
     <div class="wallet-bar">
@@ -675,6 +678,62 @@ const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUn
 const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequest');
 
 const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
+
+// ══════════════════════════════════════════════════════════════
+// 점검모드 (관리자가 관리자 페이지에서 실시간으로 켜고 끔) — LONG_MAINTENANCE와
+// 달리 코드 배포 없이 즉시 반영되고, 페이지 자체는 그대로 보여준 채 거래·홍보
+// 신청 등 게임 상태를 바꾸는 활동만 막는다. maintenance/{active, startAt}를
+// 구독해 켜지는 순간부터 startAt까지는 카운트다운 안내만 띄우고, startAt이
+// 지나야 실제로 활동을 차단한다.
+// ══════════════════════════════════════════════════════════════
+let maintenanceActive = false; // true면 거래/홍보 신청 등 활동을 막는다
+let maintenanceTickIntervalId = null;
+
+function stopMaintenanceCountdown() {
+    if (maintenanceTickIntervalId) { clearInterval(maintenanceTickIntervalId); maintenanceTickIntervalId = null; }
+}
+
+function renderMaintenanceState(data) {
+    const banner = document.getElementById('maintenance-banner');
+    stopMaintenanceCountdown();
+
+    if (!data?.active) {
+        maintenanceActive = false;
+        if (banner) { banner.style.display = 'none'; banner.className = ''; }
+        return;
+    }
+
+    const startAt = data.startAt || 0;
+
+    function tick() {
+        const remainingMs = startAt - Date.now();
+        if (remainingMs > 0) {
+            maintenanceActive = false;
+            const remainingSec = Math.max(1, Math.ceil(remainingMs / 1000));
+            banner.className = 'countdown';
+            banner.innerText = `⚠️ ${remainingSec}초 후에 점검모드가 시작됩니다 — 거래/홍보 신청은 지금 미리 완료해주세요`;
+        } else {
+            maintenanceActive = true;
+            stopMaintenanceCountdown();
+            banner.className = 'active';
+            banner.innerText = '🛠️ 점검모드 진행 중입니다 — 거래 및 홍보 신청 등 활동이 일시적으로 제한됩니다';
+        }
+    }
+
+    banner.style.display = 'block';
+    tick();
+    maintenanceTickIntervalId = setInterval(tick, 1000);
+}
+
+onValue(ref(db, 'maintenance'), (snap) => renderMaintenanceState(snap.val()));
+
+// 거래/홍보 신청 등 "활동" 진입점에서 공통으로 호출 — 점검 중이면 안내하고 true 반환
+function blockIfMaintenance() {
+    if (!maintenanceActive) return false;
+    alert('🛠️ 현재 점검 중입니다. 점검이 끝난 후 다시 시도해주세요.');
+    return true;
+}
+window.blockIfMaintenance = blockIfMaintenance; // js/promotions.js 등 다른 모듈에서도 재사용
 
 if (typeof Kakao !== 'undefined' && !Kakao.isInitialized()) {
     Kakao.init('ed4f01d6903ca41d5dc0ab32b6ae143c');
@@ -1141,6 +1200,7 @@ window.openPlayTimeModal = () => {
 window.closePlayTimeModal = () => document.getElementById('playtime-modal').classList.remove('active');
 
 window.buyPlayTime = async function() {
+    if (blockIfMaintenance()) return;
     const hoursInput = document.getElementById('playtime-hours');
     const buyBtn      = document.getElementById('playtime-buy-btn');
     const hours = parseInt(hoursInput.value, 10);
@@ -1176,6 +1236,7 @@ const { closeChartModal, getCurrentStockId } = initChartModal({ db, getAllStocks
 // 가격 계산·잔고 검증·기록은 전부 Cloud Function(trade)이 서버에서 처리한다.
 // (클라이언트는 stocks/users를 직접 쓸 수 없도록 database.rules.json에서 막혀 있음)
 window.trade = async function (id, type, qty = 1) {
+    if (blockIfMaintenance()) return;
     const currentTime  = Date.now();
     const cooldownTime = 1000;
 
