@@ -489,7 +489,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             },
             callable: submitChartBannerRequestCallable,
             onSuccess(result) {
-                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 배너가 즉시 등록됐습니다!\n노출 종료일: ${result.data.endDate}`);
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 노출 기간이 예약됐습니다!\n노출 종료일: ${result.data.endDate}\n배너 이미지는 관리자 확인 후 노출됩니다.`);
             },
             resetFn() {
                 document.getElementById('chart-ad-nickname').value = '';
