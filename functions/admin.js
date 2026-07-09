@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH } = require("./common");
+const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, creditUserCash } = require("./common");
 const {
   actionListBannerRequests,
   actionApproveBannerRequest,
@@ -350,6 +350,39 @@ async function actionCleanupInactiveUsers(db) {
   return { ok: true, count: inactive.length };
 }
 
+/**
+ * 익명 유저 초기자산 보정 — 2026-07 정책 변경(익명 20만원+카카오 80만원 →
+ * 익명 50만원+카카오 50만원) 이전에 이미 생성된 익명 유저는 20만원만 받은
+ * 상태다. 새로 생성되는 계정은 initializeUser가 이미 새 INITIAL_CASH(50만원)를
+ * 지급하므로 손댈 필요 없고, 대상은 "예전 기준으로 이미 만들어졌고 실제로
+ * 한 번이라도 거래해본(=진짜 이용한) 아직 카카오 미연동 익명 유저"로 한정한다
+ * — 한 번도 안 써본 방문성 계정까지 소급 지급할 필요는 없기 때문. 이미
+ * 카카오 연동된 유저는 예전 기준으로도 20만+80만=100만원을 이미 받았으므로
+ * 제외한다. anonTopUpAppliedAt 마커로 중복 지급을 막아, 나중에 다시 실행해도
+ * (그 사이 새로 거래를 시작한 유저만) 안전하게 추가로 잡아낼 수 있다.
+ */
+async function getAnonTopUpEligibleUserIds(db) {
+  const snap = await db.ref("users").get();
+  const data = snap.val() || {};
+  return Object.entries(data)
+    .filter(([, user]) => !user.kakaoLinked && user.lastTradeTime && !user.anonTopUpAppliedAt)
+    .map(([uid]) => uid);
+}
+
+async function actionPreviewAnonTopUp(db) {
+  const eligible = await getAnonTopUpEligibleUserIds(db);
+  return { ok: true, count: eligible.length, totalCost: eligible.length * ANON_INITIAL_CASH_TOPUP };
+}
+
+async function actionApplyAnonTopUp(db) {
+  const eligible = await getAnonTopUpEligibleUserIds(db);
+  for (const uid of eligible) {
+    await creditUserCash(db, uid, ANON_INITIAL_CASH_TOPUP);
+    await db.ref(`users/${uid}/anonTopUpAppliedAt`).set(Date.now());
+  }
+  return { ok: true, count: eligible.length, totalCost: eligible.length * ANON_INITIAL_CASH_TOPUP };
+}
+
 // ── 점검모드 ────────────────────────────────────────────────
 // 관리자가 실시간으로 켜고 끌 수 있는 "소프트 점검모드". 코드 배포가
 // 필요한 LONG_MAINTENANCE(index.html의 전체 화면 차단)와 달리, 페이지는
@@ -538,6 +571,8 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "listProfitRankings":     return actionListProfitRankings(db);
     case "listPurchaseHistory":    return actionListPurchaseHistory(db);
     case "getPendingSummary":      return actionGetPendingSummary(db);
+    case "previewAnonTopUp":       return actionPreviewAnonTopUp(db);
+    case "applyAnonTopUp":         return actionApplyAnonTopUp(db);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }

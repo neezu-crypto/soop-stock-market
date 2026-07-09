@@ -255,13 +255,29 @@
     <div class="container" style="display:block; border-color: #f97316;">
         <h1>🗑 미거래 유저 데이터 정리</h1>
         <div class="info-box" style="color: #fed7aa;">
-            한 번도 거래하지 않은 유저(잔고 1,000,000원 &amp; 보유 주식 없음)의 데이터를 삭제합니다.<br>
+            한 번도 거래하지 않은 유저(잔고 500,000원 &amp; 보유 주식 없음)의 데이터를 삭제합니다.<br>
             <span style="color:#38bdf8;">Firebase 저장 용량과 랭킹 집계 속도를 개선합니다.</span>
         </div>
         <div id="cleanup-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
         <div style="display:flex; gap:10px;">
             <button class="btn-success" style="flex:1;" onclick="previewInactiveUsers()">🔍 미거래 유저 집계</button>
             <button class="btn-primary" style="flex:2; margin-top:0; background:#f97316; color:white;" onclick="cleanupInactiveUsers()">🗑 미거래 유저 삭제</button>
+        </div>
+    </div>
+
+    <!-- 🎁 익명 유저 초기자산 소급 보정 -->
+    <div class="container" style="display:block; border-color: #f97316;">
+        <h1>🎁 익명 유저 초기자산 소급 보정</h1>
+        <div class="info-box" style="color: #fed7aa;">
+            2026-07 정책 변경(익명 20만원+카카오 80만원 → 익명 50만원+카카오 50만원) 이전에 생성된 익명 유저는
+            아직 20만원만 받은 상태입니다. 그중 <span style="color:#38bdf8;">실제로 거래해본(=진짜 이용한) 카카오
+            미연동 유저</span>에게만 차액 30만원을 1회 지급합니다. 이미 지급한 유저는 자동으로 다시 잡히지 않으니
+            안전하게 여러 번 눌러도 됩니다(그 사이 새로 거래를 시작한 유저만 추가로 잡힘).
+        </div>
+        <div id="anon-topup-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-success" style="flex:1;" onclick="previewAnonTopUp()">🔍 대상 인원 미리보기</button>
+            <button class="btn-primary" style="flex:2; margin-top:0; background:#f97316; color:white;" onclick="applyAnonTopUp()">🎁 30만원 지급</button>
         </div>
     </div>
 
@@ -693,6 +709,32 @@
                 : `✅ ${count.toLocaleString()}명 삭제 완료`;
         } catch(e) {
             statusEl.innerText = '삭제 실패: ' + e.message;
+        }
+    };
+
+    // ── 익명 유저 초기자산 소급 보정 (users/ 조회·지급은 서버(adminAction)에서 처리) ──
+    window.previewAnonTopUp = async function() {
+        const statusEl = document.getElementById('anon-topup-status');
+        statusEl.innerText = '집계 중...';
+        try {
+            const { count, totalCost } = await callAdminAction('previewAnonTopUp');
+            statusEl.innerText = `대상 ${count.toLocaleString()}명 · 총 ${totalCost.toLocaleString()}원 지급 예정`;
+        } catch(e) {
+            statusEl.innerText = '집계 실패: ' + e.message;
+        }
+    };
+
+    window.applyAnonTopUp = async function() {
+        const statusEl = document.getElementById('anon-topup-status');
+        if (!confirm('대상 유저에게 30만원씩 지급하시겠습니까?\n이미 받은 유저는 자동으로 제외됩니다.')) return;
+        statusEl.innerText = '지급 처리 중... (유저 수에 따라 시간이 걸릴 수 있습니다)';
+        try {
+            const { count, totalCost } = await callAdminAction('applyAnonTopUp');
+            statusEl.innerText = count === 0
+                ? '지급할 대상이 없습니다.'
+                : `✅ ${count.toLocaleString()}명에게 총 ${totalCost.toLocaleString()}원 지급 완료`;
+        } catch(e) {
+            statusEl.innerText = '지급 실패: ' + e.message;
         }
     };
 

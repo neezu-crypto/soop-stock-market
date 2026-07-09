@@ -601,13 +601,13 @@
                 </div>
             </div>
             <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-                <div style="font-size:12px;color:var(--text-sub);">초기 자산 200,000원 지급됨</div>
+                <div style="font-size:12px;color:var(--text-sub);">초기 자산 500,000원 지급됨</div>
                 <div style="font-size:12px;color:var(--text-sub);">
                     🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
                 </div>
                 <button id="kakao-login-btn" onclick="loginWithKakao()"
                     style="display:none;align-items:center;gap:6px;background:#FEE500;color:#181600;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
-                    💬 카카오 연결하고 +80만원 받기
+                    💬 카카오 연결하고 +50만원 받기
                 </button>
                 <div id="kakao-privacy-note" style="display:none;font-size:10px;color:#64748b;text-align:right;max-width:220px;">🔒 닉네임 등 개인정보는 수집하지 않아요 (식별용 ID만 사용)</div>
                 <span id="kakao-linked-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;">✅ 카카오 연동중</span>
@@ -714,7 +714,7 @@ const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUn
 const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequest');
 const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking');
 
-const INITIAL_CASH = 200000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
+const INITIAL_CASH = 500000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
 // ══════════════════════════════════════════════════════════════
 // 점검모드 (관리자가 관리자 페이지에서 실시간으로 켜고 끔) — LONG_MAINTENANCE와
@@ -1309,7 +1309,7 @@ window.trade = async function (id, type, qty = 1) {
         const message = error?.message || "거래 중 오류가 발생했습니다.";
         // 잔액 부족 = 카카오 연동 보너스로 바로 해결되는 순간 → 그 자리에서 유도
         if (message.includes('잔액이 부족') && !myData?.kakaoLinked) {
-            if (confirm(`${message}\n\n💬 카카오 연결하면 80만원을 바로 받을 수 있어요!\n지금 연결하시겠어요?`)) {
+            if (confirm(`${message}\n\n💬 카카오 연결하면 50만원을 바로 받을 수 있어요!\n지금 연결하시겠어요?`)) {
                 window.loginWithKakao();
             }
         } else if (message.includes('이용 시간이 모두 소진')) {
@@ -1386,7 +1386,7 @@ function checkKakaoAssetMilestone(totalAssets) {
     if (localStorage.getItem(flagKey)) return; // 계정당 1회만
     localStorage.setItem(flagKey, '1');
 
-    if (confirm('🎉 보유 자산이 100만원을 넘었어요!\n\n💬 카카오로 연결하면 80만원 보너스까지 받고, 지금까지 쌓은 자산을 안전하게 지킬 수 있어요.\n지금 연결하시겠어요?')) {
+    if (confirm('🎉 보유 자산이 100만원을 넘었어요!\n\n💬 카카오로 연결하면 50만원 보너스까지 받고, 지금까지 쌓은 자산을 안전하게 지킬 수 있어요.\n지금 연결하시겠어요?')) {
         window.loginWithKakao();
     }
 }

@@ -5,8 +5,14 @@ const { HttpsError } = require("firebase-functions/v2/https");
 // 동일한 이름의 상수가 있으니, 테스트 기간이 끝나면 둘 다 false로 바꾸고 배포한다.
 const TEST_PERIOD_ACTIVE       = true;
 const ADMIN_EMAIL              = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정
-const INITIAL_CASH             = 200000;   // 익명 최초 접속 시 지급되는 시작 자금
-const KAKAO_LINK_BONUS         = 800000;   // 카카오 최초 연동 시 추가 지급 (합산 시 기존 100만원과 동일)
+const INITIAL_CASH             = 500000;   // 익명 최초 접속 시 지급되는 시작 자금
+const KAKAO_LINK_BONUS         = 500000;   // 카카오 최초 연동 시 추가 지급 (합산 시 100만원)
+// 2026-07 정책 변경(익명 20만원+카카오 80만원 → 익명 50만원+카카오 50만원) 이전에
+// 이미 생성된 익명 유저는 20만원만 받은 상태다. 실제로 거래해본(=진짜 이용한) 익명
+// 유저에 한해 새 기준(50만원)과의 차액을 1회 보정 지급한다 — actionPreviewAnonTopUp/
+// actionApplyAnonTopUp(admin.js)에서 사용. 이미 카카오 연동된 유저는 예전 기준으로도
+// 합산 100만원을 이미 받았으므로 대상에서 제외된다.
+const ANON_INITIAL_CASH_TOPUP  = 300000;
 const STREAMER_ID_RE           = /^[a-z0-9]{2,20}$/;
 const URL_RE                   = /^https?:\/\/.+/i;
 const MAX_BANNER_REQUEST_DAYS  = 7;        // 신청 시 신청자가 고를 수 있는 노출 기간 상한
@@ -154,6 +160,7 @@ module.exports = {
   ADMIN_EMAIL,
   INITIAL_CASH,
   KAKAO_LINK_BONUS,
+  ANON_INITIAL_CASH_TOPUP,
   STREAMER_ID_RE,
   URL_RE,
   MAX_BANNER_REQUEST_DAYS,
