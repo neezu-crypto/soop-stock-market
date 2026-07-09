@@ -11,8 +11,14 @@ const {
 // ══════════════════════════════════════════════════════════
 // 순수 매매 손익 랭킹
 // 보너스/후원 당첨금/신청 환불 등 매매 외 현금흐름은 전혀 반영하지 않는다 —
-// trade()가 매도 시점마다 누적해 둔 user.realizedPL(실현손익)에, 현재
-// 보유 종목의 평가손익(미실현)만 이 자리에서 더해 총 매매손익을 계산한다.
+// trade()가 매도 시점마다 평단가 기준으로 누적해 둔 user.realizedPL(실현손익)
+// "만" 반영한다. 미실현(보유 중 종목의 평가손익)은 의도적으로 제외한다 —
+// 현재가는 본인이 직전에 소량 매수만으로도 순간적으로 밀어올릴 수 있는
+// 값이라, 대량 보유 물량에 그 가격을 그대로 곱해 마킹하면 팔지 않고도
+// (매도 시 자기 물량이 가격을 도로 끌어내리는 자기교정 없이) 가짜 이익을
+// 순위표에 영구히 박아둘 수 있는 구멍이 있었다. 실현손익만 반영하면 실제로
+// 판 수량에 대해서만, 그것도 본인 매도가 가격을 끌어내리는 만큼만 인정되어
+// 이 트릭이 통하지 않는다.
 // 익명 계정 도배를 막기 위해 카카오 연동 유저만 확인/갱신 가능하고,
 // 확인할 때마다 게임자산을 차감해 상시 폴링을 억제한다(그 대가로 스케줄
 // 재계산 없이 "확인하는 사람만" 서버가 계산하는 저비용 구조가 된다).
@@ -35,26 +41,7 @@ const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256
 
   const userSnap = await db.ref(`users/${uid}`).get();
   const user     = userSnap.val() || {};
-  const holdings = user.stocks || {};
-
-  // 보유 중인 종목만 골라 현재가를 조회 — 전체 종목(수천 개)을 매번 읽지 않는다.
-  const stockIds = Object.keys(holdings).filter((id) => (holdings[id]?.qty || 0) > 0);
-  const priceEntries = await Promise.all(
-    stockIds.map(async (id) => {
-      const snap = await db.ref(`stocks/${id}/price`).get();
-      return [id, snap.val() || 0];
-    })
-  );
-  const priceMap = Object.fromEntries(priceEntries);
-
-  let unrealizedPL = 0;
-  stockIds.forEach((id) => {
-    const pos = holdings[id];
-    const currentPrice = priceMap[id] || 0;
-    unrealizedPL += (currentPrice - pos.avg) * pos.qty;
-  });
-
-  const totalPL = Math.round((user.realizedPL || 0) + unrealizedPL);
+  const totalPL  = Math.round(user.realizedPL || 0);
 
   // 1) 확인 비용 차감 (실패 시 여기서 예외 — 아래 랭킹 갱신은 진행되지 않는다)
   await chargeUserCash(db, uid, PROFIT_RANKING_CHECK_COST);
