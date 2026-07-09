@@ -131,6 +131,18 @@
         </div>
     </div>
 
+    <!-- 🧾 유저 구매 현황 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>🧾 유저 구매 현황</h1>
+        <div class="info-box">
+            우측/차트 배너·최상단 고정·중계방·플레이타임 충전 5가지 셀프 상품의 구매 이력을 시간순(최신순)으로 통합
+            조회합니다. 각 기능별 패널은 신규/진행중/만료만 보여주므로, 지나간 구매까지 전체 이력으로 확인하려면
+            여기를 이용하세요. 자산 충전(지급)과 종목 상장 신청(무료)은 성격이 달라 제외했습니다 — 각각 별도 패널에서 확인 가능합니다.
+        </div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadPurchaseHistory()">🔄 새로고침</button>
+        <div id="purchase-history-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
     <!-- 💰 손익 랭킹 조회 -->
     <div class="container" style="display:block; border-color: #38bdf8;">
         <h1>💰 손익 랭킹 조회</h1>
@@ -467,6 +479,43 @@
             await callAdminAction('setMaintenanceMode', { active });
         } catch (e) {
             alert('점검모드 변경 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ── 유저 구매 현황 (읽기 전용 — 5가지 셀프 상품 이력 통합 조회) ──
+    window.loadPurchaseHistory = async function() {
+        const listEl = document.getElementById('purchase-history-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { purchases, totalCount } = await callAdminAction('listPurchaseHistory');
+            if (!purchases || purchases.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">아직 구매 이력이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            if (totalCount > purchases.length) {
+                const note = document.createElement('div');
+                note.className = 'info-box';
+                note.style.margin = '0 0 4px';
+                note.innerText = `전체 ${totalCount}건 중 최신 ${purchases.length}건만 표시합니다.`;
+                listEl.appendChild(note);
+            }
+            purchases.forEach(p => {
+                const at = p.at ? new Date(p.at).toLocaleString() : '-';
+                const statusColor = p.status === 'pending' ? '#fbbf24' : p.status === 'rejected' ? '#f87171' : '#4ade80';
+                const statusLabel = p.status === 'pending' ? '승인 대기' : p.status === 'rejected' ? '거절(환불됨)' : '적용됨';
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">${escapeAttr(p.typeLabel)} · ${escapeAttr(p.label)}</div>
+                        <div style="font-size:11px;color:#64748b;">uid: ${escapeAttr(p.uid || '-')} · ${at} · <span style="color:${statusColor};">${statusLabel}</span></div>
+                    </div>
+                    <div style="font-weight:800;font-size:15px;color:#38bdf8;white-space:nowrap;">${(p.amount || 0).toLocaleString()}원</div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
         }
     };
 

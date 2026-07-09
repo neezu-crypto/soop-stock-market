@@ -219,6 +219,15 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
     };
   });
 
+  // 관리자 "구매 현황" 조회용 기록 — 지금까지는 플레이타임 구매만 어디에도
+  // 남지 않아 관리자가 이력을 확인할 방법이 없었다.
+  await db.ref("playTimePurchases").push({
+    uid,
+    hours,
+    chargedAmount: cost,
+    purchasedAt:   Date.now(),
+  });
+
   return {
     ok: true,
     chargedAmount: cost,

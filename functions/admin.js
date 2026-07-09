@@ -385,6 +385,67 @@ async function actionListProfitRankings(db) {
   return { ok: true, entries };
 }
 
+const PURCHASE_HISTORY_LIMIT = 300; // 오래된 이력까지 매번 전부 내려보내지 않도록 최신 N건만 반환
+
+/**
+ * 유저 구매 현황 — 우측/차트 배너·최상단 고정·중계방·플레이타임 충전처럼
+ * 게임자산을 직접 차감해 즉시 적용되는 5가지 셀프 상품의 구매 이력을
+ * 한 화면에서 통합 조회한다. 각 기능별 패널은 "신규/진행중/만료"만
+ * 보여주도록 설계돼 있어, 시간이 지나 만료·삭제된 과거 구매까지 한눈에
+ * 보긴 어려웠던 빈틈을 메운다. (자산 충전은 반대로 "지급"이라 구매가
+ * 아니므로, 종목 상장 신청은 무료라 제외 — 각각 별도 패널에서 확인 가능)
+ */
+async function actionListPurchaseHistory(db) {
+  const [bannerSnap, chartBannerSnap, pinSnap, relaySnap, playTimeSnap] = await Promise.all([
+    db.ref("bannerRequests").get(),
+    db.ref("chartBannerRequests").get(),
+    db.ref("pinRequests").get(),
+    db.ref("relayRoomRequests").get(),
+    db.ref("playTimePurchases").get(),
+  ]);
+
+  const purchases = [];
+
+  Object.entries(bannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
+    id, type: "banner", typeLabel: "📢 우측 배너",
+    label: `${r.nickname || "-"} (${r.days || 0}일)`,
+    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    at: r.requestedAt || 0,
+  }));
+
+  Object.entries(chartBannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
+    id, type: "chartBanner", typeLabel: "🖼 차트 하단 배너",
+    label: `${r.stockName || r.nickname || "-"} (${r.days || 0}일)`,
+    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    at: r.requestedAt || 0,
+  }));
+
+  Object.entries(pinSnap.val() || {}).forEach(([id, r]) => purchases.push({
+    id, type: "pin", typeLabel: "📌 최상단 고정",
+    label: `${r.stockName || "-"} (${r.hours || 0}시간)`,
+    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    at: r.requestedAt || 0,
+  }));
+
+  Object.entries(relaySnap.val() || {}).forEach(([id, r]) => purchases.push({
+    id, type: "relayRoom", typeLabel: "🎥 중계방",
+    label: `${r.nickname || "-"} (${r.hours || 0}시간)`,
+    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    at: r.requestedAt || 0,
+  }));
+
+  Object.entries(playTimeSnap.val() || {}).forEach(([id, r]) => purchases.push({
+    id, type: "playTime", typeLabel: "⏱ 플레이타임 충전",
+    label: `${r.hours || 0}시간`,
+    amount: r.chargedAmount || 0, uid: r.uid, status: "approved",
+    at: r.purchasedAt || 0,
+  }));
+
+  purchases.sort((a, b) => b.at - a.at);
+
+  return { ok: true, purchases: purchases.slice(0, PURCHASE_HISTORY_LIMIT), totalCount: purchases.length };
+}
+
 /**
  * 관리자 페이지 전용 액션 디스패처.
  * 클라이언트는 { action, payload }만 전달하고, 실제 stocks/users/rankings/
@@ -441,6 +502,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "rejectChartBannerRequest":  return actionRejectChartBannerRequest(db, payload);
     case "setMaintenanceMode":     return actionSetMaintenanceMode(db, payload);
     case "listProfitRankings":     return actionListProfitRankings(db);
+    case "listPurchaseHistory":    return actionListPurchaseHistory(db);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }
