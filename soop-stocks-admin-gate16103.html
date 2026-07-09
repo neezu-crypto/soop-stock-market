@@ -428,7 +428,12 @@
         if (user && user.email === ADMIN_EMAIL) {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-section').style.display = 'block';
-            document.getElementById('admin-info').innerText = `접속 계정: ${user.email} (관리자)`;
+            document.getElementById('admin-info').innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <span>접속 계정: ${user.email} (관리자)</span>
+                    <span>🟢 현재 접속자 <b id="admin-online-count" style="color:#38bdf8;">-</b>명</span>
+                </div>`;
+            watchOnlineCount();
             await loadStocksOnce();
             await loadRankingStatus();
             await loadAllBannerData();
@@ -445,6 +450,22 @@
             document.getElementById('admin-section').style.display = 'none';
         }
     });
+
+    // ── 현재 접속자 수 (presence/users — 메인페이지와 동일 경로, 실시간 구독) ──
+    // 메인페이지는 접속 시 1회만 조회하지만(동시 접속자 다수라 비용 절감 목적),
+    // 관리자 페이지는 인스턴스가 사실상 1개뿐이라 실시간 구독으로 붙여도 비용
+    // 부담이 없다.
+    let onlineCountWatched = false;
+    function watchOnlineCount() {
+        if (onlineCountWatched) return;
+        onlineCountWatched = true;
+        onValue(ref(db, 'presence/users'), (snap) => {
+            const el = document.getElementById('admin-online-count');
+            if (!el) return;
+            const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+            el.innerText = count.toLocaleString();
+        });
+    }
 
     // ── 승인 대기 알람 (여러 섹션에 흩어진 pending 건수를 상단에서 한눈에) ──
     let pendingSummaryWatched = false;
