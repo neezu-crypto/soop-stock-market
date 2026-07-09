@@ -550,39 +550,41 @@
     🧪 테스트 기간 운영 중입니다 — 일부 유료 기능(플레이 시간 충전)은 테스트 기간 종료 후 이용 가능합니다
 </div>
 
-<!-- ── 점검모드 안내 배너 (관리자가 실시간으로 켜고 끔 — maintenance/ 구독) ── -->
-<div id="maintenance-banner" style="display:none;text-align:center;padding:9px 12px;font-size:13px;font-weight:800;letter-spacing:0.3px;"></div>
-
 <!-- ── 메인 래퍼 ── -->
 <div class="wrapper">
     <div class="wallet-bar">
-        <div class="wallet-info">
-            내 잔고: <span id="my-cash">0</span>원
-            <button onclick="openCashChargeModal()"
-                style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
-                💰 자산 충전
-            </button>
-            <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 관리자 — 이용시간 무제한</div>
-            <div id="playtime-bar" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">
-                ⏱ 오늘 <span id="playtime-display">--:-- / --:--</span>
-                <button id="playtime-wallet-buy-btn" onclick="openPlayTimeModal()"
-                    style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;vertical-align:middle;">
-                    충전
+        <div class="wallet-bar-top">
+            <div class="wallet-info">
+                내 잔고: <span id="my-cash">0</span>원
+                <button onclick="openCashChargeModal()"
+                    style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
+                    💰 자산 충전
                 </button>
+                <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 관리자 — 이용시간 무제한</div>
+                <div id="playtime-bar" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">
+                    ⏱ 오늘 <span id="playtime-display">--:-- / --:--</span>
+                    <button id="playtime-wallet-buy-btn" onclick="openPlayTimeModal()"
+                        style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;vertical-align:middle;">
+                        충전
+                    </button>
+                </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                <div style="font-size:12px;color:var(--text-sub);">초기 자산 200,000원 지급됨</div>
+                <div style="font-size:12px;color:var(--text-sub);">
+                    🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
+                </div>
+                <button id="kakao-login-btn" onclick="loginWithKakao()"
+                    style="display:none;align-items:center;gap:6px;background:#FEE500;color:#181600;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                    💬 카카오 연결하고 +80만원 받기
+                </button>
+                <div id="kakao-privacy-note" style="display:none;font-size:10px;color:#64748b;text-align:right;max-width:220px;">🔒 닉네임 등 개인정보는 수집하지 않아요 (식별용 ID만 사용)</div>
+                <span id="kakao-linked-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;">✅ 카카오 연동중</span>
             </div>
         </div>
-        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-            <div style="font-size:12px;color:var(--text-sub);">초기 자산 200,000원 지급됨</div>
-            <div style="font-size:12px;color:var(--text-sub);">
-                🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
-            </div>
-            <button id="kakao-login-btn" onclick="loginWithKakao()"
-                style="display:none;align-items:center;gap:6px;background:#FEE500;color:#181600;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
-                💬 카카오 연결하고 +80만원 받기
-            </button>
-            <div id="kakao-privacy-note" style="display:none;font-size:10px;color:#64748b;text-align:right;max-width:220px;">🔒 닉네임 등 개인정보는 수집하지 않아요 (식별용 ID만 사용)</div>
-            <span id="kakao-linked-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;">✅ 카카오 연동중</span>
-        </div>
+        <!-- ── 점검모드 안내 배너 (관리자가 실시간으로 켜고 끔 — maintenance/ 구독) — 지갑 카드는
+             position:sticky라 항상 화면에 보이므로, 이 배너도 스크롤과 무관하게 항상 노출된다 ── -->
+        <div id="maintenance-banner"></div>
     </div>
     <header>
         <h1 style="font-size:20px;margin:0;">📈 스트리머 주식시장(상위 Top100)</h1>
