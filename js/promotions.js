@@ -334,9 +334,20 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     window.openPinModal = () => {
         if (!requireLoginOrPrompt()) return;
         populatePinStockDatalist();
+        checkPinStockListed();
         document.getElementById('pin-modal').classList.add('active');
     };
     window.closePinModal = () => document.getElementById('pin-modal').classList.remove('active');
+
+    function checkPinStockListed() {
+        const name       = document.getElementById('pin-stock-name')?.value.trim() || '';
+        const warning    = document.getElementById('pin-not-listed-warning');
+        const submitBtn  = document.getElementById('pin-submit-btn');
+        const isListed   = name && getAllStocks().some(s => s.name === name);
+        if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
+        if (submitBtn) submitBtn.disabled    = name ? !isListed : false;
+    }
+    document.getElementById('pin-stock-name')?.addEventListener('input', checkPinStockListed);
 
     const PIN_COST_PER_HOUR = 500000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
     const updatePinCost = setupCostCalculator({ unitInputId: 'pin-hours', costElId: 'pin-cost', pricePerDay: PIN_COST_PER_HOUR });
@@ -364,6 +375,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 document.getElementById('pin-stock-name').value = '';
                 document.getElementById('pin-hours').value = '1';
                 updatePinCost();
+                checkPinStockListed();
             },
             closeFn: window.closePinModal,
         });
