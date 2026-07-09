@@ -385,6 +385,40 @@ async function actionListProfitRankings(db) {
   return { ok: true, entries };
 }
 
+/**
+ * 관리자 페이지 상단 알람용 — 승인 대기(status:"pending") 건수를 섹션별로
+ * 집계한다. 각 섹션 패널이 이미 개별적으로 pending 목록을 불러오지만,
+ * 페이지 진입 시점에 "지금 뭐가 밀려있는지"를 한눈에 보여주는 용도라
+ * 별도로 가볍게 카운트만 뽑는다.
+ */
+async function actionGetPendingSummary(db) {
+  const sections = [
+    { key: "banner",      sectionId: "section-banner",      label: "배너 광고",       paths: ["bannerRequests", "chartBannerRequests"] },
+    { key: "cashcharge",  sectionId: "section-cashcharge",  label: "자산 충전 신청", paths: ["cashChargeRequests"] },
+    { key: "pin",         sectionId: "section-pin",         label: "최상단 고정 노출", paths: ["pinRequests"] },
+    { key: "listing",     sectionId: "section-listing",     label: "종목 상장 신청", paths: ["listingRequests"] },
+    { key: "relay",       sectionId: "section-relay",       label: "중계방 홍보",     paths: ["relayRoomRequests"] },
+    { key: "freeze",      sectionId: "section-freeze",      label: "동결 해제(방송 후원)", paths: ["unfreezeDonationRequests"] },
+  ];
+
+  const allPaths = [...new Set(sections.flatMap((s) => s.paths))];
+  const snaps = await Promise.all(allPaths.map((p) => db.ref(p).get()));
+  const countByPath = {};
+  allPaths.forEach((p, i) => {
+    const data = snaps[i].val() || {};
+    countByPath[p] = Object.values(data).filter((r) => r.status === "pending").length;
+  });
+
+  const items = sections.map((s) => ({
+    key: s.key,
+    sectionId: s.sectionId,
+    label: s.label,
+    count: s.paths.reduce((sum, p) => sum + countByPath[p], 0),
+  }));
+
+  return { ok: true, items, totalCount: items.reduce((sum, i) => sum + i.count, 0) };
+}
+
 const PURCHASE_HISTORY_LIMIT = 300; // 오래된 이력까지 매번 전부 내려보내지 않도록 최신 N건만 반환
 
 /**
@@ -503,6 +537,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "setMaintenanceMode":     return actionSetMaintenanceMode(db, payload);
     case "listProfitRankings":     return actionListProfitRankings(db);
     case "listPurchaseHistory":    return actionListPurchaseHistory(db);
+    case "getPendingSummary":      return actionGetPendingSummary(db);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }

@@ -114,6 +114,14 @@
 <div id="admin-section" style="display:none; width:100%; max-width:600px;">
     <div id="admin-info"></div>
 
+    <!-- 🔔 승인 대기 알람 -->
+    <div id="pending-alarm-bar" style="display:none;position:sticky;top:0;z-index:50;background:#7f1d1d;border:1px solid #ef4444;border-radius:12px;padding:12px 14px;margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px;color:#fecaca;margin-bottom:8px;">
+            🔔 승인 대기 중인 요청이 있어요 (<span id="pending-alarm-total">0</span>건) — 클릭하면 해당 위치로 이동합니다
+        </div>
+        <div id="pending-alarm-chips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+
     <!-- 🛠️ 점검모드 관리 -->
     <div class="container" style="display:block; border-color: #f97316;">
         <h1>🛠️ 점검모드 관리</h1>
@@ -269,7 +277,7 @@
     </div>
 
     <!-- 📢 배너 광고 통합 관리 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-banner" class="container" style="display:block; border-color: #38bdf8;">
         <h1>📢 배너 광고 통합 관리</h1>
         <div class="info-box">우측 랭킹 배너는 상장된 종목이면 신청 즉시 자동 등록됩니다. 차트 하단 배너는 노출 기간은 자동 예약되지만, 신청자가 직접 올리는 이미지는 여기서 확인 후 승인해야 실제로 노출됩니다.</div>
 
@@ -289,7 +297,7 @@
     </div>
 
     <!-- 💰 자산 충전 신청 검수 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-cashcharge" class="container" style="display:block; border-color: #38bdf8;">
         <h1>💰 자산 충전 신청 검수</h1>
         <div class="info-box">유저가 라이브 방송에서 후원한 뒤 신청한 목록입니다. 방송 후원 내역과 닉네임/아이디를 대조 확인한 뒤, 지급액을 직접 입력해 승인하세요.</div>
         <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadCashChargeRequests()">🔄 신청 목록 새로고침</button>
@@ -297,7 +305,7 @@
     </div>
 
     <!-- 📌 최상단 고정 노출 관리 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-pin" class="container" style="display:block; border-color: #38bdf8;">
         <h1>📌 최상단 고정 노출 관리</h1>
         <div class="info-box">종목 리스트 최상단에 고정 노출되는 종목(최대 3개 슬롯)을 관리합니다. 슬롯 여유가 있으면 신청 즉시 자동 적용되므로, 여기서는 현재 슬롯 현황과 예전 방식으로 남아있는 신청만 확인합니다.</div>
         <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadAllPinData()">🔄 전체 새로고침</button>
@@ -310,7 +318,7 @@
     </div>
 
     <!-- 🏷 종목 상장 신청 관리 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-listing" class="container" style="display:block; border-color: #38bdf8;">
         <h1>🏷 종목 상장 신청 관리</h1>
         <div class="info-box">유저가 검색창에서 없는 종목명으로 신청한 신규 상장 요청입니다. 승인하면 즉시 새 종목(시작가 10,000원)으로 상장됩니다.</div>
         <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadListingRequests()">🔄 신청 목록 새로고침</button>
@@ -318,7 +326,7 @@
     </div>
 
     <!-- 🎥 중계방 홍보 관리 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-relay" class="container" style="display:block; border-color: #38bdf8;">
         <h1>🎥 중계방 홍보 관리</h1>
         <div class="info-box">지금 플레이 중인 스트리머를 소개하는 중계방 홍보를 관리합니다. 상장된 종목이고 슬롯 여유가 있으면 신청 즉시 자동 등록되므로, 여기서는 진행 현황과 예전 방식으로 남아있는 신청만 확인합니다.</div>
         <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadAllRelayRoomData()">🔄 전체 새로고침</button>
@@ -331,7 +339,7 @@
     </div>
 
     <!-- 🥶 종목 거래 동결 관리 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-freeze" class="container" style="display:block; border-color: #38bdf8;">
         <h1>🥶 종목 거래 동결 관리</h1>
         <div class="info-box">주가가 100만원 이상으로 5분 이상 유지되면 자동으로 거래가 동결됩니다. 동결 후 5분간은 해제할 수 없고, 12시간 내 해제되지 않으면 자동으로 상장폐지(보유 주식 전액 소멸)됩니다.</div>
         <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadAllFreezeData()">🔄 전체 새로고침</button>
@@ -430,12 +438,50 @@
             await loadAllRelayRoomData();
             await loadAllFreezeData();
             watchMaintenanceStatus();
+            watchPendingSummary();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
             document.getElementById('admin-section').style.display = 'none';
         }
     });
+
+    // ── 승인 대기 알람 (여러 섹션에 흩어진 pending 건수를 상단에서 한눈에) ──
+    let pendingSummaryWatched = false;
+
+    async function refreshPendingSummary() {
+        try {
+            const { items, totalCount } = await callAdminAction('getPendingSummary');
+            const bar   = document.getElementById('pending-alarm-bar');
+            const total = document.getElementById('pending-alarm-total');
+            const chips = document.getElementById('pending-alarm-chips');
+            if (!bar || !total || !chips) return;
+            if (!totalCount) { bar.style.display = 'none'; return; }
+            bar.style.display = 'block';
+            total.innerText = totalCount;
+            chips.innerHTML = '';
+            items.filter(i => i.count > 0).forEach(i => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.style.cssText = 'background:#ef4444;color:white;border:none;padding:6px 12px;border-radius:100px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;';
+                chip.innerText = `${i.label} ${i.count}건 →`;
+                chip.onclick = () => {
+                    document.getElementById(i.sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                };
+                chips.appendChild(chip);
+            });
+        } catch (e) {
+            // 알람은 부가 기능이라 실패해도 조용히 무시 (다음 주기에 재시도)
+        }
+    }
+    window.refreshPendingSummary = refreshPendingSummary;
+
+    function watchPendingSummary() {
+        if (pendingSummaryWatched) return; // 로그인 유지 중 재호출돼도 중복 폴링 걸지 않음
+        pendingSummaryWatched = true;
+        refreshPendingSummary();
+        setInterval(refreshPendingSummary, 30000); // 각 섹션 승인/거절 후에도 30초 안에 자동 반영
+    }
 
     // ── 점검모드 (maintenance/ 은 공개 읽기 경로라 클라이언트에서 바로 구독) ──
     let maintenanceWatched = false;
