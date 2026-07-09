@@ -203,9 +203,12 @@ async function actionRejectBannerRequest(db, { requestId }) {
  * 생성됐다). 다만 닉네임(홍보할 스트리머)도 우측 랭킹 배너와 동일하게
  * 이미 상장된 종목명이어야 한다 — 자유 텍스트를 그대로 받으면 상장되지
  * 않은 이름이 버젓이 배너에 걸릴 수 있기 때문. 우측 랭킹 배너와 달리
- * 이미지·링크도 신청자가 직접 입력한다(자동 프로필 이미지가 아니라
- * 720x150 커스텀 배너이므로). 배너가 붙는 stockId와 닉네임이 가리키는
- * 종목이 모두 실존 상장 종목으로 확인되므로 관리자 승인 없이 즉시 적용한다.
+ * 배너 이미지는 신청자가 직접 입력한다(자동 프로필 이미지가 아니라
+ * 720x150 커스텀 배너이므로) — 다만 클릭 시 이동할 홍보 페이지 링크는
+ * 우측 랭킹 배너와 동일하게 streamerId 기준 방송국 페이지로 자동
+ * 생성하고 별도 입력을 받지 않는다. 배너가 붙는 stockId와 닉네임이
+ * 가리키는 종목이 모두 실존 상장 종목으로 확인되므로 관리자 승인 없이
+ * 즉시 적용한다.
  */
 const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -218,7 +221,6 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
   const bannerImg  = String(request.data?.bannerImg || "").trim();
-  const promoLink  = String(request.data?.promoLink || "").trim();
   const days        = parseInt(request.data?.days, 10);
 
   if (!stockId) throw new HttpsError("invalid-argument", "배너를 등록할 종목의 차트를 먼저 열어주세요.");
@@ -229,12 +231,12 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
   if (!URL_RE.test(bannerImg)) {
     throw new HttpsError("invalid-argument", "배너 이미지 링크를 올바르게 입력해주세요.");
   }
-  if (!URL_RE.test(promoLink)) {
-    throw new HttpsError("invalid-argument", "홍보 페이지 링크를 올바르게 입력해주세요.");
-  }
   if (!Number.isInteger(days) || days < 1 || days > MAX_BANNER_REQUEST_DAYS) {
     throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이로 입력해주세요.`);
   }
+
+  // 홍보 페이지 링크는 별도 입력 없이 아이디 기준 방송국 페이지로 자동 연결한다.
+  const promoLink = `https://www.sooplive.com/station/${streamerId}`;
 
   const stockSnap = await db.ref(`stocks/${stockId}`).get();
   if (!stockSnap.exists()) {

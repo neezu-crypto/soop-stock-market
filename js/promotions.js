@@ -475,7 +475,6 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 const nickname   = document.getElementById('chart-ad-nickname').value.trim();
                 const streamerId = document.getElementById('chart-ad-streamer-id').value.trim().toLowerCase();
                 const bannerImg  = document.getElementById('chart-ad-img-url').value.trim();
-                const promoLink  = document.getElementById('chart-ad-promo-link').value.trim();
                 const days       = parseInt(document.getElementById('chart-ad-days').value, 10);
                 if (!nickname) { alert('홍보할 스트리머 닉네임을 입력해주세요.'); return null; }
                 if (!getAllStocks().some(s => s.name === nickname)) {
@@ -484,9 +483,9 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 }
                 if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
                 if (!isValidUrl(bannerImg)) { alert('배너 이미지 링크를 올바르게 입력해주세요.'); return null; }
-                if (!isValidUrl(promoLink)) { alert('홍보 페이지 링크를 올바르게 입력해주세요.'); return null; }
                 if (!Number.isInteger(days) || days < 1 || days > 7) { alert('노출 기간은 1~7일 사이로 입력해주세요.'); return null; }
-                return { stockId: pendingChartAdStockId, nickname, streamerId, bannerImg, promoLink, days };
+                // 홍보 페이지 링크는 서버가 streamerId로 방송국 주소를 자동 생성한다 — 별도 입력 불필요.
+                return { stockId: pendingChartAdStockId, nickname, streamerId, bannerImg, days };
             },
             callable: submitChartBannerRequestCallable,
             onSuccess(result) {
@@ -496,7 +495,6 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 document.getElementById('chart-ad-nickname').value = '';
                 document.getElementById('chart-ad-streamer-id').value = '';
                 document.getElementById('chart-ad-img-url').value = '';
-                document.getElementById('chart-ad-promo-link').value = '';
                 document.getElementById('chart-ad-days').value = '7';
                 updateChartAdPreview();
                 updateChartAdCost();
