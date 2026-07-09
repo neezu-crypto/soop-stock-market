@@ -91,35 +91,58 @@ export function initChartModal({ db, getAllStocks, getChangePercent }) {
     };
 
     // ── 차트 모달 하단 광고 배너 1회 fetch (종목별 개별 노출) ──
-    // Firebase: chartBanner/{stockId} = { img, link, endDate }
+    // Firebase: chartBanner/{stockId} = { name, link, endDate, img? }
+    // img가 없는 채로 존재하면 "신청은 됐지만 이미지 승인 대기 중" 상태다
+    // (functions/bannerRequests.js의 submitChartBannerRequest가 신청 즉시
+    // 슬롯만 예약하고 img는 관리자 승인 후에 채운다) — 이 경우 모집 안내
+    // 대신 검수중 안내를 보여주고, 같은 종목에 중복 신청하지 못하도록
+    // 클릭도 막는다.
     async function fetchChartBanner(stockId) {
-        const linkEl  = document.getElementById('chart-ad-link');
-        const imgEl   = document.getElementById('chart-ad-img');
-        const emptyEl = document.getElementById('chart-ad-empty');
+        const linkEl      = document.getElementById('chart-ad-link');
+        const imgEl       = document.getElementById('chart-ad-img');
+        const emptyEl     = document.getElementById('chart-ad-empty');
+        const emptyIconEl = document.getElementById('chart-ad-empty-icon');
+        const emptyTextEl = document.getElementById('chart-ad-empty-text');
+        const emptyCtaEl  = document.getElementById('chart-ad-empty-cta');
 
         // 초기화: 둘 다 숨기고 시작
         if (linkEl)  linkEl.style.display  = 'none';
         if (emptyEl) emptyEl.style.display = 'none';
 
+        function showEmpty(pending) {
+            if (!emptyEl) return;
+            emptyEl.style.display = 'flex';
+            if (pending) {
+                emptyEl.style.cursor = 'default';
+                emptyEl.onclick = null;
+                if (emptyIconEl) emptyIconEl.innerText = '⏳';
+                if (emptyTextEl) emptyTextEl.innerText = '배너 홍보 승인 검수중이에요';
+                if (emptyCtaEl)  emptyCtaEl.style.display = 'none';
+            } else {
+                emptyEl.style.cursor = 'pointer';
+                emptyEl.onclick = () => window.openChartAdModal();
+                if (emptyIconEl) emptyIconEl.innerText = '📢';
+                if (emptyTextEl) emptyTextEl.innerText = '이 자리에 내 방송국을 홍보해보세요!';
+                if (emptyCtaEl) { emptyCtaEl.style.display = ''; emptyCtaEl.innerText = '문의하기 →'; }
+            }
+        }
+
         try {
             const snap = await get(ref(db, `chartBanner/${stockId}`));
 
-            // 데이터 없거나 만료 → 모집 안내 표시
-            if (!snap.exists() || !snap.val().img) {
-                if (emptyEl) emptyEl.style.display = 'flex';
-                return;
-            }
+            // 데이터 자체가 없음 → 순수 모집 안내
+            if (!snap.exists()) { showEmpty(false); return; }
 
             const data = snap.val();
 
             if (data.endDate) {
                 const end = new Date(data.endDate);
                 end.setHours(23, 59, 59, 999);
-                if (end < new Date()) {
-                    if (emptyEl) emptyEl.style.display = 'flex'; // 만료 → 모집 안내
-                    return;
-                }
+                if (end < new Date()) { showEmpty(false); return; } // 만료 → 모집 안내로 복귀
             }
+
+            // 예약은 있지만 이미지가 아직 없음 → 검수중 안내(신청 불가)
+            if (!data.img) { showEmpty(true); return; }
 
             // 광고 있음 → 배너 이미지 표시
             imgEl.src          = data.img;
@@ -128,7 +151,7 @@ export function initChartModal({ db, getAllStocks, getChangePercent }) {
 
         } catch (e) {
             // fetch 실패 시 모집 안내 표시
-            if (emptyEl) emptyEl.style.display = 'flex';
+            showEmpty(false);
         }
     }
 

@@ -197,10 +197,10 @@
                 <img id="chart-ad-img" src="" alt="광고 배너">
                 <div id="chart-ad-label">AD</div>
             </a>
-            <!-- 광고 없을 때 모집 안내 -->
-            <div id="chart-ad-empty" onclick="openChartAdModal()" style="cursor:pointer;">
+            <!-- 광고 없을 때 모집 안내 (검수 대기 중이면 js/chartModal.js가 클릭 비활성화 + 문구 교체) -->
+            <div id="chart-ad-empty" style="cursor:pointer;">
                 <span id="chart-ad-empty-icon">📢</span>
-                <span>이 자리에 내 방송국을 홍보해보세요!</span>
+                <span id="chart-ad-empty-text">이 자리에 내 방송국을 홍보해보세요!</span>
                 <span id="chart-ad-empty-cta">문의하기 →</span>
             </div>
         </div>

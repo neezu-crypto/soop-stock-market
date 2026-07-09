@@ -254,6 +254,22 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
     );
   }
 
+  // 이 종목에 이미지 승인 대기 중인 예약(img 없음, 만료 전)이 있으면 중복
+  // 신청을 막는다 — 안 막으면 여러 명이 동시에 결제하고 마지막 신청이
+  // chartBanner/{stockId} 예약을 덮어써 앞선 결제자만 손해를 본다.
+  const existingChartBannerSnap = await db.ref(`chartBanner/${stockId}`).get();
+  const existingChartBanner = existingChartBannerSnap.val();
+  if (existingChartBanner && !existingChartBanner.img) {
+    const stillReserved = !existingChartBanner.endDate
+      || (() => { const d = new Date(existingChartBanner.endDate); d.setHours(23, 59, 59, 999); return d >= new Date(); })();
+    if (stillReserved) {
+      throw new HttpsError(
+        "already-exists",
+        "이 종목은 이미 배너 홍보 승인 검수중입니다. 승인/거절 처리된 뒤 다시 신청해주세요."
+      );
+    }
+  }
+
   const cost = days * CHART_BANNER_COST_PER_DAY;
   await chargeUserCash(db, auth.uid, cost);
 
