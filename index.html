@@ -238,9 +238,13 @@
         </div>
 
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-            <input type="text" id="chart-ad-nickname" placeholder="신청자 닉네임 (관리용 — 배너가 붙는 종목과는 무관)"
+            <input type="text" id="chart-ad-nickname" list="chart-ad-stock-datalist" placeholder="홍보할 스트리머 닉네임"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
-            <input type="text" id="chart-ad-streamer-id" placeholder="신청자 아이디 (예: skftodwocks2)"
+            <datalist id="chart-ad-stock-datalist"></datalist>
+            <div id="chart-ad-not-listed-warning" style="display:none;background:rgba(239,68,68,0.1);border:1px solid #ef4444;border-radius:8px;padding:10px 12px;font-size:12px;color:#fca5a5;line-height:1.6;">
+                🔍 상장되지 않은 종목명이에요. <span onclick="openListingModal(document.getElementById('chart-ad-nickname').value.trim())" style="color:#38bdf8;text-decoration:underline;cursor:pointer;font-weight:700;">먼저 종목 상장 신청을 해주세요</span> — 상장 승인 후 다시 신청할 수 있어요.
+            </div>
+            <input type="text" id="chart-ad-streamer-id" placeholder="홍보할 스트리머 아이디"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
             <input type="text" id="chart-ad-img-url" placeholder="배너 이미지 링크 (720×150px 권장, 사진/GIF)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">

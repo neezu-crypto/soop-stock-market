@@ -198,13 +198,14 @@ async function actionRejectBannerRequest(db, { requestId }) {
 /**
  * 차트 하단 배너 신청. 이 배너는 신청자가 지금 열어둔 "그 종목"의 차트
  * 하단에 붙는 것이 목적이므로, 대상은 클라이언트가 넘긴 stockId로
- * 고정한다 — 닉네임은 신청자 확인용 정보일 뿐 종목 식별에는 쓰지 않는다
- * (예전엔 닉네임으로 종목을 찾거나 없으면 새로 상장해버려서, 신청자가
- * 입력한 닉네임과 종목명이 다르면 의도치 않은 새 종목이 생성됐다).
- * 우측 랭킹 배너와 달리 이미지·링크도 신청자가 직접 입력한다(자동
- * 프로필 이미지가 아니라 720x150 커스텀 배너이므로).
- * 대상이 항상 "지금 열려 있는 실존 종목"으로 이미 고정돼 있어 검수할
- * "존재 여부" 자체가 없으므로 관리자 승인 없이 즉시 적용한다.
+ * 고정한다 — 닉네임으로 종목을 찾거나 없으면 새로 상장하지 않는다(예전엔
+ * 그래서 신청자가 입력한 닉네임과 종목명이 다르면 의도치 않은 새 종목이
+ * 생성됐다). 다만 닉네임(홍보할 스트리머)도 우측 랭킹 배너와 동일하게
+ * 이미 상장된 종목명이어야 한다 — 자유 텍스트를 그대로 받으면 상장되지
+ * 않은 이름이 버젓이 배너에 걸릴 수 있기 때문. 우측 랭킹 배너와 달리
+ * 이미지·링크도 신청자가 직접 입력한다(자동 프로필 이미지가 아니라
+ * 720x150 커스텀 배너이므로). 배너가 붙는 stockId와 닉네임이 가리키는
+ * 종목이 모두 실존 상장 종목으로 확인되므로 관리자 승인 없이 즉시 적용한다.
  */
 const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -221,7 +222,7 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
   const days        = parseInt(request.data?.days, 10);
 
   if (!stockId) throw new HttpsError("invalid-argument", "배너를 등록할 종목의 차트를 먼저 열어주세요.");
-  if (!nickname) throw new HttpsError("invalid-argument", "닉네임을 입력해주세요.");
+  if (!nickname) throw new HttpsError("invalid-argument", "홍보할 스트리머 닉네임을 입력해주세요.");
   if (!STREAMER_ID_RE.test(streamerId)) {
     throw new HttpsError("invalid-argument", "아이디는 영문 소문자/숫자 2~20자여야 합니다.");
   }
@@ -240,6 +241,13 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
     throw new HttpsError("not-found", "종목을 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.");
   }
   const stockName = stockSnap.val().name || stockId;
+
+  if (!(await findStockIdByName(db, nickname))) {
+    throw new HttpsError(
+      "failed-precondition",
+      "현재 상장되지 않은 종목입니다. 먼저 종목 상장 신청을 통해 상장한 뒤 다시 신청해주세요."
+    );
+  }
 
   const cost = days * CHART_BANNER_COST_PER_DAY;
   await chargeUserCash(db, auth.uid, cost);

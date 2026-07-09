@@ -206,9 +206,35 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         pendingChartAdStockId = stockId;
         document.getElementById('chart-ad-target-stock').innerText = stock?.name || stockId;
         closeChartModal();   // 차트창 먼저 닫기
+        populateChartAdStockDatalist();
+        checkChartAdStockListed();
         document.getElementById('chart-ad-modal').classList.add('active');
     };
     window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
+
+    // 배너가 붙는 대상은 항상 "지금 열어둔 그 종목"(stockId)으로 고정되지만,
+    // 닉네임(홍보할 스트리머)도 우측 배너와 동일하게 이미 상장된 종목명이어야
+    // 한다 — 상장 여부가 검수 포인트였으므로 신청 시점에 걸러지면 승인 없이
+    // 바로 등록할 수 있다.
+    function populateChartAdStockDatalist() {
+        const datalist = document.getElementById('chart-ad-stock-datalist');
+        if (!datalist) return;
+        datalist.innerHTML = getAllStocks()
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(s => `<option value="${s.name.replace(/"/g, '&quot;')}"></option>`)
+            .join('');
+    }
+
+    function checkChartAdStockListed() {
+        const name       = document.getElementById('chart-ad-nickname')?.value.trim() || '';
+        const warning    = document.getElementById('chart-ad-not-listed-warning');
+        const submitBtn  = document.getElementById('chart-ad-submit-btn');
+        const isListed   = name && getAllStocks().some(s => s.name === name);
+        if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
+        if (submitBtn) submitBtn.disabled    = name ? !isListed : false;
+    }
+    document.getElementById('chart-ad-nickname')?.addEventListener('input', checkChartAdStockListed);
 
     // ── 중계방 홍보 신청 (종목명 검색 + 아이디 입력 → 실시간 미리보기 → 신청) ──
     // 우측 홍보 배너와 동일하게 자유 닉네임 대신 이미 상장된 종목명만 받는다
@@ -451,7 +477,11 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 const bannerImg  = document.getElementById('chart-ad-img-url').value.trim();
                 const promoLink  = document.getElementById('chart-ad-promo-link').value.trim();
                 const days       = parseInt(document.getElementById('chart-ad-days').value, 10);
-                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+                if (!nickname) { alert('홍보할 스트리머 닉네임을 입력해주세요.'); return null; }
+                if (!getAllStocks().some(s => s.name === nickname)) {
+                    alert('상장되지 않은 종목명이에요. 먼저 종목 상장 신청을 해주세요.');
+                    return null;
+                }
                 if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
                 if (!isValidUrl(bannerImg)) { alert('배너 이미지 링크를 올바르게 입력해주세요.'); return null; }
                 if (!isValidUrl(promoLink)) { alert('홍보 페이지 링크를 올바르게 입력해주세요.'); return null; }
@@ -470,6 +500,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
                 document.getElementById('chart-ad-days').value = '7';
                 updateChartAdPreview();
                 updateChartAdCost();
+                checkChartAdStockListed();
                 pendingChartAdStockId = null;
             },
             closeFn: window.closeChartAdModal,
