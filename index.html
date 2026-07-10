@@ -1502,12 +1502,18 @@ window.loginWithGoogle = async function() {
                 alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
             } catch (e2) {
                 console.error('[google-login] signInWithCredential 실패', e2?.code, e2?.message, e2);
-                alert('계정 전환 중 오류가 발생했습니다: ' + (e2?.message || e2) + '\n\n같은 구글 계정으로 이미 이 사이트를 관리자 계정 등 다른 용도로 쓰고 계시다면, 다른 구글 계정으로 시도해주세요.');
+                alert('⚠️ 계정 전환 중 오류가 발생했습니다.\n\n' +
+                    'Safari(사파리)에서는 구글 로그인이 불안정할 수 있어요. 아래 중 하나를 시도해주세요:\n' +
+                    '① 카카오 로그인으로 계정을 보호하기\n' +
+                    '② 크롬 등 다른 브라우저에서 다시 시도하기');
             }
         } else if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') {
             // 유저가 팝업을 닫은 경우 — 조용히 무시
         } else {
-            alert('구글 로그인 중 오류가 발생했습니다: ' + (e?.message || e || '알 수 없는 오류'));
+            alert('⚠️ 구글 로그인 중 오류가 발생했습니다.\n\n' +
+                'Safari(사파리)에서는 구글 로그인이 불안정할 수 있어요. 아래 중 하나를 시도해주세요:\n' +
+                '① 카카오 로그인으로 계정을 보호하기\n' +
+                '② 크롬 등 다른 브라우저에서 다시 시도하기');
         }
     }
 };
