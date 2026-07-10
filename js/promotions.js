@@ -675,7 +675,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             topRaw.sort((a, b) => b.value - a.value);
 
             const higherSnap = await dbGet(dbQuery(dbRef(db, 'rankings/profitEntries'), orderByChild('value'), startAt(myProfit + 1)));
-            const myRank = higherSnap.numChildren() + 1;
+            const myRank = higherSnap.size + 1;
 
             renderProfitRankingResult({ myRank, myProfit, myAnonId: myAnonIdPreview(), top: topRaw, isPreview: true });
         } catch (e) {
