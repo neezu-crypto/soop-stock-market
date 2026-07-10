@@ -558,6 +558,23 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     범용 확인 모달 (window.confirm 대체)
+     — 팝업 로그인 직후 등 "활성 탭이 아니다"로 오판되는 순간에 네이티브
+     confirm()을 부르면 크롬이 다이얼로그 자체를 조용히 억제해버리는
+     문제가 있어, 카카오/구글 "다른 기기 합류" 안내처럼 팝업 인증 직후에
+     확인을 받아야 하는 곳은 이 커스텀 모달을 사용한다.
+══════════════════════════════════════════ -->
+<div id="app-confirm-modal" class="promo-modal-overlay" style="z-index:5200;">
+    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
+        <p id="app-confirm-message" style="font-size:14px;color:var(--text-main);line-height:1.7;white-space:pre-line;margin-bottom:20px;"></p>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button id="app-confirm-no-btn" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">취소</button>
+            <button id="app-confirm-yes-btn" class="btn-confirm-contact" style="flex:1;min-width:80px;font-weight:bold;font-size:14px;">확인</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      종목 거래 동결 해제 모달 (서킷브레이커)
 ══════════════════════════════════════════ -->
 <div id="unfreeze-modal" class="promo-modal-overlay">
@@ -1377,6 +1394,32 @@ initPromotions({
     },
 });
 
+// window.confirm() 대체 — 팝업 로그인 직후처럼 브라우저가 "이 탭이 활성
+// 상태가 아니다"로 오판하는 타이밍에 네이티브 confirm()을 부르면 크롬이
+// 다이얼로그를 아예 띄우지도 않고 조용히 억제해버리는 문제가 있다. 이
+// 커스텀 모달은 그냥 HTML이라 이 억제 규칙의 대상이 아니다.
+function confirmModal(message) {
+    return new Promise((resolve) => {
+        const modal   = document.getElementById('app-confirm-modal');
+        const msgEl   = document.getElementById('app-confirm-message');
+        const yesBtn  = document.getElementById('app-confirm-yes-btn');
+        const noBtn   = document.getElementById('app-confirm-no-btn');
+        if (!modal || !msgEl || !yesBtn || !noBtn) { resolve(false); return; }
+
+        msgEl.innerText = message;
+        modal.classList.add('active');
+
+        const cleanup = (result) => {
+            modal.classList.remove('active');
+            yesBtn.onclick = null;
+            noBtn.onclick  = null;
+            resolve(result);
+        };
+        yesBtn.onclick = () => cleanup(true);
+        noBtn.onclick  = () => cleanup(false);
+    });
+}
+
 // ── 계정 보호 (카카오·구글 중 하나 이상 연동해 익명 계정의 자산을 보호) ──
 window.openAccountProtectModal = function() {
     document.getElementById('account-protect-modal')?.classList.add('active');
@@ -1447,7 +1490,7 @@ window.loginWithKakao = function() {
             try {
                 const result = await linkKakaoAccountCallable({ kakaoAccessToken: authObj.access_token });
                 if (result.data.action === 'switch') {
-                    if (!confirm('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)')) return;
+                    if (!(await confirmModal('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)'))) return;
                     await signInWithCustomToken(auth, result.data.customToken);
                     alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
                 } else if (result.data.action === 'linked') {
@@ -1495,7 +1538,7 @@ window.loginWithGoogle = async function() {
     } catch (e) {
         console.error('[google-login] linkWithPopup 실패', e?.code, e?.message, e);
         if (e?.code === 'auth/credential-already-in-use') {
-            if (!confirm('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)')) return;
+            if (!(await confirmModal('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)'))) return;
             try {
                 await signInWithCredential(auth, e.credential);
                 await linkGoogleAccountCallable();
