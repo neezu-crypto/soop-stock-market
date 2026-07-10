@@ -30,6 +30,11 @@ const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 
 const PROFIT_RANKING_CHECK_COST = 500000;  // 손익 랭킹 확인(및 내 순위 갱신) 1회당 차감되는 게임자산
 const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 인원 수
 
+// 최근 7일 자산 변동 그래프용 — 화면엔 7일치만 보여주지만, 자정 근처
+// 타임존 오차나 하루 접속을 건너뛴 경우까지 여유 있게 보려고 이틀치를 더
+// 남겨둔다. 하루 1번(그날 첫 하트비트)만 기록해 저장량을 최소화한다.
+const ASSET_HISTORY_RETENTION_DAYS = 9;
+
 // 출석 보상 — 계정 보호(카카오/구글) 유저만 대상(익명 계정은 무한정 새로 만들
 // 수 있어 파밍 방지 목적). 1~7일차 순으로 지급되며, 하루라도 놓치면 1일차로
 // 리셋(연속 스트릭이 완전히 끊기는 대신 "출석부"가 다시 시작되는 방식).
@@ -196,6 +201,57 @@ async function chargeUserCash(db, uid, cost, { allowNegative = false } = {}) {
   return { resultingCash: userTx.snapshot.val()?.cash ?? 0 };
 }
 
+/** 보유 현금 + 보유 주식 평가금액(현재가 기준)을 합산한 총자산을 계산한다. */
+async function computeTotalAssets(db, user) {
+  const holdings = Object.entries(user?.stocks || {}).filter(([, s]) => (s?.qty || 0) > 0);
+  if (holdings.length === 0) return user?.cash || 0;
+
+  const priceSnaps = await Promise.all(
+    holdings.map(([stockId]) => db.ref(`stocks/${stockId}/price`).get())
+  );
+  const stockValue = holdings.reduce((sum, [, s], i) => {
+    const price = priceSnaps[i].val() || 0;
+    return sum + price * (s.qty || 0);
+  }, 0);
+
+  return (user?.cash || 0) + stockValue;
+}
+
+/**
+ * 최근 7일 자산 변동 그래프용 — 하루에 한 번(그날 첫 하트비트 시점)만
+ * users/{uid}/assetHistory/{YYYY-MM-DD}에 스냅샷을 남긴다. 이미 오늘 기록을
+ * 남겼으면(user.lastAssetSnapshotDate === today) 즉시 반환해 매 하트비트마다
+ * 무거운 보유주식 가격 조회가 반복되지 않게 한다. 오래된 기록은 매번
+ * 같이 정리해 저장량이 무한정 늘지 않게 한다.
+ */
+async function recordDailyAssetSnapshot(db, uid, user) {
+  const today = todayKeyKST();
+  if (!user || user.lastAssetSnapshotDate === today) return;
+
+  const cash = user.cash || 0;
+  const totalAssets = await computeTotalAssets(db, user);
+  const stockValue = totalAssets - cash;
+
+  const updates = {
+    [`users/${uid}/assetHistory/${today}`]: {
+      totalAssets: Math.round(totalAssets),
+      cash: Math.round(cash),
+      stockValue: Math.round(stockValue),
+      at: Date.now(),
+    },
+    [`users/${uid}/lastAssetSnapshotDate`]: today,
+  };
+
+  const cutoffKey = todayKeyKST(-ASSET_HISTORY_RETENTION_DAYS);
+  const histSnap = await db.ref(`users/${uid}/assetHistory`).get();
+  const hist = histSnap.val() || {};
+  Object.keys(hist).forEach((dateKey) => {
+    if (dateKey < cutoffKey) updates[`users/${uid}/assetHistory/${dateKey}`] = null;
+  });
+
+  await db.ref().update(updates);
+}
+
 /** 유저 게임자산(cash)에 amount만큼 더한다 (배너 신청 환불, 카카오 연동 보너스, 자산 충전 승인 등에 재사용). */
 async function creditUserCash(db, uid, amount) {
   if (!uid || !amount) return;
@@ -225,6 +281,7 @@ module.exports = {
   MAX_PINNED_SLOTS,
   PROFIT_RANKING_CHECK_COST,
   PROFIT_RANKING_TOP_N,
+  ASSET_HISTORY_RETENTION_DAYS,
   DAILY_ATTENDANCE_REWARDS,
   ANON_DAILY_SECONDS,
   PROTECTED_DAILY_SECONDS,
@@ -255,4 +312,6 @@ module.exports = {
   chargeUserCash,
   creditUserCash,
   grantAchievement,
+  computeTotalAssets,
+  recordDailyAssetSnapshot,
 };

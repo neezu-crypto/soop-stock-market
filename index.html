@@ -60,7 +60,7 @@
     <div class="my-stocks-title">
         <span>내 보유 주식</span>
         <span style="display:flex;align-items:center;gap:8px;">
-            <span id="total-assets" style="font-size: 14px; color: var(--text-sub);">평가중...</span>
+            <span id="total-assets" onclick="openAssetHistoryModal()" style="font-size: 14px; color: var(--text-sub); cursor:pointer;" title="최근 7일 자산 변동 보기">평가중...</span>
             <button class="my-stocks-close-btn" onclick="closeMyStocksPanel()">✕</button>
         </span>
     </div>
@@ -515,6 +515,88 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     📊 최근 7일 자산 변동 — 하루 1번 서버가 기록한 스냅샷을 클라이언트가
+     캔들/스파크라인으로 렌더링(계산은 전부 클라이언트에서 처리)
+══════════════════════════════════════════ -->
+<div id="asset-history-modal" class="promo-modal-overlay" style="z-index:4200;">
+    <div class="promo-modal-content" style="max-width:500px;">
+        <div class="promo-modal-header"><h2>📊 최근 7일 자산 변동</h2></div>
+        <p style="font-size:12px;color:var(--text-sub);margin-bottom:14px;">매일 접속 시 하루 한 번, 그날의 총자산(현금+보유주식 평가액)이 자동으로 기록돼요. 오늘 처음 켜셨다면 데이터가 하루씩 쌓이는 걸 지켜봐주세요!</p>
+
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button type="button" class="asset-history-mode-btn" data-mode="candle" onclick="setAssetHistoryMode('candle')"
+                style="flex:1;background:#38bdf8;color:#0f172a;border:none;padding:9px;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;">🕯️ 캔들</button>
+            <button type="button" class="asset-history-mode-btn" data-mode="sparkline" onclick="setAssetHistoryMode('sparkline')"
+                style="flex:1;background:#334155;color:#94a3b8;border:none;padding:9px;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;">〰️ 스파크라인</button>
+        </div>
+
+        <div style="position:relative;height:240px;background:#0a1628;border-radius:12px;border:1px solid #334155;padding:10px;box-sizing:border-box;">
+            <canvas id="asset-history-canvas"></canvas>
+            <div id="asset-history-empty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#475569;font-size:13px;text-align:center;padding:0 20px;">
+                <div style="font-size:28px;">📈</div>
+                아직 데이터가 부족해요.<br>매일 접속하면 하루씩 그래프가 쌓여요!
+            </div>
+        </div>
+
+        <p style="font-size:11px;color:#64748b;margin:10px 0 16px;">🕯️ 캔들은 하루 1번만 기록되는 구조상 실제 일중 고가·저가가 아니라, 전일 종가 → 오늘 값을 이은 단순화된 형태예요.</p>
+
+        <button onclick="closeAssetHistoryModal(); openAssetHistoryShareCardModal();" style="width:100%;margin-bottom:8px;background:#334155;color:#38bdf8;border:1px solid #38bdf8;padding:10px;border-radius:10px;cursor:pointer;font-weight:700;font-size:13px;">📸 스크린샷 모드</button>
+        <button onclick="closeAssetHistoryModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     최근 7일 자산 변동 공유용 카드 — 다른 두 스크린샷 카드와 동일한 뼈대
+══════════════════════════════════════════ -->
+<div id="asset-history-share-card-modal" class="promo-modal-overlay" style="z-index:5300;">
+    <div class="promo-modal-content" style="max-width:760px;max-height:90vh;overflow-y:auto;">
+        <div class="promo-modal-header"><h2>📸 공유용 카드</h2></div>
+        <p style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">화면을 직접 캡처해서 원하는 곳에 공유해보세요 — 별도의 저장/공유 기능은 없어요.</p>
+
+        <div class="share-card-layout" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+            <!-- 옵션 패널 -->
+            <div style="flex:1 1 auto;min-width:200px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">표시 항목</div>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                        <input type="checkbox" id="asset-history-opt-change" checked onchange="renderAssetHistoryShareCard()"> 증감률
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                        <input type="checkbox" id="asset-history-opt-date" checked onchange="renderAssetHistoryShareCard()"> 날짜
+                    </label>
+                    <label id="asset-history-opt-crew-label" style="display:none;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                        <input type="checkbox" id="asset-history-opt-crew" checked onchange="renderAssetHistoryShareCard()"> 크루 소속 배지
+                    </label>
+                </div>
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">테마</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button type="button" class="asset-history-share-theme-btn" data-theme="default" onclick="selectAssetHistoryShareTheme('default')"
+                            style="background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid #38bdf8;">기본</button>
+                        <button type="button" class="asset-history-share-theme-btn" data-theme="gold" onclick="selectAssetHistoryShareTheme('gold')"
+                            style="background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #475569;opacity:0.7;">골드</button>
+                        <button type="button" id="asset-history-share-theme-crew-btn" class="asset-history-share-theme-btn" data-theme="crew" onclick="selectAssetHistoryShareTheme('crew')"
+                            style="display:none;background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #475569;opacity:0.7;">크루 컬러</button>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">한 줄 문구 (선택, 최대 30자)</div>
+                    <input type="text" id="asset-history-opt-caption" maxlength="30" placeholder="예: 이번 주 꾸준히 우상향" oninput="renderAssetHistoryShareCard()"
+                        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+                </div>
+            </div>
+
+            <!-- 카드 미리보기 -->
+            <div style="flex:1 1 auto;min-width:200px;display:flex;justify-content:center;">
+                <div id="asset-history-share-card" style="width:100%;max-width:300px;aspect-ratio:9/16;border-radius:16px;padding:24px;display:flex;flex-direction:column;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
+            </div>
+        </div>
+
+        <button onclick="closeAssetHistoryShareCardModal()" style="width:100%;margin-top:20px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      종목 상장 신청 모달 (검색해도 없는 스트리머를 새 종목으로 상장 요청)
 ══════════════════════════════════════════ -->
 <div id="listing-modal" class="promo-modal-overlay" style="z-index:4000;">
@@ -762,7 +844,7 @@
     <div class="wallet-bar">
         <div class="wallet-bar-top">
             <div class="wallet-info">
-                내 잔고: <span id="my-cash">0</span>원
+                <span onclick="openAssetHistoryModal()" style="cursor:pointer;" title="최근 7일 자산 변동 보기">내 잔고: <span id="my-cash">0</span>원</span>
                 <button onclick="openCashChargeModal()"
                     style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
                     💰 자산 충전
@@ -856,6 +938,7 @@ import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 import { initChartModal } from "./js/chartModal.js";
 import { initPromotions } from "./js/promotions.js";
+import { initAssetHistory } from "./js/assetHistory.js";
 
 (function () {
 
@@ -1590,6 +1673,11 @@ initPromotions({
     },
 });
 
+initAssetHistory({
+    getMyData: () => myData,
+    getAllStocks: () => allStocks,
+});
+
 // window.confirm() 대체 — 팝업 로그인 직후처럼 브라우저가 "이 탭이 활성
 // 상태가 아니다"로 오판하는 타이밍에 네이티브 confirm()을 부르면 크롬이
 // 다이얼로그를 아예 띄우지도 않고 조용히 억제해버리는 문제가 있다. 이
@@ -2242,6 +2330,8 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('account-protect-modal').classList.contains('active')) closeAccountProtectModal();
         if (document.getElementById('profit-share-card-modal').classList.contains('active')) closeShareCardModal();
         if (document.getElementById('asset-share-card-modal').classList.contains('active')) closeAssetShareCardModal();
+        if (document.getElementById('asset-history-modal').classList.contains('active')) closeAssetHistoryModal();
+        if (document.getElementById('asset-history-share-card-modal').classList.contains('active')) closeAssetHistoryShareCardModal();
         if (document.getElementById('achievements-modal').classList.contains('active')) closeAchievementsModal();
         if (document.querySelector('.my-stocks-container').classList.contains('open')) closeMyStocksPanel();
     }

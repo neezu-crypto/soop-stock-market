@@ -311,6 +311,16 @@
             <li><strong>총수익률은 의도적으로 넣지 않음:</strong> 출석 보상·계정 보호 보너스·후원 당첨금까지 현금에 섞여 있어, 총자산 증가율을 매매 실력처럼 보여주면 오해를 줄 수 있다. 순수 매매 실력을 자랑하고 싶다면 손익 랭킹 카드(<code>realizedPL</code> 기반)를 이용하도록 역할을 분리했다</li>
         </ul>
 
+        <h3>4.15 최근 7일 자산 변동 — 하루 1번 스냅샷 + 클라이언트 렌더링</h3>
+        <p>지갑 바의 "내 잔고" 또는 "내 보유 주식" 패널의 총자산을 클릭하면 최근 최대 7일간의 총자산(현금+보유 종목 평가액) 추이를 캔들/스파크라인 중 골라 볼 수 있다. <strong>서버는 숫자만 기록하고, 캔들/스파크라인 렌더링과 집계는 전부 클라이언트(Chart.js)가 계산한다.</strong></p>
+        <ul>
+            <li><strong>스냅샷 기록 시점:</strong> 개별 매매마다 기록하면 저장량이 유저 수 × 거래 횟수로 폭증하므로, 하루에 딱 1번(그날 첫 하트비트 또는 첫 매매 시점, <code>common.js</code>의 <code>recordDailyAssetSnapshot()</code>)만 <code>users/{uid}/assetHistory/{YYYY-MM-DD}</code>에 <code>{totalAssets, cash, stockValue, at}</code>를 기록한다. <code>user.lastAssetSnapshotDate</code>로 오늘 이미 기록했는지 즉시 판별해, 20초 간격 하트비트마다 무거운 보유주식 가격 조회가 반복되지 않는다</li>
+            <li><strong>보관 기간:</strong> 화면엔 최근 7일만 보여주지만, 자정 근처 타임존 오차 등을 감안해 서버가 <code>ASSET_HISTORY_RETENTION_DAYS</code>(9일)보다 오래된 기록은 매 스냅샷 시점에 함께 정리한다</li>
+            <li><strong>"캔들"의 한계:</strong> 하루 1점만 기록되는 구조라 진짜 일중 시가/고가/저가가 아니라, <strong>전일 종가 → 오늘 값</strong>을 이은 단순화된 막대다. 모달 안내 문구로 이 한계를 명시한다</li>
+            <li><strong>신규 유저 경험:</strong> 과거 데이터를 소급해서 만들 수 없으므로(애초에 기록이 없었음), 오늘부터 하루씩 쌓이기 시작한다. 데이터가 2점 미만이면 그래프 대신 "데이터가 부족해요" 안내를 보여준다</li>
+            <li><strong>공유 카드:</strong> 손익 랭킹·보유 자산 카드와 동일한 뼈대(테마 3종·토글·30자 캡션)를 재사용하되, 카드 중앙에 작은 스파크라인(Chart.js, 축·툴팁 없이 선만)을 함께 그려 넣는다</li>
+        </ul>
+
         <h3>4.12 출석 보상 — 1~7일차 순환형 출석부</h3>
         <p>연속 스트릭(하루라도 놓치면 0으로 리셋)이 아니라 <strong>"출석부" 방식</strong> — 하루 놓쳐도 완전히 잃는 게 아니라 1일차로 되돌아가는 정도라 이탈 부담이 적다. 지갑 바의 <strong>"🎁 출석 보상 받기"</strong> 버튼을 눌러야 지급되는(자동 팝업 아닌) 방식이라 팝업 피로를 만들지 않는다.</p>
         <table>
@@ -426,7 +436,7 @@
         <h3>관리자 페이지 기능 — 전부 Cloud Function 경유 (<code>adminAction</code> callable)</h3>
         <p>종목 시세 조정, 배너 검수/관리, 비활성 유저 정리 등 관리자 페이지의 모든 쓰기·민감 읽기 작업은 클라이언트가 <code>{action, payload}</code>만 전달하고, 실제 처리는 <code>functions/admin.js</code>의 <code>adminAction</code> 콜러블이 Admin SDK로 수행합니다. 함수 진입 시 <code>auth.token.email === 관리자 이메일</code>을 서버에서 재검증합니다.</p>
         <div class="note"><b>참고 — 서버 코드 구조</b> — 원래 하나였던 <code>functions/index.js</code>(1,000줄+)를 기능 단위로 분리했습니다: <code>trade.js</code>(매매·초기자산), <code>admin.js</code>(관리자 액션 디스패처), <code>bannerRequests.js</code>(우측·차트 배너), <code>pinRequests.js</code>(고정 노출), <code>relayRoom.js</code>(중계방), <code>cashCharge.js</code>(자산 충전), <code>kakao.js</code>(카카오 연동), <code>google.js</code>(구글 연동), <code>playTime.js</code>(플레이타임 제한), <code>stockFreeze.js</code>(동결 해제·상장폐지 스케줄러), <code>listingRequests.js</code>(신규 상장 신청), <code>profitRanking.js</code>(손익 랭킹), <code>attendance.js</code>(출석 보상), <code>common.js</code>(공유 상수·헬퍼). <code>index.js</code>는 각 모듈의 Cloud Function을 모아 재노출하는 진입점만 담당합니다. 런타임은 Node.js 20 지원종료(2026-10-30 완전 중단 예정)에 대응해 <strong>Node.js 22</strong>로 마이그레이션했습니다(전부 2세대 콜러블이라 SDK 버전 변경 없이 <code>engines.node</code> 설정만으로 전환 가능했음).</div>
-        <div class="note"><b>참고 — 클라이언트 코드 구조</b> — <code>index.html</code>의 인라인 스크립트(1,600줄+) 중 다른 상태와 얽히지 않고 <strong>읽기 전용으로만 의존하는</strong> 두 부분을 별도 ES 모듈로 분리했습니다: <code>js/chartModal.js</code>(캔들 차트 모달), <code>js/promotions.js</code>(배너 2종·중계방·고정노출·자산충전 신청 폼과 공통 유틸). 로그인·거래·종목 리스트·플레이타임처럼 서로 상태를 직접 주무르는 핵심 로직은 검증 리스크가 커서 그대로 <code>index.html</code>에 남겨뒀습니다. 두 모듈은 <code>initChartModal()</code>/<code>initPromotions()</code> 호출 시 <code>getAllStocks</code>/<code>getMyData</code> 같은 접근자 함수를 전달받는 의존성 주입 방식으로 연결됩니다.</div>
+        <div class="note"><b>참고 — 클라이언트 코드 구조</b> — <code>index.html</code>의 인라인 스크립트(1,600줄+) 중 다른 상태와 얽히지 않고 <strong>읽기 전용으로만 의존하는</strong> 부분들을 별도 ES 모듈로 분리했습니다: <code>js/chartModal.js</code>(캔들 차트 모달), <code>js/promotions.js</code>(배너 2종·중계방·고정노출·자산충전 신청 폼과 공통 유틸), <code>js/assetHistory.js</code>(최근 7일 자산 변동 캔들/스파크라인 + 공유 카드). 로그인·거래·종목 리스트·플레이타임처럼 서로 상태를 직접 주무르는 핵심 로직은 검증 리스크가 커서 그대로 <code>index.html</code>에 남겨뒀습니다. 각 모듈은 <code>initChartModal()</code>/<code>initPromotions()</code>/<code>initAssetHistory()</code> 호출 시 <code>getAllStocks</code>/<code>getMyData</code> 같은 접근자 함수를 전달받는 의존성 주입 방식으로 연결됩니다.</div>
         <table>
             <tr><th>action</th><th>기능</th></tr>
             <tr><td><code>updateSinglePrice</code> / <code>updateStockData</code></td><td>개별 종목 가격·배너·링크 수정</td></tr>
@@ -513,7 +523,7 @@
         <table>
             <tr><th>경로</th><th>설명</th></tr>
             <tr><td><code>stocks/{id}</code></td><td>종목별 현재가, 거래량, (있는 경우) 배너 정보, 고정노출 만료(pinnedUntil), 동결 상태(frozenAt/freezeDeadline/freezeTriggerUid) — 가격 히스토리/등락률은 서버에 저장하지 않고 클라이언트가 실시간 틱으로 직접 계산</td></tr>
-            <tr><td><code>users/{uid}</code></td><td>유저 보유 현금(cash, 최초 지급 50만원), 보유 종목(stocks: qty/avg), 최근 거래 시각·누적 매매 횟수(lastTradeTime/tradeCount), 계정 보호 여부(kakaoLinked/googleLinked), 순수 매매 실현손익 누적(realizedPL), 초기자산 소급 보정 지급 시각(anonTopUpAppliedAt), 출석 보상 상태(lastAttendanceDate/attendanceStreak), 도전과제 달성 기록(achievements/{id}: 달성 시각), 플레이타임 사용량(playQuotaDate/playSecondsUsedToday/bonusSecondsToday/purchasedHoursToday/lastHeartbeatAt)</td></tr>
+            <tr><td><code>users/{uid}</code></td><td>유저 보유 현금(cash, 최초 지급 50만원), 보유 종목(stocks: qty/avg), 최근 거래 시각·누적 매매 횟수(lastTradeTime/tradeCount), 계정 보호 여부(kakaoLinked/googleLinked), 순수 매매 실현손익 누적(realizedPL), 초기자산 소급 보정 지급 시각(anonTopUpAppliedAt), 출석 보상 상태(lastAttendanceDate/attendanceStreak), 도전과제 달성 기록(achievements/{id}: 달성 시각), 최근 자산 변동 스냅샷(assetHistory/{YYYY-MM-DD}: totalAssets/cash/stockValue/at, lastAssetSnapshotDate로 하루 1회만 기록되도록 제어), 플레이타임 사용량(playQuotaDate/playSecondsUsedToday/bonusSecondsToday/purchasedHoursToday/lastHeartbeatAt)</td></tr>
             <tr><td><code>candlesticks/{stockId}/{분단위 timestamp}</code></td><td>OHLCV 분봉 데이터 (최대 360분 보관)</td></tr>
             <tr><td><code>rankings/top5</code></td><td>거래량 기준 상위 5개 종목 (서버가 매매 체결 시 디바운스 반영, 클라이언트는 읽기 전용)</td></tr>
             <tr><td><code>presence/users/{uid}</code></td><td>접속자 등록 (접속 시 1회 기록, onDisconnect로 자동 정리) — 접속자 수는 이 노드 개수를 접속 시 1회 조회해 표시</td></tr>

@@ -13,6 +13,8 @@ const {
   chargeUserCash,
   requireNotInMaintenance,
   todayKeyKST,
+  computeTotalAssets,
+  recordDailyAssetSnapshot,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -23,22 +25,6 @@ const {
 //   - 당일 n번째 추가 구매마다 할증 +10%p, 최대 +50%에서 상한
 //   - 자정(KST) 지나면 사용시간·구매횟수 모두 초기화
 // ══════════════════════════════════════════════════════════
-
-/** 보유 현금 + 보유 주식 평가금액(현재가 기준)을 합산한 총자산을 계산한다. */
-async function computeTotalAssets(db, user) {
-  const holdings = Object.entries(user?.stocks || {}).filter(([, s]) => (s?.qty || 0) > 0);
-  if (holdings.length === 0) return user?.cash || 0;
-
-  const priceSnaps = await Promise.all(
-    holdings.map(([stockId]) => db.ref(`stocks/${stockId}/price`).get())
-  );
-  const stockValue = holdings.reduce((sum, [, s], i) => {
-    const price = priceSnaps[i].val() || 0;
-    return sum + price * (s.qty || 0);
-  }, 0);
-
-  return (user?.cash || 0) + stockValue;
-}
 
 /** 유저의 현재 일일 이용 한도/사용량/남은 시간을 계산한다 (하트비트 갱신 없이 조회만). */
 async function getQuotaState(db, uid, auth) {
@@ -70,7 +56,7 @@ async function touchHeartbeat(db, uid) {
   const userRef  = db.ref(`users/${uid}`);
   const trueUser = (await userRef.get()).val();
 
-  return userRef.transaction((currentUser) => {
+  const userTx = await userRef.transaction((currentUser) => {
     const user = currentUser || trueUser;
     if (!user) return currentUser;
 
@@ -87,6 +73,19 @@ async function touchHeartbeat(db, uid) {
       lastHeartbeatAt:      now,
     };
   });
+
+  // 최근 7일 자산 변동 스냅샷 (best-effort — 실패해도 하트비트 자체는 정상 처리됨).
+  // recordDailyAssetSnapshot 내부에서 오늘 이미 기록했으면 즉시 반환하므로,
+  // 매 하트비트(20초 간격)마다 무거운 계산이 반복되지 않는다.
+  if (userTx.committed && userTx.snapshot.exists()) {
+    try {
+      await recordDailyAssetSnapshot(db, uid, userTx.snapshot.val());
+    } catch (e) {
+      // 다음 하트비트 때 재시도됨
+    }
+  }
+
+  return userTx;
 }
 
 /**
@@ -129,6 +128,14 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
   const db = admin.database();
 
   if (auth.token?.email === ADMIN_EMAIL) {
+    // 관리자는 이용시간 무제한이라 touchHeartbeat를 타지 않지만, 자산 변동
+    // 그래프 기능은 관리자 계정으로도 확인해볼 수 있게 스냅샷만 별도로 남긴다.
+    try {
+      const adminUser = (await db.ref(`users/${auth.uid}`).get()).val();
+      if (adminUser) await recordDailyAssetSnapshot(db, auth.uid, adminUser);
+    } catch (e) {
+      // best-effort
+    }
     return { ok: true, unlimited: true, allowed: true };
   }
 
