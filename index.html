@@ -691,7 +691,7 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, get, set, onDisconnect }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, signInWithCredential, linkWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged }
+import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, signInWithCredential, linkWithPopup, GoogleAuthProvider, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
@@ -1471,54 +1471,29 @@ window.loginWithKakao = function() {
 };
 
 // 구글은 Firebase 기본 제공자라 카카오처럼 별도 API 왕복 검증이 필요 없다.
-// 처음엔 팝업(linkWithPopup) 방식으로 만들었으나, Safari의 트래킹 방지
-// (ITP)가 팝업↔원래 창 간의 postMessage 통신을 막아 "로그인 후 팝업이
-// 멈추고" 이어서 반환된 credential 객체가 손상돼 signInWithCredential에서
-// "r._getIdTokenResponse" 내부 오류가 나는 문제가 있었다. 리다이렉트
-// 방식(linkWithRedirect)은 팝업 간 통신에 의존하지 않아 이 문제가 없다.
+//
+// authDomain(soop-stock-market.firebaseapp.com)이 실제 서비스 도메인
+// (neezu-crypto.github.io)과 달라서, 최신 Safari/Chrome/Firefox의 크로스
+// 사이트 저장소 차단 정책 때문에 signInWithRedirect/linkWithRedirect가
+// 브라우저 전반에서 조용히 실패하는 문제를 겪었다(Firebase 공식 문서
+// "Redirect best practices"에도 명시된 문제 — 근본 해결책은 authDomain을
+// 실제 서비스 도메인과 일치시키는 것인데, GitHub Pages는 Firebase의 동적
+// 인증 핸들러 경로(/__/auth/handler)를 서빙할 수 없어 구조적으로 불가능
+// 하다). 그래서 Firebase가 공식 대안으로 제시하는 linkWithPopup으로
+// 되돌렸다 — 페이지 전체가 이동하지 않고 팝업 안에서 인증이 끝나므로
+// 리다이렉트보다 크로스 사이트 저장소 문제에 덜 취약하다.
 window.loginWithGoogle = async function() {
     try {
-        // 시크릿/사생활 보호 모드는 리다이렉트 도중 저장소(IndexedDB)가
-        // 비워져 돌아온 뒤 결과를 못 찾는 경우가 있다 — sessionStorage에
-        // "지금 구글 로그인을 시도했다"는 신호만 남겨서, 돌아왔을 때
-        // 결과가 없으면 조용히 실패하는 대신 원인을 안내할 수 있게 한다.
-        sessionStorage.setItem('googleRedirectPending', '1');
-        await linkWithRedirect(auth.currentUser, provider);
-        // 리다이렉트로 페이지 자체가 이동하므로 이 아래는 실행되지 않는다 —
-        // 결과는 페이지가 돌아온 뒤 handleGoogleRedirectResult()가 처리한다.
-    } catch (e) {
-        sessionStorage.removeItem('googleRedirectPending');
-        console.error('[google-login] linkWithRedirect 시작 실패', e);
-        alert('구글 로그인을 시작할 수 없습니다: ' + (e?.message || e));
-    }
-};
-
-// 구글 로그인 리다이렉트로 돌아왔을 때(페이지 로드마다 1번씩 확인) 결과를 처리한다.
-async function handleGoogleRedirectResult() {
-    const wasPending = sessionStorage.getItem('googleRedirectPending') === '1';
-    sessionStorage.removeItem('googleRedirectPending');
-
-    try {
-        const result = await getRedirectResult(auth);
-        if (!result) {
-            // 방금 구글 로그인을 시도했는데 결과가 안 잡히면 대부분 시크릿/
-            // 사생활 보호 모드 또는 브라우저의 크로스사이트 저장소 제한이
-            // 원인이다 — 조용히 무시하지 않고 알려준다.
-            if (wasPending) {
-                console.error('[google-login] getRedirectResult가 null을 반환함 (wasPending=true)');
-                alert('⚠️ 구글 로그인 결과를 확인하지 못했어요.\n시크릿 모드/사생활 보호 브라우저에서는 구글 로그인이 정상 동작하지 않을 수 있습니다.\n일반 브라우저 창에서 다시 시도해주세요.');
-            }
-            return; // 리다이렉트로 돌아온 게 아니라 평범한 페이지 로드
-        }
-        const linkResult = await linkGoogleAccountCallable();
-        const bonus = linkResult.data.bonus || 0;
+        await linkWithPopup(auth.currentUser, provider);
+        const result = await linkGoogleAccountCallable();
+        const bonus = result.data.bonus || 0;
         if (bonus > 0) {
             alert(`🎉 구글 연동 완료!\n\n💰 보너스 ${bonus.toLocaleString()}원이 지급됐습니다!\n이제 이 계정의 자산은 안전하게 보호됩니다.`);
         } else {
             alert('✅ 구글 연동 완료! 이제 이 계정의 자산은 안전하게 보호됩니다.');
         }
     } catch (e) {
-        console.error('[google-login] 리다이렉트 결과 처리 중 오류', e?.code, e?.message, e);
+        console.error('[google-login] linkWithPopup 실패', e?.code, e?.message, e);
         if (e?.code === 'auth/credential-already-in-use') {
             if (!confirm('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)')) return;
             try {
@@ -1527,16 +1502,15 @@ async function handleGoogleRedirectResult() {
                 alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
             } catch (e2) {
                 console.error('[google-login] signInWithCredential 실패', e2?.code, e2?.message, e2);
-                alert('계정 전환 중 오류가 발생했습니다: ' + (e2?.message || e2));
+                alert('계정 전환 중 오류가 발생했습니다: ' + (e2?.message || e2) + '\n\n같은 구글 계정으로 이미 이 사이트를 관리자 계정 등 다른 용도로 쓰고 계시다면, 다른 구글 계정으로 시도해주세요.');
             }
-        } else if (wasPending) {
-            // 방금 시도한 로그인에서 난 오류는 .code 유무와 상관없이 항상 알려준다
-            // (예전엔 e?.code가 없는 오류를 조용히 무시해서 "에러도 없이 실패"로 보였다).
+        } else if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') {
+            // 유저가 팝업을 닫은 경우 — 조용히 무시
+        } else {
             alert('구글 로그인 중 오류가 발생했습니다: ' + (e?.message || e || '알 수 없는 오류'));
         }
     }
-}
-handleGoogleRedirectResult();
+};
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
 // 중계방 (현재 플레이 중인 스트리머 홍보, 최대 3명) — 페이지 로드 시 1회만
