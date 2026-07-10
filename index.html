@@ -834,9 +834,17 @@
     </div>
 </div>
 
-<!-- ── 테스트 기간 안내 배너 (TEST_PERIOD_ACTIVE가 꺼지면 자동으로 숨겨짐) ── -->
-<div id="test-period-banner" style="display:none;background:repeating-linear-gradient(135deg,#f59e0b,#f59e0b 12px,#fbbf24 12px,#fbbf24 24px);color:#1e293b;text-align:center;padding:9px 12px;font-size:13px;font-weight:800;letter-spacing:0.3px;">
-    🧪 테스트 기간 운영 중입니다 — 일부 유료 기능(플레이 시간 충전)은 테스트 기간 종료 후 이용 가능합니다
+<!-- ── 테스트 기간 안내 모달 (최초 1회 자동으로 뜨고, 이후엔 칩을 눌러 다시 볼 수 있음) ── -->
+<div id="test-period-modal" class="promo-modal-overlay" style="z-index:5100;">
+    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
+        <div class="promo-modal-header"><h2>🧪 테스트 기간 안내</h2></div>
+        <p style="font-size:14px;color:var(--text-main);line-height:1.8;margin-bottom:20px;">
+            지금은 테스트 기간이에요.<br>
+            <b style="color:#38bdf8;">자산과 보유 종목은 테스트 종료 후에도 그대로 유지</b>되니 안심하고 즐기셔도 됩니다.<br><br>
+            <span style="font-size:13px;color:var(--text-sub);">단, 게임머니로 이용시간을 충전하는 기능만 테스트 기간 중엔 잠시 이용할 수 없어요.</span>
+        </p>
+        <button onclick="closeTestPeriodModal()" style="width:100%;background:#38bdf8;color:#0f172a;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">확인했어요</button>
+    </div>
 </div>
 
 <!-- ── 메인 래퍼 ── -->
@@ -863,6 +871,10 @@
                 <div style="font-size:12px;color:var(--text-sub);">
                     🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
                 </div>
+                <span id="test-period-chip" onclick="openTestPeriodModal()"
+                    style="display:none;font-size:11px;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.4);padding:2px 8px;border-radius:100px;cursor:pointer;white-space:nowrap;">
+                    🧪 테스트 중
+                </span>
                 <button id="account-protect-btn" onclick="openAccountProtectModal()"
                     style="display:none;align-items:center;gap:6px;background:#38bdf8;color:#0f172a;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
                     🔒 계정 보호하고 +50만원 받기
@@ -953,7 +965,20 @@ const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동
 // 용도(버튼을 눌러 신청까지 갔다가 서버에서 막히는 답답함을 줄이기 위함).
 // 테스트 기간이 끝나면 이 값을 false로 바꾸고(서버 쪽도 함께) 배포한다.
 const TEST_PERIOD_ACTIVE = true;
-document.getElementById('test-period-banner').style.display = TEST_PERIOD_ACTIVE ? 'block' : 'none';
+document.getElementById('test-period-chip').style.display = TEST_PERIOD_ACTIVE ? 'inline-block' : 'none';
+
+window.openTestPeriodModal = function() {
+    document.getElementById('test-period-modal')?.classList.add('active');
+};
+window.closeTestPeriodModal = function() {
+    document.getElementById('test-period-modal')?.classList.remove('active');
+};
+// 정책 문구를 매번 반복 노출하지 않고, 최초 1회만 확정적으로 안내한다
+// (계정 보호 유도 팝업과 동일한 localStorage 1회성 플래그 패턴).
+if (TEST_PERIOD_ACTIVE && !localStorage.getItem('testPeriodNoticeShown_v1')) {
+    localStorage.setItem('testPeriodNoticeShown_v1', '1');
+    window.openTestPeriodModal();
+}
 
 const firebaseConfig = {
     apiKey:      "AIzaSyDifzxfQaJ7SWQZF1And87xvkT80LmQQk8",
@@ -2333,6 +2358,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('asset-history-modal').classList.contains('active')) closeAssetHistoryModal();
         if (document.getElementById('asset-history-share-card-modal').classList.contains('active')) closeAssetHistoryShareCardModal();
         if (document.getElementById('achievements-modal').classList.contains('active')) closeAchievementsModal();
+        if (document.getElementById('test-period-modal').classList.contains('active')) closeTestPeriodModal();
         if (document.querySelector('.my-stocks-container').classList.contains('open')) closeMyStocksPanel();
     }
 });
