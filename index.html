@@ -1493,6 +1493,10 @@ window.loginWithKakao = function() {
                     if (!(await confirmModal('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)'))) return;
                     await signInWithCustomToken(auth, result.data.customToken);
                     alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
+                    // 계정이 중간에 바뀌면 앱이 메모리에 들고 있던 상태(uid,
+                    // 구독 등)가 예전 걸 그대로 참조해 화면이 갱신되지 않는다 —
+                    // 새로고침으로 전체 상태를 새 계정 기준으로 다시 초기화한다.
+                    window.location.reload();
                 } else if (result.data.action === 'linked') {
                     const bonus = result.data.bonus || 0;
                     if (bonus > 0) {
@@ -1550,6 +1554,10 @@ window.loginWithGoogle = async function() {
                 await signInWithPopup(auth, provider);
                 await linkGoogleAccountCallable();
                 alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
+                // 계정이 중간에 바뀌면 앱이 메모리에 들고 있던 상태(uid, 구독 등)가
+                // 예전 걸 그대로 참조해 화면이 갱신되지 않는다 — 새로고침으로 전체
+                // 상태를 새 계정 기준으로 다시 초기화한다.
+                window.location.reload();
             } catch (e2) {
                 console.error('[google-login] 계정 전환용 signInWithPopup 실패', e2?.code, e2?.message, e2);
                 alert('⚠️ 계정 전환 중 오류가 발생했습니다.\n\n' +
