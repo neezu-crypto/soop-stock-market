@@ -22,8 +22,8 @@ const LEGACY_INITIAL_CASH      = 200000;
 const STREAMER_ID_RE           = /^[a-z0-9]{2,20}$/;
 const URL_RE                   = /^https?:\/\/.+/i;
 const MAX_BANNER_REQUEST_DAYS  = 7;        // 신청 시 신청자가 고를 수 있는 노출 기간 상한
-const BANNER_COST_PER_DAY      = 1000000;  // 우측 랭킹 배너 신청 1일당 차감되는 게임자산
-const CHART_BANNER_COST_PER_DAY = 2000000; // 차트 하단 배너 신청 1일당 차감되는 게임자산
+const BANNER_COST_PER_DAY      = 500000;   // 우측 랭킹 배너 신청 1일당 차감되는 게임자산
+const CHART_BANNER_COST_PER_DAY = 1000000; // 차트 하단 배너 신청 1일당 차감되는 게임자산
 // 종목 카드 프로필 배너 — "이 종목의 실제 소유주(대량 보유자)"만 신청할 수
 // 있는 홍보 상품. 우측 배너와 달리 종목 리스트의 카드 자체(가장 노출 빈도가
 // 높은 화면)에 원형 프로필 사진을 띄운다. 신청 후 보유 수량이 기준 미만으로
@@ -31,7 +31,7 @@ const CHART_BANNER_COST_PER_DAY = 2000000; // 차트 하단 배너 신청 1일�
 const CARD_BANNER_COST_PER_DAY    = 500000; // 1일당 차감되는 게임자산
 const CARD_BANNER_MIN_HOLDING_QTY = 10;     // 신청/유지에 필요한 최소 보유 수량
 const MAX_PIN_HOURS            = 12;       // 최상단 고정 노출 신청 시 고를 수 있는 시간 상한
-const PIN_COST_PER_HOUR        = 500000;   // 최상단 고정 노출 1시간당 차감되는 게임자산
+const PIN_COST_PER_HOUR        = 250000;   // 최상단 고정 노출 1시간당 차감되는 게임자산
 const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 최대 종목 수
 const PROFIT_RANKING_CHECK_COST = 500000;  // 손익 랭킹 확인(및 내 순위 갱신) 1회당 차감되는 게임자산
 const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 인원 수

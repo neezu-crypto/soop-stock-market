@@ -135,7 +135,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     // 상장된 종목명만 받고(datalist 자동완성 + 실시간 검증), 상장되지 않은
     // 이름이면 제출을 막고 종목 상장 신청부터 하도록 안내한다 — 관리자는
     // 노출 기간/비용만 보면 되므로 검수 부담이 크게 줄어든다.
-    const BANNER_COST_PER_DAY = 1000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const BANNER_COST_PER_DAY = 500000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
     const updatePromoCost = setupCostCalculator({ unitInputId: 'promo-days', costElId: 'promo-cost', pricePerDay: BANNER_COST_PER_DAY });
 
@@ -478,7 +478,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     }
     document.getElementById('pin-stock-name')?.addEventListener('input', checkPinStockListed);
 
-    const PIN_COST_PER_HOUR = 500000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const PIN_COST_PER_HOUR = 250000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
     const updatePinCost = setupCostCalculator({ unitInputId: 'pin-hours', costElId: 'pin-cost', pricePerDay: PIN_COST_PER_HOUR });
 
     window.submitPinRequest = async function() {
@@ -593,7 +593,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     };
 
     // ── 차트 하단 배너 신청 (이미지/링크 직접 입력 → 실시간 미리보기 → 신청) ──
-    const CHART_BANNER_COST_PER_DAY = 2000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const CHART_BANNER_COST_PER_DAY = 1000000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
     const updateChartAdCost = setupCostCalculator({ unitInputId: 'chart-ad-days', costElId: 'chart-ad-cost', pricePerDay: CHART_BANNER_COST_PER_DAY });
 
