@@ -654,6 +654,10 @@
                 </button>
                 <div id="account-protect-privacy-note" style="display:none;font-size:10px;color:#64748b;text-align:right;max-width:220px;">🔒 닉네임 등 개인정보는 수집하지 않아요 (식별용 ID만 사용)</div>
                 <span id="account-protect-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;"></span>
+                <button id="daily-attendance-btn" onclick="claimDailyAttendance()"
+                    style="display:none;align-items:center;gap:6px;background:#38bdf8;color:#0f172a;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 0 0 2px rgba(56,189,248,0.4);">
+                    🎁 출석 보상 받기
+                </button>
             </div>
         </div>
         <!-- ── 점검모드 안내 배너 (관리자가 실시간으로 켜고 끔 — maintenance/ 구독) — 지갑 카드는
@@ -757,6 +761,7 @@ const unfreezeWithCashCallable = httpsCallable(functions, 'unfreezeWithCash');
 const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUnfreezeDonationRequest');
 const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequest');
 const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking');
+const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttendance');
 
 const INITIAL_CASH = 500000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 
@@ -1107,6 +1112,7 @@ onAuthStateChanged(auth, async (user) => {
                 if (!myData || myData.cash === undefined) myData = { cash: INITIAL_CASH, stocks: {} };
             }
             updateAccountProtectionUI();
+            updateAttendanceUI();
             updateUI(true);
         });
     } else {
@@ -1466,6 +1472,61 @@ function updateAccountProtectionUI() {
         badge.innerText = '✅ 구글로 보호됨';
     }
 }
+
+// ── 출석 보상 (계정 보호 유저 전용, 1~7일차 순환) ──
+const DAILY_ATTENDANCE_REWARDS = [30000, 50000, 70000, 100000, 130000, 160000, 300000]; // 서버 값과 동일하게 유지(표시용)
+
+function updateAttendanceUI() {
+    const btn = document.getElementById('daily-attendance-btn');
+    if (!btn) return;
+
+    // 관리자 또는 계정 미보호 유저에게는 노출하지 않는다(어뷰징 방지 —
+    // 익명 계정은 대상이 아니고, 관리자는 애초에 자산 관리가 무의미함).
+    const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
+    const linked  = !!(myData && (myData.kakaoLinked || myData.googleLinked));
+    if (isAdmin || !linked) {
+        btn.style.display = 'none';
+        return;
+    }
+
+    btn.style.display = 'flex';
+    const alreadyClaimedToday = myData?.lastAttendanceDate === todayKeyKST();
+    if (alreadyClaimedToday) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'default';
+        btn.style.boxShadow = 'none';
+        btn.innerText = '✅ 오늘 출석 완료';
+    } else {
+        const yesterday = (() => {
+            const d = new Date(Date.now() + 9 * 3600 * 1000 - 86400000);
+            return d.toISOString().split('T')[0];
+        })();
+        const nextStreak = myData?.lastAttendanceDate === yesterday
+            ? ((myData.attendanceStreak || 0) % DAILY_ATTENDANCE_REWARDS.length) + 1
+            : 1;
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.style.boxShadow = '0 0 0 2px rgba(56,189,248,0.4)';
+        btn.innerText = `🎁 출석 보상 받기 (${nextStreak}일차)`;
+    }
+}
+
+window.claimDailyAttendance = async function() {
+    if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
+    const btn = document.getElementById('daily-attendance-btn');
+    if (btn) btn.disabled = true;
+    try {
+        const result = await claimDailyAttendanceCallable();
+        const { streak, reward } = result.data;
+        alert(`🎁 ${streak}일차 출석 보상 ${reward.toLocaleString()}원을 받았어요!\n내일 또 오시면 ${streak >= 7 ? '1일차부터 다시' : (streak + 1) + '일차'} 보상이 기다려요.`);
+        // 실제 UI 갱신은 users/{uid} 실시간 구독이 처리한다.
+    } catch (e) {
+        alert(e?.message || '출석 보상을 받는 중 오류가 발생했습니다.');
+        if (btn) btn.disabled = false;
+    }
+};
 
 // 보유 자산(현금+평가액)이 100만원을 처음 넘는 순간 1회만 계정 보호를 유도한다.
 // "지킬 자산이 생긴" 시점이라 손실회피 프레이밍이 자연스럽게 먹히는 타이밍.

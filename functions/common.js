@@ -30,6 +30,11 @@ const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 
 const PROFIT_RANKING_CHECK_COST = 500000;  // 손익 랭킹 확인(및 내 순위 갱신) 1회당 차감되는 게임자산
 const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 인원 수
 
+// 출석 보상 — 계정 보호(카카오/구글) 유저만 대상(익명 계정은 무한정 새로 만들
+// 수 있어 파밍 방지 목적). 1~7일차 순으로 지급되며, 하루라도 놓치면 1일차로
+// 리셋(연속 스트릭이 완전히 끊기는 대신 "출석부"가 다시 시작되는 방식).
+const DAILY_ATTENDANCE_REWARDS  = [30000, 50000, 70000, 100000, 130000, 160000, 300000];
+
 // ── 플레이타임 제한 관련 상수 ──────────────────────────────────
 const ANON_DAILY_SECONDS       = 15 * 60;  // 익명 유저 하루 무료 이용 시간
 const PROTECTED_DAILY_SECONDS  = 60 * 60;  // 계정 보호(카카오 또는 구글 연동) 유저 하루 무료 이용 시간
@@ -56,6 +61,12 @@ const UNFREEZE_CASH_COST         = 1000000;        // 게임자산으로 해제 
 const UNFREEZE_CASH_REWARD       = 2000000;        // 게임자산으로 해제한 유저에게 지급되는 보상(해제비용의 2배, 순이익 100만원)
 const UNFREEZE_DONATION_REWARD   = 1000000;        // 방송 후원으로 해제한 유저에게 지급되는 보상
 const UNFREEZE_DONATION_BALLOONS = 50;             // 안내용 — 방송 후원 시 필요한 별풍선 개수(별도 실행은 방송에서)
+
+/** KST(한국시간) 기준 날짜 키(YYYY-MM-DD). offsetDays로 "어제"/"내일"도 계산할 수 있다. */
+function todayKeyKST(offsetDays = 0) {
+  const kst = new Date(Date.now() + 9 * 3600 * 1000 + offsetDays * 86400000);
+  return kst.toISOString().split("T")[0];
+}
 
 function requireAdmin(auth) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -178,6 +189,7 @@ module.exports = {
   MAX_PINNED_SLOTS,
   PROFIT_RANKING_CHECK_COST,
   PROFIT_RANKING_TOP_N,
+  DAILY_ATTENDANCE_REWARDS,
   ANON_DAILY_SECONDS,
   PROTECTED_DAILY_SECONDS,
   PLAYTIME_BASE_RATE,
@@ -197,6 +209,7 @@ module.exports = {
   UNFREEZE_CASH_REWARD,
   UNFREEZE_DONATION_REWARD,
   UNFREEZE_DONATION_BALLOONS,
+  todayKeyKST,
   requireAdmin,
   requireLinkedUser,
   requireNotInMaintenance,

@@ -12,6 +12,7 @@ const {
   MAX_HEARTBEAT_GAP_SECONDS,
   chargeUserCash,
   requireNotInMaintenance,
+  todayKeyKST,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -22,11 +23,6 @@ const {
 //   - 당일 n번째 추가 구매마다 할증 +10%p, 최대 +50%에서 상한
 //   - 자정(KST) 지나면 사용시간·구매횟수 모두 초기화
 // ══════════════════════════════════════════════════════════
-
-function todayKeyKST() {
-  const kst = new Date(Date.now() + 9 * 3600 * 1000);
-  return kst.toISOString().split("T")[0];
-}
 
 /** 보유 현금 + 보유 주식 평가금액(현재가 기준)을 합산한 총자산을 계산한다. */
 async function computeTotalAssets(db, user) {
