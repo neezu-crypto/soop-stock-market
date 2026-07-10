@@ -14,6 +14,7 @@ setGlobalOptions({
 //   trade.js          — 초기 자산 지급(initializeUser), 매매 체결(trade)
 //   admin.js          — 관리자 페이지 전용 액션 디스패처(adminAction)
 //   bannerRequests.js — 우측 랭킹 배너 + 차트 하단 배너 셀프 신청
+//   cardBannerRequests.js — 종목 카드 프로필 배너 셀프 신청(대량 보유자 전용)
 //   kakao.js          — 카카오 로그인 연동
 //   google.js         — 구글 로그인 연동
 //   cashCharge.js     — 라이브 방송 후원 자산 충전 신청
@@ -28,6 +29,7 @@ setGlobalOptions({
 const { initializeUser, trade } = require("./trade");
 const { adminAction } = require("./admin");
 const { submitBannerRequest, submitChartBannerRequest } = require("./bannerRequests");
+const { submitCardBannerRequest } = require("./cardBannerRequests");
 const { linkKakaoAccount } = require("./kakao");
 const { linkGoogleAccount } = require("./google");
 const { submitCashChargeRequest } = require("./cashCharge");
@@ -48,6 +50,7 @@ exports.trade                   = trade;
 exports.adminAction             = adminAction;
 exports.submitBannerRequest     = submitBannerRequest;
 exports.submitChartBannerRequest = submitChartBannerRequest;
+exports.submitCardBannerRequest = submitCardBannerRequest;
 exports.linkKakaoAccount        = linkKakaoAccount;
 exports.linkGoogleAccount       = linkGoogleAccount;
 exports.submitCashChargeRequest = submitCashChargeRequest;

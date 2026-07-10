@@ -18,6 +18,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     const {
         submitBannerRequestCallable,
         submitChartBannerRequestCallable,
+        submitCardBannerRequestCallable,
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
         submitCashChargeRequestCallable,
@@ -204,6 +205,128 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             closeFn: window.closePromoModal,
         });
     };
+    // ── 종목 카드 프로필 배너 신청 (10주 이상 보유자 전용) ──────────
+    // 우측 배너와 동일한 신청 방식(닉네임 검색+아이디+기간 → 즉시 적용)을
+    // 재사용하되, "해당 종목을 10주 이상 보유했는지"를 클라이언트에서도
+    // 미리 확인해 보여준다 — 실제 차단은 서버(submitCardBannerRequest)가
+    // 최종 판정하므로 이건 어디까지나 UX 편의용 사전 안내다.
+    const CARD_BANNER_COST_PER_DAY    = 500000; // 서버 값과 동일하게 유지(표시용)
+    const CARD_BANNER_MIN_HOLDING_QTY = 10;
+
+    window.openCardBannerModal = () => {
+        if (!requireLoginOrPrompt()) return;
+        populateCardBannerStockDatalist();
+        checkCardBannerEligibility();
+        document.getElementById('card-banner-modal').classList.add('active');
+    };
+    window.closeCardBannerModal = () => document.getElementById('card-banner-modal').classList.remove('active');
+
+    const updateCardBannerCost = setupCostCalculator({ unitInputId: 'card-banner-days', costElId: 'card-banner-cost', pricePerDay: CARD_BANNER_COST_PER_DAY });
+
+    const updateCardBannerPreview = setupImagePreview({
+        inputId: 'card-banner-streamer-id',
+        placeholderId: 'card-banner-preview-placeholder',
+        imgId: 'card-banner-preview-img',
+        displayStyle: 'block',
+        buildUrl: (streamerId) => isValidSoopId(streamerId)
+            ? `https://stimg.sooplive.com/LOGO/${streamerId.slice(0, 2)}/${streamerId}/${streamerId}.jpg`
+            : null,
+        invalidText: '미리보기',
+        errorText: '이미지 없음',
+    });
+
+    function populateCardBannerStockDatalist() {
+        const datalist = document.getElementById('card-banner-stock-datalist');
+        if (!datalist) return;
+        datalist.innerHTML = getAllStocks()
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(s => `<option value="${s.name.replace(/"/g, '&quot;')}"></option>`)
+            .join('');
+    }
+
+    // 입력한 종목명의 상장 여부 + 내 보유 수량(10주 이상인지)을 함께 확인해
+    // 미리 안내하고, 자격 미달이면 신청 버튼을 잠근다.
+    function checkCardBannerEligibility() {
+        const name      = document.getElementById('card-banner-stock-name')?.value.trim() || '';
+        const warning   = document.getElementById('card-banner-not-listed-warning');
+        const eligBox   = document.getElementById('card-banner-eligibility');
+        const submitBtn = document.getElementById('card-banner-submit-btn');
+        if (!warning || !eligBox || !submitBtn) return;
+
+        if (!name) {
+            warning.style.display = 'none';
+            eligBox.style.display = 'none';
+            submitBtn.disabled = false;
+            return;
+        }
+
+        const stock = getAllStocks().find(s => s.name === name);
+        if (!stock) {
+            warning.style.display = 'block';
+            eligBox.style.display = 'none';
+            submitBtn.disabled = true;
+            return;
+        }
+        warning.style.display = 'none';
+
+        const myQty = (getMyData()?.stocks || {})[stock.id]?.qty || 0;
+        const isEligible = myQty >= CARD_BANNER_MIN_HOLDING_QTY;
+        eligBox.style.display = 'block';
+        if (isEligible) {
+            eligBox.style.background = 'rgba(74,222,128,0.1)';
+            eligBox.style.border = '1px solid rgba(74,222,128,0.4)';
+            eligBox.style.color = '#4ade80';
+            eligBox.innerText = `✅ 현재 보유: ${myQty}주 — 신청 가능`;
+        } else {
+            eligBox.style.background = 'rgba(239,68,68,0.1)';
+            eligBox.style.border = '1px solid rgba(239,68,68,0.4)';
+            eligBox.style.color = '#fca5a5';
+            eligBox.innerText = `🔒 현재 보유: ${myQty}주 — ${CARD_BANNER_MIN_HOLDING_QTY}주 이상 필요`;
+        }
+        submitBtn.disabled = !isEligible;
+    }
+    document.getElementById('card-banner-stock-name')?.addEventListener('input', checkCardBannerEligibility);
+
+    window.submitCardBannerRequest = async function() {
+        await submitRequestForm({
+            submitBtnId: 'card-banner-submit-btn',
+            submitLabel: '신청하기',
+            validateAndBuild() {
+                const nickname   = document.getElementById('card-banner-stock-name').value.trim();
+                const streamerId = document.getElementById('card-banner-streamer-id').value.trim().toLowerCase();
+                const days       = parseInt(document.getElementById('card-banner-days').value, 10);
+                if (!nickname) { alert('종목명을 입력해주세요.'); return null; }
+                const stock = getAllStocks().find(s => s.name === nickname);
+                if (!stock) {
+                    alert('상장되지 않은 종목명이에요.');
+                    return null;
+                }
+                const myQty = (getMyData()?.stocks || {})[stock.id]?.qty || 0;
+                if (myQty < CARD_BANNER_MIN_HOLDING_QTY) {
+                    alert(`이 상품은 해당 종목을 ${CARD_BANNER_MIN_HOLDING_QTY}주 이상 보유해야 신청할 수 있습니다. 현재 보유: ${myQty}주`);
+                    return null;
+                }
+                if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+                if (!Number.isInteger(days) || days < 1 || days > 7) { alert('노출 기간은 1~7일 사이로 입력해주세요.'); return null; }
+                return { nickname, streamerId, days };
+            },
+            callable: submitCardBannerRequestCallable,
+            onSuccess(result) {
+                alert(`✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 종목 카드에 홍보가 즉시 등록됐습니다!\n노출 종료일: ${result.data.endDate}\n\n⚠️ 보유 수량이 10주 미만으로 떨어지면 자동으로 삭제됩니다.`);
+            },
+            resetFn() {
+                document.getElementById('card-banner-stock-name').value = '';
+                document.getElementById('card-banner-streamer-id').value = '';
+                document.getElementById('card-banner-days').value = '7';
+                updateCardBannerPreview();
+                updateCardBannerCost();
+                checkCardBannerEligibility();
+            },
+            closeFn: window.closeCardBannerModal,
+        });
+    };
+
     window.openChartAdModal  = () => {
         if (!requireLoginOrPrompt()) return;
         const stockId = getCurrentChartStockId(); // closeChartModal()이 초기화하기 전에 먼저 붙잡아둔다

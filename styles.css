@@ -53,6 +53,8 @@
         }
         .btn:disabled, .btn.disabled { background: #444 !important; opacity: 0.5; cursor: not-allowed; transform: none !important; }
         .my-qty { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
+        /* 종목 카드 프로필 배너 — 이름 옆 빈 공간에 원형으로 노출(우측 배너와 동일한 원형 스타일) */
+        .stock-card-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid #334155; }
         .up   { color: var(--up-color);   stroke: var(--up-color);   }
         .down { color: var(--down-color); stroke: var(--down-color); }
 

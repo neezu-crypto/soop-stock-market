@@ -24,6 +24,12 @@ const URL_RE                   = /^https?:\/\/.+/i;
 const MAX_BANNER_REQUEST_DAYS  = 7;        // 신청 시 신청자가 고를 수 있는 노출 기간 상한
 const BANNER_COST_PER_DAY      = 1000000;  // 우측 랭킹 배너 신청 1일당 차감되는 게임자산
 const CHART_BANNER_COST_PER_DAY = 2000000; // 차트 하단 배너 신청 1일당 차감되는 게임자산
+// 종목 카드 프로필 배너 — "이 종목의 실제 소유주(대량 보유자)"만 신청할 수
+// 있는 홍보 상품. 우측 배너와 달리 종목 리스트의 카드 자체(가장 노출 빈도가
+// 높은 화면)에 원형 프로필 사진을 띄운다. 신청 후 보유 수량이 기준 미만으로
+// 떨어지면(되팔기 등) 자동으로 삭제된다 — trade.js의 매도 처리에서 검사.
+const CARD_BANNER_COST_PER_DAY    = 500000; // 1일당 차감되는 게임자산
+const CARD_BANNER_MIN_HOLDING_QTY = 10;     // 신청/유지에 필요한 최소 보유 수량
 const MAX_PIN_HOURS            = 12;       // 최상단 고정 노출 신청 시 고를 수 있는 시간 상한
 const PIN_COST_PER_HOUR        = 500000;   // 최상단 고정 노출 1시간당 차감되는 게임자산
 const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 최대 종목 수
@@ -85,7 +91,7 @@ const ACHIEVEMENTS = [
   { id: "unfreeze_hero",     icon: "🧊", label: "동결 해제 성공", desc: "동결(서킷브레이커)된 종목을 해제했어요" },
   { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
   { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
-  { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너·고정노출·중계방 홍보 상품을 처음 구매했어요" },
+  { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너·카드 배너·고정노출·중계방 홍보 상품을 처음 구매했어요" },
 ];
 
 /**
@@ -276,6 +282,8 @@ module.exports = {
   MAX_BANNER_REQUEST_DAYS,
   BANNER_COST_PER_DAY,
   CHART_BANNER_COST_PER_DAY,
+  CARD_BANNER_COST_PER_DAY,
+  CARD_BANNER_MIN_HOLDING_QTY,
   MAX_PIN_HOURS,
   PIN_COST_PER_HOUR,
   MAX_PINNED_SLOTS,

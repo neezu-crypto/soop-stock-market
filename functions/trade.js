@@ -5,6 +5,7 @@ const {
   STOCK_FREEZE_THRESHOLD,
   STOCK_FREEZE_CANDLE_COUNT,
   STOCK_DELIST_DEADLINE_MS,
+  CARD_BANNER_MIN_HOLDING_QTY,
   requireNotInMaintenance,
   grantAchievement,
 } = require("./common");
@@ -342,6 +343,27 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     if (tradeCount >= 50) await grantAchievement(db, uid, "trade_50");
   } catch (e) {
     // 도전과제 지급 실패는 무시 (다음 거래 때 재시도됨)
+  }
+
+  // 6) 종목 카드 프로필 배너 되팔기 방지 — 이 매도로 홀더 본인의 보유 수량이
+  //    기준(10주) 밑으로 떨어지면 배너를 즉시 자동 삭제한다 (best-effort).
+  if (type === "sell") {
+    try {
+      const updatedStock = stockTx.snapshot.val();
+      if (updatedStock?.cardBannerHolderUid === uid) {
+        const newQty = (finalUser.stocks || {})[stockId]?.qty || 0;
+        if (newQty < CARD_BANNER_MIN_HOLDING_QTY) {
+          await db.ref(`stocks/${stockId}`).update({
+            cardBannerImg: null,
+            cardBannerLink: null,
+            cardBannerEndDate: null,
+            cardBannerHolderUid: null,
+          });
+        }
+      }
+    } catch (e) {
+      // 삭제 실패는 무시 (다음 매도 때 재시도됨)
+    }
   }
 
   return {

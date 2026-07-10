@@ -215,6 +215,16 @@ async function actionListActiveBanners(db) {
       active, daysLeft,
     });
   });
+  Object.entries(stocksData).forEach(([id, s]) => {
+    if (!s.cardBannerImg) return;
+    const { active, daysLeft } = bannerStatus(s.cardBannerEndDate);
+    items.push({
+      type: "card", stockId: id, name: s.name || id, stockName: s.name || id,
+      img: s.cardBannerImg, link: s.cardBannerLink || "", endDate: s.cardBannerEndDate || "",
+      holderUid: s.cardBannerHolderUid || "",
+      active, daysLeft,
+    });
+  });
   Object.entries(chartData).forEach(([id, c]) => {
     // chartBanner는 예전에 전체 종목 공동 노출용 평면 필드(img/link/endDate/name)로
     // 쓰이던 경로라, 과거 잔재가 최상위에 남아있으면 문자열 값이 종목ID처럼
@@ -253,6 +263,12 @@ async function actionUpdateBanner(db, { type, stockId, name, img, link, endDate 
       link:    String(link || "").trim(),
       endDate: String(endDate || "").trim(),
     });
+  } else if (type === "card") {
+    await db.ref().update({
+      [`stocks/${stockId}/cardBannerImg`]:     bannerImg,
+      [`stocks/${stockId}/cardBannerLink`]:    String(link || "").trim(),
+      [`stocks/${stockId}/cardBannerEndDate`]: String(endDate || "").trim(),
+    });
   } else {
     await db.ref().update({
       [`stocks/${stockId}/bannerImg`]:     bannerImg,
@@ -268,6 +284,13 @@ async function actionDeleteBanner(db, { type, stockId }) {
   if (!stockId) throw new HttpsError("invalid-argument", "stockId가 필요합니다.");
   if (type === "chart") {
     await db.ref(`chartBanner/${stockId}`).remove();
+  } else if (type === "card") {
+    await db.ref().update({
+      [`stocks/${stockId}/cardBannerImg`]:       null,
+      [`stocks/${stockId}/cardBannerLink`]:      null,
+      [`stocks/${stockId}/cardBannerEndDate`]:   null,
+      [`stocks/${stockId}/cardBannerHolderUid`]: null,
+    });
   } else {
     await db.ref().update({
       [`stocks/${stockId}/bannerImg`]:     null,
@@ -461,17 +484,18 @@ async function actionGetPendingSummary(db) {
 const PURCHASE_HISTORY_LIMIT = 300; // 오래된 이력까지 매번 전부 내려보내지 않도록 최신 N건만 반환
 
 /**
- * 유저 구매 현황 — 우측/차트 배너·최상단 고정·중계방·플레이타임 충전처럼
- * 게임자산을 직접 차감해 즉시 적용되는 5가지 셀프 상품의 구매 이력을
+ * 유저 구매 현황 — 우측/차트/카드 배너·최상단 고정·중계방·플레이타임 충전처럼
+ * 게임자산을 직접 차감해 즉시 적용되는 6가지 셀프 상품의 구매 이력을
  * 한 화면에서 통합 조회한다. 각 기능별 패널은 "신규/진행중/만료"만
  * 보여주도록 설계돼 있어, 시간이 지나 만료·삭제된 과거 구매까지 한눈에
  * 보긴 어려웠던 빈틈을 메운다. (자산 충전은 반대로 "지급"이라 구매가
  * 아니므로, 종목 상장 신청은 무료라 제외 — 각각 별도 패널에서 확인 가능)
  */
 async function actionListPurchaseHistory(db) {
-  const [bannerSnap, chartBannerSnap, pinSnap, relaySnap, playTimeSnap] = await Promise.all([
+  const [bannerSnap, chartBannerSnap, cardBannerSnap, pinSnap, relaySnap, playTimeSnap] = await Promise.all([
     db.ref("bannerRequests").get(),
     db.ref("chartBannerRequests").get(),
+    db.ref("cardBannerRequests").get(),
     db.ref("pinRequests").get(),
     db.ref("relayRoomRequests").get(),
     db.ref("playTimePurchases").get(),
@@ -481,6 +505,13 @@ async function actionListPurchaseHistory(db) {
 
   Object.entries(bannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "banner", typeLabel: "📢 우측 배너",
+    label: `${r.nickname || "-"} (${r.days || 0}일)`,
+    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    at: r.requestedAt || 0,
+  }));
+
+  Object.entries(cardBannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
+    id, type: "cardBanner", typeLabel: "🎴 종목 카드 배너",
     label: `${r.nickname || "-"} (${r.days || 0}일)`,
     amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
     at: r.requestedAt || 0,
@@ -704,13 +735,14 @@ async function actionGetOverviewStats(db) {
   const [
     attendance,
     usersSnap,
-    bannerSnap, chartBannerSnap, pinSnap, relaySnap, playTimeSnap,
+    bannerSnap, chartBannerSnap, cardBannerSnap, pinSnap, relaySnap, playTimeSnap,
     profitSnap,
   ] = await Promise.all([
     actionGetAttendanceStats(db),
     db.ref("users").get(),
     db.ref("bannerRequests").get(),
     db.ref("chartBannerRequests").get(),
+    db.ref("cardBannerRequests").get(),
     db.ref("pinRequests").get(),
     db.ref("relayRoomRequests").get(),
     db.ref("playTimePurchases").get(),
@@ -720,12 +752,13 @@ async function actionGetOverviewStats(db) {
   const today = todayKeyKST();
   const toKSTDateKey = (ms) => new Date((ms || 0) + 9 * 3600 * 1000).toISOString().split("T")[0];
 
-  // 실제로 매출로 잡을 수 있는 건: 승인 완료(approved)된 배너/차트배너/고정/중계방
+  // 실제로 매출로 잡을 수 있는 건: 승인 완료(approved)된 배너/차트배너/카드배너/고정/중계방
   // 신청 + 즉시 적용되는 플레이타임 충전(별도 status 없이 전부 유효).
   // 자산 충전(지급)·종목 상장(무료)은 성격이 달라 구매 현황과 동일하게 제외한다.
   const revenueEntries = [
     ...Object.values(bannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
     ...Object.values(chartBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
+    ...Object.values(cardBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
     ...Object.values(pinSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
     ...Object.values(relaySnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
     ...Object.values(playTimeSnap.val() || {}).map((r) => ({ amount: r.chargedAmount || 0, at: r.purchasedAt || 0 })),
