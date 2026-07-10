@@ -382,6 +382,7 @@
                 <div id="profit-ranking-status" style="font-size:11px;margin-top:6px;font-weight:700;">-</div>
             </div>
             <div id="profit-ranking-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+            <button id="profit-ranking-share-btn" onclick="openShareCardModal()" style="width:100%;margin-top:10px;background:#334155;color:#38bdf8;border:1px solid #38bdf8;padding:8px;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px;">📸 공유용 카드 보기</button>
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
@@ -394,6 +395,61 @@
             <button id="profit-ranking-check-btn" onclick="checkProfitRanking()" class="btn-confirm-contact" style="flex:1;min-width:160px;font-weight:bold;font-size:14px;">💰 50만원으로 공식 게시</button>
         </div>
         <button onclick="closeProfitRankingModal()" style="width:100%;background:transparent;color:var(--text-sub);border:none;padding:8px;cursor:pointer;font-size:13px;text-decoration:underline;">닫기</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     손익 랭킹 공유용 카드 모달 — 저장/공유 기능 없음, 화면에 예쁘게
+     띄워두면 유저가 직접 스크린샷해서 공유하는 방식
+══════════════════════════════════════════ -->
+<div id="profit-share-card-modal" class="promo-modal-overlay" style="z-index:5300;">
+    <div class="promo-modal-content" style="max-width:760px;max-height:90vh;overflow-y:auto;">
+        <div class="promo-modal-header"><h2>📸 공유용 카드</h2></div>
+        <p style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">화면을 직접 캡처해서 원하는 곳에 공유해보세요 — 별도의 저장/공유 기능은 없어요.</p>
+
+        <div id="share-card-layout" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+            <!-- 옵션 패널 -->
+            <div id="share-card-options" style="flex:1 1 auto;min-width:200px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">표시 항목</div>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                        <input type="checkbox" id="share-opt-anonid" checked onchange="renderShareCard()"> 익명 ID
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                        <input type="checkbox" id="share-opt-top3" checked onchange="renderShareCard()"> 상위 3명 리스트
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                        <input type="checkbox" id="share-opt-date" checked onchange="renderShareCard()"> 날짜
+                    </label>
+                    <label id="share-opt-crew-label" style="display:none;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                        <input type="checkbox" id="share-opt-crew" checked onchange="renderShareCard()"> 크루 소속 배지
+                    </label>
+                </div>
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">테마</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button type="button" class="share-theme-btn" data-theme="default" onclick="selectShareTheme('default')"
+                            style="background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid #38bdf8;">기본</button>
+                        <button type="button" class="share-theme-btn" data-theme="gold" onclick="selectShareTheme('gold')"
+                            style="background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #475569;opacity:0.7;">골드</button>
+                        <button type="button" id="share-theme-crew-btn" class="share-theme-btn" data-theme="crew" onclick="selectShareTheme('crew')"
+                            style="display:none;background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #475569;opacity:0.7;">크루 컬러</button>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">한 줄 문구 (선택, 최대 30자)</div>
+                    <input type="text" id="share-opt-caption" maxlength="30" placeholder="예: 드디어 흑자 전환!" oninput="renderShareCard()"
+                        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+                </div>
+            </div>
+
+            <!-- 카드 미리보기 -->
+            <div style="flex:1 1 auto;min-width:200px;display:flex;justify-content:center;">
+                <div id="profit-share-card" style="width:100%;max-width:300px;aspect-ratio:9/16;border-radius:16px;padding:24px;display:flex;flex-direction:column;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
+            </div>
+        </div>
+
+        <button onclick="closeShareCardModal()" style="width:100%;margin-top:20px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
     </div>
 </div>
 
@@ -2012,6 +2068,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('unfreeze-modal').classList.contains('active')) closeUnfreezeModal();
         if (document.getElementById('profit-ranking-modal').classList.contains('active')) closeProfitRankingModal();
         if (document.getElementById('account-protect-modal').classList.contains('active')) closeAccountProtectModal();
+        if (document.getElementById('profit-share-card-modal').classList.contains('active')) closeShareCardModal();
     }
 });
 

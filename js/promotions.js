@@ -618,7 +618,13 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     };
     window.closeProfitRankingModal = () => document.getElementById('profit-ranking-modal').classList.remove('active');
 
+    // 공유 카드 모달이 참고할 "가장 최근 조회 결과" — 미리보기든 공식 게시든
+    // renderProfitRankingResult를 거칠 때마다 갱신된다.
+    let lastProfitRankingData = null;
+
     function renderProfitRankingResult({ myRank, myProfit, myAnonId, top, isPreview }) {
+        lastProfitRankingData = { myRank, myProfit, myAnonId, top, isPreview };
+
         const resultEl = document.getElementById('profit-ranking-result');
         const rankEl    = document.getElementById('profit-ranking-my-rank');
         const profitEl  = document.getElementById('profit-ranking-my-profit');
@@ -694,5 +700,130 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             btn.disabled = false;
             btn.innerText = '💰 50만원으로 공식 게시';
         }
+    };
+
+    // ── 손익 랭킹 공유용 카드 ──────────────────────────────────
+    // 저장/공유 API는 의도적으로 넣지 않는다 — 유저가 직접 스크린샷해서
+    // 원하는 곳에 공유하는 방식이라, "화면에 예쁘게 띄우는 것"까지만
+    // 신경 쓰면 된다. 세로 비율(9:16)로 만들어 모바일 전체화면 캡처에도
+    // 잘 맞도록 함.
+
+    function escapeCaption(str) {
+        const div = document.createElement('div');
+        div.innerText = str;
+        return div.innerHTML;
+    }
+
+    // 크루 이름 문자열을 고정된 색상(hue)으로 변환 — 같은 크루면 항상 같은 색.
+    function crewNameToHue(name) {
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 360;
+        return Math.abs(hash) % 360;
+    }
+
+    // 보유 종목 중 [크루명] 프리픽스가 붙은 것 중 평가금액이 가장 큰 크루를 고른다.
+    function detectMyCrew() {
+        const myData = getMyData();
+        const allStocks = getAllStocks();
+        if (!myData?.stocks) return null;
+        let best = null;
+        Object.entries(myData.stocks).forEach(([id, pos]) => {
+            if (!pos?.qty) return;
+            const stock = allStocks.find(s => s.id === id);
+            if (!stock) return;
+            const m = stock.name.match(/^\[(.+?)\]/);
+            if (!m) return;
+            const value = (stock.price || 0) * pos.qty;
+            if (!best || value > best.value) best = { crew: m[1], value };
+        });
+        return best ? best.crew : null;
+    }
+
+    function themeColors(themeKey, crewName) {
+        if (themeKey === 'gold') return { bg: 'linear-gradient(160deg,#1c1509,#3b2a0f)', accent: '#fbbf24' };
+        if (themeKey === 'crew' && crewName) {
+            const hue = crewNameToHue(crewName);
+            return { bg: `linear-gradient(160deg,hsl(${hue},45%,12%),hsl(${hue},40%,20%))`, accent: `hsl(${hue},85%,60%)` };
+        }
+        return { bg: 'linear-gradient(160deg,#0f172a,#1e293b)', accent: '#38bdf8' };
+    }
+
+    window.selectShareTheme = function(theme) {
+        document.querySelectorAll('.share-theme-btn').forEach(b => {
+            const isActive = b.dataset.theme === theme;
+            b.style.border = isActive ? '2px solid #38bdf8' : '1px solid #475569';
+            b.style.opacity = isActive ? '1' : '0.7';
+            b.dataset.active = isActive ? '1' : '0';
+        });
+        renderShareCard();
+    };
+
+    function selectedShareTheme() {
+        return document.querySelector('.share-theme-btn[data-active="1"]')?.dataset.theme || 'default';
+    }
+
+    window.renderShareCard = function() {
+        const data = lastProfitRankingData;
+        const card = document.getElementById('profit-share-card');
+        if (!data || !card) return;
+
+        const crewName = detectMyCrew();
+        const { bg, accent } = themeColors(selectedShareTheme(), crewName);
+
+        const showAnonId = document.getElementById('share-opt-anonid')?.checked;
+        const showTop3   = document.getElementById('share-opt-top3')?.checked;
+        const showDate    = document.getElementById('share-opt-date')?.checked;
+        const showCrew    = !!crewName && document.getElementById('share-opt-crew')?.checked;
+        const caption     = (document.getElementById('share-opt-caption')?.value || '').trim();
+
+        const sign  = data.myProfit > 0 ? '+' : '';
+        const color = data.myProfit > 0 ? '#4ade80' : data.myProfit < 0 ? '#f87171' : '#94a3b8';
+        const statusLabel = data.isPreview ? '🔍 예상치 (미게시)' : '✅ 공식 게시됨';
+        const statusColor = data.isPreview ? '#fbbf24' : '#4ade80';
+        const dateStr = new Date().toLocaleDateString('ko-KR');
+
+        card.style.background = bg;
+        card.innerHTML = `
+            <div style="text-align:center;font-size:11px;font-weight:800;letter-spacing:1px;color:${accent};text-transform:uppercase;margin-bottom:4px;">SOOP STOCK</div>
+            <div style="text-align:center;font-size:11px;color:${statusColor};font-weight:700;margin-bottom:16px;">${statusLabel}</div>
+            ${showCrew ? `<div style="text-align:center;margin-bottom:10px;"><span style="display:inline-block;background:rgba(255,255,255,0.12);color:${accent};font-size:11px;font-weight:700;padding:4px 10px;border-radius:100px;">[${escapeCaption(crewName)}] 소속 트레이더</span></div>` : ''}
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">내 순위</div>
+                <div style="font-size:48px;font-weight:900;color:${accent};line-height:1;">${data.myRank}위</div>
+                <div style="font-size:22px;font-weight:800;color:${color};margin-top:12px;">${sign}${data.myProfit.toLocaleString()}원</div>
+                ${showAnonId ? `<div style="font-size:12px;color:#94a3b8;margin-top:8px;">${data.myAnonId}</div>` : ''}
+            </div>
+            ${showTop3 ? `
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15);">
+                ${data.top.slice(0, 3).map((item, i) => {
+                    const s = item.value > 0 ? '+' : '';
+                    const c = item.value > 0 ? '#4ade80' : item.value < 0 ? '#f87171' : '#94a3b8';
+                    return `<div style="display:flex;justify-content:space-between;font-size:11px;color:#cbd5e1;padding:3px 0;">
+                        <span>${i + 1}위 ${item.anonId}</span>
+                        <span style="color:${c};">${s}${item.value.toLocaleString()}원</span>
+                    </div>`;
+                }).join('')}
+            </div>` : ''}
+            ${caption ? `<div style="text-align:center;font-size:12px;color:#f8fafc;margin-top:14px;font-style:italic;">"${escapeCaption(caption)}"</div>` : ''}
+            ${showDate ? `<div style="text-align:center;font-size:10px;color:#64748b;margin-top:${caption ? '8px' : '14px'};">${dateStr}</div>` : ''}
+        `;
+    };
+
+    window.openShareCardModal = function() {
+        if (!lastProfitRankingData) {
+            alert('먼저 손익 랭킹을 확인해주세요.');
+            return;
+        }
+        const crewName = detectMyCrew();
+        const crewLabel = document.getElementById('share-opt-crew-label');
+        const crewThemeBtn = document.getElementById('share-theme-crew-btn');
+        if (crewLabel) crewLabel.style.display = crewName ? 'flex' : 'none';
+        if (crewThemeBtn) crewThemeBtn.style.display = crewName ? 'inline-block' : 'none';
+
+        document.getElementById('profit-share-card-modal')?.classList.add('active');
+        window.selectShareTheme('default'); // 테마 버튼 상태 초기화 + 카드 렌더링까지 겸함
+    };
+    window.closeShareCardModal = function() {
+        document.getElementById('profit-share-card-modal')?.classList.remove('active');
     };
 }
