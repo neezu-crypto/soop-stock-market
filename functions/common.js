@@ -62,6 +62,42 @@ const UNFREEZE_CASH_REWARD       = 2000000;        // 게임자산으로 해제�
 const UNFREEZE_DONATION_REWARD   = 1000000;        // 방송 후원으로 해제한 유저에게 지급되는 보상
 const UNFREEZE_DONATION_BALLOONS = 50;             // 안내용 — 방송 후원 시 필요한 별풍선 개수(별도 실행은 방송에서)
 
+// ── 도전과제(업적) ───────────────────────────────────────────
+// 현금 보상 없이 배지만 지급한다 — 보상이 걸리면 익명 계정을 무한정 새로
+// 만들 수 있는 이 앱 구조상 곧바로 파밍 어뷰징으로 이어지기 때문에(출석
+// 보상이 계정 보호 유저로 대상을 한정하는 것과 같은 이유), 도전과제는
+// 계정 보호 여부와 무관하게 누구나 달성할 수 있게 열어두는 대신 보상은
+// 순수 기록/표시용으로만 둔다. users/{uid}/achievements/{id}에 달성
+// 시각(ms)만 기록되며, ID·아이콘·설명은 여기 한 곳에서만 관리해 클라이언트
+// (index.html의 ACHIEVEMENT_DEFS)와 반드시 동일하게 맞춘다.
+const ACHIEVEMENTS = [
+  { id: "first_trade",       icon: "🎉", label: "첫 매매",        desc: "종목을 처음으로 매수 또는 매도했어요" },
+  { id: "trade_10",          icon: "📈", label: "매매의 정석",    desc: "누적 매매 10회를 달성했어요" },
+  { id: "trade_50",          icon: "🔁", label: "트레이더",       desc: "누적 매매 50회를 달성했어요" },
+  { id: "account_protected", icon: "🔒", label: "계정 보호 완료", desc: "카카오 또는 구글로 계정을 보호했어요" },
+  { id: "profit_published",  icon: "💰", label: "손익 공개",      desc: "내 손익 랭킹을 처음으로 게시했어요" },
+  { id: "profit_top10",      icon: "🏆", label: "TOP 10 진입",    desc: "손익 랭킹 TOP 10에 진입했어요" },
+  { id: "unfreeze_hero",     icon: "🧊", label: "동결 해제 성공", desc: "동결(서킷브레이커)된 종목을 해제했어요" },
+  { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
+  { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
+  { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너·고정노출·중계방 홍보 상품을 처음 구매했어요" },
+];
+
+/**
+ * 도전과제를 idempotent하게 지급한다 — 이미 달성한 도전과제면 아무 것도
+ * 하지 않고 false를 반환, 처음 달성한 것이면 시각을 기록하고 true를 반환.
+ * 호출부는 대부분 best-effort(try/catch로 감싸 실패해도 본 기능은
+ * 그대로 성공하도록)로 사용한다.
+ */
+async function grantAchievement(db, uid, achievementId) {
+  if (!uid || !achievementId) return false;
+  const ref  = db.ref(`users/${uid}/achievements/${achievementId}`);
+  const snap = await ref.get();
+  if (snap.exists()) return false;
+  await ref.set(Date.now());
+  return true;
+}
+
 /** KST(한국시간) 기준 날짜 키(YYYY-MM-DD). offsetDays로 "어제"/"내일"도 계산할 수 있다. */
 function todayKeyKST(offsetDays = 0) {
   const kst = new Date(Date.now() + 9 * 3600 * 1000 + offsetDays * 86400000);
@@ -209,6 +245,7 @@ module.exports = {
   UNFREEZE_CASH_REWARD,
   UNFREEZE_DONATION_REWARD,
   UNFREEZE_DONATION_BALLOONS,
+  ACHIEVEMENTS,
   todayKeyKST,
   requireAdmin,
   requireLinkedUser,
@@ -217,4 +254,5 @@ module.exports = {
   bannerStatus,
   chargeUserCash,
   creditUserCash,
+  grantAchievement,
 };

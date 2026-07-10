@@ -14,6 +14,7 @@ const {
   requireNotInMaintenance,
   chargeUserCash,
   creditUserCash,
+  grantAchievement,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -92,6 +93,7 @@ const unfreezeWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   await announceUnfreeze(db, {
     stockId, stockName: stock.name || stockId, method: "cash", rewardAmount: UNFREEZE_CASH_REWARD,
   });
+  await grantAchievement(db, auth.uid, "unfreeze_hero");
 
   return { ok: true, rewardAmount: UNFREEZE_CASH_REWARD };
 });
@@ -164,6 +166,7 @@ async function actionApproveUnfreezeDonationRequest(db, { requestId }) {
   assertUnfreezable(stock, reqData.requesterUid);
 
   await creditUserCash(db, reqData.requesterUid, UNFREEZE_DONATION_REWARD);
+  await grantAchievement(db, reqData.requesterUid, "unfreeze_hero");
 
   await db.ref().update({
     [`stocks/${reqData.stockId}/price`]:            STOCK_UNFREEZE_PRICE,

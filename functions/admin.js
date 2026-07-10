@@ -794,6 +794,7 @@ async function actionGetUserDetail(db, { uid }) {
     lastTradeTime: user.lastTradeTime || null,
     lastAttendanceDate: user.lastAttendanceDate || null,
     attendanceStreak: user.attendanceStreak || 0,
+    achievements: Object.keys(user.achievements || {}),
     holdings,
   };
 }

@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireLinkedUser, requireNotInMaintenance, findStockIdByName } = require("./common");
+const { requireLinkedUser, requireNotInMaintenance, findStockIdByName, grantAchievement } = require("./common");
 
 // ══════════════════════════════════════════════════════════
 // 종목 상장 신청 — 검색해도 없는 스트리머를 유저가 직접 상장 요청할 수
@@ -105,6 +105,7 @@ async function actionApproveListingRequest(db, { requestId, stockName }) {
     [`listingRequests/${requestId}/reviewedAt`]:  Date.now(),
     [`listingRequests/${requestId}/stockId`]:     newStockId,
   });
+  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "listing_approved");
 
   return { ok: true, stockId: newStockId };
 }

@@ -10,6 +10,7 @@ const {
   findStockIdByName,
   requireLinkedUser,
   requireNotInMaintenance,
+  grantAchievement,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -81,6 +82,7 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
 
   const cost = hours * RELAY_ROOM_COST_PER_HOUR;
   await chargeUserCash(db, auth.uid, cost);
+  await grantAchievement(db, auth.uid, "first_support");
 
   const { previewImg, stationLink } = buildRelayPreview(streamerId);
   const endAt = now + hours * 3600000;

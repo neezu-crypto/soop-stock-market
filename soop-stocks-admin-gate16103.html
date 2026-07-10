@@ -472,6 +472,7 @@
     const provider  = new GoogleAuthProvider();
     const functions = getFunctions(app);
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
+    const ACHIEVEMENT_COUNT = 10; // functions/common.js의 ACHIEVEMENTS 개수와 맞춰 유지
 
     // 관리자 쓰기·users 읽기는 전부 이 콜러블(functions/index.js의 adminAction)이
     // Admin SDK로 처리한다 — RTDB 규칙의 이메일 매칭에 의존하지 않는다.
@@ -1050,6 +1051,7 @@
                         <span>실현손익 <b style="color:${data.realizedPL >= 0 ? '#4ade80' : '#f87171'};">${data.realizedPL.toLocaleString()}원</b></span>
                         <span style="color:#64748b;">마지막 거래: ${data.lastTradeTime ? new Date(data.lastTradeTime).toLocaleString() : '-'}</span>
                         <span style="color:#64748b;">출석: ${data.lastAttendanceDate ? `${data.lastAttendanceDate} (${data.attendanceStreak}일차)` : '받은 적 없음'}</span>
+                        <span style="color:#64748b;">🏅 도전과제 ${data.achievements.length}/${ACHIEVEMENT_COUNT}</span>
                     </div>
                     <div style="margin-bottom:14px;">${holdingsHtml}</div>
                     <div class="admin-action-row">

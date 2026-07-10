@@ -6,6 +6,7 @@ const {
   creditUserCash,
   requireLinkedUser,
   requireNotInMaintenance,
+  grantAchievement,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -61,6 +62,9 @@ const claimDailyAttendance = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   }
 
   await creditUserCash(db, uid, claimed.reward);
+  if (claimed.streak === DAILY_ATTENDANCE_REWARDS.length) {
+    await grantAchievement(db, uid, "attendance_streak");
+  }
   return { ok: true, streak: claimed.streak, reward: claimed.reward };
 });
 

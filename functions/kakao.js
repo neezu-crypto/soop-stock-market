@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { ACCOUNT_PROTECTION_BONUS, creditUserCash } = require("./common");
+const { ACCOUNT_PROTECTION_BONUS, creditUserCash, grantAchievement } = require("./common");
 
 // ══════════════════════════════════════════════════════════
 // 카카오 로그인 연동 — 익명 계정 자산을 유지한 채 카카오 ID로 보호
@@ -47,6 +47,7 @@ const linkKakaoAccount = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
     const trueUser = (await db.ref(`users/${auth.uid}`).get()).val() || {};
     const alreadyProtected = !!trueUser.googleLinked;
     await db.ref(`users/${auth.uid}/kakaoLinked`).set(true);
+    await grantAchievement(db, auth.uid, "account_protected");
     if (alreadyProtected) {
       return { ok: true, action: "linked", bonus: 0 };
     }

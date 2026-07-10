@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { ACCOUNT_PROTECTION_BONUS, creditUserCash } = require("./common");
+const { ACCOUNT_PROTECTION_BONUS, creditUserCash, grantAchievement } = require("./common");
 
 // ══════════════════════════════════════════════════════════
 // 구글 로그인 연동 — 익명 계정 자산을 유지한 채 구글 계정으로 보호
@@ -39,6 +39,7 @@ const linkGoogleAccount = onCall({ cors: true, timeoutSeconds: 30, memory: "256M
   // 이때도 googleLinked는 이미 true이므로 보너스는 자동으로 건너뛴다.
   const alreadyProtected = !!(trueUser.kakaoLinked || trueUser.googleLinked);
   await userRef.child("googleLinked").set(true);
+  await grantAchievement(db, auth.uid, "account_protected");
 
   if (alreadyProtected) {
     return { ok: true, action: "linked", bonus: 0 };

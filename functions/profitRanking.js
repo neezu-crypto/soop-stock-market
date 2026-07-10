@@ -6,6 +6,7 @@ const {
   requireLinkedUser,
   requireNotInMaintenance,
   chargeUserCash,
+  grantAchievement,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -69,6 +70,14 @@ const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256
     .startAt(totalPL + 1)
     .get();
   const myRank = (higherSnap.numChildren ? higherSnap.numChildren() : 0) + 1;
+
+  // 도전과제 판정 (best-effort — 실패해도 랭킹 확인 결과에는 영향 없음)
+  try {
+    await grantAchievement(db, uid, "profit_published");
+    if (myRank <= PROFIT_RANKING_TOP_N) await grantAchievement(db, uid, "profit_top10");
+  } catch (e) {
+    // 도전과제 지급 실패는 무시 (다음 확인 때 재시도됨)
+  }
 
   return {
     ok: true,

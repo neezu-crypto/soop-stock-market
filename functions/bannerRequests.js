@@ -11,6 +11,7 @@ const {
   findStockIdByName,
   requireLinkedUser,
   requireNotInMaintenance,
+  grantAchievement,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -82,6 +83,7 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
 
   const cost = days * BANNER_COST_PER_DAY;
   await chargeUserCash(db, auth.uid, cost);
+  await grantAchievement(db, auth.uid, "first_support");
 
   const { previewImg, stationLink } = buildBannerPreview(streamerId);
   const ref = db.ref("bannerRequests").push();
@@ -275,6 +277,7 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
 
   const cost = days * CHART_BANNER_COST_PER_DAY;
   await chargeUserCash(db, auth.uid, cost);
+  await grantAchievement(db, auth.uid, "first_support");
 
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + days);

@@ -6,6 +6,7 @@ const {
   STOCK_FREEZE_CANDLE_COUNT,
   STOCK_DELIST_DEADLINE_MS,
   requireNotInMaintenance,
+  grantAchievement,
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
 
@@ -236,6 +237,7 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
 
     user.stocks        = stocks;
     user.lastTradeTime = now;
+    user.tradeCount    = (user.tradeCount || 0) + 1;
     return user;
   });
 
@@ -331,6 +333,17 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   }
 
   const finalUser = userTx.snapshot.val();
+
+  // 5) 도전과제 판정 (best-effort — 실패해도 매매 결과에는 영향 없음)
+  try {
+    await grantAchievement(db, uid, "first_trade");
+    const tradeCount = finalUser.tradeCount || 0;
+    if (tradeCount >= 10) await grantAchievement(db, uid, "trade_10");
+    if (tradeCount >= 50) await grantAchievement(db, uid, "trade_50");
+  } catch (e) {
+    // 도전과제 지급 실패는 무시 (다음 거래 때 재시도됨)
+  }
+
   return {
     ok:       true,
     price:    finalTradePrice,

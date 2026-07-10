@@ -9,6 +9,7 @@ const {
   findStockIdByName,
   requireLinkedUser,
   requireNotInMaintenance,
+  grantAchievement,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -69,6 +70,7 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
 
   const cost = hours * PIN_COST_PER_HOUR;
   await chargeUserCash(db, auth.uid, cost);
+  await grantAchievement(db, auth.uid, "first_support");
 
   // 이미 고정 중인 종목의 재신청은 남은 시간에 이어서 연장한다(우측 배너와 동일한 원칙).
   const baseTime    = isAlreadyPinned ? existingStock.pinnedUntil : now;

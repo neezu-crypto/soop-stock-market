@@ -617,6 +617,19 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     🏅 도전과제
+══════════════════════════════════════════ -->
+<div id="achievements-modal" class="promo-modal-overlay" style="z-index:4200;">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>🏅 도전과제</h2></div>
+        <div id="achievements-progress" style="font-size:13px;color:var(--text-sub);margin-bottom:14px;">불러오는 중...</div>
+        <div id="achievements-list" style="display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto;margin-bottom:16px;"></div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:16px;text-align:center;">현금 보상 없이 기록만 남는 배지예요. 게임을 즐기며 하나씩 채워보세요!</div>
+        <button onclick="closeAchievementsModal()" style="width:100%;background:#334155;color:white;border:none;padding:10px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:13px;">닫기</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      범용 확인 모달 (window.confirm 대체)
      — 팝업 로그인 직후 등 "활성 탭이 아니다"로 오판되는 순간에 네이티브
      confirm()을 부르면 크롬이 다이얼로그 자체를 조용히 억제해버리는
@@ -736,9 +749,12 @@
         </div>
     </header>
     <div class="ranking-bar">
-        <div class="ranking-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div class="ranking-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
             <span>🔥 인기 TOP 5</span>
-            <button onclick="openProfitRankingModal()" style="background:#334155;color:#38bdf8;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer;">💰 내 손익 랭킹</button>
+            <div style="display:flex;gap:6px;">
+                <button id="achievements-btn" onclick="openAchievementsModal()" style="background:#334155;color:#facc15;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer;">🏅 도전과제</button>
+                <button onclick="openProfitRankingModal()" style="background:#334155;color:#38bdf8;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer;">💰 내 손익 랭킹</button>
+            </div>
         </div>
         <div id="top-rankers" class="ranking-list">불러오는 중...</div>
     </div>
@@ -1205,6 +1221,7 @@ onAuthStateChanged(auth, async (user) => {
             }
             updateAccountProtectionUI();
             updateAttendanceUI();
+            updateAchievementsUI();
             updateUI(true);
         });
     } else {
@@ -1619,6 +1636,52 @@ window.claimDailyAttendance = async function() {
         alert(e?.message || '출석 보상을 받는 중 오류가 발생했습니다.');
         if (btn) btn.disabled = false;
     }
+};
+
+// ── 도전과제 (functions/common.js의 ACHIEVEMENTS와 반드시 동일하게 유지) ──
+// 현금 보상 없이 기록만 남기는 배지라 서버 조회 없이 myData.achievements를
+// 그대로 렌더링한다(이미 실시간 구독 중인 users/{uid} 안에 포함돼 있음).
+const ACHIEVEMENT_DEFS = [
+    { id: "first_trade",       icon: "🎉", label: "첫 매매",        desc: "종목을 처음으로 매수 또는 매도했어요" },
+    { id: "trade_10",          icon: "📈", label: "매매의 정석",    desc: "누적 매매 10회를 달성했어요" },
+    { id: "trade_50",          icon: "🔁", label: "트레이더",       desc: "누적 매매 50회를 달성했어요" },
+    { id: "account_protected", icon: "🔒", label: "계정 보호 완료", desc: "카카오 또는 구글로 계정을 보호했어요" },
+    { id: "profit_published",  icon: "💰", label: "손익 공개",      desc: "내 손익 랭킹을 처음으로 게시했어요" },
+    { id: "profit_top10",      icon: "🏆", label: "TOP 10 진입",    desc: "손익 랭킹 TOP 10에 진입했어요" },
+    { id: "unfreeze_hero",     icon: "🧊", label: "동결 해제 성공", desc: "동결(서킷브레이커)된 종목을 해제했어요" },
+    { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
+    { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
+    { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너·고정노출·중계방 홍보 상품을 처음 구매했어요" },
+];
+
+function updateAchievementsUI() {
+    const btn = document.getElementById('achievements-btn');
+    if (!btn) return;
+    const earned = myData?.achievements || {};
+    const count  = Object.keys(earned).length;
+    btn.innerText = `🏅 도전과제 ${count}/${ACHIEVEMENT_DEFS.length}`;
+}
+
+window.openAchievementsModal = function() {
+    const earned = myData?.achievements || {};
+    const count  = Object.keys(earned).length;
+    document.getElementById('achievements-progress').innerText = `${count} / ${ACHIEVEMENT_DEFS.length}개 달성`;
+    document.getElementById('achievements-list').innerHTML = ACHIEVEMENT_DEFS.map(a => {
+        const done = !!earned[a.id];
+        return `
+            <div style="display:flex;align-items:center;gap:12px;background:${done ? 'rgba(56,189,248,0.08)' : 'rgba(255,255,255,0.03)'};border:1px solid ${done ? '#38bdf8' : '#334155'};border-radius:10px;padding:10px 14px;">
+                <div style="font-size:22px;filter:${done ? 'none' : 'grayscale(1);opacity:0.35'};">${a.icon}</div>
+                <div style="flex:1;">
+                    <div style="font-weight:800;font-size:14px;color:${done ? 'var(--text-main)' : 'var(--text-sub)'};">${a.label}</div>
+                    <div style="font-size:11px;color:#64748b;">${a.desc}</div>
+                </div>
+                <div style="font-size:12px;font-weight:700;color:${done ? '#4ade80' : '#475569'};white-space:nowrap;">${done ? '✅ 달성' : '🔒 미달성'}</div>
+            </div>`;
+    }).join('');
+    document.getElementById('achievements-modal')?.classList.add('active');
+};
+window.closeAchievementsModal = function() {
+    document.getElementById('achievements-modal')?.classList.remove('active');
 };
 
 // 보유 자산(현금+평가액)이 100만원을 처음 넘는 순간 1회만 계정 보호를 유도한다.
@@ -2104,6 +2167,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('profit-ranking-modal').classList.contains('active')) closeProfitRankingModal();
         if (document.getElementById('account-protect-modal').classList.contains('active')) closeAccountProtectModal();
         if (document.getElementById('profit-share-card-modal').classList.contains('active')) closeShareCardModal();
+        if (document.getElementById('achievements-modal').classList.contains('active')) closeAchievementsModal();
     }
 });
 
