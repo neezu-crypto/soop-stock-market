@@ -371,7 +371,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📊 <b>기준:</b> 보너스·후원 당첨금 등은 전혀 반영하지 않는 <b style="color:#38bdf8;">순수 매매 손익</b>만 집계</li>
             <li>🙈 <b>익명:</b> 닉네임 대신 트레이더-XXXXXX 형태로만 표시</li>
-            <li>🔒 <b>대상:</b> 카카오 연동 계정만 확인/갱신 가능</li>
+            <li>🔒 <b>대상:</b> 카카오 또는 구글로 계정을 보호한 유저만 확인/게시 가능</li>
         </ul>
 
         <div id="profit-ranking-result" style="display:none;margin-bottom:16px;">
@@ -379,18 +379,21 @@
                 <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">내 순위</div>
                 <div id="profit-ranking-my-rank" style="font-size:22px;font-weight:800;color:#38bdf8;">-</div>
                 <div id="profit-ranking-my-profit" style="font-size:13px;color:#94a3b8;margin-top:4px;">-</div>
+                <div id="profit-ranking-status" style="font-size:11px;margin-top:6px;font-weight:700;">-</div>
             </div>
             <div id="profit-ranking-list" style="display:flex;flex-direction:column;gap:6px;"></div>
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            확인할 때마다 게임자산 <b style="color:#38bdf8;">500,000원</b>이 차감되며, 그 시점 기준으로 내 순위가 즉시 갱신됩니다.
+            <b style="color:#38bdf8;">예상 순위 보기는 무료</b>입니다 — 지금 게시하면 몇 등일지 언제든 확인해보세요.<br>
+            실제로 <b style="color:#38bdf8;">순위표에 내 이름을 올려 다른 유저에게 보이게 하려면</b> 게시할 때마다 게임자산 <b style="color:#38bdf8;">500,000원</b>이 차감됩니다.
         </div>
 
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-            <button onclick="closeProfitRankingModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
-            <button id="profit-ranking-check-btn" onclick="checkProfitRanking()" class="btn-confirm-contact" style="flex:2;min-width:160px;font-weight:bold;font-size:14px;">💰 50만원으로 확인하기</button>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;">
+            <button id="profit-ranking-preview-btn" onclick="previewMyProfitRank()" style="flex:1;min-width:160px;background:#334155;color:#38bdf8;border:1px solid #38bdf8;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">🔍 무료로 예상 순위 보기</button>
+            <button id="profit-ranking-check-btn" onclick="checkProfitRanking()" class="btn-confirm-contact" style="flex:1;min-width:160px;font-weight:bold;font-size:14px;">💰 50만원으로 공식 게시</button>
         </div>
+        <button onclick="closeProfitRankingModal()" style="width:100%;background:transparent;color:var(--text-sub);border:none;padding:8px;cursor:pointer;font-size:13px;text-decoration:underline;">닫기</button>
     </div>
 </div>
 
@@ -710,7 +713,7 @@
 ══════════════════════════════════════════ -->
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, get, set, onDisconnect }
+import { getDatabase, ref, onValue, get, set, onDisconnect, query, orderByChild, limitToLast, startAt }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, signOut, linkWithPopup, GoogleAuthProvider, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
@@ -1393,6 +1396,7 @@ initPromotions({
     ADMIN_EMAIL,
     closeChartModal,
     getCurrentChartStockId: getCurrentStockId,
+    db, dbRef: ref, dbGet: get, dbQuery: query, orderByChild, limitToLast, startAt,
     callables: {
         submitBannerRequestCallable,
         submitChartBannerRequestCallable,

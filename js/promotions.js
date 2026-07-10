@@ -14,7 +14,7 @@
  * @param {() => string|null} deps.getCurrentChartStockId - 지금 열려 있는 차트 모달의 종목ID (없으면 null)
  * @param {object} deps.callables - httpsCallable로 미리 생성된 콜러블 참조 모음
  */
-export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, closeChartModal, getCurrentChartStockId, callables }) {
+export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, closeChartModal, getCurrentChartStockId, db, dbRef, dbGet, dbQuery, orderByChild, limitToLast, startAt, callables }) {
     const {
         submitBannerRequestCallable,
         submitChartBannerRequestCallable,
@@ -604,47 +604,95 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         }
     };
 
-    // ── 내 손익 랭킹 (순수 매매 손익만, 확인할 때마다 서버가 즉석 재계산) ──
+    // ── 내 손익 랭킹 ──────────────────────────────────────────
+    // "보기"(무료)와 "공식 게시"(유료)를 분리한다 — 순위가 궁금해서 캐주얼하게
+    // 열어보는 행위 자체에 비용을 매기면 오히려 재접속을 유도해야 할 기능이
+    // 재접속을 억제하는 역설이 생긴다. rankings/profitEntries는 인기 TOP5와
+    // 동일하게 이미 공개 읽기 경로라, 내 실현손익(이미 클라이언트가 들고
+    // 있는 값)과 조합하면 서버 호출 없이 "지금 게시하면 몇 등일지"를 무료로
+    // 보여줄 수 있다. 실제로 순위표에 내 이름을 올리는(다른 유저에게 보이는)
+    // 행위만 유료로 남긴다.
     window.openProfitRankingModal = () => {
         if (!requireLoginOrPrompt()) return;
         document.getElementById('profit-ranking-modal').classList.add('active');
     };
     window.closeProfitRankingModal = () => document.getElementById('profit-ranking-modal').classList.remove('active');
 
+    function renderProfitRankingResult({ myRank, myProfit, myAnonId, top, isPreview }) {
+        const resultEl = document.getElementById('profit-ranking-result');
+        const rankEl    = document.getElementById('profit-ranking-my-rank');
+        const profitEl  = document.getElementById('profit-ranking-my-profit');
+        const statusEl  = document.getElementById('profit-ranking-status');
+        const listEl    = document.getElementById('profit-ranking-list');
+
+        resultEl.style.display = 'block';
+        rankEl.innerText = `${myRank.toLocaleString()}위`;
+        const sign  = myProfit > 0 ? '+' : '';
+        const color = myProfit > 0 ? '#4ade80' : myProfit < 0 ? '#f87171' : '#94a3b8';
+        profitEl.innerHTML = `${myAnonId} · 순수 매매 손익 <b style="color:${color};">${sign}${myProfit.toLocaleString()}원</b>`;
+        if (statusEl) {
+            statusEl.innerText = isPreview ? '🔍 예상 순위 (아직 순위표에 게시되지 않음)' : '✅ 순위표에 게시됨 — 다른 유저에게도 보여요';
+            statusEl.style.color = isPreview ? '#fbbf24' : '#4ade80';
+        }
+
+        listEl.innerHTML = top.map((item, i) => {
+            const isMe = item.anonId === myAnonId;
+            const s = item.value > 0 ? '+' : '';
+            const c = item.value > 0 ? '#4ade80' : item.value < 0 ? '#f87171' : '#94a3b8';
+            return `
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;background:${isMe ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isMe ? '#38bdf8' : 'transparent'};font-size:13px;">
+                    <span style="color:#94a3b8;width:28px;flex-shrink:0;">${i + 1}위</span>
+                    <span style="flex:1;color:${isMe ? '#38bdf8' : 'white'};font-weight:${isMe ? '700' : '400'};">${item.anonId}${isMe ? ' (나)' : ''}</span>
+                    <span style="color:${c};font-weight:700;white-space:nowrap;">${s}${item.value.toLocaleString()}원</span>
+                </div>`;
+        }).join('');
+    }
+
+    // 서버(profitRanking.js)의 anonIdFor와 동일한 규칙(uid 뒤 6자리) — 미리보기
+    // 단계에서도 top10 중 "나"를 하이라이트할 수 있도록 클라이언트에서 재현.
+    function myAnonIdPreview() {
+        const uid = auth.currentUser?.uid || '';
+        return `트레이더-${uid.slice(-6).toUpperCase()}`;
+    }
+
+    window.previewMyProfitRank = async function() {
+        const btn = document.getElementById('profit-ranking-preview-btn');
+        btn.disabled = true;
+        btn.innerText = '조회 중...';
+        try {
+            const myData = getMyData();
+            const myProfit = Math.round(myData?.realizedPL || 0);
+
+            const topSnap = await dbGet(dbQuery(dbRef(db, 'rankings/profitEntries'), orderByChild('value'), limitToLast(10)));
+            const topRaw = [];
+            topSnap.forEach(child => topRaw.push(child.val()));
+            topRaw.sort((a, b) => b.value - a.value);
+
+            const higherSnap = await dbGet(dbQuery(dbRef(db, 'rankings/profitEntries'), orderByChild('value'), startAt(myProfit + 1)));
+            const myRank = higherSnap.numChildren() + 1;
+
+            renderProfitRankingResult({ myRank, myProfit, myAnonId: myAnonIdPreview(), top: topRaw, isPreview: true });
+        } catch (e) {
+            alert(e?.message || '예상 순위 조회 중 오류가 발생했습니다.');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '🔍 무료로 예상 순위 보기';
+        }
+    };
+
     window.checkProfitRanking = async function() {
         if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
         const btn = document.getElementById('profit-ranking-check-btn');
         btn.disabled = true;
-        btn.innerText = '확인 중...';
+        btn.innerText = '게시 중...';
         try {
             const { data } = await checkProfitRankingCallable();
-            const resultEl = document.getElementById('profit-ranking-result');
-            const rankEl   = document.getElementById('profit-ranking-my-rank');
-            const profitEl = document.getElementById('profit-ranking-my-profit');
-            const listEl   = document.getElementById('profit-ranking-list');
-
-            resultEl.style.display = 'block';
-            rankEl.innerText = `${data.myRank.toLocaleString()}위`;
-            const sign = data.myProfit > 0 ? '+' : '';
-            const color = data.myProfit > 0 ? '#4ade80' : data.myProfit < 0 ? '#f87171' : '#94a3b8';
-            profitEl.innerHTML = `${data.myAnonId} · 순수 매매 손익 <b style="color:${color};">${sign}${data.myProfit.toLocaleString()}원</b>`;
-
-            listEl.innerHTML = data.top.map((item, i) => {
-                const isMe = item.anonId === data.myAnonId;
-                const s = item.value > 0 ? '+' : '';
-                const c = item.value > 0 ? '#4ade80' : item.value < 0 ? '#f87171' : '#94a3b8';
-                return `
-                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;background:${isMe ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isMe ? '#38bdf8' : 'transparent'};font-size:13px;">
-                        <span style="color:#94a3b8;width:28px;flex-shrink:0;">${i + 1}위</span>
-                        <span style="flex:1;color:${isMe ? '#38bdf8' : 'white'};font-weight:${isMe ? '700' : '400'};">${item.anonId}${isMe ? ' (나)' : ''}</span>
-                        <span style="color:${c};font-weight:700;white-space:nowrap;">${s}${item.value.toLocaleString()}원</span>
-                    </div>`;
-            }).join('');
+            renderProfitRankingResult({ myRank: data.myRank, myProfit: data.myProfit, myAnonId: data.myAnonId, top: data.top, isPreview: false });
         } catch (e) {
-            alert(e?.message || '랭킹 확인 중 오류가 발생했습니다.');
+            alert(e?.message || '랭킹 게시 중 오류가 발생했습니다.');
         } finally {
             btn.disabled = false;
-            btn.innerText = '💰 50만원으로 확인하기';
+            btn.innerText = '💰 50만원으로 공식 게시';
         }
     };
 }

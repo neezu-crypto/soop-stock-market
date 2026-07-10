@@ -295,8 +295,8 @@
         <p>보너스·후원 당첨금·홍보 신청 비용 등 매매 외 현금흐름은 전혀 반영하지 않는 <strong>순수 매매 손익</strong>만 집계하는 익명 리더보드.</p>
         <ul>
             <li><strong>계산:</strong> 매도 체결마다 <code>trade()</code>가 평단가 기준으로 <code>users/{uid}.realizedPL</code>에 실현손익만 누적하고, 랭킹 확인 시점에 서버가 이 값을 그대로 반영한다 — <strong>미실현(보유 중 종목의 평가손익)은 의도적으로 반영하지 않는다.</strong> 현재가는 본인이 소량 매수만으로도 순간적으로 밀어올릴 수 있는 값이라, 대량 보유 물량에 그대로 곱해 마킹하면 팔지 않고도 가짜 이익을 순위표에 영구히 박아둘 수 있는 구멍이 있었다(초기 설계의 결함, 발견 후 수정). 클라이언트가 보낸 숫자는 애초에 신뢰하지 않고 매번 서버가 원본 데이터로 재계산한다</li>
-            <li><strong>확인 비용:</strong> 1회 확인(및 내 순위 갱신)당 게임자산 <strong>50만원</strong> 차감 — 상시 폴링을 억제하고, 그 대가로 스케줄 재계산 없이 확인하는 사람만 계산하는 저비용 구조로 설계됨</li>
-            <li><strong>대상:</strong> 카카오 연동 유저만 확인/갱신 가능(어뷰징 방지)</li>
+            <li><strong>"예상 순위 보기"(무료)와 "공식 게시"(유료) 분리:</strong> 순위가 궁금해서 캐주얼하게 열어보는 행위 자체에 비용을 매기면 재접속을 유도해야 할 기능이 오히려 재접속을 억제하는 역설이 생긴다. <code>rankings/profitEntries</code>가 인기 TOP5와 동일하게 이미 공개 읽기 경로라, 클라이언트가 이미 들고 있는 내 <code>realizedPL</code>과 조합해 <strong>서버 호출 없이 무료로</strong> "지금 게시하면 몇 등일지" 계산해 보여준다(<code>orderByChild('value').startAt(내손익+1)</code>로 나보다 높은 공개 엔트리 수를 세는 방식). 실제로 <strong>순위표에 이름을 올려 다른 유저에게 보이게 하는 행위만</strong> 유료(<code>checkProfitRanking</code>, 50만원)로 남긴다 — 상시 폴링 억제와 서버 재계산 비용 절감 목적은 그대로 유지됨</li>
+            <li><strong>대상:</strong> 확인/게시 모두 카카오 또는 구글로 계정을 보호한 유저만 가능(어뷰징 방지)</li>
             <li><strong>표시:</strong> 실제 닉네임 대신 <code>트레이더-XXXXXX</code> 형태의 익명 ID로만 노출, 상위 10명 + 내 순위를 함께 보여줌</li>
             <li><strong>저장 구조:</strong> <code>rankings/profitEntries/{uid}</code>에 <code>value</code>로 인덱싱(<code>.indexOn</code>)된 경로에 기록해 RTDB 쿼리(<code>orderByChild('value').limitToLast(N)</code>)만으로 상위 N명을 조회 — 별도 스케줄 집계 작업이 없다</li>
         </ul>
