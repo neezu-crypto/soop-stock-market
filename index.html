@@ -53,11 +53,16 @@
     </div>
 </div>
 
-<!-- ── 내 보유 주식 패널 ── -->
+<!-- ── 내 보유 주식 패널 (좁은 화면에서는 좌측 슬라이드 서랍으로 전환) ── -->
+<button class="my-stocks-toggle-btn" onclick="openMyStocksPanel()">📊 내 보유 주식</button>
+<div class="my-stocks-backdrop" onclick="closeMyStocksPanel()"></div>
 <div class="my-stocks-container">
     <div class="my-stocks-title">
         <span>내 보유 주식</span>
-        <span id="total-assets" style="font-size: 14px; color: var(--text-sub); align-self: flex-end;">평가중...</span>
+        <span style="display:flex;align-items:center;gap:8px;">
+            <span id="total-assets" style="font-size: 14px; color: var(--text-sub);">평가중...</span>
+            <button class="my-stocks-close-btn" onclick="closeMyStocksPanel()">✕</button>
+        </span>
     </div>
     <div id="my-stocks-list" class="my-stocks-list">
         <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
@@ -1100,8 +1105,21 @@ function renderRankingFromCache(items) {
 // ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
 document.getElementById('my-stocks-list').addEventListener('click', (e) => {
     const item = e.target.closest('.my-stock-item');
-    if (item) selectStockForSearch(item.getAttribute('data-name'));
+    if (item) {
+        selectStockForSearch(item.getAttribute('data-name'));
+        closeMyStocksPanel(); // 좁은 화면(서랍)에서는 종목 선택 즉시 서랍을 닫아 검색 결과가 바로 보이게
+    }
 });
+
+// ── 내 보유 주식 서랍 열기/닫기 (좁은 화면 전용, 넓은 화면에서는 항상 보이는 고정 패널이라 영향 없음) ──
+window.openMyStocksPanel = function() {
+    document.querySelector('.my-stocks-container')?.classList.add('open');
+    document.querySelector('.my-stocks-backdrop')?.classList.add('open');
+};
+window.closeMyStocksPanel = function() {
+    document.querySelector('.my-stocks-container')?.classList.remove('open');
+    document.querySelector('.my-stocks-backdrop')?.classList.remove('open');
+};
 
 // ── 내 보유 주식 패널 ────────────────────────────────────────
 function renderMyPortfolio() {
@@ -2168,6 +2186,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('account-protect-modal').classList.contains('active')) closeAccountProtectModal();
         if (document.getElementById('profit-share-card-modal').classList.contains('active')) closeShareCardModal();
         if (document.getElementById('achievements-modal').classList.contains('active')) closeAchievementsModal();
+        if (document.querySelector('.my-stocks-container').classList.contains('open')) closeMyStocksPanel();
     }
 });
 

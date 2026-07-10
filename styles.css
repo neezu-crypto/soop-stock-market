@@ -230,7 +230,37 @@
         .my-stock-details { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sub); }
         .no-stock-msg { text-align: center; color: var(--text-sub); font-size: 12px; padding: 20px 0; }
         .my-stocks-guide { font-size: 13px; color: var(--text-sub); text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(51, 65, 85, 0.5); opacity: 0.8; pointer-events: none; }
-        @media (max-width: 1300px) { .my-stocks-container { display: none; } }
+        .my-stocks-close-btn { display: none; }
+
+        /* 좁은 화면(<=1300px)에서는 고정 패널 대신 좌측 슬라이드 서랍으로 전환.
+           평소엔 화면 밖(translateX(-110%))에 숨어있다가, 좌측 탭 버튼을 누르면
+           .open 클래스가 붙어 안으로 슬라이드된다. */
+        .my-stocks-toggle-btn { display: none; }
+        @media (max-width: 1300px) {
+            .my-stocks-toggle-btn {
+                display: flex; align-items: center; justify-content: center;
+                position: fixed; left: 0; top: 50%; transform: translateY(-50%);
+                writing-mode: vertical-rl; gap: 6px;
+                background: var(--primary); color: #0f172a; font-weight: 800; font-size: 13px;
+                padding: 14px 6px; border-radius: 0 12px 12px 0; border: none; cursor: pointer;
+                box-shadow: 2px 0 12px rgba(0,0,0,0.4); z-index: 999;
+            }
+            .my-stocks-backdrop {
+                display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1099;
+            }
+            .my-stocks-backdrop.open { display: block; }
+            .my-stocks-container {
+                left: 0; top: 0; transform: translateX(-110%);
+                width: min(78vw, 300px); max-height: 100vh; height: 100vh;
+                border-radius: 0 20px 20px 0; transition: transform 0.25s ease;
+            }
+            .my-stocks-container.open { transform: translateX(0); }
+            .my-stocks-close-btn {
+                display: inline-flex; align-items: center; justify-content: center;
+                background: transparent; border: none; color: var(--text-sub); font-size: 18px;
+                cursor: pointer; padding: 0 0 0 10px; line-height: 1;
+            }
+        }
 
         /* ══════════════════════════════════════════
            차트 모달 (신규)
