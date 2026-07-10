@@ -246,7 +246,7 @@
                 box-shadow: 2px 0 12px rgba(0,0,0,0.4); z-index: 999;
             }
             .my-stocks-backdrop {
-                display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1099;
+                display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 998;
             }
             .my-stocks-backdrop.open { display: block; }
             .my-stocks-container {
