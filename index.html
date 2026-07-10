@@ -1488,6 +1488,7 @@ window.loginWithGoogle = async function() {
         // 결과는 페이지가 돌아온 뒤 handleGoogleRedirectResult()가 처리한다.
     } catch (e) {
         sessionStorage.removeItem('googleRedirectPending');
+        console.error('[google-login] linkWithRedirect 시작 실패', e);
         alert('구글 로그인을 시작할 수 없습니다: ' + (e?.message || e));
     }
 };
@@ -1501,8 +1502,10 @@ async function handleGoogleRedirectResult() {
         const result = await getRedirectResult(auth);
         if (!result) {
             // 방금 구글 로그인을 시도했는데 결과가 안 잡히면 대부분 시크릿/
-            // 사생활 보호 모드가 원인이다 — 조용히 무시하지 않고 알려준다.
+            // 사생활 보호 모드 또는 브라우저의 크로스사이트 저장소 제한이
+            // 원인이다 — 조용히 무시하지 않고 알려준다.
             if (wasPending) {
+                console.error('[google-login] getRedirectResult가 null을 반환함 (wasPending=true)');
                 alert('⚠️ 구글 로그인 결과를 확인하지 못했어요.\n시크릿 모드/사생활 보호 브라우저에서는 구글 로그인이 정상 동작하지 않을 수 있습니다.\n일반 브라우저 창에서 다시 시도해주세요.');
             }
             return; // 리다이렉트로 돌아온 게 아니라 평범한 페이지 로드
@@ -1515,6 +1518,7 @@ async function handleGoogleRedirectResult() {
             alert('✅ 구글 연동 완료! 이제 이 계정의 자산은 안전하게 보호됩니다.');
         }
     } catch (e) {
+        console.error('[google-login] 리다이렉트 결과 처리 중 오류', e?.code, e?.message, e);
         if (e?.code === 'auth/credential-already-in-use') {
             if (!confirm('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)')) return;
             try {
@@ -1522,10 +1526,13 @@ async function handleGoogleRedirectResult() {
                 await linkGoogleAccountCallable();
                 alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
             } catch (e2) {
+                console.error('[google-login] signInWithCredential 실패', e2?.code, e2?.message, e2);
                 alert('계정 전환 중 오류가 발생했습니다: ' + (e2?.message || e2));
             }
-        } else if (e?.code) {
-            alert('구글 로그인 중 오류가 발생했습니다: ' + (e?.message || e));
+        } else if (wasPending) {
+            // 방금 시도한 로그인에서 난 오류는 .code 유무와 상관없이 항상 알려준다
+            // (예전엔 e?.code가 없는 오류를 조용히 무시해서 "에러도 없이 실패"로 보였다).
+            alert('구글 로그인 중 오류가 발생했습니다: ' + (e?.message || e || '알 수 없는 오류'));
         }
     }
 }
