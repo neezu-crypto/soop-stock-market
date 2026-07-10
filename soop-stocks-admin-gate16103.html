@@ -89,6 +89,29 @@
         .stock-row-name { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .stock-row-price { width: 100px; }
 
+        /* 🧭 세션 빠른 이동 패널 — 페이지 우측에 고정, 클릭 시 해당 섹션으로 스크롤.
+           본문(max-width:600px)이 항상 가운데 정렬이라, 우측 여백이 충분한
+           넓은 화면(1100px 초과)에서만 노출한다. */
+        .admin-quicknav {
+            display: none; position: fixed; right: 16px; top: 90px;
+            max-height: calc(100vh - 110px); overflow-y: auto;
+            flex-direction: column; gap: 2px; background: #1e293b; border: 1px solid #334155;
+            border-radius: 12px; padding: 8px; z-index: 200; width: 168px;
+        }
+        .admin-quicknav.visible { display: flex; }
+        .admin-quicknav-title { font-size: 11px; font-weight: 800; color: #64748b; padding: 4px 10px 6px; }
+        .admin-quicknav button {
+            background: transparent; color: #94a3b8; border: none; padding: 7px 10px; border-radius: 8px;
+            font-size: 12.5px; font-weight: 700; text-align: left; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+        }
+        .admin-quicknav button:hover { background: #334155; color: #38bdf8; }
+        .admin-quicknav::-webkit-scrollbar { width: 4px; }
+        .admin-quicknav::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 10px; }
+        @media (max-width: 1100px) {
+            .admin-quicknav { display: none !important; }
+        }
+
         /* ── 모바일: 여백을 줄여 화면 너비를 그대로 활용 ── */
         @media (max-width: 640px) {
             body { padding: 16px 10px; }
@@ -113,6 +136,7 @@
     </style>
 </head>
 <body>
+<nav id="admin-quicknav" class="admin-quicknav"></nav>
 <div id="login-section" class="login-box">
     <h2 style="margin:0">Admin Auth</h2>
     <p style="color:#94a3b8; font-size:14px">관리자 계정으로 로그인하세요.</p>
@@ -133,7 +157,7 @@
     </div>
 
     <!-- 📊 전체 통계 요약 -->
-    <div class="container" style="display:block; border-color: #a855f7;">
+    <div id="section-overview" class="container" style="display:block; border-color: #a855f7;">
         <h1>📊 전체 통계 요약</h1>
         <div class="info-box">
             출석 보상·구매 매출·유저 현황·손익 랭킹처럼 여기저기 흩어진 통계를 한눈에 모아 보여줍니다.
@@ -144,7 +168,7 @@
     </div>
 
     <!-- 🛠️ 점검모드 관리 -->
-    <div class="container" style="display:block; border-color: #f97316;">
+    <div id="section-maintenance" class="container" style="display:block; border-color: #f97316;">
         <h1>🛠️ 점검모드 관리</h1>
         <div class="info-box" style="color:#fed7aa;">
             켜면 30초 후부터 메인 페이지의 거래·홍보 신청 등 활동이 막힙니다(페이지 자체는 그대로 보임).<br>
@@ -161,7 +185,7 @@
     </div>
 
     <!-- 📢 공지 배너 관리 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-announcement" class="container" style="display:block; border-color: #38bdf8;">
         <h1>📢 공지 배너 관리</h1>
         <div class="info-box">
             점검모드와 별개로, 지갑 카드 아래에 자유 문구("오늘 20시 이벤트!" 등)를 띄웠다 내렸다 할 수 있습니다.
@@ -178,7 +202,7 @@
     </div>
 
     <!-- 🧾 유저 구매 현황 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-purchase-history" class="container" style="display:block; border-color: #38bdf8;">
         <h1>🧾 유저 구매 현황</h1>
         <div class="info-box">
             우측/차트 배너·최상단 고정·중계방·플레이타임 충전 5가지 셀프 상품의 구매 이력을 시간순(최신순)으로 통합
@@ -190,7 +214,7 @@
     </div>
 
     <!-- 💰 손익 랭킹 조회 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-profit-ranking" class="container" style="display:block; border-color: #38bdf8;">
         <h1>💰 손익 랭킹 조회</h1>
         <div class="info-box">
             유저가 "내 손익 랭킹"을 확인할 때마다 갱신되는 목록입니다. 보너스·후원 당첨금 등은 제외한
@@ -202,7 +226,7 @@
     </div>
 
     <!-- 🏆 랭킹 TOP5 관리 -->
-    <div class="container" style="display:block; border-color: #a855f7;">
+    <div id="section-ranking-top5" class="container" style="display:block; border-color: #a855f7;">
         <h1>🏆 랭킹 TOP5 관리</h1>
         <div class="info-box">
             모든 유저의 보유 주식을 집계하여 <b>/rankings/top5</b> 경로에 저장합니다.<br>
@@ -226,7 +250,7 @@
     </div>
 
     <!-- 🔍 개별 종목 관리 -->
-    <div class="container" style="display:block">
+    <div id="section-stock-search" class="container" style="display:block">
         <h1>🔍 개별 종목 관리</h1>
         <div class="data-status-bar">
             <span>종목 데이터: <b id="stocks-load-status">로딩 중...</b></span>
@@ -239,7 +263,7 @@
     </div>
 
     <!-- 🛠 종목 상세 정보 수정 -->
-    <div class="container" style="display:block; border-color: #f59e0b;">
+    <div id="section-stock-edit" class="container" style="display:block; border-color: #f59e0b;">
         <h1>🛠 종목 상세 정보 수정</h1>
         <div class="info-box">닉네임을 입력하고 '불러오기'를 누르면 현재 저장된 모든 정보를 수정할 수 있습니다.</div>
         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
@@ -263,7 +287,7 @@
 
 
     <!-- 📈 주가 일괄 조정 -->
-    <div class="container" style="display:block">
+    <div id="section-price-adjust" class="container" style="display:block">
         <h1>📈 주가 일괄 조정 (% 단위)</h1>
         <div class="info-box">입력한 수치만큼 전 종목 주가를 변동시킵니다.</div>
         <div class="batch-control">
@@ -273,7 +297,7 @@
     </div>
 
     <!-- ♻️ 전 종목 주가 초기화 -->
-    <div class="container" style="display:block; border-color: #f97316;">
+    <div id="section-price-reset" class="container" style="display:block; border-color: #f97316;">
         <h1>♻️ 전 종목 주가 초기화</h1>
         <div class="info-box" style="color:#fed7aa;">
             모든 종목의 주가를 <b>10,000원</b>으로 초기화하고 가격 히스토리/등락률도 함께 리셋합니다.<br>
@@ -283,14 +307,14 @@
     </div>
 
     <!-- 🧹 데이터 무결성 관리 -->
-    <div class="container" style="display:block; border-color: #ef4444;">
+    <div id="section-data-cleanup" class="container" style="display:block; border-color: #ef4444;">
         <h1>🧹 데이터 무결성 관리</h1>
         <div class="info-box" style="color: #fca5a5;">이미 상장된 종목 중 중복된 닉네임을 찾아 정리합니다. (최초 상장본 유지)</div>
         <button class="btn-primary" style="background: #ef4444; color: white;" onclick="cleanupDuplicateStocks()">중복 닉네임 일괄 정리</button>
     </div>
 
     <!-- 🗑 미거래 유저 데이터 정리 -->
-    <div class="container" style="display:block; border-color: #f97316;">
+    <div id="section-inactive-cleanup" class="container" style="display:block; border-color: #f97316;">
         <h1>🗑 미거래 유저 데이터 정리</h1>
         <div class="info-box" style="color: #fed7aa;">
             한 번도 거래하지 않은 유저(잔고 500,000원 또는 예전 기준 200,000원 &amp; 보유 주식 없음)의 데이터를 삭제합니다.<br>
@@ -304,7 +328,7 @@
     </div>
 
     <!-- 🎁 익명 유저 초기자산 소급 보정 -->
-    <div class="container" style="display:block; border-color: #f97316;">
+    <div id="section-anon-topup" class="container" style="display:block; border-color: #f97316;">
         <h1>🎁 익명 유저 초기자산 소급 보정</h1>
         <div class="info-box" style="color: #fed7aa;">
             2026-07 정책 변경(익명 20만원+카카오 80만원 → 익명 50만원+카카오 50만원) 이전에 생성된 익명 유저는
@@ -320,7 +344,7 @@
     </div>
 
     <!-- 🚀 스트리머 상장 및 삭제 -->
-    <div class="container" style="display:block">
+    <div id="section-listing-upload" class="container" style="display:block">
         <h1>🚀 스트리머 상장 및 삭제</h1>
         <div class="info-box">닉네임을 한 줄에 하나씩 입력하세요. <br>상장은 신규 추가, 삭제는 목록에서 제거합니다.</div>
         <textarea id="list" placeholder="닉네임1&#10;닉네임2..."></textarea>
@@ -331,7 +355,7 @@
     </div>
 
     <!-- 🏴 크루 프리픽스 일괄 적용 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-crew-prefix-apply" class="container" style="display:block; border-color: #38bdf8;">
         <h1>🏴 크루 프리픽스 일괄 적용</h1>
         <div class="info-box">
             크루명과 멤버 닉네임 목록(한 줄에 하나씩)을 넣으면 이미 상장된 종목과 매칭합니다. 정확히 일치하면
@@ -347,7 +371,7 @@
     </div>
 
     <!-- 🏳 크루 프리픽스 일괄 해제 -->
-    <div class="container" style="display:block; border-color: #ef4444;">
+    <div id="section-crew-prefix-remove" class="container" style="display:block; border-color: #ef4444;">
         <h1>🏳 크루 프리픽스 일괄 해제</h1>
         <div class="info-box" style="color:#fca5a5;">
             크루가 해체되거나 멤버가 빠졌을 때, [크루명] 프리픽스가 붙은 종목을 한꺼번에 찾아 해제합니다.
@@ -361,7 +385,7 @@
     </div>
 
     <!-- 👤 유저 상세 조회 -->
-    <div class="container" style="display:block; border-color: #38bdf8;">
+    <div id="section-user-detail" class="container" style="display:block; border-color: #38bdf8;">
         <h1>👤 유저 상세 조회</h1>
         <div class="info-box">
             "손익 랭킹 조회"·"구매 현황" 등에 노출되는 uid를 붙여넣으면 자산·보유종목·손익을 확인할 수 있습니다.
@@ -520,6 +544,44 @@
         }
     }
 
+    // ── 🧭 세션 빠른 이동 패널 (페이지 우측 고정, 클릭 시 해당 섹션으로 스크롤) ──
+    const QUICKNAV_ITEMS = [
+        { id: 'section-overview',           label: '📊 전체 통계' },
+        { id: 'section-maintenance',        label: '🛠️ 점검모드' },
+        { id: 'section-announcement',       label: '📢 공지 배너' },
+        { id: 'section-purchase-history',   label: '🧾 구매 현황' },
+        { id: 'section-profit-ranking',     label: '💰 손익 랭킹' },
+        { id: 'section-ranking-top5',       label: '🏆 랭킹 TOP5' },
+        { id: 'section-stock-search',       label: '🔍 개별 종목' },
+        { id: 'section-stock-edit',         label: '🛠 종목 수정' },
+        { id: 'section-price-adjust',       label: '📈 주가 조정' },
+        { id: 'section-price-reset',        label: '♻️ 주가 초기화' },
+        { id: 'section-data-cleanup',       label: '🧹 중복 정리' },
+        { id: 'section-inactive-cleanup',   label: '🗑 미거래 정리' },
+        { id: 'section-anon-topup',         label: '🎁 소급 보정' },
+        { id: 'section-listing-upload',     label: '🚀 상장/삭제' },
+        { id: 'section-crew-prefix-apply',  label: '🏴 크루 적용' },
+        { id: 'section-crew-prefix-remove', label: '🏳 크루 해제' },
+        { id: 'section-user-detail',        label: '👤 유저 조회' },
+        { id: 'section-banner',             label: '📢 배너 관리' },
+        { id: 'section-cashcharge',         label: '💰 충전 검수' },
+        { id: 'section-pin',                label: '📌 고정 노출' },
+        { id: 'section-listing',            label: '🏷 상장 신청' },
+        { id: 'section-relay',              label: '🎥 중계방' },
+        { id: 'section-freeze',             label: '🥶 동결 관리' },
+    ];
+
+    function renderQuickNav() {
+        const nav = document.getElementById('admin-quicknav');
+        if (!nav) return;
+        nav.innerHTML = '<div class="admin-quicknav-title">🧭 빠른 이동</div>' +
+            QUICKNAV_ITEMS.map(item => `<button type="button" data-target="${item.id}">${item.label}</button>`).join('');
+        nav.querySelectorAll('button[data-target]').forEach(btn => {
+            btn.onclick = () => document.getElementById(btn.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        nav.classList.add('visible');
+    }
+
     // ── 인증 ────────────────────────────────────────────────
     window.login  = () => signInWithPopup(auth, provider).catch(err => alert("로그인 실패: " + err.message));
     window.logout = () => signOut(auth);
@@ -533,6 +595,7 @@
                     <span>접속 계정: ${user.email} (관리자)</span>
                     <span>🟢 현재 접속자 <b id="admin-online-count" style="color:#38bdf8;">-</b>명</span>
                 </div>`;
+            renderQuickNav();
             watchOnlineCount();
             await loadStocksOnce();
             await loadRankingStatus();
@@ -550,6 +613,7 @@
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
             document.getElementById('admin-section').style.display = 'none';
+            document.getElementById('admin-quicknav')?.classList.remove('visible');
         }
     });
 
