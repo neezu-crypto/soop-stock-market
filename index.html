@@ -467,9 +467,9 @@
         </p>
         <p id="playtime-expired-test-note" style="display:none;font-size:12px;color:#fbbf24;margin-top:-12px;margin-bottom:16px;">🧪 테스트 기간 중에는 시간 충전을 이용할 수 없습니다.</p>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-            <button id="playtime-expired-kakao-btn" onclick="loginWithKakao()"
-                style="display:none;flex:1;min-width:140px;background:#FEE500;color:#181600;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
-                💬 카카오 연동하고 시간 늘리기
+            <button id="playtime-expired-protect-btn" onclick="openAccountProtectModal()"
+                style="display:none;flex:1;min-width:140px;background:#38bdf8;color:#0f172a;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
+                🔒 계정 보호하고 시간 늘리기
             </button>
             <button id="playtime-expired-buy-btn" onclick="openPlayTimeModal()" class="btn-confirm-contact" style="flex:1;min-width:140px;font-weight:bold;font-size:14px;">⏱ 시간 충전하기</button>
         </div>
@@ -528,6 +528,32 @@
             <button onclick="closeRelayRoomModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
             <button id="relay-submit-btn" class="btn-confirm-contact" onclick="submitRelayRoomRequest()" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청하기</button>
         </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     계정 보호 선택 모달 (카카오 / 구글)
+══════════════════════════════════════════ -->
+<div id="account-protect-modal" class="promo-modal-overlay" style="z-index:5100;">
+    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
+        <div class="promo-modal-header"><h2>🔒 계정 보호하기</h2></div>
+        <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:20px;">
+            지금 쓰는 계정은 익명이라, 브라우저 데이터가 지워지면 자산을 잃을 수 있어요.<br>
+            카카오 또는 구글 중 편한 방법으로 연결하면 <b style="color:#38bdf8;">50만원 보너스</b>와 함께
+            자산이 안전하게 보호됩니다.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+            <button onclick="closeAccountProtectModal(); loginWithKakao();"
+                style="display:flex;align-items:center;justify-content:center;gap:8px;background:#FEE500;color:#181600;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
+                💬 카카오로 보호하기
+            </button>
+            <button onclick="closeAccountProtectModal(); loginWithGoogle();"
+                style="display:flex;align-items:center;justify-content:center;gap:8px;background:white;color:#334155;border:1px solid #cbd5e1;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18"> 구글로 보호하기
+            </button>
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:16px;">🔒 닉네임·이름·프로필 사진은 수집하지 않아요 (식별용 ID만 사용)</div>
+        <button onclick="closeAccountProtectModal()" style="width:100%;background:#334155;color:white;border:none;padding:10px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:13px;">닫기</button>
     </div>
 </div>
 
@@ -605,12 +631,12 @@
                 <div style="font-size:12px;color:var(--text-sub);">
                     🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
                 </div>
-                <button id="kakao-login-btn" onclick="loginWithKakao()"
-                    style="display:none;align-items:center;gap:6px;background:#FEE500;color:#181600;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
-                    💬 카카오 연결하고 +50만원 받기
+                <button id="account-protect-btn" onclick="openAccountProtectModal()"
+                    style="display:none;align-items:center;gap:6px;background:#38bdf8;color:#0f172a;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+                    🔒 계정 보호하고 +50만원 받기
                 </button>
-                <div id="kakao-privacy-note" style="display:none;font-size:10px;color:#64748b;text-align:right;max-width:220px;">🔒 닉네임 등 개인정보는 수집하지 않아요 (식별용 ID만 사용)</div>
-                <span id="kakao-linked-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;">✅ 카카오 연동중</span>
+                <div id="account-protect-privacy-note" style="display:none;font-size:10px;color:#64748b;text-align:right;max-width:220px;">🔒 닉네임 등 개인정보는 수집하지 않아요 (식별용 ID만 사용)</div>
+                <span id="account-protect-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;"></span>
             </div>
         </div>
         <!-- ── 점검모드 안내 배너 (관리자가 실시간으로 켜고 끔 — maintenance/ 구독) — 지갑 카드는
@@ -665,7 +691,7 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, get, set, onDisconnect }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, GoogleAuthProvider, onAuthStateChanged }
+import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, signInWithCredential, linkWithPopup, GoogleAuthProvider, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
@@ -703,6 +729,7 @@ const tradeCallable              = httpsCallable(functions, 'trade');
 const submitBannerRequestCallable = httpsCallable(functions, 'submitBannerRequest');
 const submitChartBannerRequestCallable = httpsCallable(functions, 'submitChartBannerRequest');
 const linkKakaoAccountCallable = httpsCallable(functions, 'linkKakaoAccount');
+const linkGoogleAccountCallable = httpsCallable(functions, 'linkGoogleAccount');
 const initializeUserCallable   = httpsCallable(functions, 'initializeUser');
 const submitCashChargeRequestCallable = httpsCallable(functions, 'submitCashChargeRequest');
 const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
@@ -953,7 +980,7 @@ function renderMyPortfolio() {
     if (stockIds.length === 0) {
         portfolioDiv.innerHTML = '<div class="no-stock-msg">보유 중인 주식이 없습니다.</div>';
         if (totalAssetsDisplay) totalAssetsDisplay.innerText = "0원";
-        checkKakaoAssetMilestone(myData.cash || 0);
+        checkAccountProtectionMilestone(myData.cash || 0);
         return;
     }
 
@@ -981,7 +1008,7 @@ function renderMyPortfolio() {
         portfolioDiv.appendChild(item);
     });
     if (totalAssetsDisplay) totalAssetsDisplay.innerText = `총 ${totalStockValue.toLocaleString()}원`;
-    checkKakaoAssetMilestone((myData.cash || 0) + totalStockValue);
+    checkAccountProtectionMilestone((myData.cash || 0) + totalStockValue);
 }
 
 function selectStockForSearch(stockName) {
@@ -1056,7 +1083,7 @@ onAuthStateChanged(auth, async (user) => {
             } else {
                 if (!myData || myData.cash === undefined) myData = { cash: INITIAL_CASH, stocks: {} };
             }
-            updateKakaoLinkUI();
+            updateAccountProtectionUI();
             updateUI(true);
         });
     } else {
@@ -1128,13 +1155,13 @@ function lockPlaytimeExpired() {
 }
 
 window.showPlayTimeExpired = function() {
-    const kakaoBtn = document.getElementById('playtime-expired-kakao-btn');
-    const alreadyCovered = myData?.kakaoLinked || auth.currentUser?.email === ADMIN_EMAIL;
-    if (kakaoBtn) kakaoBtn.style.display = alreadyCovered ? 'none' : 'block';
+    const protectBtn = document.getElementById('playtime-expired-protect-btn');
+    const alreadyCovered = myData?.kakaoLinked || myData?.googleLinked || auth.currentUser?.email === ADMIN_EMAIL;
+    if (protectBtn) protectBtn.style.display = alreadyCovered ? 'none' : 'block';
     document.getElementById('playtime-expired-modal')?.classList.add('active');
 };
 
-// 테스트 기간에는 플레이 시간 충전(유료)만 막는다 — 카카오 연동 유도는 그대로 유지.
+// 테스트 기간에는 플레이 시간 충전(유료)만 막는다 — 계정 보호 유도는 그대로 유지.
 if (TEST_PERIOD_ACTIVE) {
     const walletBuyBtn  = document.getElementById('playtime-wallet-buy-btn');
     const expiredBuyBtn = document.getElementById('playtime-expired-buy-btn');
@@ -1307,10 +1334,10 @@ window.trade = async function (id, type, qty = 1) {
 
     } catch (error) {
         const message = error?.message || "거래 중 오류가 발생했습니다.";
-        // 잔액 부족 = 카카오 연동 보너스로 바로 해결되는 순간 → 그 자리에서 유도
-        if (message.includes('잔액이 부족') && !myData?.kakaoLinked) {
-            if (confirm(`${message}\n\n💬 카카오 연결하면 50만원을 바로 받을 수 있어요!\n지금 연결하시겠어요?`)) {
-                window.loginWithKakao();
+        // 잔액 부족 = 계정 보호 보너스로 바로 해결되는 순간 → 그 자리에서 유도
+        if (message.includes('잔액이 부족') && !myData?.kakaoLinked && !myData?.googleLinked) {
+            if (confirm(`${message}\n\n🔒 계정을 보호하면 50만원을 바로 받을 수 있어요!\n지금 보호하시겠어요?`)) {
+                window.openAccountProtectModal();
             }
         } else if (message.includes('이용 시간이 모두 소진')) {
             window.showPlayTimeExpired();
@@ -1350,14 +1377,21 @@ initPromotions({
     },
 });
 
-// ── 카카오 계정 연동 (익명 계정에 카카오 ID를 매핑해 자산 보호) ──
-function updateKakaoLinkUI() {
-    const btn   = document.getElementById('kakao-login-btn');
-    const badge = document.getElementById('kakao-linked-badge');
-    const note  = document.getElementById('kakao-privacy-note');
+// ── 계정 보호 (카카오·구글 중 하나 이상 연동해 익명 계정의 자산을 보호) ──
+window.openAccountProtectModal = function() {
+    document.getElementById('account-protect-modal')?.classList.add('active');
+};
+window.closeAccountProtectModal = function() {
+    document.getElementById('account-protect-modal')?.classList.remove('active');
+};
+
+function updateAccountProtectionUI() {
+    const btn   = document.getElementById('account-protect-btn');
+    const badge = document.getElementById('account-protect-badge');
+    const note  = document.getElementById('account-protect-privacy-note');
     if (!btn || !badge || !note) return;
 
-    // 관리자(구글) 계정으로 로그인 중이면 카카오 유도 UI는 의미가 없으니
+    // 관리자(구글) 계정으로 로그인 중이면 보호 유도 UI는 의미가 없으니
     // 숨기고, 이미 구글로 연동돼있다는 배지만 보여준다.
     if (auth.currentUser?.email === ADMIN_EMAIL) {
         btn.style.display   = 'none';
@@ -1367,27 +1401,37 @@ function updateKakaoLinkUI() {
         return;
     }
 
-    const linked = !!(myData && myData.kakaoLinked);
+    const kakaoLinked = !!(myData && myData.kakaoLinked);
+    const googleLinked = !!(myData && myData.googleLinked);
+    const linked = kakaoLinked || googleLinked;
+
     btn.style.display   = linked ? 'none'  : 'flex';
     note.style.display  = linked ? 'none'  : 'block';
     badge.style.display = linked ? 'inline' : 'none';
-    badge.innerText      = '✅ 카카오 연동중';
+
+    if (kakaoLinked && googleLinked) {
+        badge.innerText = '✅ 카카오·구글로 보호됨';
+    } else if (kakaoLinked) {
+        badge.innerText = '✅ 카카오로 보호됨';
+    } else if (googleLinked) {
+        badge.innerText = '✅ 구글로 보호됨';
+    }
 }
 
-// 보유 자산(현금+평가액)이 100만원을 처음 넘는 순간 1회만 카카오 연동을 유도한다.
+// 보유 자산(현금+평가액)이 100만원을 처음 넘는 순간 1회만 계정 보호를 유도한다.
 // "지킬 자산이 생긴" 시점이라 손실회피 프레이밍이 자연스럽게 먹히는 타이밍.
-function checkKakaoAssetMilestone(totalAssets) {
+function checkAccountProtectionMilestone(totalAssets) {
     if (!userUID) return;
-    if (auth.currentUser?.email === ADMIN_EMAIL) return; // 관리자는 대상 아님
-    if (myData?.kakaoLinked) return;                      // 이미 연동된 유저는 대상 아님
+    if (auth.currentUser?.email === ADMIN_EMAIL) return;                     // 관리자는 대상 아님
+    if (myData?.kakaoLinked || myData?.googleLinked) return;                 // 이미 연동된 유저는 대상 아님
     if (totalAssets <= 1000000) return;
 
-    const flagKey = `kakaoNudge_1m_${userUID}`;
+    const flagKey = `accountProtectNudge_1m_${userUID}`;
     if (localStorage.getItem(flagKey)) return; // 계정당 1회만
     localStorage.setItem(flagKey, '1');
 
-    if (confirm('🎉 보유 자산이 100만원을 넘었어요!\n\n💬 카카오로 연결하면 50만원 보너스까지 받고, 지금까지 쌓은 자산을 안전하게 지킬 수 있어요.\n지금 연결하시겠어요?')) {
-        window.loginWithKakao();
+    if (confirm('🎉 보유 자산이 100만원을 넘었어요!\n\n🔒 계정을 보호하면 50만원 보너스까지 받고, 지금까지 쌓은 자산을 안전하게 지킬 수 있어요.\n지금 보호하시겠어요?')) {
+        window.openAccountProtectModal();
     }
 }
 
@@ -1403,12 +1447,16 @@ window.loginWithKakao = function() {
             try {
                 const result = await linkKakaoAccountCallable({ kakaoAccessToken: authObj.access_token });
                 if (result.data.action === 'switch') {
-                    if (!confirm('이 카카오 계정은 이미 다른 기기에서 연동돼 있습니다.\n그 계정으로 전환하시겠습니까? (현재 진행 상황은 사라집니다)')) return;
+                    if (!confirm('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)')) return;
                     await signInWithCustomToken(auth, result.data.customToken);
-                    alert('✅ 기존 계정으로 전환됐습니다.');
+                    alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
                 } else if (result.data.action === 'linked') {
                     const bonus = result.data.bonus || 0;
-                    alert(`🎉 카카오 연동 완료!\n\n💰 보너스 ${bonus.toLocaleString()}원이 지급됐습니다!\n이제 이 계정의 자산은 안전하게 보호됩니다.`);
+                    if (bonus > 0) {
+                        alert(`🎉 카카오 연동 완료!\n\n💰 보너스 ${bonus.toLocaleString()}원이 지급됐습니다!\n이제 이 계정의 자산은 안전하게 보호됩니다.`);
+                    } else {
+                        alert('✅ 카카오 연동 완료! 이제 이 계정의 자산은 안전하게 보호됩니다.');
+                    }
                 } else {
                     alert('✅ 이미 연동된 계정입니다.');
                 }
@@ -1420,6 +1468,38 @@ window.loginWithKakao = function() {
             alert('카카오 로그인이 취소되었거나 실패했습니다.');
         },
     });
+};
+
+// 구글은 Firebase 기본 제공자라 카카오처럼 별도 API 왕복 검증이 필요 없다 —
+// linkWithPopup으로 지금 쓰던 익명 uid에 그대로 이어붙이고, 이미 다른 uid에
+// 연동된 구글 계정이면 credential-already-in-use 에러가 나므로 그 자리에서
+// signInWithCredential로 기존 계정에 합류시킨다.
+window.loginWithGoogle = async function() {
+    try {
+        await linkWithPopup(auth.currentUser, provider);
+        const result = await linkGoogleAccountCallable();
+        const bonus = result.data.bonus || 0;
+        if (bonus > 0) {
+            alert(`🎉 구글 연동 완료!\n\n💰 보너스 ${bonus.toLocaleString()}원이 지급됐습니다!\n이제 이 계정의 자산은 안전하게 보호됩니다.`);
+        } else {
+            alert('✅ 구글 연동 완료! 이제 이 계정의 자산은 안전하게 보호됩니다.');
+        }
+    } catch (e) {
+        if (e?.code === 'auth/credential-already-in-use') {
+            if (!confirm('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)')) return;
+            try {
+                await signInWithCredential(auth, e.credential);
+                await linkGoogleAccountCallable();
+                alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
+            } catch (e2) {
+                alert('계정 전환 중 오류가 발생했습니다: ' + (e2?.message || e2));
+            }
+        } else if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') {
+            // 유저가 팝업을 닫은 경우 — 조용히 무시
+        } else {
+            alert('구글 로그인 중 오류가 발생했습니다: ' + (e?.message || e));
+        }
+    }
 };
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
@@ -1786,6 +1866,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('relay-room-modal').classList.contains('active')) closeRelayRoomModal();
         if (document.getElementById('unfreeze-modal').classList.contains('active')) closeUnfreezeModal();
         if (document.getElementById('profit-ranking-modal').classList.contains('active')) closeProfitRankingModal();
+        if (document.getElementById('account-protect-modal').classList.contains('active')) closeAccountProtectModal();
     }
 });
 

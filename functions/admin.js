@@ -356,20 +356,22 @@ async function actionCleanupInactiveUsers(db) {
 
 /**
  * 익명 유저 초기자산 보정 — 2026-07 정책 변경(익명 20만원+카카오 80만원 →
- * 익명 50만원+카카오 50만원) 이전에 이미 생성된 익명 유저는 20만원만 받은
- * 상태다. 새로 생성되는 계정은 initializeUser가 이미 새 INITIAL_CASH(50만원)를
- * 지급하므로 손댈 필요 없고, 대상은 "예전 기준으로 이미 만들어졌고 실제로
- * 한 번이라도 거래해본(=진짜 이용한) 아직 카카오 미연동 익명 유저"로 한정한다
- * — 한 번도 안 써본 방문성 계정까지 소급 지급할 필요는 없기 때문. 이미
- * 카카오 연동된 유저는 예전 기준으로도 20만+80만=100만원을 이미 받았으므로
- * 제외한다. anonTopUpAppliedAt 마커로 중복 지급을 막아, 나중에 다시 실행해도
- * (그 사이 새로 거래를 시작한 유저만) 안전하게 추가로 잡아낼 수 있다.
+ * 익명 50만원+카카오/구글 50만원) 이전에 이미 생성된 익명 유저는 20만원만
+ * 받은 상태다. 새로 생성되는 계정은 initializeUser가 이미 새 INITIAL_CASH
+ * (50만원)를 지급하므로 손댈 필요 없고, 대상은 "예전 기준으로 이미 만들어졌고
+ * 실제로 한 번이라도 거래해본(=진짜 이용한) 아직 미보호(카카오·구글 둘 다
+ * 미연동) 익명 유저"로 한정한다 — 한 번도 안 써본 방문성 계정까지 소급
+ * 지급할 필요는 없기 때문. 이미 계정 보호된 유저는 예전 기준으로도
+ * 20만+80만=100만원을 이미 받았을 것으로 보고 제외한다(정책 변경 이후에야
+ * 새로 연동한 극소수 예외는 감안하지 않음). anonTopUpAppliedAt 마커로 중복
+ * 지급을 막아, 나중에 다시 실행해도(그 사이 새로 거래를 시작한 유저만)
+ * 안전하게 추가로 잡아낼 수 있다.
  */
 async function getAnonTopUpEligibleUserIds(db) {
   const snap = await db.ref("users").get();
   const data = snap.val() || {};
   return Object.entries(data)
-    .filter(([, user]) => !user.kakaoLinked && user.lastTradeTime && !user.anonTopUpAppliedAt)
+    .filter(([, user]) => !user.kakaoLinked && !user.googleLinked && user.lastTradeTime && !user.anonTopUpAppliedAt)
     .map(([uid]) => uid);
 }
 
@@ -636,6 +638,7 @@ async function actionGetUserDetail(db, { uid }) {
     uid,
     cash: user.cash ?? INITIAL_CASH,
     kakaoLinked: !!user.kakaoLinked,
+    googleLinked: !!user.googleLinked,
     realizedPL: user.realizedPL || 0,
     lastTradeTime: user.lastTradeTime || null,
     holdings,

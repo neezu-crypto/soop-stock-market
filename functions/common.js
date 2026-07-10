@@ -6,7 +6,9 @@ const { HttpsError } = require("firebase-functions/v2/https");
 const TEST_PERIOD_ACTIVE       = true;
 const ADMIN_EMAIL              = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정
 const INITIAL_CASH             = 500000;   // 익명 최초 접속 시 지급되는 시작 자금
-const KAKAO_LINK_BONUS         = 500000;   // 카카오 최초 연동 시 추가 지급 (합산 시 100만원)
+// 계정 보호(카카오 또는 구글 중 처음 연동하는 쪽) 시 추가 지급 (합산 시 100만원).
+// 카카오/구글 둘 다 연동해도 이 보너스는 최초 1회만 지급된다.
+const ACCOUNT_PROTECTION_BONUS = 500000;
 // 2026-07 정책 변경(익명 20만원+카카오 80만원 → 익명 50만원+카카오 50만원) 이전에
 // 이미 생성된 익명 유저는 20만원만 받은 상태다. 실제로 거래해본(=진짜 이용한) 익명
 // 유저에 한해 새 기준(50만원)과의 차액을 1회 보정 지급한다 — actionPreviewAnonTopUp/
@@ -30,7 +32,7 @@ const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 �
 
 // ── 플레이타임 제한 관련 상수 ──────────────────────────────────
 const ANON_DAILY_SECONDS       = 15 * 60;  // 익명 유저 하루 무료 이용 시간
-const KAKAO_DAILY_SECONDS      = 60 * 60;  // 카카오 연동 유저 하루 무료 이용 시간
+const PROTECTED_DAILY_SECONDS  = 60 * 60;  // 계정 보호(카카오 또는 구글 연동) 유저 하루 무료 이용 시간
 const PLAYTIME_BASE_RATE       = 0.10;     // 기준단가 = 총자산(현금+평가금액) × 이 비율 (1시간, 할증 전)
 const PLAYTIME_SURCHARGE_STEP  = 0.10;     // 당일 n번째 추가 구매마다 할증률 +10%p
 const PLAYTIME_SURCHARGE_MAX   = 0.50;     // 할증률 상한 (5번째 이상은 +50%로 고정)
@@ -65,17 +67,17 @@ function requireAdmin(auth) {
 /**
  * 자산충전/배너/중계방/고정노출 등 "로그인 유저 전용" 셀프 서비스 신청에서
  * 공통으로 쓰는 게이트. 이 앱의 익명 로그인은 접속 시 자동으로 이뤄지므로,
- * 여기서 말하는 "로그인"은 실제로는 카카오 연동(또는 관리자 Google 계정)을
- * 뜻한다 — 매크로/도배성 신청을 어렵게 하고, 실제 신원이 있는 유저만
- * 게임자산을 실제 홍보 슬롯으로 바꿀 수 있게 하기 위함.
+ * 여기서 말하는 "로그인"은 실제로는 계정 보호(카카오 또는 구글 연동, 혹은
+ * 관리자 Google 계정)를 뜻한다 — 매크로/도배성 신청을 어렵게 하고, 실제
+ * 신원이 있는 유저만 게임자산을 실제 홍보 슬롯으로 바꿀 수 있게 하기 위함.
  */
 async function requireLinkedUser(db, uid, auth) {
   if (auth.token?.email === ADMIN_EMAIL) return; // 관리자는 이미 Google 로그인 상태
   const user = (await db.ref(`users/${uid}`).get()).val();
-  if (!user?.kakaoLinked) {
+  if (!user?.kakaoLinked && !user?.googleLinked) {
     throw new HttpsError(
       "permission-denied",
-      "로그인이 필요한 기능입니다. 카카오 연동 후 이용해주세요."
+      "로그인이 필요한 기능입니다. 카카오 또는 구글 연동 후 이용해주세요."
     );
   }
 }
@@ -163,7 +165,7 @@ module.exports = {
   TEST_PERIOD_ACTIVE,
   ADMIN_EMAIL,
   INITIAL_CASH,
-  KAKAO_LINK_BONUS,
+  ACCOUNT_PROTECTION_BONUS,
   ANON_INITIAL_CASH_TOPUP,
   LEGACY_INITIAL_CASH,
   STREAMER_ID_RE,
@@ -177,7 +179,7 @@ module.exports = {
   PROFIT_RANKING_CHECK_COST,
   PROFIT_RANKING_TOP_N,
   ANON_DAILY_SECONDS,
-  KAKAO_DAILY_SECONDS,
+  PROTECTED_DAILY_SECONDS,
   PLAYTIME_BASE_RATE,
   PLAYTIME_SURCHARGE_STEP,
   PLAYTIME_SURCHARGE_MAX,

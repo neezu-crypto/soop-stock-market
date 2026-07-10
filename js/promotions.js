@@ -47,15 +47,15 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     const isValidSoopId = (v) => SOOP_ID_RE.test(v);
     const isValidUrl    = (v) => /^https?:\/\/.+/i.test(v);
 
-    // 자산충전/홍보/중계방/고정노출 등 로그인(카카오 연동) 유저 전용 기능의
+    // 자산충전/홍보/중계방/고정노출 등 로그인(계정 보호) 유저 전용 기능의
     // 공통 게이트 — 실제 차단은 서버(requireLinkedUser)가 하지만, 폼을 다
     // 작성한 뒤에야 막히면 답답하므로 모달을 열기 전에 미리 안내한다.
     function requireLoginOrPrompt() {
         const myData = getMyData();
-        const isLinked = myData?.kakaoLinked || auth.currentUser?.email === ADMIN_EMAIL;
+        const isLinked = myData?.kakaoLinked || myData?.googleLinked || auth.currentUser?.email === ADMIN_EMAIL;
         if (isLinked) return true;
-        if (confirm('로그인이 필요한 기능입니다.\n카카오 연동하고 계속하시겠어요?')) {
-            window.loginWithKakao();
+        if (confirm('로그인이 필요한 기능입니다.\n계정을 보호하고 계속하시겠어요?')) {
+            window.openAccountProtectModal();
         }
         return false;
     }

@@ -15,6 +15,7 @@ setGlobalOptions({
 //   admin.js          — 관리자 페이지 전용 액션 디스패처(adminAction)
 //   bannerRequests.js — 우측 랭킹 배너 + 차트 하단 배너 셀프 신청
 //   kakao.js          — 카카오 로그인 연동
+//   google.js         — 구글 로그인 연동
 //   cashCharge.js     — 라이브 방송 후원 자산 충전 신청
 //   pinRequests.js    — 종목 리스트 최상단 고정 노출 셀프 신청
 //   playTime.js       — 하루 무료 이용 시간 제한 + 게임머니 셀프 충전
@@ -27,6 +28,7 @@ const { initializeUser, trade } = require("./trade");
 const { adminAction } = require("./admin");
 const { submitBannerRequest, submitChartBannerRequest } = require("./bannerRequests");
 const { linkKakaoAccount } = require("./kakao");
+const { linkGoogleAccount } = require("./google");
 const { submitCashChargeRequest } = require("./cashCharge");
 const { submitPinRequest } = require("./pinRequests");
 const { heartbeat, buyPlayTime } = require("./playTime");
@@ -45,6 +47,7 @@ exports.adminAction             = adminAction;
 exports.submitBannerRequest     = submitBannerRequest;
 exports.submitChartBannerRequest = submitChartBannerRequest;
 exports.linkKakaoAccount        = linkKakaoAccount;
+exports.linkGoogleAccount       = linkGoogleAccount;
 exports.submitCashChargeRequest = submitCashChargeRequest;
 exports.submitPinRequest        = submitPinRequest;
 exports.heartbeat               = heartbeat;

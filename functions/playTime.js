@@ -4,7 +4,7 @@ const {
   TEST_PERIOD_ACTIVE,
   ADMIN_EMAIL,
   ANON_DAILY_SECONDS,
-  KAKAO_DAILY_SECONDS,
+  PROTECTED_DAILY_SECONDS,
   PLAYTIME_BASE_RATE,
   PLAYTIME_SURCHARGE_STEP,
   PLAYTIME_SURCHARGE_MAX,
@@ -52,7 +52,7 @@ async function getQuotaState(db, uid, auth) {
   const today = todayKeyKST();
   const isNewDay = user.playQuotaDate !== today;
 
-  const baseLimitSeconds = user.kakaoLinked ? KAKAO_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  const baseLimitSeconds = (user.kakaoLinked || user.googleLinked) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
   const usedSeconds      = isNewDay ? 0 : (user.playSecondsUsedToday || 0);
   const bonusSeconds     = isNewDay ? 0 : (user.bonusSecondsToday || 0);
   const remainingSeconds = Math.max(0, baseLimitSeconds + bonusSeconds - usedSeconds);
@@ -106,7 +106,7 @@ async function checkPlayQuota(db, uid, auth) {
   if (!userTx.committed || !userTx.snapshot.exists()) return; // 아직 유저 데이터가 없는 극초반 — initializeUser가 곧 처리
 
   const updated = userTx.snapshot.val();
-  const baseLimitSeconds = updated.kakaoLinked ? KAKAO_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  const baseLimitSeconds = (updated.kakaoLinked || updated.googleLinked) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
   const remainingSeconds = Math.max(
     0,
     baseLimitSeconds + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
@@ -143,7 +143,7 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
   }
 
   const updated = userTx.snapshot.val();
-  const baseLimitSeconds = updated.kakaoLinked ? KAKAO_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  const baseLimitSeconds = (updated.kakaoLinked || updated.googleLinked) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
   const remainingSeconds = Math.max(
     0,
     baseLimitSeconds + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
