@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, creditUserCash, chargeUserCash } = require("./common");
+const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, todayKeyKST, creditUserCash, chargeUserCash } = require("./common");
 const {
   actionListBannerRequests,
   actionApproveBannerRequest,
@@ -609,6 +609,157 @@ async function actionApplyCrewPrefix(db, { crewName, assignments }) {
   return { ok: true, prefixedCount, listedCount };
 }
 
+// ── 공지 배너 ────────────────────────────────────────────────
+// 점검모드와 별개로, 관리자가 자유 문구를 지갑 카드 아래에 띄웠다 내렸다
+// 할 수 있는 기능. maintenance와 동일하게 공개 읽기 전용 경로(announcement)에
+// 쓰기만 Admin SDK로 처리한다.
+async function actionSetAnnouncement(db, { active, text }) {
+  const isActive = !!active;
+  const trimmed  = String(text || "").trim();
+  if (isActive && !trimmed) {
+    throw new HttpsError("invalid-argument", "공지 문구를 입력해주세요.");
+  }
+  await db.ref("announcement").set({
+    active: isActive,
+    text:   trimmed,
+    updatedAt: Date.now(),
+  });
+  return { ok: true, active: isActive, text: trimmed };
+}
+
+// ── 출석 보상 현황 ───────────────────────────────────────────
+// 개별 클레임 로그는 남기지 않고 users/{uid}.lastAttendanceDate/attendanceStreak만
+// 갱신되므로, "오늘 몇 명이 받았고 총 얼마가 나갔는지"는 전체 유저를 스캔해
+// lastAttendanceDate가 오늘인 사람만 집계해서 구한다.
+async function actionGetAttendanceStats(db) {
+  const today = todayKeyKST();
+  const snap  = await db.ref("users").get();
+  const data  = snap.val() || {};
+
+  let claimedCount   = 0;
+  let totalPaidToday = 0;
+  const streakBuckets = {};
+
+  Object.values(data).forEach((user) => {
+    if (user.lastAttendanceDate !== today) return;
+    claimedCount++;
+    const streak = Math.min(Math.max(user.attendanceStreak || 1, 1), DAILY_ATTENDANCE_REWARDS.length);
+    totalPaidToday += DAILY_ATTENDANCE_REWARDS[streak - 1];
+    streakBuckets[streak] = (streakBuckets[streak] || 0) + 1;
+  });
+
+  return { ok: true, today, claimedCount, totalPaidToday, streakBuckets };
+}
+
+/**
+ * 크루가 해체되거나 이름이 바뀌었을 때, [크루명] 프리픽스가 붙은 종목을
+ * 한꺼번에 찾아 해제 후보로 보여준다. applyCrewPrefix의 반대 동작.
+ */
+async function actionPreviewCrewPrefixRemove(db, { crewName }) {
+  const crew = String(crewName || "").trim();
+  if (!crew) throw new HttpsError("invalid-argument", "크루명을 입력해주세요.");
+
+  const prefix = `[${crew}] `;
+  const snap   = await db.ref("stocks").get();
+  const data   = snap.val() || {};
+
+  const matches = Object.entries(data)
+    .filter(([, s]) => (s.name || "").startsWith(prefix))
+    .map(([id, s]) => ({ stockId: id, name: s.name, nameAfter: s.name.slice(prefix.length) }));
+
+  return { ok: true, crewName: crew, matches };
+}
+
+/** stockIds: 해제할 종목 id 배열 */
+async function actionApplyCrewPrefixRemove(db, { crewName, stockIds }) {
+  const crew = String(crewName || "").trim();
+  if (!crew) throw new HttpsError("invalid-argument", "크루명을 입력해주세요.");
+  if (!Array.isArray(stockIds) || stockIds.length === 0) {
+    throw new HttpsError("invalid-argument", "해제할 종목을 선택해주세요.");
+  }
+
+  const prefix  = `[${crew}] `;
+  const updates = {};
+  let removedCount = 0;
+
+  for (const stockId of stockIds) {
+    const nameSnap    = await db.ref(`stocks/${stockId}/name`).get();
+    const currentName = nameSnap.val();
+    if (currentName && currentName.startsWith(prefix)) {
+      updates[`stocks/${stockId}/name`] = currentName.slice(prefix.length);
+      removedCount++;
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db.ref().update(updates);
+  }
+  return { ok: true, removedCount };
+}
+
+// ── 통계 요약 ────────────────────────────────────────────────
+// 관리자 페이지 곳곳에 흩어져 있는 통계(출석 보상, 구매 매출, 유저 현황,
+// 손익 랭킹 게시 건수)를 한 화면에서 확인할 수 있도록 모아서 반환한다.
+async function actionGetOverviewStats(db) {
+  const [
+    attendance,
+    usersSnap,
+    bannerSnap, chartBannerSnap, pinSnap, relaySnap, playTimeSnap,
+    profitSnap,
+  ] = await Promise.all([
+    actionGetAttendanceStats(db),
+    db.ref("users").get(),
+    db.ref("bannerRequests").get(),
+    db.ref("chartBannerRequests").get(),
+    db.ref("pinRequests").get(),
+    db.ref("relayRoomRequests").get(),
+    db.ref("playTimePurchases").get(),
+    db.ref("rankings/profitEntries").get(),
+  ]);
+
+  const today = todayKeyKST();
+  const toKSTDateKey = (ms) => new Date((ms || 0) + 9 * 3600 * 1000).toISOString().split("T")[0];
+
+  // 실제로 매출로 잡을 수 있는 건: 승인 완료(approved)된 배너/차트배너/고정/중계방
+  // 신청 + 즉시 적용되는 플레이타임 충전(별도 status 없이 전부 유효).
+  // 자산 충전(지급)·종목 상장(무료)은 성격이 달라 구매 현황과 동일하게 제외한다.
+  const revenueEntries = [
+    ...Object.values(bannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
+    ...Object.values(chartBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
+    ...Object.values(pinSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
+    ...Object.values(relaySnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
+    ...Object.values(playTimeSnap.val() || {}).map((r) => ({ amount: r.chargedAmount || 0, at: r.purchasedAt || 0 })),
+  ];
+
+  const purchase = revenueEntries.reduce((acc, e) => {
+    acc.totalCount++;
+    acc.totalRevenue += e.amount;
+    if (toKSTDateKey(e.at) === today) {
+      acc.todayCount++;
+      acc.todayRevenue += e.amount;
+    }
+    return acc;
+  }, { totalCount: 0, totalRevenue: 0, todayCount: 0, todayRevenue: 0 });
+
+  const usersData = usersSnap.val() || {};
+  const userList  = Object.values(usersData);
+  const users = {
+    totalUsers: userList.length,
+    protectedUsers: userList.filter((u) => u.kakaoLinked || u.googleLinked).length,
+    anonUsers: userList.filter((u) => !u.kakaoLinked && !u.googleLinked).length,
+  };
+
+  const profitRankingEntryCount = Object.keys(profitSnap.val() || {}).length;
+
+  return {
+    ok: true,
+    attendance: { today: attendance.today, claimedCount: attendance.claimedCount, totalPaidToday: attendance.totalPaidToday },
+    purchase,
+    users,
+    profitRankingEntryCount,
+  };
+}
+
 // ── 유저 상세 조회 및 수동 조치 ──────────────────────────────
 // 개별 거래는 로그로 남기지 않으므로(체결가/잔고만 갱신), 보여줄 수 있는 건
 // 현재 보유 스냅샷과 손익 누적치까지다.
@@ -641,6 +792,8 @@ async function actionGetUserDetail(db, { uid }) {
     googleLinked: !!user.googleLinked,
     realizedPL: user.realizedPL || 0,
     lastTradeTime: user.lastTradeTime || null,
+    lastAttendanceDate: user.lastAttendanceDate || null,
+    attendanceStreak: user.attendanceStreak || 0,
     holdings,
   };
 }
@@ -742,12 +895,17 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "getPendingSummary":      return actionGetPendingSummary(db);
     case "previewAnonTopUp":       return actionPreviewAnonTopUp(db);
     case "applyAnonTopUp":         return actionApplyAnonTopUp(db);
-    case "previewCrewPrefixMatch": return actionPreviewCrewPrefixMatch(db, payload);
-    case "applyCrewPrefix":        return actionApplyCrewPrefix(db, payload);
+    case "previewCrewPrefixMatch":  return actionPreviewCrewPrefixMatch(db, payload);
+    case "applyCrewPrefix":         return actionApplyCrewPrefix(db, payload);
+    case "previewCrewPrefixRemove": return actionPreviewCrewPrefixRemove(db, payload);
+    case "applyCrewPrefixRemove":   return actionApplyCrewPrefixRemove(db, payload);
     case "getUserDetail":          return actionGetUserDetail(db, payload);
     case "adjustUserCash":         return actionAdjustUserCash(db, payload);
     case "resetUserProfitRanking": return actionResetUserProfitRanking(db, payload);
     case "deleteUser":             return actionDeleteUser(db, payload);
+    case "setAnnouncement":        return actionSetAnnouncement(db, payload);
+    case "getAttendanceStats":     return actionGetAttendanceStats(db);
+    case "getOverviewStats":       return actionGetOverviewStats(db);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }

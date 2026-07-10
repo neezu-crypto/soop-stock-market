@@ -99,7 +99,17 @@
             .stock-row-price { width: 84px; }
             .data-status-bar, .chart-banner-info-row { flex-wrap: wrap; gap: 6px; }
             .ranking-preview { overflow-x: auto; }
+            #overview-stats-grid { grid-template-columns: 1fr !important; }
         }
+
+        /* 📊 전체 통계 요약 카드 */
+        .stat-card {
+            background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 12px 14px;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .stat-card .stat-label { font-size: 12px; color: #94a3b8; }
+        .stat-card .stat-value { font-size: 18px; font-weight: 800; color: #f8fafc; }
+        .stat-card .stat-sub { font-size: 11px; color: #64748b; }
     </style>
 </head>
 <body>
@@ -122,6 +132,17 @@
         <div id="pending-alarm-chips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
 
+    <!-- 📊 전체 통계 요약 -->
+    <div class="container" style="display:block; border-color: #a855f7;">
+        <h1>📊 전체 통계 요약</h1>
+        <div class="info-box">
+            출석 보상·구매 매출·유저 현황·손익 랭킹처럼 여기저기 흩어진 통계를 한눈에 모아 보여줍니다.
+            상세 내역이 필요하면 아래 각 섹션을 확인하세요.
+        </div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadOverviewStats()">🔄 새로고침</button>
+        <div id="overview-stats-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+    </div>
+
     <!-- 🛠️ 점검모드 관리 -->
     <div class="container" style="display:block; border-color: #f97316;">
         <h1>🛠️ 점검모드 관리</h1>
@@ -136,6 +157,23 @@
         <div style="display:flex;gap:8px;">
             <button class="btn-danger" style="flex:1;" onclick="setMaintenanceMode(true)">🛠️ 점검모드 켜기</button>
             <button class="btn-success" style="flex:1;" onclick="setMaintenanceMode(false)">✅ 점검모드 끄기</button>
+        </div>
+    </div>
+
+    <!-- 📢 공지 배너 관리 -->
+    <div class="container" style="display:block; border-color: #38bdf8;">
+        <h1>📢 공지 배너 관리</h1>
+        <div class="info-box">
+            점검모드와 별개로, 지갑 카드 아래에 자유 문구("오늘 20시 이벤트!" 등)를 띄웠다 내렸다 할 수 있습니다.
+        </div>
+        <div class="data-status-bar" style="margin-bottom:12px;">
+            <span>현재 상태</span>
+            <b id="announcement-status-label" style="color:#94a3b8;">확인 중...</b>
+        </div>
+        <textarea id="announcement-text-input" style="height:70px;" placeholder="공지 문구를 입력하세요"></textarea>
+        <div style="display:flex;gap:8px;">
+            <button class="btn-primary" style="flex:2;margin-top:0;" onclick="setAnnouncement(true)">📢 공지 게시</button>
+            <button class="btn-danger" style="flex:1;" onclick="setAnnouncement(false)">끄기</button>
         </div>
     </div>
 
@@ -306,6 +344,20 @@
         <button class="btn-primary" onclick="previewCrewPrefixMatch()">🔍 매칭 확인</button>
         <div id="crew-prefix-result" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;"></div>
         <button id="crew-prefix-apply-btn" class="btn-primary" style="display:none;background:#f97316;" onclick="applyCrewPrefix()">✅ 일괄 적용</button>
+    </div>
+
+    <!-- 🏳 크루 프리픽스 일괄 해제 -->
+    <div class="container" style="display:block; border-color: #ef4444;">
+        <h1>🏳 크루 프리픽스 일괄 해제</h1>
+        <div class="info-box" style="color:#fca5a5;">
+            크루가 해체되거나 멤버가 빠졌을 때, [크루명] 프리픽스가 붙은 종목을 한꺼번에 찾아 해제합니다.
+            해제할 종목만 체크하고 적용하세요.
+        </div>
+        <input type="text" id="crew-remove-name-input" placeholder="크루명 (예: 크로아)"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:14px;margin-bottom:10px;">
+        <button class="btn-primary" style="background:#ef4444;" onclick="previewCrewPrefixRemove()">🔍 대상 종목 조회</button>
+        <div id="crew-remove-result" style="display:flex;flex-direction:column;gap:8px;margin:14px 0;"></div>
+        <button id="crew-remove-apply-btn" class="btn-primary" style="display:none;background:#ef4444;" onclick="applyCrewPrefixRemove()">✅ 선택 항목 해제</button>
     </div>
 
     <!-- 👤 유저 상세 조회 -->
@@ -490,7 +542,9 @@
             await loadAllRelayRoomData();
             await loadAllFreezeData();
             watchMaintenanceStatus();
+            watchAnnouncementStatus();
             watchPendingSummary();
+            await loadOverviewStats();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -593,6 +647,69 @@
             await callAdminAction('setMaintenanceMode', { active });
         } catch (e) {
             alert('점검모드 변경 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ── 공지 배너 (announcement/ 은 공개 읽기 경로라 클라이언트에서 바로 구독) ──
+    let announcementWatched = false;
+
+    function watchAnnouncementStatus() {
+        if (announcementWatched) return;
+        announcementWatched = true;
+        onValue(ref(db, 'announcement'), (snap) => {
+            const data  = snap.val();
+            const label = document.getElementById('announcement-status-label');
+            const input = document.getElementById('announcement-text-input');
+            if (label) {
+                if (data?.active && data.text) {
+                    label.style.color = '#4ade80';
+                    label.innerText = `게시 중 — "${data.text}"`;
+                } else {
+                    label.style.color = '#94a3b8';
+                    label.innerText = '꺼짐';
+                }
+            }
+            if (input && !input.dataset.userEdited) input.value = data?.text || '';
+        });
+    }
+
+    document.getElementById('announcement-text-input')?.addEventListener('input', (e) => {
+        e.target.dataset.userEdited = 'true';
+    });
+
+    window.setAnnouncement = async function(active) {
+        const text = document.getElementById('announcement-text-input').value.trim();
+        if (active && !text) return alert('공지 문구를 입력해주세요.');
+        if (!confirm(active ? '이 문구로 공지를 게시할까요?' : '공지를 끌까요?')) return;
+        try {
+            await callAdminAction('setAnnouncement', { active, text });
+            document.getElementById('announcement-text-input').removeAttribute('data-user-edited');
+        } catch (e) {
+            alert('공지 변경 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ── 전체 통계 요약 (출석·매출·유저·손익랭킹을 한 화면에) ──
+    window.loadOverviewStats = async function() {
+        const gridEl = document.getElementById('overview-stats-grid');
+        gridEl.innerHTML = '<div class="info-box" style="margin:0;grid-column:1/-1;">불러오는 중...</div>';
+        try {
+            const { attendance, purchase, users, profitRankingEntryCount } = await callAdminAction('getOverviewStats');
+            const cards = [
+                { label: `🎁 오늘 출석 (${attendance.today})`, value: `${attendance.claimedCount.toLocaleString()}명`, sub: `총 지급 ${attendance.totalPaidToday.toLocaleString()}원` },
+                { label: '🧾 오늘 매출', value: `${purchase.todayRevenue.toLocaleString()}원`, sub: `${purchase.todayCount.toLocaleString()}건` },
+                { label: '🧾 누적 매출', value: `${purchase.totalRevenue.toLocaleString()}원`, sub: `${purchase.totalCount.toLocaleString()}건` },
+                { label: '👥 전체 유저', value: `${users.totalUsers.toLocaleString()}명`, sub: `보호 ${users.protectedUsers.toLocaleString()} · 익명 ${users.anonUsers.toLocaleString()}` },
+                { label: '💰 손익 랭킹 게시', value: `${profitRankingEntryCount.toLocaleString()}건`, sub: '유저가 직접 게시한 건수' },
+            ];
+            gridEl.innerHTML = cards.map(c => `
+                <div class="stat-card">
+                    <div class="stat-label">${c.label}</div>
+                    <div class="stat-value">${c.value}</div>
+                    <div class="stat-sub">${c.sub}</div>
+                </div>`).join('');
+        } catch (e) {
+            gridEl.innerHTML = `<div class="info-box" style="margin:0;grid-column:1/-1;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
         }
     };
 
@@ -858,6 +975,53 @@
         }
     };
 
+    // ── 크루 프리픽스 일괄 해제 ────────────────────────────────
+    window.previewCrewPrefixRemove = async function() {
+        const crewName = document.getElementById('crew-remove-name-input').value.trim();
+        const resultEl = document.getElementById('crew-remove-result');
+        const applyBtn = document.getElementById('crew-remove-apply-btn');
+        if (!crewName) return alert('크루명을 입력해주세요.');
+
+        resultEl.innerHTML = '<div class="info-box" style="margin:0;">조회 중...</div>';
+        applyBtn.style.display = 'none';
+        try {
+            const { matches } = await callAdminAction('previewCrewPrefixRemove', { crewName });
+            if (matches.length === 0) {
+                resultEl.innerHTML = '<div class="info-box" style="margin:0;">[해당 크루] 프리픽스가 붙은 종목이 없습니다.</div>';
+                return;
+            }
+            resultEl.innerHTML = '';
+            matches.forEach((m) => {
+                const row = document.createElement('label');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;';
+                row.innerHTML = `
+                    <input type="checkbox" class="crew-remove-checkbox" value="${escapeAttr(m.stockId)}" checked style="width:16px;height:16px;">
+                    <span style="flex:1;">${escapeAttr(m.name)}</span>
+                    <span style="color:#64748b;font-size:12px;">→ ${escapeAttr(m.nameAfter)}</span>`;
+                resultEl.appendChild(row);
+            });
+            applyBtn.style.display = 'block';
+        } catch (e) {
+            resultEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">조회 실패: ${e.message}</div>`;
+        }
+    };
+
+    window.applyCrewPrefixRemove = async function() {
+        const crewName = document.getElementById('crew-remove-name-input').value.trim();
+        const stockIds = Array.from(document.querySelectorAll('.crew-remove-checkbox:checked')).map(el => el.value);
+        if (stockIds.length === 0) return alert('해제할 종목을 선택해주세요.');
+        if (!confirm(`${stockIds.length}건의 프리픽스를 해제하시겠습니까?`)) return;
+
+        try {
+            const { removedCount } = await callAdminAction('applyCrewPrefixRemove', { crewName, stockIds });
+            alert(`✅ ${removedCount}건 해제 완료`);
+            document.getElementById('crew-remove-result').innerHTML = '';
+            document.getElementById('crew-remove-apply-btn').style.display = 'none';
+        } catch (e) {
+            alert('해제 실패: ' + e.message);
+        }
+    };
+
     // ── 유저 상세 조회 ────────────────────────────────────────
     window.loadUserDetail = async function() {
         const uid = document.getElementById('user-detail-uid-input').value.trim();
@@ -885,6 +1049,7 @@
                         <span>${(data.kakaoLinked || data.googleLinked) ? `✅ 보호됨 (${[data.kakaoLinked && '카카오', data.googleLinked && '구글'].filter(Boolean).join('·')})` : '⚠️ 익명 계정'}</span>
                         <span>실현손익 <b style="color:${data.realizedPL >= 0 ? '#4ade80' : '#f87171'};">${data.realizedPL.toLocaleString()}원</b></span>
                         <span style="color:#64748b;">마지막 거래: ${data.lastTradeTime ? new Date(data.lastTradeTime).toLocaleString() : '-'}</span>
+                        <span style="color:#64748b;">출석: ${data.lastAttendanceDate ? `${data.lastAttendanceDate} (${data.attendanceStreak}일차)` : '받은 적 없음'}</span>
                     </div>
                     <div style="margin-bottom:14px;">${holdingsHtml}</div>
                     <div class="admin-action-row">
