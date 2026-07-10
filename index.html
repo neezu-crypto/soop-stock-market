@@ -708,7 +708,7 @@
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, get, set, onDisconnect }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
-import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, signInWithCredential, linkWithPopup, GoogleAuthProvider, onAuthStateChanged }
+import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, linkWithPopup, GoogleAuthProvider, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
@@ -1540,15 +1540,22 @@ window.loginWithGoogle = async function() {
         if (e?.code === 'auth/credential-already-in-use') {
             if (!(await confirmModal('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)'))) return;
             try {
-                await signInWithCredential(auth, e.credential);
+                // linkWithPopup의 already-in-use 에러가 돌려주는 credential을
+                // signInWithCredential에 그대로 재사용하면 Firebase Auth SDK
+                // 내부(mfa_error.ts)의 알려진 버그로 "undefined의
+                // _getIdTokenResponse를 읽을 수 없음" 오류가 난다(SDK 자체의
+                // 미해결 이슈, 브라우저 무관하게 발생). credential을 재사용하는
+                // 대신, 관리자 Ctrl+Enter 로그인과 동일하게 검증된 signInWithPopup
+                // 을 한 번 더 호출해 새로 인증받는 방식으로 이 버그를 피한다.
+                await signInWithPopup(auth, provider);
                 await linkGoogleAccountCallable();
                 alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
             } catch (e2) {
-                console.error('[google-login] signInWithCredential 실패', e2?.code, e2?.message, e2);
+                console.error('[google-login] 계정 전환용 signInWithPopup 실패', e2?.code, e2?.message, e2);
                 alert('⚠️ 계정 전환 중 오류가 발생했습니다.\n\n' +
-                    'Safari(사파리)에서는 구글 로그인이 불안정할 수 있어요. 아래 중 하나를 시도해주세요:\n' +
+                    '아래 중 하나를 시도해주세요:\n' +
                     '① 카카오 로그인으로 계정을 보호하기\n' +
-                    '② 크롬 등 다른 브라우저에서 다시 시도하기');
+                    '② 다른 브라우저에서 다시 시도하기');
             }
         } else if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') {
             // 유저가 팝업을 닫은 경우 — 조용히 무시
