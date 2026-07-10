@@ -1065,6 +1065,7 @@ const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking'
 const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttendance');
 
 const INITIAL_CASH = 500000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
+const CARD_BANNER_MIN_HOLDING_QTY = 10; // 서버 CARD_BANNER_MIN_HOLDING_QTY와 동일하게 유지
 
 // ══════════════════════════════════════════════════════════════
 // 점검모드 (관리자가 관리자 페이지에서 실시간으로 켜고 끔) — LONG_MAINTENANCE와
@@ -1689,6 +1690,23 @@ window.trade = async function (id, type, qty = 1) {
     }
     if (isTrading) return;
     if (!userUID || !myData) return alert("데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.");
+
+    // 종목 카드 배너 홀더 본인이 이 매도로 10주 미만이 되면, 자동 삭제되기
+    // 전에 미리 경고하고 취소할 기회를 준다(서버는 경고 없이 그대로 삭제함).
+    if (type === 'sell') {
+        const stock = allStocks.find(s => s.id === id);
+        if (stock?.cardBannerHolderUid === userUID) {
+            const currentQty = (myData.stocks || {})[id]?.qty || 0;
+            const afterQty   = currentQty - qty;
+            if (afterQty < CARD_BANNER_MIN_HOLDING_QTY) {
+                const proceed = confirm(
+                    `⚠️ 이 매도를 하면 보유 수량이 ${afterQty}주가 되어 ${CARD_BANNER_MIN_HOLDING_QTY}주 미만이 됩니다.\n` +
+                    `이 종목의 "카드 홍보"가 자동으로 삭제되며(환불 없음), 되돌릴 수 없습니다.\n\n계속 매도하시겠어요?`
+                );
+                if (!proceed) return;
+            }
+        }
+    }
 
     isTrading = true;
     updateUI(false);
