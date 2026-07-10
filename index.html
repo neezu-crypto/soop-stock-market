@@ -67,6 +67,7 @@
     <div id="my-stocks-list" class="my-stocks-list">
         <div class="no-stock-msg">보유 중인 주식이 없습니다.</div>
     </div>
+    <button onclick="openAssetShareCardModal()" style="width:100%;margin-top:10px;background:#334155;color:#38bdf8;border:1px solid #38bdf8;padding:8px;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px;">📸 스크린샷 모드</button>
     <div class="my-stocks-guide">💡 클릭 시 즉시 검색됩니다</div>
 </div>
 
@@ -412,7 +413,7 @@
         <div class="promo-modal-header"><h2>📸 공유용 카드</h2></div>
         <p style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">화면을 직접 캡처해서 원하는 곳에 공유해보세요 — 별도의 저장/공유 기능은 없어요.</p>
 
-        <div id="share-card-layout" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+        <div id="share-card-layout" class="share-card-layout" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
             <!-- 옵션 패널 -->
             <div id="share-card-options" style="flex:1 1 auto;min-width:200px;display:flex;flex-direction:column;gap:16px;">
                 <div>
@@ -455,6 +456,61 @@
         </div>
 
         <button onclick="closeShareCardModal()" style="width:100%;margin-top:20px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     보유 자산 공유용 카드 모달 — 손익 랭킹 카드와 동일한 뼈대
+     (저장/공유 기능 없음, 직접 스크린샷해서 공유하는 방식)
+══════════════════════════════════════════ -->
+<div id="asset-share-card-modal" class="promo-modal-overlay" style="z-index:5300;">
+    <div class="promo-modal-content" style="max-width:760px;max-height:90vh;overflow-y:auto;">
+        <div class="promo-modal-header"><h2>📸 공유용 카드</h2></div>
+        <p style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">화면을 직접 캡처해서 원하는 곳에 공유해보세요 — 별도의 저장/공유 기능은 없어요.</p>
+
+        <div class="share-card-layout" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+            <!-- 옵션 패널 -->
+            <div style="flex:1 1 auto;min-width:200px;display:flex;flex-direction:column;gap:16px;">
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">표시 항목</div>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                        <input type="checkbox" id="asset-share-opt-top3" checked onchange="renderAssetShareCard()"> 보유 종목 TOP3
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;padding-left:22px;">
+                        <input type="checkbox" id="asset-share-opt-detail" onchange="renderAssetShareCard()"> 수량·평단가 표시
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                        <input type="checkbox" id="asset-share-opt-date" checked onchange="renderAssetShareCard()"> 날짜
+                    </label>
+                    <label id="asset-share-opt-crew-label" style="display:none;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                        <input type="checkbox" id="asset-share-opt-crew" checked onchange="renderAssetShareCard()"> 크루 소속 배지
+                    </label>
+                </div>
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">테마</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button type="button" class="asset-share-theme-btn" data-theme="default" onclick="selectAssetShareTheme('default')"
+                            style="background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid #38bdf8;">기본</button>
+                        <button type="button" class="asset-share-theme-btn" data-theme="gold" onclick="selectAssetShareTheme('gold')"
+                            style="background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #475569;opacity:0.7;">골드</button>
+                        <button type="button" id="asset-share-theme-crew-btn" class="asset-share-theme-btn" data-theme="crew" onclick="selectAssetShareTheme('crew')"
+                            style="display:none;background:#1e293b;color:white;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #475569;opacity:0.7;">크루 컬러</button>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">한 줄 문구 (선택, 최대 30자)</div>
+                    <input type="text" id="asset-share-opt-caption" maxlength="30" placeholder="예: 꾸준히 모으는 중" oninput="renderAssetShareCard()"
+                        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+                </div>
+            </div>
+
+            <!-- 카드 미리보기 -->
+            <div style="flex:1 1 auto;min-width:200px;display:flex;justify-content:center;">
+                <div id="asset-share-card" style="width:100%;max-width:300px;aspect-ratio:9/16;border-radius:16px;padding:24px;display:flex;flex-direction:column;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
+            </div>
+        </div>
+
+        <button onclick="closeAssetShareCardModal()" style="width:100%;margin-top:20px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
     </div>
 </div>
 
@@ -2185,6 +2241,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('profit-ranking-modal').classList.contains('active')) closeProfitRankingModal();
         if (document.getElementById('account-protect-modal').classList.contains('active')) closeAccountProtectModal();
         if (document.getElementById('profit-share-card-modal').classList.contains('active')) closeShareCardModal();
+        if (document.getElementById('asset-share-card-modal').classList.contains('active')) closeAssetShareCardModal();
         if (document.getElementById('achievements-modal').classList.contains('active')) closeAchievementsModal();
         if (document.querySelector('.my-stocks-container').classList.contains('open')) closeMyStocksPanel();
     }

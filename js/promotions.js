@@ -826,4 +826,111 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     window.closeShareCardModal = function() {
         document.getElementById('profit-share-card-modal')?.classList.remove('active');
     };
+
+    // ── 보유 자산 공유용 카드 ──────────────────────────────────
+    // 손익 랭킹 카드와 뼈대(테마·토글·캡션·저장 API 없음)는 동일하되, 매매
+    // 실력(realizedPL)이 아니라 "지금 포트폴리오가 이렇게 생겼다"는 스냅샷이라
+    // 총수익률 같은 값은 의도적으로 넣지 않는다 — 출석 보상·계정보호
+    // 보너스·후원 당첨금까지 현금에 섞여 있어, 총자산 증가율을 매매 실력처럼
+    // 보여주면 오해를 줄 수 있다(실력 자랑은 손익 랭킹 카드 쪽 역할).
+    function computeMyPortfolioSummary() {
+        const myData = getMyData();
+        const allStocks = getAllStocks();
+        const cash = myData?.cash || 0;
+        const holdings = Object.entries(myData?.stocks || {})
+            .filter(([, pos]) => pos?.qty > 0)
+            .map(([id, pos]) => {
+                const stock = allStocks.find(s => s.id === id);
+                if (!stock) return null;
+                const currentPrice = stock.price || 0;
+                const profitPct = pos.avg ? ((currentPrice - pos.avg) / pos.avg) * 100 : 0;
+                return {
+                    name: stock.name,
+                    qty: pos.qty,
+                    avg: pos.avg,
+                    value: currentPrice * pos.qty,
+                    profitPct,
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.value - a.value);
+        const stockValue = holdings.reduce((sum, h) => sum + h.value, 0);
+        return { cash, stockValue, totalAssets: cash + stockValue, holdings };
+    }
+
+    window.selectAssetShareTheme = function(theme) {
+        document.querySelectorAll('.asset-share-theme-btn').forEach(b => {
+            const isActive = b.dataset.theme === theme;
+            b.style.border = isActive ? '2px solid #38bdf8' : '1px solid #475569';
+            b.style.opacity = isActive ? '1' : '0.7';
+            b.dataset.active = isActive ? '1' : '0';
+        });
+        renderAssetShareCard();
+    };
+
+    function selectedAssetShareTheme() {
+        return document.querySelector('.asset-share-theme-btn[data-active="1"]')?.dataset.theme || 'default';
+    }
+
+    window.renderAssetShareCard = function() {
+        const summary = computeMyPortfolioSummary();
+        const card = document.getElementById('asset-share-card');
+        if (!card) return;
+
+        const crewName = detectMyCrew();
+        const { bg, accent } = themeColors(selectedAssetShareTheme(), crewName);
+
+        const showTop3   = document.getElementById('asset-share-opt-top3')?.checked;
+        const showDetail = document.getElementById('asset-share-opt-detail')?.checked;
+        const showDate   = document.getElementById('asset-share-opt-date')?.checked;
+        const showCrew   = !!crewName && document.getElementById('asset-share-opt-crew')?.checked;
+        const caption    = (document.getElementById('asset-share-opt-caption')?.value || '').trim();
+        const dateStr    = new Date().toLocaleDateString('ko-KR');
+
+        card.style.background = bg;
+        card.innerHTML = `
+            <div style="text-align:center;font-size:11px;font-weight:800;letter-spacing:1px;color:${accent};text-transform:uppercase;margin-bottom:4px;">SOOP STOCK</div>
+            <div style="text-align:center;font-size:11px;color:#94a3b8;font-weight:700;margin-bottom:16px;">내 포트폴리오</div>
+            ${showCrew ? `<div style="text-align:center;margin-bottom:10px;"><span style="display:inline-block;background:rgba(255,255,255,0.12);color:${accent};font-size:11px;font-weight:700;padding:4px 10px;border-radius:100px;">[${escapeCaption(crewName)}] 소속 트레이더</span></div>` : ''}
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">총 자산</div>
+                <div style="font-size:34px;font-weight:900;color:${accent};line-height:1;">${Math.floor(summary.totalAssets).toLocaleString()}원</div>
+            </div>
+            ${showTop3 ? `
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15);">
+                ${summary.holdings.slice(0, 3).map((h) => {
+                    const s = h.profitPct > 0 ? '+' : '';
+                    const c = h.profitPct > 0 ? '#4ade80' : h.profitPct < 0 ? '#f87171' : '#94a3b8';
+                    return `<div style="padding:3px 0;">
+                        <div style="display:flex;justify-content:space-between;font-size:11px;color:#cbd5e1;">
+                            <span>${escapeCaption(h.name)}</span>
+                            <span style="color:${c};">${s}${h.profitPct.toFixed(1)}%</span>
+                        </div>
+                        ${showDetail ? `<div style="font-size:10px;color:#64748b;">${h.qty}주 · 평단 ${h.avg.toLocaleString()}원</div>` : ''}
+                    </div>`;
+                }).join('')}
+            </div>` : ''}
+            ${caption ? `<div style="text-align:center;font-size:12px;color:#f8fafc;margin-top:14px;font-style:italic;">"${escapeCaption(caption)}"</div>` : ''}
+            ${showDate ? `<div style="text-align:center;font-size:10px;color:#64748b;margin-top:${caption ? '8px' : '14px'};">${dateStr}</div>` : ''}
+        `;
+    };
+
+    window.openAssetShareCardModal = function() {
+        const myData = getMyData();
+        if (!myData) {
+            alert('데이터 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+            return;
+        }
+        const crewName = detectMyCrew();
+        const crewLabel = document.getElementById('asset-share-opt-crew-label');
+        const crewThemeBtn = document.getElementById('asset-share-theme-crew-btn');
+        if (crewLabel) crewLabel.style.display = crewName ? 'flex' : 'none';
+        if (crewThemeBtn) crewThemeBtn.style.display = crewName ? 'inline-block' : 'none';
+
+        document.getElementById('asset-share-card-modal')?.classList.add('active');
+        window.selectAssetShareTheme('default'); // 테마 버튼 상태 초기화 + 카드 렌더링까지 겸함
+    };
+    window.closeAssetShareCardModal = function() {
+        document.getElementById('asset-share-card-modal')?.classList.remove('active');
+    };
 }
