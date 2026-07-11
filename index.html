@@ -2370,17 +2370,18 @@ function updateCardContent(card, s, userStock) {
         ? '<span style="color:#38bdf8;">🥶 동결중</span> '
         : (isNearFreeze ? '<span style="color:#f97316;">⚠️ 동결임박</span> ' : (isPinned ? '<span style="color:#fbbf24;">📌</span> ' : ''));
     const tradeDisabled = isTrading || isFrozen;
-    const cardAvatarHtml = s.cardBannerImg
-        ? `<img src="${s.cardBannerImg}" class="stock-card-avatar" alt="" loading="lazy">`
+    // 종목 카드 프로필 배너 — 스파크라인을 가리지 않도록 그 위에 작은 원형
+    // 배지로 겹쳐 띄운다(우측 상단 모서리). 클릭 시 방송국으로 이동하며,
+    // 카드 전체 클릭(차트 열기)으로 이벤트가 번지지 않게 막는다.
+    const cardBannerBadgeHtml = s.cardBannerImg
+        ? `<img src="${s.cardBannerImg}" class="stock-card-avatar-badge" alt="" loading="lazy" title="홍보 배너 — 클릭 시 방송국으로 이동" onclick="event.stopPropagation(); window.open('${s.cardBannerLink || '#'}', '_blank');">`
         : '';
     card.innerHTML = `
         <div class="info-group">
-            <div class="stock-name" style="display:flex;align-items:center;gap:6px;">
-                ${cardAvatarHtml}<span>${badge}${s.name}</span>
-            </div>
+            <div class="stock-name">${badge}${s.name}</div>
             <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
         </div>
-        <div>${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}</div>
+        <div style="position:relative;display:inline-block;">${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}${cardBannerBadgeHtml}</div>
         <div class="price-group">
             <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
             <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${change}%</div>
