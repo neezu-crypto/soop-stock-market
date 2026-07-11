@@ -2371,17 +2371,23 @@ function updateCardContent(card, s, userStock) {
     // 방송국으로 이동, 비어있으면 같은 자리·크기의 빈 슬롯을 눌러 바로
     // 그 종목으로 신청 모달을 열 수 있다(신청 버튼도 실제 노출 위치와 동일하게).
     // 카드 전체 클릭(차트 열기)으로 이벤트가 번지지 않게 막는다.
-    const cardBannerBadgeHtml = s.cardBannerImg
-        ? `<img src="${s.cardBannerImg}" class="stock-card-avatar-badge" alt="" loading="lazy" title="배너 홍보 — 클릭 시 방송국으로 이동" onclick="event.stopPropagation(); window.open('${s.cardBannerLink || '#'}', '_blank');">`
-        : `<div class="stock-card-avatar-badge stock-card-avatar-badge-empty" title="배너 홍보 신청" onclick="event.stopPropagation(); window.openCardBannerModal('${s.name.replace(/'/g, "\\'")}');">📢</div>`;
+    // PC는 이름 옆 인라인 배치, 모바일은 예전처럼 스파크라인 위에 겹쳐 띄운다
+    // (2열 그리드에서 이름 칸이 너무 좁아지는 걸 피하려고 자리를 다르게 유지) —
+    // 두 자리 모두 마크업에 렌더링해두고 미디어쿼리로 하나만 보여준다.
+    function cardBannerBadge(positionClass) {
+        if (s.cardBannerImg) {
+            return `<img src="${s.cardBannerImg}" class="stock-card-avatar-badge ${positionClass}" alt="" loading="lazy" title="배너 홍보 — 클릭 시 방송국으로 이동" onclick="event.stopPropagation(); window.open('${s.cardBannerLink || '#'}', '_blank');">`;
+        }
+        return `<div class="stock-card-avatar-badge stock-card-avatar-badge-empty ${positionClass}" title="배너 홍보 신청" onclick="event.stopPropagation(); window.openCardBannerModal('${s.name.replace(/'/g, "\\'")}');">📢</div>`;
+    }
     card.innerHTML = `
         <div class="info-group">
             <div class="stock-name" style="display:flex;align-items:center;gap:6px;min-width:0;">
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${badge}${s.name}</span>${cardBannerBadgeHtml}
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${badge}${s.name}</span>${cardBannerBadge('stock-card-badge-inline')}
             </div>
             <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
         </div>
-        <div>${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}</div>
+        <div style="position:relative;">${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}${cardBannerBadge('stock-card-badge-overlay')}</div>
         <div class="price-group">
             <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
             <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${change}%</div>

@@ -69,10 +69,12 @@
             box-shadow: none;
         }
         .stock-card-avatar-badge-empty:hover { opacity: 1; border-color: var(--primary); }
+        /* PC는 이름 옆 인라인 자리, 모바일은 스파크라인 위에 겹치는 자리 —
+           둘 다 마크업에 있고 화면 폭에 따라 하나만 보여준다(크기는 동일 34px) */
+        .stock-card-badge-overlay { display: none; position: absolute; top: -8px; right: -6px; }
         @media (max-width: 600px) {
-            /* 모바일은 카드가 2열 그리드가 되면서 이름 칸이 훨씬 좁아지므로,
-               배지를 줄여 긴 종목명이 잘리지 않는 여유를 준다 */
-            .stock-card-avatar-badge { width: 26px; height: 26px; }
+            .stock-card-badge-inline { display: none; }
+            .stock-card-badge-overlay { display: flex; }
         }
         .up   { color: var(--up-color);   stroke: var(--up-color);   }
         .down { color: var(--down-color); stroke: var(--down-color); }
