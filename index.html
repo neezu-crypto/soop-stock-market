@@ -852,7 +852,7 @@
         <div id="streamer-verify-form">
             <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:16px;">
                 방송 닉네임을 입력하고 신청하면 4자리 인증번호가 발급돼요.<br>
-                <b style="color:#38bdf8;">본인 방송에서 그 번호를 언급</b>해주시면, 관리자가 다시보기로 확인한 뒤 승인해드려요.
+                <b style="color:#38bdf8;">방송 화면에 인증번호를 노출</b>하시면, 관리자가 다시보기로 확인한 뒤 승인해드려요.
             </p>
             <input id="streamer-verify-nickname" type="text" maxlength="20" placeholder="방송 닉네임 입력"
                 style="width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:14px;margin-bottom:12px;">
@@ -2077,8 +2077,8 @@ function showStreamerVerifyPending(nickname, isSwitch) {
     const pending = document.getElementById('streamer-verify-pending');
     pending.style.display = 'block';
     document.getElementById('streamer-verify-pending-text').innerText = isSwitch
-        ? `"${nickname}" 계정 전환 신청이 접수됐어요. 방금 뜬 번호를 방송에서 언급해주시면, 관리자 확인 후 이 기기에서도 기존 계정을 이어서 쓸 수 있어요.`
-        : `"${nickname}" 인증 신청이 접수됐어요. 방금 뜬 번호를 방송에서 언급해주시면, 관리자가 다시보기 확인 후 승인해드려요.`;
+        ? `"${nickname}" 계정 전환 신청이 접수됐어요. 방금 뜬 번호를 방송 화면에 노출해주시면, 관리자 확인 후 이 기기에서도 기존 계정을 이어서 쓸 수 있어요.`
+        : `"${nickname}" 인증 신청이 접수됐어요. 방금 뜬 번호를 방송 화면에 노출해주시면, 관리자가 다시보기 확인 후 승인해드려요.`;
 }
 
 async function completeStreamerVerificationSwitch(customToken) {
@@ -2121,7 +2121,7 @@ window.checkStreamerVerificationStatus = async function() {
             alert('✅ 스트리머 인증이 완료됐어요! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
         } else {
             showStreamerVerifyPending(nickname, isSwitch);
-            alert('아직 관리자 확인 전이에요. 방송에서 인증번호를 언급한 뒤 다시 확인해주세요.');
+            alert('아직 관리자 확인 전이에요. 방송 화면에 인증번호를 노출한 뒤 다시 확인해주세요.');
         }
     } catch (e) {
         alert('상태 확인 중 오류가 발생했습니다: ' + (e?.message || e));
