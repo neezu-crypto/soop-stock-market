@@ -53,11 +53,9 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     // 작성한 뒤에야 막히면 답답하므로 모달을 열기 전에 미리 안내한다.
     function requireLoginOrPrompt() {
         const myData = getMyData();
-        const isLinked = myData?.kakaoLinked || myData?.googleLinked || auth.currentUser?.email === ADMIN_EMAIL;
+        const isLinked = !!(myData?.kakaoLinked || myData?.googleLinked || myData?.streamerVerified) || auth.currentUser?.email === ADMIN_EMAIL;
         if (isLinked) return true;
-        if (confirm('로그인이 필요한 기능입니다.\n계정을 보호하고 계속하시겠어요?')) {
-            window.openAccountProtectModal();
-        }
+        window.openAccountProtectModal();
         return false;
     }
 
