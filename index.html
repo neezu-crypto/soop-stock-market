@@ -874,10 +874,11 @@
     </div>
 </div>
 
-<!-- 인증번호 1초 플래시 오버레이 — 화면 녹화/캡처로 코드가 오래 남지 않도록 짧게만 보여준다 -->
+<!-- 인증번호 3초 플래시 오버레이 — 화면 녹화/캡처로 코드가 오래 남지 않도록 짧게만 보여준다 -->
 <div id="streamer-verify-code-flash" style="display:none;position:fixed;inset:0;z-index:5200;background:rgba(15,23,42,0.96);align-items:center;justify-content:center;flex-direction:column;">
     <div style="font-size:14px;color:#94a3b8;margin-bottom:12px;">이 번호를 기억해주세요</div>
     <div id="streamer-verify-code-flash-value" style="font-size:64px;font-weight:900;color:#38bdf8;letter-spacing:8px;"></div>
+    <div style="font-size:12px;color:#64748b;margin-top:16px;">3초 후 자동으로 사라져요</div>
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -2069,7 +2070,7 @@ function flashStreamerVerifyCode(code) {
     const overlay = document.getElementById('streamer-verify-code-flash');
     document.getElementById('streamer-verify-code-flash-value').innerText = code;
     overlay.style.display = 'flex';
-    setTimeout(() => { overlay.style.display = 'none'; }, 1000);
+    setTimeout(() => { overlay.style.display = 'none'; }, 3000);
 }
 
 function showStreamerVerifyPending(nickname, isSwitch) {
