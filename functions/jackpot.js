@@ -83,8 +83,16 @@ async function pickNewJackpot(db) {
  * 계정당 상한(JACKPOT_PER_ACCOUNT_CAP) 안에서 기여량을 반영하고, 목표치에
  * 도달하는 순간(동시성 상황에서도 정확히 한 명만) 그 유저에게 상금을
  * 지급한 뒤 다음 잭팟 사이클을 시작한다.
+ *
+ * isProtected(계정 보호 여부)를 넘겨받아 익명 유저는 아예 카운트에서
+ * 제외한다 — 익명 계정은 무한정 새로 만들 수 있어, 계정당 상한만으로는
+ * "여러 익명 계정을 파서 혼자 목표치를 채우고 마지막 트리거만 원하는
+ * 계정으로 실행" 하는 셀프 파밍을 막지 못하기 때문(다른 현금 보상
+ * 기능들과 동일한 이유로 로그인 유저만 대상으로 한정).
  */
-async function contributeToJackpot(db, uid, stockId, qty) {
+async function contributeToJackpot(db, uid, stockId, qty, isProtected) {
+  if (!isProtected) return;
+
   const stateSnap = await db.ref("jackpot/state").get();
   const state = stateSnap.val();
   if (!state || state.stockId !== stockId || state.wonAt) return;

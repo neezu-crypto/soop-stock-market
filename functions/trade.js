@@ -368,10 +368,12 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   }
 
   // 7) 잭팟 종목 진행도 반영 (best-effort — 실패해도 매매 결과에는 영향 없음)
+  //    익명 유저는 카운트에서 제외 — jackpot.js의 contributeToJackpot 주석 참고.
   try {
     const updatedStock = stockTx.snapshot.val();
+    const isProtected = !!(finalUser.kakaoLinked || finalUser.googleLinked);
     await updateStockDailySnapshot(db, stockId, updatedStock?.volume || 0);
-    await contributeToJackpot(db, uid, stockId, qty);
+    await contributeToJackpot(db, uid, stockId, qty, isProtected);
   } catch (e) {
     // 잭팟 반영 실패는 무시 (다음 거래 때 재시도됨)
   }
