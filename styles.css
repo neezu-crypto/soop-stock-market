@@ -69,6 +69,11 @@
             box-shadow: none;
         }
         .stock-card-avatar-badge-empty:hover { opacity: 1; border-color: var(--primary); }
+        @media (max-width: 600px) {
+            /* 모바일은 카드가 2열 그리드가 되면서 이름 칸이 훨씬 좁아지므로,
+               배지를 줄여 긴 종목명이 잘리지 않는 여유를 준다 */
+            .stock-card-avatar-badge { width: 26px; height: 26px; }
+        }
         .up   { color: var(--up-color);   stroke: var(--up-color);   }
         .down { color: var(--down-color); stroke: var(--down-color); }
 

@@ -2376,8 +2376,8 @@ function updateCardContent(card, s, userStock) {
         : `<div class="stock-card-avatar-badge stock-card-avatar-badge-empty" title="배너 홍보 신청" onclick="event.stopPropagation(); window.openCardBannerModal('${s.name.replace(/'/g, "\\'")}');">📢</div>`;
     card.innerHTML = `
         <div class="info-group">
-            <div class="stock-name" style="display:flex;align-items:center;gap:6px;">
-                <span>${badge}${s.name}</span>${cardBannerBadgeHtml}
+            <div class="stock-name" style="display:flex;align-items:center;gap:6px;min-width:0;">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${badge}${s.name}</span>${cardBannerBadgeHtml}
             </div>
             <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
         </div>
