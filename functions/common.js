@@ -91,7 +91,7 @@ const ACHIEVEMENTS = [
   { id: "unfreeze_hero",     icon: "🧊", label: "동결 해제 성공", desc: "동결(서킷브레이커)된 종목을 해제했어요" },
   { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
   { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
-  { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너·카드 배너·고정노출·중계방 홍보 상품을 처음 구매했어요" },
+  { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너(우측/차트/배너 홍보)·고정노출·중계방 홍보 상품을 처음 구매했어요" },
 ];
 
 /**

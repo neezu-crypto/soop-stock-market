@@ -121,12 +121,12 @@
     </div>
 </div>
 
-<!-- ── 종목 카드 프로필 배너 신청 모달 — 누구나 열람 가능, 신청은 10주 이상 보유자만 ── -->
+<!-- ── 배너 홍보(종목 카드 프로필 배너) 신청 모달 — 누구나 열람 가능, 신청은 10주 이상 보유자만 ── -->
 <div id="card-banner-modal" class="promo-modal-overlay">
     <div class="promo-modal-content">
-        <div class="promo-modal-header"><h2>🎴 종목 카드 홍보 신청</h2></div>
+        <div class="promo-modal-header"><h2>📢 배너 홍보</h2></div>
         <ul class="promo-info-list" style="margin-bottom:16px;">
-            <li>📍 <b>위치:</b> 종목 리스트 카드 이름 옆 원형 프로필 사진 (스크롤할 때마다 보이는 가장 눈에 띄는 자리)</li>
+            <li>📍 <b>위치:</b> 종목 카드 안, 가격 앞 원형 자리(스크롤할 때마다 보이는 가장 눈에 띄는 자리) — 빈 카드에서 📢 아이콘을 눌러도 바로 신청할 수 있어요</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
             <li>💰 <b>비용:</b> 1일 당 게임자산 50만원 (신청 시 보유 현금에서 선차감)</li>
             <li>🔒 <b>신청 자격:</b> 해당 종목을 <b style="color:#38bdf8;">10주 이상 보유</b>한 유저만 신청 가능 — 실제 이 종목의 "소유주"만 홍보할 수 있게 하기 위함</li>
@@ -976,10 +976,6 @@
             <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
             <div class="banner-name">문의하기</div>
         </div>
-        <div onclick="openCardBannerModal()" class="banner-item">
-            <div class="banner-circle"><div class="banner-no-img">종목 카드 홍보</div></div>
-            <div class="banner-name">10주+ 보유자</div>
-        </div>
     </div>
 </div>
 
@@ -1701,7 +1697,7 @@ window.trade = async function (id, type, qty = 1) {
             if (afterQty < CARD_BANNER_MIN_HOLDING_QTY) {
                 const proceed = confirm(
                     `⚠️ 이 매도를 하면 보유 수량이 ${afterQty}주가 되어 ${CARD_BANNER_MIN_HOLDING_QTY}주 미만이 됩니다.\n` +
-                    `이 종목의 "카드 홍보"가 자동으로 삭제되며(환불 없음), 되돌릴 수 없습니다.\n\n계속 매도하시겠어요?`
+                    `이 종목의 "배너 홍보"가 자동으로 삭제되며(환불 없음), 되돌릴 수 없습니다.\n\n계속 매도하시겠어요?`
                 );
                 if (!proceed) return;
             }
@@ -1912,7 +1908,7 @@ const ACHIEVEMENT_DEFS = [
     { id: "unfreeze_hero",     icon: "🧊", label: "동결 해제 성공", desc: "동결(서킷브레이커)된 종목을 해제했어요" },
     { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
     { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
-    { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너·카드 배너·고정노출·중계방 홍보 상품을 처음 구매했어요" },
+    { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너(우측/차트/배너 홍보)·고정노출·중계방 홍보 상품을 처음 구매했어요" },
 ];
 
 function updateAchievementsUI() {
@@ -2370,12 +2366,14 @@ function updateCardContent(card, s, userStock) {
         ? '<span style="color:#38bdf8;">🥶 동결중</span> '
         : (isNearFreeze ? '<span style="color:#f97316;">⚠️ 동결임박</span> ' : (isPinned ? '<span style="color:#fbbf24;">📌</span> ' : ''));
     const tradeDisabled = isTrading || isFrozen;
-    // 종목 카드 프로필 배너 — 스파크라인을 가리지 않도록 그 위에 작은 원형
-    // 배지로 겹쳐 띄운다(우측 상단 모서리). 클릭 시 방송국으로 이동하며,
+    // 종목 카드 프로필 배너("배너 홍보") — 스파크라인을 가리지 않도록 그 위에
+    // 작은 원형 배지로 겹쳐 띄운다(우측 상단 모서리). 이미 홍보 중이면 클릭 시
+    // 방송국으로 이동, 비어있으면 같은 자리·크기의 빈 슬롯을 눌러 바로
+    // 그 종목으로 신청 모달을 열 수 있다(신청 버튼도 실제 노출 위치와 동일하게).
     // 카드 전체 클릭(차트 열기)으로 이벤트가 번지지 않게 막는다.
     const cardBannerBadgeHtml = s.cardBannerImg
-        ? `<img src="${s.cardBannerImg}" class="stock-card-avatar-badge" alt="" loading="lazy" title="홍보 배너 — 클릭 시 방송국으로 이동" onclick="event.stopPropagation(); window.open('${s.cardBannerLink || '#'}', '_blank');">`
-        : '';
+        ? `<img src="${s.cardBannerImg}" class="stock-card-avatar-badge" alt="" loading="lazy" title="배너 홍보 — 클릭 시 방송국으로 이동" onclick="event.stopPropagation(); window.open('${s.cardBannerLink || '#'}', '_blank');">`
+        : `<div class="stock-card-avatar-badge stock-card-avatar-badge-empty" title="배너 홍보 신청" onclick="event.stopPropagation(); window.openCardBannerModal('${s.name.replace(/'/g, "\\'")}');">📢</div>`;
     card.innerHTML = `
         <div class="info-group">
             <div class="stock-name">${badge}${s.name}</div>

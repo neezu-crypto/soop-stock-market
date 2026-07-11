@@ -213,9 +213,11 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     const CARD_BANNER_COST_PER_DAY    = 500000; // 서버 값과 동일하게 유지(표시용)
     const CARD_BANNER_MIN_HOLDING_QTY = 10;
 
-    window.openCardBannerModal = () => {
+    window.openCardBannerModal = (prefillStockName) => {
         if (!requireLoginOrPrompt()) return;
         populateCardBannerStockDatalist();
+        const nameInput = document.getElementById('card-banner-stock-name');
+        if (prefillStockName && nameInput) nameInput.value = prefillStockName;
         checkCardBannerEligibility();
         document.getElementById('card-banner-modal').classList.add('active');
     };

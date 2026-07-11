@@ -62,6 +62,13 @@
             transition: box-shadow 0.2s;
         }
         .stock-card-avatar-badge:hover { box-shadow: 0 0 0 1px var(--primary); }
+        /* 아직 배너 홍보가 없는 종목의 빈 슬롯 — 같은 자리·크기로 신청 버튼 역할을 겸한다 */
+        .stock-card-avatar-badge-empty {
+            display: flex; align-items: center; justify-content: center; font-size: 11px;
+            background: rgba(255,255,255,0.04); border: 2px dashed #475569; opacity: 0.6;
+            box-shadow: none;
+        }
+        .stock-card-avatar-badge-empty:hover { opacity: 1; border-color: var(--primary); }
         .up   { color: var(--up-color);   stroke: var(--up-color);   }
         .down { color: var(--down-color); stroke: var(--down-color); }
 
