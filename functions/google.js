@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { ACCOUNT_PROTECTION_BONUS, creditUserCash, grantAchievement } = require("./common");
+const { grantAchievement } = require("./common");
 
 // ══════════════════════════════════════════════════════════
 // 구글 로그인 연동 — 익명 계정 자산을 유지한 채 구글 계정으로 보호
@@ -15,9 +15,11 @@ const { ACCOUNT_PROTECTION_BONUS, creditUserCash, grantAchievement } = require("
 //     (카카오의 커스텀 토큰 발급과 동일한 효과를 Firebase가 네이티브로 제공).
 //
 // 이 함수는 그 이후 "정말 구글이 연동된 세션인지"만 서버에서 재확인하고
-// (클라이언트가 링크 성공 여부를 속일 수 없도록), 보너스 지급 + googleLinked
-// 마킹을 한다 — 카카오처럼 외부 API 검증이나 자체 ID 매핑이 필요 없다.
-// 카카오와 마찬가지로 이메일·이름·프로필 사진은 전혀 저장하지 않는다.
+// (클라이언트가 링크 성공 여부를 속일 수 없도록) googleLinked 마킹을 한다 —
+// 카카오처럼 외부 API 검증이나 자체 ID 매핑이 필요 없다. 익명/로그인 초기
+// 자산이 동일해진 뒤로는 연동 자체에 현금 보너스가 없다(진행상황 보존 +
+// 잭팟/복권/출석 같은 로그인 전용 콘텐츠 이용권이 연동의 가치). 카카오와
+// 마찬가지로 이메일·이름·프로필 사진은 전혀 저장하지 않는다.
 // ══════════════════════════════════════════════════════════
 const linkGoogleAccount = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -30,23 +32,11 @@ const linkGoogleAccount = onCall({ cors: true, timeoutSeconds: 30, memory: "256M
     throw new HttpsError("failed-precondition", "구글 계정 연동이 확인되지 않았습니다.");
   }
 
-  const db      = admin.database();
-  const userRef = db.ref(`users/${auth.uid}`);
-  const trueUser = (await userRef.get()).val() || {};
-
-  // 카카오로 이미 보호돼있던 계정이거나, 전환(신규 연동이 아니라 기존에
-  // 구글로 이미 보호돼있던 계정으로 signInWithCredential 전환한 경우 —
-  // 이때도 googleLinked는 이미 true이므로 보너스는 자동으로 건너뛴다.
-  const alreadyProtected = !!(trueUser.kakaoLinked || trueUser.googleLinked);
-  await userRef.child("googleLinked").set(true);
+  const db = admin.database();
+  await db.ref(`users/${auth.uid}/googleLinked`).set(true);
   await grantAchievement(db, auth.uid, "account_protected");
 
-  if (alreadyProtected) {
-    return { ok: true, action: "linked", bonus: 0 };
-  }
-
-  await creditUserCash(db, auth.uid, ACCOUNT_PROTECTION_BONUS);
-  return { ok: true, action: "linked", bonus: ACCOUNT_PROTECTION_BONUS };
+  return { ok: true, action: "linked" };
 });
 
 module.exports = { linkGoogleAccount };

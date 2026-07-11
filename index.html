@@ -820,8 +820,8 @@
         <div class="promo-modal-header"><h2>🔒 계정 보호하기</h2></div>
         <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:20px;">
             지금 쓰는 계정은 익명이라, 브라우저 데이터가 지워지면 자산을 잃을 수 있어요.<br>
-            카카오 또는 구글 중 편한 방법으로 연결하면 <b style="color:#38bdf8;">50만원 보너스</b>와 함께
-            자산이 안전하게 보호됩니다.
+            카카오 또는 구글 중 편한 방법으로 연결하면 자산이 안전하게 보호되고,
+            <b style="color:#38bdf8;">잭팟·복권·출석 보상</b> 같은 로그인 전용 콘텐츠도 이용할 수 있어요.
         </p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
             <button onclick="closeAccountProtectModal(); loginWithKakao();"
@@ -946,7 +946,7 @@
                 </div>
             </div>
             <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-                <div style="font-size:12px;color:var(--text-sub);">초기 자산 500,000원 지급됨</div>
+                <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
                 <div style="font-size:12px;color:var(--text-sub);">
                     🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
                 </div>
@@ -956,7 +956,7 @@
                 </span>
                 <button id="account-protect-btn" onclick="openAccountProtectModal()"
                     style="display:none;align-items:center;gap:6px;background:#38bdf8;color:#0f172a;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
-                    🔒 계정 보호하고 +50만원 받기
+                    🔒 계정 보호하고 자산 지키기
                 </button>
                 <div id="account-protect-privacy-note" style="display:none;font-size:10px;color:#64748b;text-align:right;max-width:220px;">🔒 닉네임 등 개인정보는 수집하지 않아요 (식별용 ID만 사용)</div>
                 <span id="account-protect-badge" style="display:none;font-size:12px;color:#4ade80;font-weight:700;"></span>
@@ -1104,7 +1104,7 @@ const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking'
 const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttendance');
 const buyLotteryTicketCallable = httpsCallable(functions, 'buyLotteryTicket');
 
-const INITIAL_CASH = 500000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
+const INITIAL_CASH = 1000000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 const CARD_BANNER_MIN_HOLDING_QTY = 10; // 서버 CARD_BANNER_MIN_HOLDING_QTY와 동일하게 유지
 
 // ══════════════════════════════════════════════════════════════
@@ -1926,12 +1926,7 @@ window.trade = async function (id, type, qty = 1) {
 
     } catch (error) {
         const message = error?.message || "거래 중 오류가 발생했습니다.";
-        // 잔액 부족 = 계정 보호 보너스로 바로 해결되는 순간 → 그 자리에서 유도
-        if (message.includes('잔액이 부족') && !myData?.kakaoLinked && !myData?.googleLinked) {
-            if (confirm(`${message}\n\n🔒 계정을 보호하면 50만원을 바로 받을 수 있어요!\n지금 보호하시겠어요?`)) {
-                window.openAccountProtectModal();
-            }
-        } else if (message.includes('이용 시간이 모두 소진')) {
+        if (message.includes('이용 시간이 모두 소진')) {
             window.showPlayTimeExpired();
         } else {
             alert(message);
@@ -2152,13 +2147,15 @@ function checkAccountProtectionMilestone(totalAssets) {
     if (!userUID) return;
     if (auth.currentUser?.email === ADMIN_EMAIL) return;                     // 관리자는 대상 아님
     if (myData?.kakaoLinked || myData?.googleLinked) return;                 // 이미 연동된 유저는 대상 아님
-    if (totalAssets <= 1000000) return;
+    // 시작 자산이 100만원이므로, 그 이상은 "성장했다"는 신호가 못 된다. 자산이
+    // 시작 자산의 2배(200만원)를 넘어선 시점 = 실제로 불려낸 순간을 기준으로 유도.
+    if (totalAssets <= 2000000) return;
 
-    const flagKey = `accountProtectNudge_1m_${userUID}`;
+    const flagKey = `accountProtectNudge_2m_${userUID}`;
     if (localStorage.getItem(flagKey)) return; // 계정당 1회만
     localStorage.setItem(flagKey, '1');
 
-    if (confirm('🎉 보유 자산이 100만원을 넘었어요!\n\n🔒 계정을 보호하면 50만원 보너스까지 받고, 지금까지 쌓은 자산을 안전하게 지킬 수 있어요.\n지금 보호하시겠어요?')) {
+    if (confirm('🎉 보유 자산이 200만원을 넘었어요!\n\n🔒 계정을 보호하면 지금까지 쌓은 자산을 안전하게 지킬 수 있고, 잭팟·복권·출석 보상도 이용할 수 있어요.\n지금 보호하시겠어요?')) {
         window.openAccountProtectModal();
     }
 }
@@ -2184,12 +2181,7 @@ window.loginWithKakao = function() {
                     // 새로고침으로 전체 상태를 새 계정 기준으로 다시 초기화한다.
                     window.location.reload();
                 } else if (result.data.action === 'linked') {
-                    const bonus = result.data.bonus || 0;
-                    if (bonus > 0) {
-                        alert(`🎉 카카오 연동 완료!\n\n💰 보너스 ${bonus.toLocaleString()}원이 지급됐습니다!\n이제 이 계정의 자산은 안전하게 보호됩니다.`);
-                    } else {
-                        alert('✅ 카카오 연동 완료! 이제 이 계정의 자산은 안전하게 보호됩니다.');
-                    }
+                    alert('✅ 카카오 연동 완료! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
                 } else {
                     alert('✅ 이미 연동된 계정입니다.');
                 }
@@ -2218,13 +2210,8 @@ window.loginWithKakao = function() {
 window.loginWithGoogle = async function() {
     try {
         await linkWithPopup(auth.currentUser, provider);
-        const result = await linkGoogleAccountCallable();
-        const bonus = result.data.bonus || 0;
-        if (bonus > 0) {
-            alert(`🎉 구글 연동 완료!\n\n💰 보너스 ${bonus.toLocaleString()}원이 지급됐습니다!\n이제 이 계정의 자산은 안전하게 보호됩니다.`);
-        } else {
-            alert('✅ 구글 연동 완료! 이제 이 계정의 자산은 안전하게 보호됩니다.');
-        }
+        await linkGoogleAccountCallable();
+        alert('✅ 구글 연동 완료! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
     } catch (e) {
         console.error('[google-login] linkWithPopup 실패', e?.code, e?.message, e);
         if (e?.code === 'auth/credential-already-in-use') {
