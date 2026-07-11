@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, LEGACY_INITIAL_CASH_500K, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, LOTTERY_POOL_FLOOR, todayKeyKST, creditUserCash, chargeUserCash } = require("./common");
+const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, LEGACY_INITIAL_CASH_500K, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, LOTTERY_POOL_FLOOR, todayKeyKST, creditUserCash, chargeUserCash, isUserProtected } = require("./common");
 const {
   actionListBannerRequests,
   actionApproveBannerRequest,
@@ -41,6 +41,11 @@ const {
   actionRejectListingRequest,
 } = require("./listingRequests");
 const { pickNewJackpot } = require("./jackpot");
+const {
+  actionListStreamerVerificationRequests,
+  actionApproveStreamerVerification,
+  actionRejectStreamerVerification,
+} = require("./streamerVerification");
 
 // ══════════════════════════════════════════════════════════
 // 관리자 페이지 기능 — 전부 Admin SDK로 처리해 RTDB 규칙의
@@ -474,6 +479,7 @@ async function actionGetPendingSummary(db) {
     { key: "listing",     sectionId: "section-listing",     label: "종목 상장 신청", paths: ["listingRequests"] },
     { key: "relay",       sectionId: "section-relay",       label: "중계방 홍보",     paths: ["relayRoomRequests"] },
     { key: "freeze",      sectionId: "section-freeze",      label: "동결 해제(방송 후원)", paths: ["unfreezeDonationRequests"] },
+    { key: "streamer",    sectionId: "section-streamer-verification", label: "스트리머 인증", paths: ["streamerVerificationRequests"] },
   ];
 
   const allPaths = [...new Set(sections.flatMap((s) => s.paths))];
@@ -802,8 +808,8 @@ async function actionGetOverviewStats(db) {
   const userList  = Object.values(usersData);
   const users = {
     totalUsers: userList.length,
-    protectedUsers: userList.filter((u) => u.kakaoLinked || u.googleLinked).length,
-    anonUsers: userList.filter((u) => !u.kakaoLinked && !u.googleLinked).length,
+    protectedUsers: userList.filter((u) => isUserProtected(u)).length,
+    anonUsers: userList.filter((u) => !isUserProtected(u)).length,
   };
 
   const profitRankingEntryCount = Object.keys(profitSnap.val() || {}).length;
@@ -951,6 +957,9 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "listListingRequests":    return actionListListingRequests(db);
     case "approveListingRequest":  return actionApproveListingRequest(db, payload);
     case "rejectListingRequest":   return actionRejectListingRequest(db, payload);
+    case "listStreamerVerificationRequests":    return actionListStreamerVerificationRequests(db);
+    case "approveStreamerVerification":         return actionApproveStreamerVerification(db, payload);
+    case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload);
     case "previewRankings":        return actionPreviewRankings(db);
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);

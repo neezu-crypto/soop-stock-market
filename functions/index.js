@@ -27,6 +27,7 @@ setGlobalOptions({
 //   attendance.js     — 출석 보상(1~7일차 순환)
 //   jackpot.js        — 잭팟 종목(커뮤니티 합산 매매량 마일스톤)
 //   lottery.js        — 복권함(계정당 구매, 즉시 판정 스크래치 복권)
+//   streamerVerification.js — 카카오/구글 대체 계정 보호(방송 검증 기반)
 //   common.js         — 위 모듈들이 공유하는 상수/헬퍼 (Cloud Function 없음)
 const { initializeUser, trade } = require("./trade");
 const { adminAction } = require("./admin");
@@ -47,6 +48,7 @@ const { submitListingRequest } = require("./listingRequests");
 const { checkProfitRanking } = require("./profitRanking");
 const { claimDailyAttendance } = require("./attendance");
 const { buyLotteryTicket } = require("./lottery");
+const { requestStreamerVerification } = require("./streamerVerification");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -68,3 +70,4 @@ exports.submitListingRequest          = submitListingRequest;
 exports.checkProfitRanking            = checkProfitRanking;
 exports.claimDailyAttendance          = claimDailyAttendance;
 exports.buyLotteryTicket              = buyLotteryTicket;
+exports.requestStreamerVerification   = requestStreamerVerification;

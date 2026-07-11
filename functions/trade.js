@@ -8,6 +8,7 @@ const {
   CARD_BANNER_MIN_HOLDING_QTY,
   requireNotInMaintenance,
   grantAchievement,
+  isUserProtected,
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
 const { updateStockDailySnapshot, contributeToJackpot } = require("./jackpot");
@@ -371,7 +372,7 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   //    익명 유저는 카운트에서 제외 — jackpot.js의 contributeToJackpot 주석 참고.
   try {
     const updatedStock = stockTx.snapshot.val();
-    const isProtected = !!(finalUser.kakaoLinked || finalUser.googleLinked);
+    const isProtected = isUserProtected(finalUser);
     await updateStockDailySnapshot(db, stockId, updatedStock?.volume || 0);
     await contributeToJackpot(db, uid, stockId, qty, isProtected);
   } catch (e) {

@@ -832,10 +832,52 @@
                 style="display:flex;align-items:center;justify-content:center;gap:8px;background:white;color:#334155;border:1px solid #cbd5e1;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18"> 구글로 보호하기
             </button>
+            <button onclick="closeAccountProtectModal(); openStreamerVerifyModal();"
+                style="display:flex;align-items:center;justify-content:center;gap:8px;background:#1e293b;color:#f8fafc;border:1px solid #475569;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
+                🎙️ 스트리머 인증하기
+            </button>
         </div>
         <div style="font-size:11px;color:#64748b;margin-bottom:16px;">🔒 닉네임·이름·프로필 사진은 수집하지 않아요 (식별용 ID만 사용)</div>
         <button onclick="closeAccountProtectModal()" style="width:100%;background:#334155;color:white;border:none;padding:10px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:13px;">닫기</button>
     </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     🎙️ 스트리머 인증 (카카오/구글 대체 계정 보호)
+══════════════════════════════════════════ -->
+<div id="streamer-verify-modal" class="promo-modal-overlay" style="z-index:5150;">
+    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
+        <div class="promo-modal-header"><h2>🎙️ 스트리머 인증</h2></div>
+
+        <div id="streamer-verify-form">
+            <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:16px;">
+                방송 닉네임을 입력하고 신청하면 4자리 인증번호가 발급돼요.<br>
+                <b style="color:#38bdf8;">본인 방송에서 그 번호를 언급</b>해주시면, 관리자가 다시보기로 확인한 뒤 승인해드려요.
+            </p>
+            <input id="streamer-verify-nickname" type="text" maxlength="20" placeholder="방송 닉네임 입력"
+                style="width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:14px;margin-bottom:12px;">
+            <button onclick="submitStreamerVerification()"
+                style="width:100%;background:#38bdf8;color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;margin-bottom:10px;">
+                신청하기
+            </button>
+        </div>
+
+        <div id="streamer-verify-pending" style="display:none;">
+            <p id="streamer-verify-pending-text" style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:16px;"></p>
+            <button onclick="checkStreamerVerificationStatus()"
+                style="width:100%;background:#38bdf8;color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;margin-bottom:10px;">
+                🔄 승인됐는지 확인하기
+            </button>
+        </div>
+
+        <button onclick="closeStreamerVerifyModal()" style="width:100%;background:#334155;color:white;border:none;padding:10px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:13px;">닫기</button>
+    </div>
+</div>
+
+<!-- 인증번호 1초 플래시 오버레이 — 화면 녹화/캡처로 코드가 오래 남지 않도록 짧게만 보여준다 -->
+<div id="streamer-verify-code-flash" style="display:none;position:fixed;inset:0;z-index:5200;background:rgba(15,23,42,0.96);align-items:center;justify-content:center;flex-direction:column;">
+    <div style="font-size:14px;color:#94a3b8;margin-bottom:12px;">이 번호를 기억해주세요</div>
+    <div id="streamer-verify-code-flash-value" style="font-size:64px;font-weight:900;color:#38bdf8;letter-spacing:8px;"></div>
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -1103,8 +1145,14 @@ const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequ
 const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking');
 const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttendance');
 const buyLotteryTicketCallable = httpsCallable(functions, 'buyLotteryTicket');
+const requestStreamerVerificationCallable = httpsCallable(functions, 'requestStreamerVerification');
 
 const INITIAL_CASH = 1000000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
+
+/** 카카오/구글 연동 또는 스트리머 인증 중 하나라도 됐으면 "계정 보호됨"으로 취급한다(서버 isUserProtected와 동일 기준). */
+function isMyAccountProtected() {
+    return !!(myData && (myData.kakaoLinked || myData.googleLinked || myData.streamerVerified));
+}
 const CARD_BANNER_MIN_HOLDING_QTY = 10; // 서버 CARD_BANNER_MIN_HOLDING_QTY와 동일하게 유지
 
 // ══════════════════════════════════════════════════════════════
@@ -1401,7 +1449,7 @@ onValue(ref(db, 'lotteryLastWin'), (snap) => {
 });
 
 window.openLotteryModal = function() {
-    const isLinked = myData?.kakaoLinked || myData?.googleLinked || auth.currentUser?.email === ADMIN_EMAIL;
+    const isLinked = isMyAccountProtected() || auth.currentUser?.email === ADMIN_EMAIL;
     if (!isLinked) {
         if (confirm('로그인이 필요한 기능입니다.\n계정을 보호하고 계속하시겠어요?')) window.openAccountProtectModal();
         return;
@@ -1727,7 +1775,7 @@ window.showPlayTimeExpired = function() {
 // myData가 나중에 채워지므로, 이용시간 표시가 갱신될 때마다(updatePlaytimeDisplay)
 // 함께 재평가한다 — 페이지 로드 시점의 한 번짜리 체크로는 로그인 여부를 반영 못 함.
 function isPlaytimeTestPeriodExempt() {
-    return !!(myData?.kakaoLinked || myData?.googleLinked || auth.currentUser?.email === ADMIN_EMAIL);
+    return isMyAccountProtected() || auth.currentUser?.email === ADMIN_EMAIL;
 }
 
 function unlockPlaytimeIfNeeded() {
@@ -2005,6 +2053,80 @@ window.closeAccountProtectModal = function() {
     document.getElementById('account-protect-modal')?.classList.remove('active');
 };
 
+// ── 스트리머 인증 (카카오/구글을 꺼리는 유저를 위한 대체 계정 보호) ──
+window.openStreamerVerifyModal = function() {
+    document.getElementById('streamer-verify-form').style.display = 'block';
+    document.getElementById('streamer-verify-pending').style.display = 'none';
+    document.getElementById('streamer-verify-nickname').value = '';
+    document.getElementById('streamer-verify-modal')?.classList.add('active');
+};
+window.closeStreamerVerifyModal = function() {
+    document.getElementById('streamer-verify-modal')?.classList.remove('active');
+};
+
+function flashStreamerVerifyCode(code) {
+    const overlay = document.getElementById('streamer-verify-code-flash');
+    document.getElementById('streamer-verify-code-flash-value').innerText = code;
+    overlay.style.display = 'flex';
+    setTimeout(() => { overlay.style.display = 'none'; }, 1000);
+}
+
+function showStreamerVerifyPending(nickname, isSwitch) {
+    document.getElementById('streamer-verify-form').style.display = 'none';
+    const pending = document.getElementById('streamer-verify-pending');
+    pending.style.display = 'block';
+    document.getElementById('streamer-verify-pending-text').innerText = isSwitch
+        ? `"${nickname}" 계정 전환 신청이 접수됐어요. 방금 뜬 번호를 방송에서 언급해주시면, 관리자 확인 후 이 기기에서도 기존 계정을 이어서 쓸 수 있어요.`
+        : `"${nickname}" 인증 신청이 접수됐어요. 방금 뜬 번호를 방송에서 언급해주시면, 관리자가 다시보기 확인 후 승인해드려요.`;
+}
+
+async function completeStreamerVerificationSwitch(customToken) {
+    await clearMyPresence(); // 지금 이 기기의 익명 uid presence를 먼저 정리 — 접속자 수 orphan 방지
+    await signInWithCustomToken(auth, customToken);
+    alert('✅ 이제 이 기기에서도 인증된 계정을 이어서 쓸 수 있어요.');
+    window.location.reload();
+}
+
+window.submitStreamerVerification = async function() {
+    const nickname = document.getElementById('streamer-verify-nickname').value.trim();
+    if (!nickname) return alert('닉네임을 입력해주세요.');
+    try {
+        const result = await requestStreamerVerificationCallable({ nickname });
+        const { action, code, nickname: returnedNickname, isSwitch, customToken } = result.data;
+        if (action === 'switch') {
+            closeStreamerVerifyModal();
+            await completeStreamerVerificationSwitch(customToken);
+        } else if (action === 'already-verified') {
+            closeStreamerVerifyModal();
+            alert('✅ 이미 스트리머 인증이 완료된 계정이에요.');
+        } else {
+            showStreamerVerifyPending(returnedNickname, isSwitch);
+            flashStreamerVerifyCode(code);
+        }
+    } catch (e) {
+        alert('스트리머 인증 신청 중 오류가 발생했습니다: ' + (e?.message || e));
+    }
+};
+
+window.checkStreamerVerificationStatus = async function() {
+    try {
+        const result = await requestStreamerVerificationCallable({});
+        const { action, code, nickname, isSwitch, customToken } = result.data;
+        if (action === 'switch') {
+            closeStreamerVerifyModal();
+            await completeStreamerVerificationSwitch(customToken);
+        } else if (action === 'already-verified') {
+            closeStreamerVerifyModal();
+            alert('✅ 스트리머 인증이 완료됐어요! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
+        } else {
+            showStreamerVerifyPending(nickname, isSwitch);
+            alert('아직 관리자 확인 전이에요. 방송에서 인증번호를 언급한 뒤 다시 확인해주세요.');
+        }
+    } catch (e) {
+        alert('상태 확인 중 오류가 발생했습니다: ' + (e?.message || e));
+    }
+};
+
 function updateAccountProtectionUI() {
     const btn   = document.getElementById('account-protect-btn');
     const badge = document.getElementById('account-protect-badge');
@@ -2023,19 +2145,18 @@ function updateAccountProtectionUI() {
 
     const kakaoLinked = !!(myData && myData.kakaoLinked);
     const googleLinked = !!(myData && myData.googleLinked);
-    const linked = kakaoLinked || googleLinked;
+    const streamerVerified = !!(myData && myData.streamerVerified);
+    const linked = kakaoLinked || googleLinked || streamerVerified;
 
     btn.style.display   = linked ? 'none'  : 'flex';
     note.style.display  = linked ? 'none'  : 'block';
     badge.style.display = linked ? 'inline' : 'none';
 
-    if (kakaoLinked && googleLinked) {
-        badge.innerText = '✅ 카카오·구글로 보호됨';
-    } else if (kakaoLinked) {
-        badge.innerText = '✅ 카카오로 보호됨';
-    } else if (googleLinked) {
-        badge.innerText = '✅ 구글로 보호됨';
-    }
+    const methods = [];
+    if (kakaoLinked) methods.push('카카오');
+    if (googleLinked) methods.push('구글');
+    if (streamerVerified) methods.push('스트리머 인증');
+    if (methods.length) badge.innerText = `✅ ${methods.join('·')}로 보호됨`;
 }
 
 // ── 출석 보상 (계정 보호 유저 전용, 1~7일차 순환) ──
@@ -2048,7 +2169,7 @@ function updateAttendanceUI() {
     // 관리자 또는 계정 미보호 유저에게는 노출하지 않는다(어뷰징 방지 —
     // 익명 계정은 대상이 아니고, 관리자는 애초에 자산 관리가 무의미함).
     const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
-    const linked  = !!(myData && (myData.kakaoLinked || myData.googleLinked));
+    const linked  = isMyAccountProtected();
     if (isAdmin || !linked) {
         btn.style.display = 'none';
         return;
@@ -2100,7 +2221,7 @@ const ACHIEVEMENT_DEFS = [
     { id: "first_trade",       icon: "🎉", label: "첫 매매",        desc: "종목을 처음으로 매수 또는 매도했어요" },
     { id: "trade_10",          icon: "📈", label: "매매의 정석",    desc: "누적 매매 10회를 달성했어요" },
     { id: "trade_50",          icon: "🔁", label: "트레이더",       desc: "누적 매매 50회를 달성했어요" },
-    { id: "account_protected", icon: "🔒", label: "계정 보호 완료", desc: "카카오 또는 구글로 계정을 보호했어요" },
+    { id: "account_protected", icon: "🔒", label: "계정 보호 완료", desc: "카카오, 구글, 또는 스트리머 인증으로 계정을 보호했어요" },
     { id: "profit_published",  icon: "💰", label: "손익 공개",      desc: "내 손익 랭킹을 처음으로 게시했어요" },
     { id: "profit_top10",      icon: "🏆", label: "TOP 10 진입",    desc: "손익 랭킹 TOP 10에 진입했어요" },
     { id: "unfreeze_hero",     icon: "🧊", label: "동결 해제 성공", desc: "동결(서킷브레이커)된 종목을 해제했어요" },
@@ -2146,7 +2267,7 @@ window.closeAchievementsModal = function() {
 function checkAccountProtectionMilestone(totalAssets) {
     if (!userUID) return;
     if (auth.currentUser?.email === ADMIN_EMAIL) return;                     // 관리자는 대상 아님
-    if (myData?.kakaoLinked || myData?.googleLinked) return;                 // 이미 연동된 유저는 대상 아님
+    if (isMyAccountProtected()) return;                                      // 이미 보호된 유저는 대상 아님
     // 시작 자산이 100만원이므로, 그 이상은 "성장했다"는 신호가 못 된다. 자산이
     // 시작 자산의 2배(200만원)를 넘어선 시점 = 실제로 불려낸 순간을 기준으로 유도.
     if (totalAssets <= 2000000) return;

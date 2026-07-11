@@ -15,6 +15,7 @@ const {
   todayKeyKST,
   computeTotalAssets,
   recordDailyAssetSnapshot,
+  isUserProtected,
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -34,7 +35,7 @@ async function getQuotaState(db, uid, auth) {
   const today = todayKeyKST();
   const isNewDay = user.playQuotaDate !== today;
 
-  const baseLimitSeconds = (user.kakaoLinked || user.googleLinked) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  const baseLimitSeconds = isUserProtected(user) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
   const usedSeconds      = isNewDay ? 0 : (user.playSecondsUsedToday || 0);
   const bonusSeconds     = isNewDay ? 0 : (user.bonusSecondsToday || 0);
   const remainingSeconds = Math.max(0, baseLimitSeconds + bonusSeconds - usedSeconds);
@@ -101,7 +102,7 @@ async function checkPlayQuota(db, uid, auth) {
   if (!userTx.committed || !userTx.snapshot.exists()) return; // 아직 유저 데이터가 없는 극초반 — initializeUser가 곧 처리
 
   const updated = userTx.snapshot.val();
-  const baseLimitSeconds = (updated.kakaoLinked || updated.googleLinked) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  const baseLimitSeconds = isUserProtected(updated) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
   const remainingSeconds = Math.max(
     0,
     baseLimitSeconds + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
@@ -146,7 +147,7 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
   }
 
   const updated = userTx.snapshot.val();
-  const baseLimitSeconds = (updated.kakaoLinked || updated.googleLinked) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  const baseLimitSeconds = isUserProtected(updated) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
   const remainingSeconds = Math.max(
     0,
     baseLimitSeconds + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
@@ -176,7 +177,7 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   const isAdmin = auth.token?.email === ADMIN_EMAIL;
   const today = todayKeyKST();
   const user = (await db.ref(`users/${uid}`).get()).val() || { cash: 0, stocks: {} };
-  const isProtected = !!(user.kakaoLinked || user.googleLinked);
+  const isProtected = isUserProtected(user);
 
   let hours = parseInt(request.data?.hours, 10);
 

@@ -42,6 +42,16 @@ const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 
 const PROFIT_RANKING_CHECK_COST = 500000;  // 손익 랭킹 확인(및 내 순위 갱신) 1회당 차감되는 게임자산
 const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 인원 수
 
+// ── 스트리머 인증 ────────────────────────────────────────────
+// 카카오/구글 연동을 꺼리는 스트리머를 위한 대체 계정 보호 경로. 신청 시
+// 서버가 4자리 인증번호를 발급하고, 신청자는 본인 방송에서 그 번호를
+// 언급해 소유권을 증명한다. 관리자가 다시보기에서 번호를 직접 확인한 뒤
+// 승인해야만 보호가 확정된다 — 닉네임 자체는 아무나 입력할 수 있어 증명력이
+// 없으므로, 매 승인마다(최초 인증뿐 아니라 다른 기기로 넘어가는 재인증도)
+// 반드시 이 랜덤 코드 확인을 거치게 해 타 계정 탈취를 막는다.
+const STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH = 20;
+const STREAMER_VERIFICATION_COOLDOWN_MS         = 60 * 1000; // 매크로/도배성 재신청 방지
+
 // ── 잭팟 종목 ────────────────────────────────────────────────
 // 매일(또는 당첨될 때까지) 랜덤 종목 1개를 "잭팟 종목"으로 선정해, 전체
 // 유저가 그 종목을 매매한 수량(매수+매도 합산)이 목표치에 도달하는 순간
@@ -117,7 +127,7 @@ const ACHIEVEMENTS = [
   { id: "first_trade",       icon: "🎉", label: "첫 매매",        desc: "종목을 처음으로 매수 또는 매도했어요" },
   { id: "trade_10",          icon: "📈", label: "매매의 정석",    desc: "누적 매매 10회를 달성했어요" },
   { id: "trade_50",          icon: "🔁", label: "트레이더",       desc: "누적 매매 50회를 달성했어요" },
-  { id: "account_protected", icon: "🔒", label: "계정 보호 완료", desc: "카카오 또는 구글로 계정을 보호했어요" },
+  { id: "account_protected", icon: "🔒", label: "계정 보호 완료", desc: "카카오, 구글, 또는 스트리머 인증으로 계정을 보호했어요" },
   { id: "profit_published",  icon: "💰", label: "손익 공개",      desc: "내 손익 랭킹을 처음으로 게시했어요" },
   { id: "profit_top10",      icon: "🏆", label: "TOP 10 진입",    desc: "손익 랭킹 TOP 10에 진입했어요" },
   { id: "unfreeze_hero",     icon: "🧊", label: "동결 해제 성공", desc: "동결(서킷브레이커)된 종목을 해제했어요" },
@@ -156,20 +166,25 @@ function requireAdmin(auth) {
   }
 }
 
+/** 카카오/구글 연동 또는 스트리머 인증 중 하나라도 됐으면 "계정 보호됨"으로 취급한다. */
+function isUserProtected(user) {
+  return !!(user?.kakaoLinked || user?.googleLinked || user?.streamerVerified);
+}
+
 /**
  * 자산충전/배너/중계방/고정노출 등 "로그인 유저 전용" 셀프 서비스 신청에서
  * 공통으로 쓰는 게이트. 이 앱의 익명 로그인은 접속 시 자동으로 이뤄지므로,
- * 여기서 말하는 "로그인"은 실제로는 계정 보호(카카오 또는 구글 연동, 혹은
- * 관리자 Google 계정)를 뜻한다 — 매크로/도배성 신청을 어렵게 하고, 실제
- * 신원이 있는 유저만 게임자산을 실제 홍보 슬롯으로 바꿀 수 있게 하기 위함.
+ * 여기서 말하는 "로그인"은 실제로는 계정 보호(카카오·구글 연동, 스트리머
+ * 인증, 혹은 관리자 Google 계정)를 뜻한다 — 매크로/도배성 신청을 어렵게 하고,
+ * 실제 신원이 있는 유저만 게임자산을 실제 홍보 슬롯으로 바꿀 수 있게 하기 위함.
  */
 async function requireLinkedUser(db, uid, auth) {
   if (auth.token?.email === ADMIN_EMAIL) return; // 관리자는 이미 Google 로그인 상태
   const user = (await db.ref(`users/${uid}`).get()).val();
-  if (!user?.kakaoLinked && !user?.googleLinked) {
+  if (!isUserProtected(user)) {
     throw new HttpsError(
       "permission-denied",
-      "로그인이 필요한 기능입니다. 카카오 또는 구글 연동 후 이용해주세요."
+      "로그인이 필요한 기능입니다. 카카오 연동, 구글 연동, 또는 스트리머 인증 후 이용해주세요."
     );
   }
 }
@@ -323,6 +338,8 @@ module.exports = {
   MAX_PINNED_SLOTS,
   PROFIT_RANKING_CHECK_COST,
   PROFIT_RANKING_TOP_N,
+  STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH,
+  STREAMER_VERIFICATION_COOLDOWN_MS,
   JACKPOT_PRIZE_AMOUNT,
   JACKPOT_PER_ACCOUNT_CAP,
   JACKPOT_TARGET_MIN,
@@ -359,6 +376,7 @@ module.exports = {
   requireAdmin,
   requireLinkedUser,
   requireNotInMaintenance,
+  isUserProtected,
   findStockIdByName,
   bannerStatus,
   chargeUserCash,
