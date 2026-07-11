@@ -508,7 +508,7 @@
     const provider  = new GoogleAuthProvider();
     const functions = getFunctions(app);
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
-    const ACHIEVEMENT_COUNT = 11; // functions/common.js의 ACHIEVEMENTS 개수와 맞춰 유지
+    const ACHIEVEMENT_COUNT = 12; // functions/common.js의 ACHIEVEMENTS 개수와 맞춰 유지
 
     // 관리자 쓰기·users 읽기는 전부 이 콜러블(functions/index.js의 adminAction)이
     // Admin SDK로 처리한다 — RTDB 규칙의 이메일 매칭에 의존하지 않는다.
@@ -802,13 +802,15 @@
         const gridEl = document.getElementById('overview-stats-grid');
         gridEl.innerHTML = '<div class="info-box" style="margin:0;grid-column:1/-1;">불러오는 중...</div>';
         try {
-            const { attendance, purchase, users, profitRankingEntryCount } = await callAdminAction('getOverviewStats');
+            const { attendance, purchase, users, profitRankingEntryCount, lottery } = await callAdminAction('getOverviewStats');
             const cards = [
                 { label: `🎁 오늘 출석 (${attendance.today})`, value: `${attendance.claimedCount.toLocaleString()}명`, sub: `총 지급 ${attendance.totalPaidToday.toLocaleString()}원` },
                 { label: '🧾 오늘 매출', value: `${purchase.todayRevenue.toLocaleString()}원`, sub: `${purchase.todayCount.toLocaleString()}건` },
                 { label: '🧾 누적 매출', value: `${purchase.totalRevenue.toLocaleString()}원`, sub: `${purchase.totalCount.toLocaleString()}건` },
                 { label: '👥 전체 유저', value: `${users.totalUsers.toLocaleString()}명`, sub: `보호 ${users.protectedUsers.toLocaleString()} · 익명 ${users.anonUsers.toLocaleString()}` },
                 { label: '💰 손익 랭킹 게시', value: `${profitRankingEntryCount.toLocaleString()}건`, sub: '유저가 직접 게시한 건수' },
+                { label: '🎟️ 복권함 현재 모금액', value: `${lottery.currentPool.toLocaleString()}원`, sub: `누적 판매 ${lottery.totalSold.toLocaleString()}장` },
+                { label: '🎟️ 복권함 순이익', value: `${lottery.netRevenue.toLocaleString()}원`, sub: `판매 ${lottery.totalRevenue.toLocaleString()} - 당첨지급 ${lottery.totalPayout.toLocaleString()} (${lottery.totalWins}회 당첨)` },
             ];
             gridEl.innerHTML = cards.map(c => `
                 <div class="stat-card">

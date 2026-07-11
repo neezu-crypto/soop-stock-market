@@ -25,6 +25,8 @@ setGlobalOptions({
 //   listingRequests.js — 검색해도 없는 종목의 신규 상장 셀프 신청
 //   profitRanking.js  — 순수 매매 손익 랭킹 확인/갱신
 //   attendance.js     — 출석 보상(1~7일차 순환)
+//   jackpot.js        — 잭팟 종목(커뮤니티 합산 매매량 마일스톤)
+//   lottery.js        — 복권함(계정당 구매, 즉시 판정 스크래치 복권)
 //   common.js         — 위 모듈들이 공유하는 상수/헬퍼 (Cloud Function 없음)
 const { initializeUser, trade } = require("./trade");
 const { adminAction } = require("./admin");
@@ -44,6 +46,7 @@ const {
 const { submitListingRequest } = require("./listingRequests");
 const { checkProfitRanking } = require("./profitRanking");
 const { claimDailyAttendance } = require("./attendance");
+const { buyLotteryTicket } = require("./lottery");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -64,3 +67,4 @@ exports.checkFrozenStockDelistings    = checkFrozenStockDelistings;
 exports.submitListingRequest          = submitListingRequest;
 exports.checkProfitRanking            = checkProfitRanking;
 exports.claimDailyAttendance          = claimDailyAttendance;
+exports.buyLotteryTicket              = buyLotteryTicket;

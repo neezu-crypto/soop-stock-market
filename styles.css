@@ -139,6 +139,35 @@
             height: 100%; width: 0%; background: linear-gradient(90deg, #f59e0b, #fbbf24);
             transition: width 0.4s ease; border-radius: 100px;
         }
+        /* 🎟️ 복권함 바 — 누적 모금액 상시 노출 + 클릭 시 구매 모달 */
+        .lottery-bar {
+            background: linear-gradient(135deg, rgba(168,85,247,0.10), rgba(126,34,206,0.06));
+            width: 100%; padding: 12px 20px; border-radius: 12px;
+            margin-bottom: 20px; border: 1px solid rgba(168,85,247,0.4); box-sizing: border-box;
+            cursor: pointer; transition: border-color 0.2s;
+        }
+        .lottery-bar:hover { border-color: #a855f7; }
+        .lottery-bar-title {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            font-weight: 800; font-size: 14px; color: #c084fc;
+        }
+        .lottery-bar-title b { color: var(--text-main); }
+        .lottery-buy-btn {
+            background: #a855f7; color: white; font-size: 11px; font-weight: 800;
+            padding: 5px 10px; border-radius: 100px; white-space: nowrap;
+        }
+        .lottery-scratch-cell {
+            width: 64px; height: 64px; border-radius: 12px;
+            background: linear-gradient(160deg, #334155, #1e293b);
+            border: 2px solid #475569; display: flex; align-items: center; justify-content: center;
+            font-size: 26px; font-weight: 900; color: #94a3b8; cursor: pointer;
+            transition: transform 0.15s, border-color 0.2s, background 0.2s;
+        }
+        .lottery-scratch-cell:hover { transform: scale(1.05); border-color: #a855f7; }
+        .lottery-scratch-cell.revealed {
+            cursor: default; transform: none; background: rgba(168,85,247,0.15); color: #c084fc;
+        }
+        .lottery-scratch-cell.revealed.lucky-seven { background: rgba(74,222,128,0.2); border-color: #4ade80; color: #4ade80; }
         .relay-room-bar {
             background: var(--card-bg); width: 100%; padding: 12px 20px; border-radius: 12px;
             margin-bottom: 20px; border: 1px dashed #334155; box-sizing: border-box;

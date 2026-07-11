@@ -171,6 +171,34 @@
     </div>
 </div>
 
+<!-- ── 🎟️ 복권함 — 20만원에 복권 1장, 서버가 즉시 확정한 세 자리(1~7)를 긁어서 확인 ── -->
+<div id="lottery-modal" class="promo-modal-overlay">
+    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
+        <div class="promo-modal-header"><h2>🎟️ 복권함</h2></div>
+        <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.4);border-radius:10px;padding:14px;margin-bottom:16px;">
+            <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">현재 누적 모금액</div>
+            <div id="lottery-modal-pool" style="font-size:26px;font-weight:900;color:#c084fc;">-</div>
+        </div>
+        <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
+            <li>🎫 <b>가격:</b> 1장당 20만원 (구매 개수 제한 없음)</li>
+            <li>🍀 <b>당첨:</b> 세 자리(1~7) 모두 7이 나오면(777) 그 순간 모금액의 90% 지급, 모금액은 100만원으로 초기화</li>
+            <li>🔒 <b>대상:</b> 카카오 또는 구글로 계정을 보호한 유저만 구매 가능</li>
+        </ul>
+
+        <div id="lottery-scratch-area" style="display:none;margin-bottom:16px;">
+            <div style="display:flex;gap:10px;justify-content:center;margin-bottom:12px;">
+                <div class="lottery-scratch-cell" id="lottery-cell-0" onclick="scratchLotteryCell(0)">❓</div>
+                <div class="lottery-scratch-cell" id="lottery-cell-1" onclick="scratchLotteryCell(1)">❓</div>
+                <div class="lottery-scratch-cell" id="lottery-cell-2" onclick="scratchLotteryCell(2)">❓</div>
+            </div>
+            <div id="lottery-result-text" style="font-size:13px;color:var(--text-sub);min-height:20px;">각 칸을 눌러 긁어보세요!</div>
+        </div>
+
+        <button id="lottery-buy-submit-btn" onclick="buyLotteryTicket()" style="width:100%;margin-bottom:10px;background:#a855f7;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">🎫 20만원으로 복권 구매</button>
+        <button onclick="closeLotteryModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+    </div>
+</div>
+
 <!-- ══════════════════════════════════════════
      차트 상세 모달 (신규)
 ══════════════════════════════════════════ -->
@@ -971,6 +999,12 @@
         <div class="jackpot-progress-track"><div class="jackpot-progress-fill" id="jackpot-progress-fill"></div></div>
         <div id="jackpot-progress-label" style="font-size:11px;color:var(--text-sub);margin-top:4px;">0 / 0</div>
     </div>
+    <div class="lottery-bar" onclick="openLotteryModal()">
+        <div class="lottery-bar-title">
+            <span>🎟️ 복권함 모금액: <b id="lottery-pool-amount">-</b></span>
+            <span class="lottery-buy-btn">구매하기</span>
+        </div>
+    </div>
     <div class="relay-room-bar" id="relay-room-bar">
         <div class="relay-room-title">
             <span>🎥 중계방 — 지금 플레이 중인 스트리머 (최대 3명)</span>
@@ -1067,6 +1101,7 @@ const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUn
 const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequest');
 const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking');
 const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttendance');
+const buyLotteryTicketCallable = httpsCallable(functions, 'buyLotteryTicket');
 
 const INITIAL_CASH = 500000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 const CARD_BANNER_MIN_HOLDING_QTY = 10; // 서버 CARD_BANNER_MIN_HOLDING_QTY와 동일하게 유지
@@ -1344,6 +1379,88 @@ onValue(ref(db, 'jackpotLastWin'), (snap) => {
     if (!win.at || win.at <= pageLoadTime) return;
     alert(`🎰 잭팟 당첨!\n"${win.stockName}" 종목의 목표 매매량을 채운 유저에게 ${win.prizeAmount.toLocaleString()}원이 지급됐습니다!\n\n새 잭팟 종목이 선정됐어요.`);
 });
+
+// ── 🎟️ 복권함 구독 + 구매/긁기 ───────────────────────────────
+let latestLotteryPool = null;
+let currentLotteryTicket = null; // { digits, won, prizeAmount } — 구매 직후 서버가 이미 확정한 결과
+
+onValue(ref(db, 'lottery/pool'), (snap) => {
+    latestLotteryPool = snap.val();
+    const el = document.getElementById('lottery-pool-amount');
+    if (el) el.innerText = (latestLotteryPool || 0).toLocaleString() + '원';
+    const modalEl = document.getElementById('lottery-modal-pool');
+    if (modalEl) modalEl.innerText = (latestLotteryPool || 0).toLocaleString() + '원';
+});
+
+onValue(ref(db, 'lotteryLastWin'), (snap) => {
+    if (!snap.exists()) return;
+    const win = snap.val();
+    if (!win.at || win.at <= pageLoadTime) return;
+    alert(`🎟️ 복권함에서 777이 나왔습니다!\n어떤 유저가 ${win.prizeAmount.toLocaleString()}원을 받았습니다!\n\n모금액이 초기화됐어요.`);
+});
+
+window.openLotteryModal = function() {
+    const isLinked = myData?.kakaoLinked || myData?.googleLinked || auth.currentUser?.email === ADMIN_EMAIL;
+    if (!isLinked) {
+        if (confirm('로그인이 필요한 기능입니다.\n계정을 보호하고 계속하시겠어요?')) window.openAccountProtectModal();
+        return;
+    }
+    currentLotteryTicket = null;
+    document.getElementById('lottery-scratch-area').style.display = 'none';
+    document.getElementById('lottery-buy-submit-btn').style.display = 'block';
+    [0, 1, 2].forEach(i => {
+        const cell = document.getElementById(`lottery-cell-${i}`);
+        cell.className = 'lottery-scratch-cell';
+        cell.innerText = '❓';
+    });
+    document.getElementById('lottery-modal').classList.add('active');
+};
+window.closeLotteryModal = function() {
+    document.getElementById('lottery-modal').classList.remove('active');
+};
+
+window.buyLotteryTicket = async function() {
+    if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
+    const btn = document.getElementById('lottery-buy-submit-btn');
+    btn.disabled = true;
+    btn.innerText = '구매 중...';
+    try {
+        const result = await buyLotteryTicketCallable();
+        currentLotteryTicket = result.data;
+        // 잔액 표시는 users/{uid} 실시간 구독이 곧 알아서 갱신해준다(별도 반영 불필요).
+        btn.style.display = 'none';
+        document.getElementById('lottery-scratch-area').style.display = 'block';
+        document.getElementById('lottery-result-text').innerText = '각 칸을 눌러 긁어보세요!';
+    } catch (e) {
+        alert(e?.message || '복권 구매 중 오류가 발생했습니다.');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = '🎫 20만원으로 복권 구매';
+    }
+};
+
+window.scratchLotteryCell = function(idx) {
+    if (!currentLotteryTicket) return;
+    const cell = document.getElementById(`lottery-cell-${idx}`);
+    if (cell.classList.contains('revealed')) return;
+
+    const digit = currentLotteryTicket.digits[idx];
+    cell.innerText = digit;
+    cell.classList.add('revealed');
+    if (digit === 7) cell.classList.add('lucky-seven');
+
+    const allRevealed = [0, 1, 2].every(i => document.getElementById(`lottery-cell-${i}`).classList.contains('revealed'));
+    if (!allRevealed) return;
+
+    const resultEl = document.getElementById('lottery-result-text');
+    if (currentLotteryTicket.won) {
+        resultEl.innerHTML = `<span style="color:#4ade80;font-weight:800;">🎉 777! ${currentLotteryTicket.prizeAmount.toLocaleString()}원 당첨!</span>`;
+    } else {
+        resultEl.innerText = '아쉽지만 다음 기회에! 😢';
+    }
+    document.getElementById('lottery-buy-submit-btn').style.display = 'block';
+    document.getElementById('lottery-buy-submit-btn').innerText = '🎫 20만원으로 한 장 더 구매';
+};
 
 function renderRankingFromCache(items) {
     const rankDiv = document.getElementById('top-rankers');
@@ -1953,6 +2070,7 @@ const ACHIEVEMENT_DEFS = [
     { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
     { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너(우측/차트/배너 홍보)·고정노출·중계방 홍보 상품을 처음 구매했어요" },
     { id: "jackpot_winner",    icon: "🎰", label: "잭팟 당첨",      desc: "오늘의 잭팟 종목 목표 매매량을 채운 그 매매의 주인공이 됐어요" },
+    { id: "lottery_winner",    icon: "🎟️", label: "복권 당첨",      desc: "복권함에서 777을 맞춰 누적 모금액의 90%를 받았어요" },
 ];
 
 function updateAchievementsUI() {
@@ -2475,6 +2593,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
         if (document.getElementById('card-banner-modal').classList.contains('active')) closeCardBannerModal();
+        if (document.getElementById('lottery-modal').classList.contains('active')) closeLotteryModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
         if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
         if (document.getElementById('pin-modal').classList.contains('active')) closePinModal();

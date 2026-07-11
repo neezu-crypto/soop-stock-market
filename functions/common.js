@@ -48,6 +48,20 @@ const JACKPOT_TARGET_MIN         = 1000;    // 목표치 하한선(트래픽이 
 const JACKPOT_TARGET_RATIO       = 0.2;     // 목표치 = 전일 최고 매매량 델타 × 이 비율
 const JACKPOT_TARGET_VARIANCE    = 0.2;     // 목표치에 적용하는 랜덤 변동폭(±20%)
 
+// ── 복권함 ───────────────────────────────────────────────────
+// 계정 보호 유저만 20만원에 복권 1장을 살 수 있고, 구매 즉시 서버가 세
+// 자리 숫자(각 자리 1~7)를 확정한다. "긁기"는 이미 정해진 결과를 보여주는
+// 연출일 뿐, 실제 당첨 판정과 지급은 구매 시점에 서버에서 끝난다. 777이면
+// 그 시점 누적 모금액의 90%를 받고 모금액은 다시 초기값으로 리셋된다.
+// 익명 계정 무한 생성 파밍을 막기 위해 계정 보호 유저로 대상을 한정한다
+// (출석 보상과 동일한 이유). 1인당 구매 개수 제한은 없다 — 티켓마다 실제
+// 비용이 드는 구조라, 많이 사는 건 파밍이 아니라 정상적인 복권 원리다.
+const LOTTERY_TICKET_PRICE   = 200000;  // 복권 1장 가격
+const LOTTERY_POOL_FLOOR     = 1000000; // 모금액 초기값 및 당첨 후 리셋값
+const LOTTERY_PAYOUT_RATIO   = 0.9;     // 당첨 시 누적 모금액 중 지급 비율
+const LOTTERY_DIGIT_MIN      = 1;       // 각 자리 숫자 범위 하한
+const LOTTERY_DIGIT_MAX      = 7;       // 각 자리 숫자 범위 상한(당첨 조합은 7-7-7)
+
 // 최근 7일 자산 변동 그래프용 — 화면엔 7일치만 보여주지만, 자정 근처
 // 타임존 오차나 하루 접속을 건너뛴 경우까지 여유 있게 보려고 이틀치를 더
 // 남겨둔다. 하루 1번(그날 첫 하트비트)만 기록해 저장량을 최소화한다.
@@ -105,6 +119,7 @@ const ACHIEVEMENTS = [
   { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
   { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너(우측/차트/배너 홍보)·고정노출·중계방 홍보 상품을 처음 구매했어요" },
   { id: "jackpot_winner",    icon: "🎰", label: "잭팟 당첨",      desc: "오늘의 잭팟 종목 목표 매매량을 채운 그 매매의 주인공이 됐어요" },
+  { id: "lottery_winner",    icon: "🎟️", label: "복권 당첨",      desc: "복권함에서 777을 맞춰 누적 모금액의 90%를 받았어요" },
 ];
 
 /**
@@ -307,6 +322,11 @@ module.exports = {
   JACKPOT_TARGET_MIN,
   JACKPOT_TARGET_RATIO,
   JACKPOT_TARGET_VARIANCE,
+  LOTTERY_TICKET_PRICE,
+  LOTTERY_POOL_FLOOR,
+  LOTTERY_PAYOUT_RATIO,
+  LOTTERY_DIGIT_MIN,
+  LOTTERY_DIGIT_MAX,
   ASSET_HISTORY_RETENTION_DAYS,
   DAILY_ATTENDANCE_REWARDS,
   ANON_DAILY_SECONDS,

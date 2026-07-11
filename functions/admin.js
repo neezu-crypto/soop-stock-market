@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, todayKeyKST, creditUserCash, chargeUserCash } = require("./common");
+const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, LOTTERY_POOL_FLOOR, todayKeyKST, creditUserCash, chargeUserCash } = require("./common");
 const {
   actionListBannerRequests,
   actionApproveBannerRequest,
@@ -496,21 +496,22 @@ async function actionGetPendingSummary(db) {
 const PURCHASE_HISTORY_LIMIT = 300; // 오래된 이력까지 매번 전부 내려보내지 않도록 최신 N건만 반환
 
 /**
- * 유저 구매 현황 — 우측/차트/카드 배너·최상단 고정·중계방·플레이타임 충전처럼
- * 게임자산을 직접 차감해 즉시 적용되는 6가지 셀프 상품의 구매 이력을
+ * 유저 구매 현황 — 우측/차트/카드 배너·최상단 고정·중계방·플레이타임 충전·복권함처럼
+ * 게임자산을 직접 차감해 즉시 적용되는 7가지 셀프 상품의 구매 이력을
  * 한 화면에서 통합 조회한다. 각 기능별 패널은 "신규/진행중/만료"만
  * 보여주도록 설계돼 있어, 시간이 지나 만료·삭제된 과거 구매까지 한눈에
  * 보긴 어려웠던 빈틈을 메운다. (자산 충전은 반대로 "지급"이라 구매가
  * 아니므로, 종목 상장 신청은 무료라 제외 — 각각 별도 패널에서 확인 가능)
  */
 async function actionListPurchaseHistory(db) {
-  const [bannerSnap, chartBannerSnap, cardBannerSnap, pinSnap, relaySnap, playTimeSnap] = await Promise.all([
+  const [bannerSnap, chartBannerSnap, cardBannerSnap, pinSnap, relaySnap, playTimeSnap, lotterySnap] = await Promise.all([
     db.ref("bannerRequests").get(),
     db.ref("chartBannerRequests").get(),
     db.ref("cardBannerRequests").get(),
     db.ref("pinRequests").get(),
     db.ref("relayRoomRequests").get(),
     db.ref("playTimePurchases").get(),
+    db.ref("lotteryPurchases").get(),
   ]);
 
   const purchases = [];
@@ -553,6 +554,13 @@ async function actionListPurchaseHistory(db) {
   Object.entries(playTimeSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "playTime", typeLabel: "⏱ 플레이타임 충전",
     label: `${r.hours || 0}시간`,
+    amount: r.chargedAmount || 0, uid: r.uid, status: "approved",
+    at: r.purchasedAt || 0,
+  }));
+
+  Object.entries(lotterySnap.val() || {}).forEach(([id, r]) => purchases.push({
+    id, type: "lottery", typeLabel: "🎟️ 복권함",
+    label: r.won ? `🎉 당첨! +${(r.prizeAmount || 0).toLocaleString()}원` : "미당첨",
     amount: r.chargedAmount || 0, uid: r.uid, status: "approved",
     at: r.purchasedAt || 0,
   }));
@@ -749,6 +757,7 @@ async function actionGetOverviewStats(db) {
     usersSnap,
     bannerSnap, chartBannerSnap, cardBannerSnap, pinSnap, relaySnap, playTimeSnap,
     profitSnap,
+    lotterySnap, lotteryPoolSnap,
   ] = await Promise.all([
     actionGetAttendanceStats(db),
     db.ref("users").get(),
@@ -759,6 +768,8 @@ async function actionGetOverviewStats(db) {
     db.ref("relayRoomRequests").get(),
     db.ref("playTimePurchases").get(),
     db.ref("rankings/profitEntries").get(),
+    db.ref("lotteryPurchases").get(),
+    db.ref("lottery/pool").get(),
   ]);
 
   const today = todayKeyKST();
@@ -796,12 +807,26 @@ async function actionGetOverviewStats(db) {
 
   const profitRankingEntryCount = Object.keys(profitSnap.val() || {}).length;
 
+  // 복권함은 판매액 대부분이 당첨금으로 다시 유저에게 나가는 구조라, 다른
+  // 셀프 상품처럼 판매액을 그대로 "매출"에 합산하면 실제보다 부풀려 보인다.
+  // 그래서 판매액/지급액/순이익을 별도로 분리해서 보여준다.
+  const lotteryEntries = Object.values(lotterySnap.val() || {});
+  const lottery = lotteryEntries.reduce((acc, r) => {
+    acc.totalSold++;
+    acc.totalRevenue += r.chargedAmount || 0;
+    if (r.won) { acc.totalWins++; acc.totalPayout += r.prizeAmount || 0; }
+    return acc;
+  }, { totalSold: 0, totalRevenue: 0, totalWins: 0, totalPayout: 0 });
+  lottery.netRevenue = lottery.totalRevenue - lottery.totalPayout;
+  lottery.currentPool = lotteryPoolSnap.val() || LOTTERY_POOL_FLOOR;
+
   return {
     ok: true,
     attendance: { today: attendance.today, claimedCount: attendance.claimedCount, totalPaidToday: attendance.totalPaidToday },
     purchase,
     users,
     profitRankingEntryCount,
+    lottery,
   };
 }
 
