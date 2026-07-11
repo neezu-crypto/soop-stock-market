@@ -1148,11 +1148,6 @@ const buyLotteryTicketCallable = httpsCallable(functions, 'buyLotteryTicket');
 const requestStreamerVerificationCallable = httpsCallable(functions, 'requestStreamerVerification');
 
 const INITIAL_CASH = 1000000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
-
-/** 카카오/구글 연동 또는 스트리머 인증 중 하나라도 됐으면 "계정 보호됨"으로 취급한다(서버 isUserProtected와 동일 기준). */
-function isMyAccountProtected() {
-    return !!(myData && (myData.kakaoLinked || myData.googleLinked || myData.streamerVerified));
-}
 const CARD_BANNER_MIN_HOLDING_QTY = 10; // 서버 CARD_BANNER_MIN_HOLDING_QTY와 동일하게 유지
 
 // ══════════════════════════════════════════════════════════════
@@ -1293,6 +1288,12 @@ function startApp() {
 
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
+
+/** 카카오/구글 연동 또는 스트리머 인증 중 하나라도 됐으면 "계정 보호됨"으로 취급한다(서버 isUserProtected와 동일 기준). */
+function isMyAccountProtected() {
+    return !!(myData && (myData.kakaoLinked || myData.googleLinked || myData.streamerVerified));
+}
+
 let userUID          = null;
 let allStocks        = [];
 let isTrading        = false;
