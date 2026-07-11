@@ -40,6 +40,7 @@ const {
   actionApproveListingRequest,
   actionRejectListingRequest,
 } = require("./listingRequests");
+const { pickNewJackpot } = require("./jackpot");
 
 // ══════════════════════════════════════════════════════════
 // 관리자 페이지 기능 — 전부 Admin SDK로 처리해 RTDB 규칙의
@@ -431,6 +432,17 @@ async function actionSetMaintenanceMode(db, { active }) {
     await db.ref("maintenance").set({ active: false });
   }
   return { ok: true, active: isActive };
+}
+
+// ── 잭팟 종목 ────────────────────────────────────────────────
+// 정상 운영 중에는 당첨 시 jackpot.js가 자동으로 다음 사이클을 시작하므로
+// 관리자가 손댈 일이 거의 없다 — 이 액션은 최초 1회 부트스트랩(잭팟이
+// 아직 한 번도 시작 안 됐을 때)이나, 수동으로 종목/목표치를 새로 뽑고
+// 싶을 때(예: 특정 종목이 부적절해서 다시 뽑고 싶은 경우)만 사용한다.
+async function actionRerollJackpot(db) {
+  await pickNewJackpot(db);
+  const snap = await db.ref("jackpot/state").get();
+  return { ok: true, state: snap.val() };
 }
 
 /**
@@ -924,6 +936,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "approveChartBannerRequest": return actionApproveChartBannerRequest(db, payload);
     case "rejectChartBannerRequest":  return actionRejectChartBannerRequest(db, payload);
     case "setMaintenanceMode":     return actionSetMaintenanceMode(db, payload);
+    case "rerollJackpot":          return actionRerollJackpot(db);
     case "listProfitRankings":     return actionListProfitRankings(db);
     case "listPurchaseHistory":    return actionListPurchaseHistory(db);
     case "getPendingSummary":      return actionGetPendingSummary(db);

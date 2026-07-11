@@ -116,6 +116,29 @@
         .rank-vol  { color: var(--text-sub); font-size: 12px; }
 
         /* ── 중계방 (현재 플레이 중인 스트리머 홍보, 최대 3명) ── */
+        /* 🎰 잭팟 종목 바 — 전체 유저 합산 매매량이 목표치에 닿으면 그 매매를 실행한
+           유저에게 상금이 지급되는 이벤트. 진행률 바로 긴장감을 보여준다. */
+        .jackpot-bar {
+            background: linear-gradient(135deg, rgba(251,191,36,0.10), rgba(217,119,6,0.06));
+            width: 100%; padding: 12px 20px; border-radius: 12px;
+            margin-bottom: 20px; border: 1px solid rgba(251,191,36,0.4); box-sizing: border-box;
+            cursor: pointer; transition: border-color 0.2s;
+        }
+        .jackpot-bar:hover { border-color: #fbbf24; }
+        .jackpot-bar-title {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            font-weight: 800; font-size: 14px; color: #fbbf24;
+        }
+        .jackpot-bar-title b { color: var(--text-main); }
+        .jackpot-bar-title span#jackpot-prize { font-size: 12px; color: #fcd34d; }
+        .jackpot-progress-track {
+            margin-top: 8px; height: 8px; border-radius: 100px; background: rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+        .jackpot-progress-fill {
+            height: 100%; width: 0%; background: linear-gradient(90deg, #f59e0b, #fbbf24);
+            transition: width 0.4s ease; border-radius: 100px;
+        }
         .relay-room-bar {
             background: var(--card-bg); width: 100%; padding: 12px 20px; border-radius: 12px;
             margin-bottom: 20px; border: 1px dashed #334155; box-sizing: border-box;

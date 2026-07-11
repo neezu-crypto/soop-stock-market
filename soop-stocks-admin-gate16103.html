@@ -201,6 +201,18 @@
         </div>
     </div>
 
+    <!-- 🎰 잭팟 종목 관리 -->
+    <div id="section-jackpot" class="container" style="display:block; border-color: #fbbf24;">
+        <h1>🎰 잭팟 종목 관리</h1>
+        <div class="info-box">
+            전체 유저 합산 매매량(계정당 최대 100까지만 반영)이 목표치에 도달하면 그 매매를 실행한 유저에게 200만원이
+            자동 지급되고 다음 사이클이 자동으로 시작됩니다. 여기서는 현재 진행 상황만 확인하고, 필요할 때(예: 최초
+            부트스트랩이나 종목을 다시 뽑고 싶을 때)만 수동으로 다시 뽑으면 됩니다.
+        </div>
+        <div id="jackpot-admin-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;">불러오는 중...</div>
+        <button class="btn-primary" style="background:#fbbf24;color:#1e293b;" onclick="rerollJackpot()">🎲 잭팟 종목 새로 뽑기</button>
+    </div>
+
     <!-- 🧾 유저 구매 현황 -->
     <div id="section-purchase-history" class="container" style="display:block; border-color: #38bdf8;">
         <h1>🧾 유저 구매 현황</h1>
@@ -496,7 +508,7 @@
     const provider  = new GoogleAuthProvider();
     const functions = getFunctions(app);
     const ADMIN_EMAIL = "skftodwocks2@gmail.com";
-    const ACHIEVEMENT_COUNT = 10; // functions/common.js의 ACHIEVEMENTS 개수와 맞춰 유지
+    const ACHIEVEMENT_COUNT = 11; // functions/common.js의 ACHIEVEMENTS 개수와 맞춰 유지
 
     // 관리자 쓰기·users 읽기는 전부 이 콜러블(functions/index.js의 adminAction)이
     // Admin SDK로 처리한다 — RTDB 규칙의 이메일 매칭에 의존하지 않는다.
@@ -549,6 +561,7 @@
         { id: 'section-overview',           label: '📊 전체 통계' },
         { id: 'section-maintenance',        label: '🛠️ 점검모드' },
         { id: 'section-announcement',       label: '📢 공지 배너' },
+        { id: 'section-jackpot',            label: '🎰 잭팟 종목' },
         { id: 'section-purchase-history',   label: '🧾 구매 현황' },
         { id: 'section-profit-ranking',     label: '💰 손익 랭킹' },
         { id: 'section-ranking-top5',       label: '🏆 랭킹 TOP5' },
@@ -607,6 +620,7 @@
             await loadAllFreezeData();
             watchMaintenanceStatus();
             watchAnnouncementStatus();
+            watchJackpotStatus();
             watchPendingSummary();
             await loadOverviewStats();
         } else {
@@ -751,6 +765,35 @@
             document.getElementById('announcement-text-input').removeAttribute('data-user-edited');
         } catch (e) {
             alert('공지 변경 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ── 잭팟 종목 (jackpot/state는 공개 읽기 경로라 클라이언트에서 바로 구독) ──
+    let jackpotWatched = false;
+
+    function renderJackpotAdminStatus(state) {
+        const el = document.getElementById('jackpot-admin-status');
+        if (!el) return;
+        if (!state || !state.stockId) {
+            el.innerText = '❌ 아직 잭팟이 시작되지 않았습니다 — 아래 버튼으로 처음 시작해주세요.';
+            return;
+        }
+        const startedAt = state.startedAt ? new Date(state.startedAt).toLocaleString() : '-';
+        el.innerHTML = `🎰 <b style="color:#fbbf24;">${escapeAttr(state.stockName)}</b> · 진행 ${(state.progress||0).toLocaleString()} / ${(state.target||0).toLocaleString()} · 시작: ${startedAt}`;
+    }
+
+    function watchJackpotStatus() {
+        if (jackpotWatched) return;
+        jackpotWatched = true;
+        onValue(ref(db, 'jackpot/state'), (snap) => renderJackpotAdminStatus(snap.val()));
+    }
+
+    window.rerollJackpot = async function() {
+        if (!confirm('잭팟 종목을 새로 뽑을까요? 지금 진행 중인 종목의 누적 진행도는 초기화됩니다.')) return;
+        try {
+            await callAdminAction('rerollJackpot');
+        } catch (e) {
+            alert('잭팟 재선정 중 오류 발생: ' + e.message);
         }
     };
 

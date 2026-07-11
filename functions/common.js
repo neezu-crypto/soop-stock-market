@@ -36,6 +36,18 @@ const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 
 const PROFIT_RANKING_CHECK_COST = 500000;  // 손익 랭킹 확인(및 내 순위 갱신) 1회당 차감되는 게임자산
 const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 인원 수
 
+// ── 잭팟 종목 ────────────────────────────────────────────────
+// 매일(또는 당첨될 때까지) 랜덤 종목 1개를 "잭팟 종목"으로 선정해, 전체
+// 유저가 그 종목을 매매한 수량(매수+매도 합산)이 목표치에 도달하는 순간
+// 그 매매를 실행한 유저가 상금을 받는다. 혼자 반복 매매해서 셀프로 채우는
+// 것을 막기 위해 계정당 기여량에 상한을 둔다 — 목표치를 상한으로 나눈
+// 값(예: 1000/100=10명)만큼 서로 다른 계정이 실제로 참여해야만 도달 가능.
+const JACKPOT_PRIZE_AMOUNT       = 2000000; // 당첨금
+const JACKPOT_PER_ACCOUNT_CAP    = 100;     // 계정당 목표치에 반영되는 최대 기여량(그 이상 매매해도 더 반영 안 됨)
+const JACKPOT_TARGET_MIN         = 1000;    // 목표치 하한선(트래픽이 적어도 이 아래로는 안 내려감)
+const JACKPOT_TARGET_RATIO       = 0.2;     // 목표치 = 전일 최고 매매량 델타 × 이 비율
+const JACKPOT_TARGET_VARIANCE    = 0.2;     // 목표치에 적용하는 랜덤 변동폭(±20%)
+
 // 최근 7일 자산 변동 그래프용 — 화면엔 7일치만 보여주지만, 자정 근처
 // 타임존 오차나 하루 접속을 건너뛴 경우까지 여유 있게 보려고 이틀치를 더
 // 남겨둔다. 하루 1번(그날 첫 하트비트)만 기록해 저장량을 최소화한다.
@@ -92,6 +104,7 @@ const ACHIEVEMENTS = [
   { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
   { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
   { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너(우측/차트/배너 홍보)·고정노출·중계방 홍보 상품을 처음 구매했어요" },
+  { id: "jackpot_winner",    icon: "🎰", label: "잭팟 당첨",      desc: "오늘의 잭팟 종목 목표 매매량을 채운 그 매매의 주인공이 됐어요" },
 ];
 
 /**
@@ -289,6 +302,11 @@ module.exports = {
   MAX_PINNED_SLOTS,
   PROFIT_RANKING_CHECK_COST,
   PROFIT_RANKING_TOP_N,
+  JACKPOT_PRIZE_AMOUNT,
+  JACKPOT_PER_ACCOUNT_CAP,
+  JACKPOT_TARGET_MIN,
+  JACKPOT_TARGET_RATIO,
+  JACKPOT_TARGET_VARIANCE,
   ASSET_HISTORY_RETENTION_DAYS,
   DAILY_ATTENDANCE_REWARDS,
   ANON_DAILY_SECONDS,
