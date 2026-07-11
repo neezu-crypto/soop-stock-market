@@ -170,22 +170,35 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  // 테스트 기간 동안은 관리자를 제외한 모두의 플레이 시간 충전(유료)을 막는다.
-  if (TEST_PERIOD_ACTIVE && auth.token?.email !== ADMIN_EMAIL) {
-    throw new HttpsError("failed-precondition", "테스트 기간 중에는 플레이 시간 충전을 이용할 수 없습니다.");
+  const db   = admin.database();
+  await requireNotInMaintenance(db, auth);
+  const uid  = auth.uid;
+  const isAdmin = auth.token?.email === ADMIN_EMAIL;
+  const today = todayKeyKST();
+  const user = (await db.ref(`users/${uid}`).get()).val() || { cash: 0, stocks: {} };
+  const isProtected = !!(user.kakaoLinked || user.googleLinked);
+
+  let hours = parseInt(request.data?.hours, 10);
+
+  // 테스트 기간 동안은 플레이 시간 충전(유료)을 원칙적으로 막되, 로그인
+  // (계정 보호) 유저에 한해 하루 1회·1시간만 예외적으로 허용한다 — 테스트
+  // 기간이라도 하루 이용시간(60분)을 다 쓴 로그인 유저가 완전히 발이
+  // 묶이지 않도록. testPeriodPurchaseDate로 "오늘 이미 한 번 썼는지"만
+  // 판정하므로, 익명 유저나 관리자에게는 영향이 없다.
+  if (TEST_PERIOD_ACTIVE && !isAdmin) {
+    if (!isProtected) {
+      throw new HttpsError("failed-precondition", "테스트 기간 중에는 플레이 시간 충전을 이용할 수 없습니다.");
+    }
+    if (user.testPeriodPurchaseDate === today) {
+      throw new HttpsError("failed-precondition", "테스트 기간 중에는 하루 1회(1시간)만 연장 구매할 수 있습니다. 내일 다시 시도해주세요.");
+    }
+    hours = 1;
   }
 
-  const hours = parseInt(request.data?.hours, 10);
   if (!Number.isInteger(hours) || hours < 1 || hours > MAX_PLAYTIME_BUY_HOURS) {
     throw new HttpsError("invalid-argument", `충전 시간은 1~${MAX_PLAYTIME_BUY_HOURS}시간 사이로 입력해주세요.`);
   }
 
-  const db   = admin.database();
-  await requireNotInMaintenance(db, auth);
-  const uid  = auth.uid;
-  const user = (await db.ref(`users/${uid}`).get()).val() || { cash: 0, stocks: {} };
-
-  const today = todayKeyKST();
   const isNewDay = user.playQuotaDate !== today;
   const purchasedTodayBefore = isNewDay ? 0 : (user.purchasedHoursToday || 0);
 
@@ -219,6 +232,7 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
       playSecondsUsedToday:  isNewDay2 ? 0 : (u.playSecondsUsedToday || 0),
       bonusSecondsToday:     (isNewDay2 ? 0 : (u.bonusSecondsToday || 0)) + addedSeconds,
       purchasedHoursToday:   (isNewDay2 ? 0 : (u.purchasedHoursToday || 0)) + hours,
+      testPeriodPurchaseDate: (TEST_PERIOD_ACTIVE && !isAdmin) ? today : (u.testPeriodPurchaseDate || null),
     };
   });
 

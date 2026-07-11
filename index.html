@@ -715,7 +715,8 @@
             <li>🕛 <b>초기화:</b> 매일 자정(한국시간) 기준 이용시간·할증 모두 초기화</li>
         </ul>
 
-        <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid #475569;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+        <p id="playtime-test-period-note" style="display:none;font-size:12px;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);border-radius:8px;padding:10px 12px;margin-bottom:10px;line-height:1.6;">🧪 테스트 기간 중에는 로그인 계정에 한해 <b>하루 1회, 1시간만</b> 예외적으로 연장 구매할 수 있어요.</p>
+        <div id="playtime-hours-row" style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid #475569;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
             <label for="playtime-hours" style="font-size:13px;color:#94a3b8;white-space:nowrap;">충전 시간:</label>
             <input type="number" id="playtime-hours" value="1" min="1" max="12"
                 style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
@@ -745,7 +746,7 @@
             시간을 충전하거나, 카카오 연동으로 매일 더 오래 이용해보세요.<br>
             자정(한국시간)이 지나면 자동으로 초기화됩니다.
         </p>
-        <p id="playtime-expired-test-note" style="display:none;font-size:12px;color:#fbbf24;margin-top:-12px;margin-bottom:16px;">🧪 테스트 기간 중에는 시간 충전을 이용할 수 없습니다.</p>
+        <p id="playtime-expired-test-note" style="display:none;font-size:12px;color:#fbbf24;margin-top:-12px;margin-bottom:16px;">🧪 테스트 기간 중에는 시간 충전을 이용할 수 없습니다. (로그인 계정은 하루 1회 1시간 예외 가능)</p>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
             <button id="playtime-expired-protect-btn" onclick="openAccountProtectModal()"
                 style="display:none;flex:1;min-width:140px;background:#38bdf8;color:#0f172a;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">
@@ -1645,6 +1646,10 @@ function updatePlaytimeDisplay() {
     const bar       = document.getElementById('playtime-bar');
     const adminNote = document.getElementById('playtime-admin-note');
     const display   = document.getElementById('playtime-display');
+    const walletBuyBtn = document.getElementById('playtime-wallet-buy-btn');
+    if (walletBuyBtn) {
+        walletBuyBtn.style.display = (TEST_PERIOD_ACTIVE && !isPlaytimeTestPeriodExempt()) ? 'none' : 'inline-block';
+    }
     if (!bar || !display) return;
 
     if (playtimeUnlimited) {
@@ -1688,19 +1693,21 @@ function lockPlaytimeExpired() {
 
 window.showPlayTimeExpired = function() {
     const protectBtn = document.getElementById('playtime-expired-protect-btn');
-    const alreadyCovered = myData?.kakaoLinked || myData?.googleLinked || auth.currentUser?.email === ADMIN_EMAIL;
+    const alreadyCovered = isPlaytimeTestPeriodExempt();
     if (protectBtn) protectBtn.style.display = alreadyCovered ? 'none' : 'block';
+    const expiredBuyBtn = document.getElementById('playtime-expired-buy-btn');
+    const expiredNote   = document.getElementById('playtime-expired-test-note');
+    if (expiredBuyBtn) expiredBuyBtn.style.display = (TEST_PERIOD_ACTIVE && !alreadyCovered) ? 'none' : 'block';
+    if (expiredNote)   expiredNote.style.display   = (TEST_PERIOD_ACTIVE && !alreadyCovered) ? 'block' : 'none';
     document.getElementById('playtime-expired-modal')?.classList.add('active');
 };
 
-// 테스트 기간에는 플레이 시간 충전(유료)만 막는다 — 계정 보호 유도는 그대로 유지.
-if (TEST_PERIOD_ACTIVE) {
-    const walletBuyBtn  = document.getElementById('playtime-wallet-buy-btn');
-    const expiredBuyBtn = document.getElementById('playtime-expired-buy-btn');
-    const expiredNote   = document.getElementById('playtime-expired-test-note');
-    if (walletBuyBtn)  walletBuyBtn.style.display  = 'none';
-    if (expiredBuyBtn) expiredBuyBtn.style.display = 'none';
-    if (expiredNote)   expiredNote.style.display   = 'block';
+// 테스트 기간에는 플레이 시간 충전(유료)을 원칙적으로 막되, 로그인(계정
+// 보호) 유저에 한해 하루 1회·1시간만 예외로 허용한다(서버가 최종 검증).
+// myData가 나중에 채워지므로, 이용시간 표시가 갱신될 때마다(updatePlaytimeDisplay)
+// 함께 재평가한다 — 페이지 로드 시점의 한 번짜리 체크로는 로그인 여부를 반영 못 함.
+function isPlaytimeTestPeriodExempt() {
+    return !!(myData?.kakaoLinked || myData?.googleLinked || auth.currentUser?.email === ADMIN_EMAIL);
 }
 
 function unlockPlaytimeIfNeeded() {
@@ -1774,7 +1781,7 @@ function updatePlaytimeCostEstimate() {
     const hoursInput = document.getElementById('playtime-hours');
     const estEl       = document.getElementById('playtime-cost-estimate');
     if (!hoursInput || !estEl) return;
-    const hours = parseInt(hoursInput.value, 10);
+    const hours = TEST_PERIOD_ACTIVE ? 1 : parseInt(hoursInput.value, 10);
     if (!Number.isInteger(hours) || hours < 1) { estEl.innerText = '-'; return; }
 
     const totalAssets = estimateTotalAssetsClient();
@@ -1792,7 +1799,22 @@ function updatePlaytimeCostEstimate() {
 document.getElementById('playtime-hours')?.addEventListener('input', updatePlaytimeCostEstimate);
 
 window.openPlayTimeModal = () => {
-    if (TEST_PERIOD_ACTIVE) return alert('🧪 테스트 기간 중에는 플레이 시간 충전을 이용할 수 없습니다.');
+    const exempt = isPlaytimeTestPeriodExempt();
+    if (TEST_PERIOD_ACTIVE && !exempt) {
+        return alert('🧪 테스트 기간 중에는 플레이 시간 충전을 이용할 수 없습니다. (로그인 계정은 하루 1회 1시간 예외 가능)');
+    }
+    const hoursRow  = document.getElementById('playtime-hours-row');
+    const testNote  = document.getElementById('playtime-test-period-note');
+    const hoursInput = document.getElementById('playtime-hours');
+    if (TEST_PERIOD_ACTIVE) {
+        // 테스트 기간 중 로그인 유저 예외 — 하루 1회·1시간 고정, 시간 선택 자체를 숨겨 혼동 방지
+        hoursInput.value = '1';
+        if (hoursRow) hoursRow.style.display = 'none';
+        if (testNote) testNote.style.display = 'block';
+    } else {
+        if (hoursRow) hoursRow.style.display = 'flex';
+        if (testNote) testNote.style.display = 'none';
+    }
     updatePlaytimeCostEstimate();
     document.getElementById('playtime-modal').classList.add('active');
 };
@@ -1802,14 +1824,15 @@ window.buyPlayTime = async function() {
     if (blockIfMaintenance()) return;
     const hoursInput = document.getElementById('playtime-hours');
     const buyBtn      = document.getElementById('playtime-buy-btn');
-    const hours = parseInt(hoursInput.value, 10);
+    const hours = TEST_PERIOD_ACTIVE ? 1 : parseInt(hoursInput.value, 10);
     if (!Number.isInteger(hours) || hours < 1 || hours > 12) return alert('충전 시간은 1~12시간 사이로 입력해주세요.');
 
     buyBtn.disabled = true;
     buyBtn.innerText = '충전 중...';
     try {
         const result = await buyPlayTimeCallable({ hours });
-        let msg = `✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 ${hours}시간이 충전됐습니다!`;
+        const actualHours = Math.round((result.data.addedSeconds || 0) / 3600);
+        let msg = `✅ ${result.data.chargedAmount.toLocaleString()}원이 차감되고 ${actualHours}시간이 충전됐습니다!`;
         if (result.data.negativeCashWarning) {
             msg += `\n\n⚠️ 미수금 발생 안내: 잔액이 부족한 상태로 결제되어 게임자산이 ${result.data.resultingCash.toLocaleString()}원(마이너스)이 됐습니다. 미수금 상태에서는 주식을 매수할 수 없으니, 보유 주식을 매도하거나 자산을 회복해 미수금을 해소해주세요.`;
         }
