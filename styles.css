@@ -53,10 +53,10 @@
         }
         .btn:disabled, .btn.disabled { background: #444 !important; opacity: 0.5; cursor: not-allowed; transform: none !important; }
         .my-qty { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
-        /* 종목 카드 프로필 배너 — 스파크라인을 가리지 않도록 그 위 우측 상단에
-           작은 원형 배지로 겹쳐 띄운다. 우측 배너와 동일한 원형 스타일. */
+        /* 종목 카드 프로필 배너 — 종목 이름 오른쪽에 원형 배지로 노출.
+           우측 배너와 동일한 원형 스타일. */
         .stock-card-avatar-badge {
-            position: absolute; top: -8px; right: -6px; width: 26px; height: 26px;
+            flex-shrink: 0; width: 34px; height: 34px;
             border-radius: 50%; object-fit: cover; cursor: pointer;
             border: 2px solid var(--card-bg); box-shadow: 0 0 0 1px #334155;
             transition: box-shadow 0.2s;

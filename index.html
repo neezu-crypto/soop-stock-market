@@ -2376,10 +2376,12 @@ function updateCardContent(card, s, userStock) {
         : `<div class="stock-card-avatar-badge stock-card-avatar-badge-empty" title="배너 홍보 신청" onclick="event.stopPropagation(); window.openCardBannerModal('${s.name.replace(/'/g, "\\'")}');">📢</div>`;
     card.innerHTML = `
         <div class="info-group">
-            <div class="stock-name">${badge}${s.name}</div>
+            <div class="stock-name" style="display:flex;align-items:center;gap:6px;">
+                <span>${badge}${s.name}</span>${cardBannerBadgeHtml}
+            </div>
             <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
         </div>
-        <div style="position:relative;display:inline-block;">${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}${cardBannerBadgeHtml}</div>
+        <div>${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}</div>
         <div class="price-group">
             <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
             <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${change}%</div>
