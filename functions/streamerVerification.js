@@ -70,6 +70,18 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     throw new HttpsError("invalid-argument", `닉네임은 ${STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH}자 이하로 입력해주세요.`);
   }
 
+  // 같은 닉네임으로 다른 uid가 이미 대기 중인 신청을 넣어뒀으면 막는다 —
+  // 안 막으면 실제 스트리머의 신청이 검토되기 전에 다른 사람이 같은 닉네임으로
+  // 먼저(또는 동시에) 신청해둘 수 있고, 관리자가 실수로 그 신청을 승인하면
+  // 같은 닉네임이 서로 다른 uid 두 개에 영구히 매핑되는 상태가 된다.
+  const duplicatePending = Object.values(allReq).some((r) => r.nickname === nickname && r.status === "pending" && r.uid !== uid);
+  if (duplicatePending) {
+    throw new HttpsError(
+      "already-exists",
+      "이미 같은 닉네임으로 인증 검토를 기다리는 신청이 있습니다. 해당 신청이 처리된 후 다시 시도해주세요."
+    );
+  }
+
   const now = Date.now();
   let tooSoon = false;
   await db.ref(`users/${uid}/lastStreamerVerificationRequestAt`).transaction((last) => {
