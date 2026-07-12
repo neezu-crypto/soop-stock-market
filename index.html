@@ -1096,11 +1096,9 @@ import { initAssetHistory } from "./js/assetHistory.js";
 const LONG_MAINTENANCE = false;
 const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정
 
-// 테스트 기간 동안 플레이 시간 충전(유료)만 막는다 — 서버(functions/common.js의
-// TEST_PERIOD_ACTIVE)에서도 동일하게 차단하므로, 여기서는 UI를 미리 맞춰두는
-// 용도(버튼을 눌러 신청까지 갔다가 서버에서 막히는 답답함을 줄이기 위함).
-// 테스트 기간이 끝나면 이 값을 false로 바꾸고(서버 쪽도 함께) 배포한다.
-const TEST_PERIOD_ACTIVE = true;
+// 테스트 기간 동안 플레이 시간 충전(유료)만 막았었다 — 2026-07-12 해제.
+// 서버(functions/common.js의 TEST_PERIOD_ACTIVE)와 항상 함께 바꿔야 한다.
+const TEST_PERIOD_ACTIVE = false;
 document.getElementById('test-period-chip').style.display = TEST_PERIOD_ACTIVE ? 'inline-block' : 'none';
 
 window.openTestPeriodModal = function() {

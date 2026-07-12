@@ -1,9 +1,9 @@
 const { HttpsError } = require("firebase-functions/v2/https");
 
 // ── 전역 공통 상수 ────────────────────────────────────────────
-// 테스트 기간 동안 플레이 시간 충전(유료)만 막는다 — 클라이언트(index.html)에도
-// 동일한 이름의 상수가 있으니, 테스트 기간이 끝나면 둘 다 false로 바꾸고 배포한다.
-const TEST_PERIOD_ACTIVE       = true;
+// 테스트 기간 동안 플레이 시간 충전(유료)만 막았었다 — 2026-07-12 해제.
+// 클라이언트(index.html)에도 동일한 이름의 상수가 있어 항상 함께 바꿔야 한다.
+const TEST_PERIOD_ACTIVE       = false;
 const ADMIN_EMAIL              = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정
 // 2026-07-12 정책 변경: 익명/로그인 유저의 초기 자산 격차(50만원+50만원
 // 보너스 방식)를 없애고 접속 즉시 누구나 100만원을 받는다 — 익명 계정을
