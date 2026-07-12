@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>스트리머 주식시장 — 방송용 오픈 타이틀</title>
+<style>
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+  }
+
+  :root {
+    --ink:       #10131b;
+    --ink-2:     #171b26;
+    --paper:     #f2ead2;
+    --paper-dim: #cabf9e;
+    --up:        #e2685c;
+    --up-dim:    #7a3530;
+    --down:      #6ba3d6;
+    --down-dim:  #2f4f68;
+    --gold:      #d9b354;
+    --line:      #33394a;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    background: var(--ink);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  }
+
+  .mono {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stage {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    background:
+      radial-gradient(ellipse 1400px 900px at 68% 38%, rgba(217,179,84,0.07), transparent 60%),
+      linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 100%);
+  }
+
+  /* ── 배경 캔들 차트 (앰비언트) ── */
+  canvas#candles {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    opacity: 0.5;
+  }
+
+  /* ── 세이프 프레임 코너 틱 ── */
+  .frame-tick {
+    position: absolute;
+    width: 46px;
+    height: 46px;
+    border: 2px solid var(--gold);
+    opacity: 0.55;
+  }
+  .frame-tick.tl { top: 44px; left: 44px; border-right: none; border-bottom: none; }
+  .frame-tick.tr { top: 44px; right: 44px; border-left: none; border-bottom: none; }
+  .frame-tick.bl { bottom: 44px; left: 44px; border-right: none; border-top: none; }
+  .frame-tick.br { bottom: 44px; right: 44px; border-left: none; border-top: none; }
+
+  /* ── 상태 칩 ── */
+  .status-chip {
+    position: absolute;
+    top: 70px;
+    left: 82px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--up);
+  }
+  .status-chip .dot {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: var(--up);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(226,104,92,0.5); }
+    50% { opacity: 0.55; box-shadow: 0 0 0 9px rgba(226,104,92,0); }
+  }
+
+  .exchange-code {
+    position: absolute;
+    top: 66px;
+    right: 82px;
+    font-size: 18px;
+    color: var(--paper-dim);
+    letter-spacing: 0.14em;
+    text-align: right;
+  }
+  .exchange-code b { color: var(--gold); }
+
+  /* ── 중앙 히어로 ── */
+  .hero {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -54%);
+    text-align: center;
+    width: 1500px;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    color: var(--paper-dim);
+    margin-bottom: 30px;
+    opacity: 0;
+    animation: fade-up 0.7s ease-out 0.15s forwards;
+  }
+  .eyebrow::before, .eyebrow::after {
+    content: "";
+    width: 64px;
+    height: 1px;
+    background: var(--line);
+  }
+
+  h1.game-name {
+    font-size: 118px;
+    font-weight: 900;
+    color: var(--paper);
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    opacity: 0;
+    animation: fade-up 0.7s ease-out 0.3s forwards;
+  }
+
+  .tagline {
+    font-size: 30px;
+    color: var(--paper-dim);
+    margin: 0 0 46px;
+    opacity: 0;
+    animation: fade-up 0.7s ease-out 0.45s forwards;
+  }
+
+  .stamp {
+    position: relative;
+    display: inline-block;
+    padding: 22px 64px;
+    border: 5px solid var(--up);
+    border-radius: 14px;
+    color: var(--up);
+    font-weight: 900;
+    font-size: 56px;
+    letter-spacing: 0.1em;
+    transform: rotate(-3deg) scale(0.6);
+    opacity: 0;
+    animation: stamp-in 0.55s cubic-bezier(.19,1.6,.4,1) 0.75s forwards;
+    text-shadow: 0 0 30px rgba(226,104,92,0.35);
+  }
+  .stamp::before, .stamp::after {
+    content: "★";
+    font-size: 22px;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.65;
+  }
+  .stamp::before { left: 22px; }
+  .stamp::after  { right: 22px; }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes stamp-in {
+    to { opacity: 1; transform: rotate(-3deg) scale(1); }
+  }
+
+  /* ── 하단 티커 바 ── */
+  .ticker-wrap {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 1920px;
+    height: 92px;
+    background: rgba(16,19,27,0.92);
+    border-top: 3px double var(--gold);
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+  }
+  .ticker {
+    display: inline-flex;
+    white-space: nowrap;
+    padding-left: 1920px;
+    animation: ticker-scroll 34s linear infinite;
+  }
+  .ticker span {
+    padding: 0 46px;
+    font-size: 25px;
+    font-weight: 700;
+    color: var(--paper);
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .ticker span::before {
+    content: "▲";
+    color: var(--up);
+    font-size: 15px;
+  }
+  .ticker span.flat::before { content: "●"; color: var(--gold); font-size: 12px; }
+  @keyframes ticker-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-100%); }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <canvas id="candles"></canvas>
+
+  <div class="frame-tick tl"></div>
+  <div class="frame-tick tr"></div>
+  <div class="frame-tick bl"></div>
+  <div class="frame-tick br"></div>
+
+  <div class="status-chip mono"><span class="dot"></span>NOW OPEN</div>
+  <div class="exchange-code mono">SOOP STOCK EXCHANGE<br><b>2026.07.13</b></div>
+
+  <div class="hero">
+    <div class="eyebrow mono">STREAMER STOCK MARKET</div>
+    <h1 class="game-name">스트리머 주식시장</h1>
+    <p class="tagline">방송 보며 즐기는 나만의 스트리머 증권거래소</p>
+    <div class="stamp">정식 OPEN</div>
+  </div>
+
+  <div class="ticker-wrap">
+    <div class="ticker mono">
+      <span>초기자산 100만원 통일</span>
+      <span>스트리머 인증 오픈</span>
+      <span>로그인 유저 이용시간 무제한</span>
+      <span class="flat">잭팟 200만원</span>
+      <span class="flat">복권함 배당 90%</span>
+      <span>초기자산 100만원 통일</span>
+      <span>스트리머 인증 오픈</span>
+      <span>로그인 유저 이용시간 무제한</span>
+      <span class="flat">잭팟 200만원</span>
+      <span class="flat">복권함 배당 90%</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var canvas = document.getElementById('candles');
+  var ctx = canvas.getContext('2d');
+  var W = 1920, H = 1080;
+  canvas.width = W;
+  canvas.height = H;
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var candleW = 34, gap = 20;
+  var count = Math.ceil(W / (candleW + gap)) + 2;
+  var candles = [];
+  var baseY = H * 0.6;
+
+  function makeCandle(prevClose) {
+    var open = prevClose;
+    var change = (Math.random() - 0.46) * 70;
+    var close = open + change;
+    var high = Math.max(open, close) + Math.random() * 30;
+    var low = Math.min(open, close) - Math.random() * 30;
+    return { open: open, close: close, high: high, low: low };
+  }
+
+  var prev = 0;
+  for (var i = 0; i < count; i++) {
+    var c = makeCandle(prev);
+    candles.push(c);
+    prev = c.close;
+  }
+
+  var offset = 0;
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      var x = i * (candleW + gap) - offset;
+      var up = c.close >= c.open;
+      var color = up ? 'rgba(226,104,92,0.5)' : 'rgba(107,163,214,0.5)';
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 3;
+
+      ctx.beginPath();
+      ctx.moveTo(x + candleW / 2, baseY - c.high);
+      ctx.lineTo(x + candleW / 2, baseY - c.low);
+      ctx.stroke();
+
+      var top = baseY - Math.max(c.open, c.close);
+      var h = Math.max(4, Math.abs(c.close - c.open));
+      ctx.fillRect(x, top, candleW, h);
+    }
+  }
+
+  function tick() {
+    offset += 0.35;
+    if (offset > candleW + gap) {
+      offset -= (candleW + gap);
+      candles.shift();
+      var last = candles[candles.length - 1];
+      candles.push(makeCandle(last.close));
+    }
+    draw();
+    if (!reduceMotion) requestAnimationFrame(tick);
+  }
+
+  draw();
+  if (!reduceMotion) requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
