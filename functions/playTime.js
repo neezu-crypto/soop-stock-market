@@ -4,7 +4,6 @@ const {
   TEST_PERIOD_ACTIVE,
   ADMIN_EMAIL,
   ANON_DAILY_SECONDS,
-  PROTECTED_DAILY_SECONDS,
   PLAYTIME_BASE_RATE,
   PLAYTIME_SURCHARGE_STEP,
   PLAYTIME_SURCHARGE_MAX,
@@ -21,10 +20,15 @@ const {
 // ══════════════════════════════════════════════════════════
 // 플레이타임 제한 — 서버 이용 비용 절감을 위해 하루 무료 이용 시간을 두고,
 // 초과분은 게임머니로 직접 충전(자기서비스, 관리자 검수 불필요)한다.
-//   - 익명 유저: 하루 15분 / 카카오 연동 유저: 하루 60분 / 관리자: 무제한
-//   - 충전 단가 = 총자산(현금+보유주식 평가금액) × 10% (기준, 1시간)
+//   - 익명 유저: 하루 15분 / 계정 보호(카카오·구글·스트리머 인증) 유저: 무제한 / 관리자: 무제한
+//   - 충전 단가 = 총자산(현금+보유주식 평가금액) × 10% (기준, 1시간) — 익명 유저 전용
 //   - 당일 n번째 추가 구매마다 할증 +10%p, 최대 +50%에서 상한
 //   - 자정(KST) 지나면 사용시간·구매횟수 모두 초기화
+//
+// 2026-07-13: 계정 보호 유저는 무제한으로 전환했다 — 일일 한도는 무한정 새로
+// 만들 수 있는 익명 계정의 실시간 연결 남용(=서버비)을 막는 게 목적인데,
+// 계정 보호는 외부 인증이나 관리자 수동 검수를 거쳐야 해서 대량 생성이
+// 어려우니 그쪽까지 제한할 이유가 없다고 판단했다.
 // ══════════════════════════════════════════════════════════
 
 /** 유저의 현재 일일 이용 한도/사용량/남은 시간을 계산한다 (하트비트 갱신 없이 조회만). */
@@ -32,10 +36,12 @@ async function getQuotaState(db, uid, auth) {
   if (auth.token?.email === ADMIN_EMAIL) return { unlimited: true };
 
   const user = (await db.ref(`users/${uid}`).get()).val() || {};
+  if (isUserProtected(user)) return { unlimited: true };
+
   const today = todayKeyKST();
   const isNewDay = user.playQuotaDate !== today;
 
-  const baseLimitSeconds = isUserProtected(user) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  const baseLimitSeconds = ANON_DAILY_SECONDS;
   const usedSeconds      = isNewDay ? 0 : (user.playSecondsUsedToday || 0);
   const bonusSeconds     = isNewDay ? 0 : (user.bonusSecondsToday || 0);
   const remainingSeconds = Math.max(0, baseLimitSeconds + bonusSeconds - usedSeconds);
@@ -102,10 +108,11 @@ async function checkPlayQuota(db, uid, auth) {
   if (!userTx.committed || !userTx.snapshot.exists()) return; // 아직 유저 데이터가 없는 극초반 — initializeUser가 곧 처리
 
   const updated = userTx.snapshot.val();
-  const baseLimitSeconds = isUserProtected(updated) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  if (isUserProtected(updated)) return; // 계정 보호 유저는 이용시간 무제한
+
   const remainingSeconds = Math.max(
     0,
-    baseLimitSeconds + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
+    ANON_DAILY_SECONDS + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
   );
   if (remainingSeconds <= 0) {
     throw new HttpsError(
@@ -147,7 +154,11 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
   }
 
   const updated = userTx.snapshot.val();
-  const baseLimitSeconds = isUserProtected(updated) ? PROTECTED_DAILY_SECONDS : ANON_DAILY_SECONDS;
+  if (isUserProtected(updated)) {
+    return { ok: true, unlimited: true, allowed: true };
+  }
+
+  const baseLimitSeconds = ANON_DAILY_SECONDS;
   const remainingSeconds = Math.max(
     0,
     baseLimitSeconds + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
@@ -179,21 +190,19 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   const user = (await db.ref(`users/${uid}`).get()).val() || { cash: 0, stocks: {} };
   const isProtected = isUserProtected(user);
 
+  // 계정 보호(카카오·구글·스트리머 인증) 유저는 이용시간이 이미 무제한이라
+  // 충전이 아무 효과가 없다 — 모르고 결제해 게임자산만 낭비하는 일을 막는다.
+  if (isProtected && !isAdmin) {
+    throw new HttpsError("failed-precondition", "계정 보호 유저는 이용시간이 무제한이라 충전이 필요 없습니다.");
+  }
+
   let hours = parseInt(request.data?.hours, 10);
 
-  // 테스트 기간 동안은 플레이 시간 충전(유료)을 원칙적으로 막되, 로그인
-  // (계정 보호) 유저에 한해 하루 1회·1시간만 예외적으로 허용한다 — 테스트
-  // 기간이라도 하루 이용시간(60분)을 다 쓴 로그인 유저가 완전히 발이
-  // 묶이지 않도록. testPeriodPurchaseDate로 "오늘 이미 한 번 썼는지"만
-  // 판정하므로, 익명 유저나 관리자에게는 영향이 없다.
+  // 테스트 기간 동안은 플레이 시간 충전(유료)을 원칙적으로 막았다(현재는
+  // TEST_PERIOD_ACTIVE=false라 미적용) — 켜져도 이 시점엔 이미 위에서
+  // 계정 보호 유저를 걸러냈으므로, 이 블록은 익명 유저 전면 차단으로만 동작한다.
   if (TEST_PERIOD_ACTIVE && !isAdmin) {
-    if (!isProtected) {
-      throw new HttpsError("failed-precondition", "테스트 기간 중에는 플레이 시간 충전을 이용할 수 없습니다.");
-    }
-    if (user.testPeriodPurchaseDate === today) {
-      throw new HttpsError("failed-precondition", "테스트 기간 중에는 하루 1회(1시간)만 연장 구매할 수 있습니다. 내일 다시 시도해주세요.");
-    }
-    hours = 1;
+    throw new HttpsError("failed-precondition", "테스트 기간 중에는 플레이 시간 충전을 이용할 수 없습니다.");
   }
 
   if (!Number.isInteger(hours) || hours < 1 || hours > MAX_PLAYTIME_BUY_HOURS) {
@@ -233,7 +242,6 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
       playSecondsUsedToday:  isNewDay2 ? 0 : (u.playSecondsUsedToday || 0),
       bonusSecondsToday:     (isNewDay2 ? 0 : (u.bonusSecondsToday || 0)) + addedSeconds,
       purchasedHoursToday:   (isNewDay2 ? 0 : (u.purchasedHoursToday || 0)) + hours,
-      testPeriodPurchaseDate: (TEST_PERIOD_ACTIVE && !isAdmin) ? today : (u.testPeriodPurchaseDate || null),
     };
   });
 

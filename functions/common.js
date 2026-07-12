@@ -89,8 +89,11 @@ const ASSET_HISTORY_RETENTION_DAYS = 9;
 const DAILY_ATTENDANCE_REWARDS  = [30000, 50000, 70000, 100000, 130000, 160000, 300000];
 
 // ── 플레이타임 제한 관련 상수 ──────────────────────────────────
-const ANON_DAILY_SECONDS       = 15 * 60;  // 익명 유저 하루 무료 이용 시간
-const PROTECTED_DAILY_SECONDS  = 60 * 60;  // 계정 보호(카카오 또는 구글 연동) 유저 하루 무료 이용 시간
+// 2026-07-13: 계정 보호(카카오/구글/스트리머 인증) 유저는 이용시간 무제한으로
+// 전환했다 — 서버비 억제 목적의 일일 한도는 무한정 새로 만들 수 있는 익명
+// 계정에만 의미가 있고, 계정 보호는 실제 외부 인증이나 관리자 수동 검수를
+// 거쳐야 해서 대량으로 만들기 어려우니 굳이 시간을 제한할 이유가 없다.
+const ANON_DAILY_SECONDS       = 15 * 60;  // 익명 유저 하루 무료 이용 시간(계정 보호 유저는 무제한이라 상한 없음)
 const PLAYTIME_BASE_RATE       = 0.10;     // 기준단가 = 총자산(현금+평가금액) × 이 비율 (1시간, 할증 전)
 const PLAYTIME_SURCHARGE_STEP  = 0.10;     // 당일 n번째 추가 구매마다 할증률 +10%p
 const PLAYTIME_SURCHARGE_MAX   = 0.50;     // 할증률 상한 (5번째 이상은 +50%로 고정)
@@ -359,7 +362,6 @@ module.exports = {
   ASSET_HISTORY_RETENTION_DAYS,
   DAILY_ATTENDANCE_REWARDS,
   ANON_DAILY_SECONDS,
-  PROTECTED_DAILY_SECONDS,
   PLAYTIME_BASE_RATE,
   PLAYTIME_SURCHARGE_STEP,
   PLAYTIME_SURCHARGE_MAX,

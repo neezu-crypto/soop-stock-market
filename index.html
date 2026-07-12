@@ -977,7 +977,7 @@
                     style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
                     💰 자산 충전
                 </button>
-                <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 관리자 — 이용시간 무제한</div>
+                <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 이용시간 무제한</div>
                 <div id="playtime-bar" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">
                     ⏱ 오늘 <span id="playtime-display">--:-- / --:--</span>
                     <button id="playtime-wallet-buy-btn" onclick="openPlayTimeModal()"
@@ -1304,7 +1304,7 @@ let intersectingStockIds = new Set(); // 지금 스크롤 뷰포트 안에 실�
 let alwaysSubscribedIds  = new Set(); // 뷰포트 밖이어도 항상 구독해야 하는 종목 id(보유 중 + 고정노출)
 
 // ── 플레이타임 제한 상태 (하트비트 응답으로 갱신, 1초마다 로컬에서 카운트다운 표시) ──
-let playtimeUnlimited      = false; // 관리자 계정
+let playtimeUnlimited      = false; // 관리자 또는 계정 보호(카카오·구글·스트리머 인증) 유저
 let playtimeRemainingSec   = null;  // 서버가 마지막으로 알려준 남은 초
 let playtimeBaseLimitSec   = null;
 let playtimeLocked         = false; // 소진돼 리스너를 내린 상태인지
