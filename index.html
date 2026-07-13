@@ -704,6 +704,36 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     사운드 설정 모달 (매수/매도/호버 효과음 음소거·볼륨 조절)
+══════════════════════════════════════════ -->
+<div id="sound-settings-modal" class="promo-modal-overlay" style="z-index:4050;">
+    <div class="promo-modal-content" style="max-width:340px;">
+        <div class="promo-modal-header"><h2>🔊 사운드 설정</h2></div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid #334155;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+            <span style="font-size:14px;font-weight:700;">전체 음소거</span>
+            <label style="position:relative;display:inline-block;width:44px;height:24px;">
+                <input type="checkbox" id="sound-mute-toggle" onchange="window.toggleSoundMute(this.checked)" style="opacity:0;width:0;height:0;">
+                <span id="sound-mute-slider" style="position:absolute;inset:0;background:#334155;border-radius:100px;cursor:pointer;transition:background 0.2s;" onclick="document.getElementById('sound-mute-toggle').click();">
+                    <span id="sound-mute-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;pointer-events:none;"></span>
+                </span>
+            </label>
+        </div>
+
+        <div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:13px;color:var(--text-sub);">
+            <span>볼륨</span>
+            <span id="sound-volume-label">100%</span>
+        </div>
+        <input type="range" id="sound-volume-slider" min="0" max="100" value="100"
+            oninput="window.updateSoundVolume(this.value)"
+            style="width:100%;margin-bottom:20px;accent-color:#38bdf8;">
+
+        <div style="font-size:11px;color:#64748b;margin-bottom:16px;">매수/매도 체결음과 종목 카드 호버 효과음에 적용됩니다. 설정은 이 브라우저에 저장돼요.</div>
+        <button onclick="closeSoundSettingsModal()" style="width:100%;background:#334155;color:white;border:none;padding:10px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:13px;">닫기</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      플레이 시간 충전 모달 (게임머니로 자기서비스 즉시 충전)
 ══════════════════════════════════════════ -->
 <div id="playtime-modal" class="promo-modal-overlay" style="z-index:4000;">
@@ -976,6 +1006,10 @@
                 <button onclick="openCashChargeModal()"
                     style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
                     💰 자산 충전
+                </button>
+                <button id="sound-settings-btn" onclick="openSoundSettingsModal()"
+                    style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
+                    🔊 사운드
                 </button>
                 <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 이용시간 무제한</div>
                 <div id="playtime-bar" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">
@@ -1334,21 +1368,73 @@ function getChangePercent(id) {
 // (차트 모달 상태는 js/chartModal.js로 이동 — initChartModal() 내부 클로저)
 
 // ── 사운드 ──────────────────────────────────────────────────
+// 각 효과음의 "원래 설계 볼륨"은 그대로 두고, 유저가 설정 모달에서 고른
+// 배율(soundVolume 0~1, 음소거 시 0)을 곱해서 최종 볼륨을 정한다.
+const BUY_SOUND_BASE_VOLUME   = 0.2;
+const SELL_SOUND_BASE_VOLUME  = 0.2;
+const HOVER_SOUND_BASE_VOLUME = 0.5;
+
 const buySound  = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
 const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/sell%20sound.mp3");
-buySound.volume  = 0.2;
-sellSound.volume = 0.2;
 
 // 호버 사운드: 연속 재생이 겹쳐도 끊기지 않도록 Audio 풀 사용
 const HOVER_POOL_SIZE = 3;
 const hoverPool = Array.from({ length: HOVER_POOL_SIZE }, () => {
-    const a = new Audio("https://raw.githubusercontent.com/neezu-crypto/soop-stock-market/refs/heads/main/sound/scroll.mp3");
-    a.volume = 0.5;
-    return a;
+    return new Audio("https://raw.githubusercontent.com/neezu-crypto/soop-stock-market/refs/heads/main/sound/scroll.mp3");
 });
 let hoverPoolIdx  = 0;
 let lastHoverTime = 0;
 const HOVER_COOLDOWN_MS = 80; // 너무 빠른 연속 재생 방지
+
+let soundVolume = 100; // 0~100, 유저 설정(localStorage) — 사운드 설정 모달에서 조절
+let soundMuted  = false;
+
+function applySoundSettings() {
+    const mult = soundMuted ? 0 : (soundVolume / 100);
+    buySound.volume  = BUY_SOUND_BASE_VOLUME  * mult;
+    sellSound.volume = SELL_SOUND_BASE_VOLUME * mult;
+    hoverPool.forEach((a) => { a.volume = HOVER_SOUND_BASE_VOLUME * mult; });
+    const btn = document.getElementById('sound-settings-btn');
+    if (btn) btn.innerText = soundMuted ? '🔇 사운드' : '🔊 사운드';
+}
+
+(function initSoundSettings() {
+    const savedVolume = localStorage.getItem('soundVolume');
+    const savedMuted  = localStorage.getItem('soundMuted');
+    if (savedVolume !== null) soundVolume = Math.min(100, Math.max(0, parseInt(savedVolume, 10) || 0));
+    if (savedMuted !== null)  soundMuted  = savedMuted === '1';
+    applySoundSettings();
+})();
+
+function updateMuteToggleVisual() {
+    const slider = document.getElementById('sound-mute-slider');
+    const knob   = document.getElementById('sound-mute-knob');
+    if (slider) slider.style.background = soundMuted ? '#38bdf8' : '#334155';
+    if (knob)   knob.style.transform    = soundMuted ? 'translateX(20px)' : 'translateX(0)';
+}
+
+window.openSoundSettingsModal = function() {
+    document.getElementById('sound-volume-slider').value = soundVolume;
+    document.getElementById('sound-volume-label').innerText = `${soundVolume}%`;
+    document.getElementById('sound-mute-toggle').checked = soundMuted;
+    updateMuteToggleVisual();
+    document.getElementById('sound-settings-modal')?.classList.add('active');
+};
+window.closeSoundSettingsModal = function() {
+    document.getElementById('sound-settings-modal')?.classList.remove('active');
+};
+window.toggleSoundMute = function(checked) {
+    soundMuted = checked;
+    localStorage.setItem('soundMuted', soundMuted ? '1' : '0');
+    updateMuteToggleVisual();
+    applySoundSettings();
+};
+window.updateSoundVolume = function(value) {
+    soundVolume = parseInt(value, 10) || 0;
+    localStorage.setItem('soundVolume', String(soundVolume));
+    document.getElementById('sound-volume-label').innerText = `${soundVolume}%`;
+    applySoundSettings();
+};
 
 function playHoverSound() {
     const now = Date.now();
