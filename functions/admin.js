@@ -867,6 +867,7 @@ async function actionGetUserDetail(db, { uid }) {
     cash: user.cash ?? INITIAL_CASH,
     kakaoLinked: !!user.kakaoLinked,
     googleLinked: !!user.googleLinked,
+    streamerVerified: !!user.streamerVerified,
     realizedPL: user.realizedPL || 0,
     lastTradeTime: user.lastTradeTime || null,
     lastAttendanceDate: user.lastAttendanceDate || null,

@@ -1165,7 +1165,7 @@
                 <div style="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;margin-top:10px;">
                     <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:13px;margin-bottom:12px;">
                         <span>💰 현금 <b style="color:#38bdf8;">${data.cash.toLocaleString()}원</b></span>
-                        <span>${(data.kakaoLinked || data.googleLinked) ? `✅ 보호됨 (${[data.kakaoLinked && '카카오', data.googleLinked && '구글'].filter(Boolean).join('·')})` : '⚠️ 익명 계정'}</span>
+                        <span>${(data.kakaoLinked || data.googleLinked || data.streamerVerified) ? `✅ 보호됨 (${[data.kakaoLinked && '카카오', data.googleLinked && '구글', data.streamerVerified && '스트리머 인증'].filter(Boolean).join('·')})` : '⚠️ 익명 계정'}</span>
                         <span>실현손익 <b style="color:${data.realizedPL >= 0 ? '#4ade80' : '#f87171'};">${data.realizedPL.toLocaleString()}원</b></span>
                         <span style="color:#64748b;">마지막 거래: ${data.lastTradeTime ? new Date(data.lastTradeTime).toLocaleString() : '-'}</span>
                         <span style="color:#64748b;">출석: ${data.lastAttendanceDate ? `${data.lastAttendanceDate} (${data.attendanceStreak}일차)` : '받은 적 없음'}</span>
