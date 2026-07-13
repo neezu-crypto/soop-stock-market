@@ -707,28 +707,12 @@
      사운드 설정 모달 (매수/매도/호버 효과음 음소거·볼륨 조절)
 ══════════════════════════════════════════ -->
 <div id="sound-settings-modal" class="promo-modal-overlay" style="z-index:4050;">
-    <div class="promo-modal-content" style="max-width:340px;">
+    <div class="promo-modal-content" style="max-width:360px;">
         <div class="promo-modal-header"><h2>🔊 사운드 설정</h2></div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid #334155;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
-            <span style="font-size:14px;font-weight:700;">전체 음소거</span>
-            <label style="position:relative;display:inline-block;width:44px;height:24px;">
-                <input type="checkbox" id="sound-mute-toggle" onchange="window.toggleSoundMute(this.checked)" style="opacity:0;width:0;height:0;">
-                <span id="sound-mute-slider" style="position:absolute;inset:0;background:#334155;border-radius:100px;cursor:pointer;transition:background 0.2s;" onclick="document.getElementById('sound-mute-toggle').click();">
-                    <span id="sound-mute-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;pointer-events:none;"></span>
-                </span>
-            </label>
-        </div>
+        <div id="sound-settings-rows" style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;"></div>
 
-        <div style="margin-bottom:8px;display:flex;justify-content:space-between;font-size:13px;color:var(--text-sub);">
-            <span>볼륨</span>
-            <span id="sound-volume-label">100%</span>
-        </div>
-        <input type="range" id="sound-volume-slider" min="0" max="100" value="100"
-            oninput="window.updateSoundVolume(this.value)"
-            style="width:100%;margin-bottom:20px;accent-color:#38bdf8;">
-
-        <div style="font-size:11px;color:#64748b;margin-bottom:16px;">매수/매도 체결음과 종목 카드 호버 효과음에 적용됩니다. 설정은 이 브라우저에 저장돼요.</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:16px;">사운드별로 따로 켜고 끄고 볼륨을 조절할 수 있어요. 설정은 이 브라우저에 저장됩니다.</div>
         <button onclick="closeSoundSettingsModal()" style="width:100%;background:#334155;color:white;border:none;padding:10px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:13px;">닫기</button>
     </div>
 </div>
@@ -1368,11 +1352,14 @@ function getChangePercent(id) {
 // (차트 모달 상태는 js/chartModal.js로 이동 — initChartModal() 내부 클로저)
 
 // ── 사운드 ──────────────────────────────────────────────────
-// 각 효과음의 "원래 설계 볼륨"은 그대로 두고, 유저가 설정 모달에서 고른
-// 배율(soundVolume 0~1, 음소거 시 0)을 곱해서 최종 볼륨을 정한다.
-const BUY_SOUND_BASE_VOLUME   = 0.2;
-const SELL_SOUND_BASE_VOLUME  = 0.2;
-const HOVER_SOUND_BASE_VOLUME = 0.5;
+// 사운드 종류별로 각자 음소거/볼륨을 따로 조절할 수 있다. 각 효과음의
+// "원래 설계 볼륨"(baseVolume)은 그대로 두고, 유저가 그 사운드에 대해
+// 고른 배율(0~1, 음소거 시 0)을 곱해서 최종 볼륨을 정한다.
+const SOUND_DEFS = {
+    buy:   { label: '매수 체결음',      baseVolume: 0.2 },
+    sell:  { label: '매도 체결음',      baseVolume: 0.2 },
+    hover: { label: '종목 카드 호버음', baseVolume: 0.5 },
+};
 
 const buySound  = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/buy%20sound.mp3");
 const sellSound = new Audio("https://github.com/neezu-crypto/Splayground/raw/refs/heads/main/sell%20sound.mp3");
@@ -1386,53 +1373,96 @@ let hoverPoolIdx  = 0;
 let lastHoverTime = 0;
 const HOVER_COOLDOWN_MS = 80; // 너무 빠른 연속 재생 방지
 
-let soundVolume = 100; // 0~100, 유저 설정(localStorage) — 사운드 설정 모달에서 조절
-let soundMuted  = false;
+// { buy: {volume:100, muted:false}, sell: {...}, hover: {...} } — localStorage에 JSON으로 저장
+let soundSettings = Object.fromEntries(
+    Object.keys(SOUND_DEFS).map((key) => [key, { volume: 100, muted: false }])
+);
 
 function applySoundSettings() {
-    const mult = soundMuted ? 0 : (soundVolume / 100);
-    buySound.volume  = BUY_SOUND_BASE_VOLUME  * mult;
-    sellSound.volume = SELL_SOUND_BASE_VOLUME * mult;
-    hoverPool.forEach((a) => { a.volume = HOVER_SOUND_BASE_VOLUME * mult; });
+    const mult = (key) => soundSettings[key].muted ? 0 : (soundSettings[key].volume / 100);
+    buySound.volume  = SOUND_DEFS.buy.baseVolume   * mult('buy');
+    sellSound.volume = SOUND_DEFS.sell.baseVolume  * mult('sell');
+    hoverPool.forEach((a) => { a.volume = SOUND_DEFS.hover.baseVolume * mult('hover'); });
+
     const btn = document.getElementById('sound-settings-btn');
-    if (btn) btn.innerText = soundMuted ? '🔇 사운드' : '🔊 사운드';
+    if (btn) {
+        const allMuted = Object.values(soundSettings).every((s) => s.muted);
+        btn.innerText = allMuted ? '🔇 사운드' : '🔊 사운드';
+    }
 }
 
 (function initSoundSettings() {
-    const savedVolume = localStorage.getItem('soundVolume');
-    const savedMuted  = localStorage.getItem('soundMuted');
-    if (savedVolume !== null) soundVolume = Math.min(100, Math.max(0, parseInt(savedVolume, 10) || 0));
-    if (savedMuted !== null)  soundMuted  = savedMuted === '1';
+    const saved = localStorage.getItem('soundSettings');
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            Object.keys(SOUND_DEFS).forEach((key) => {
+                if (parsed[key]) {
+                    soundSettings[key] = {
+                        volume: Math.min(100, Math.max(0, parseInt(parsed[key].volume, 10) || 0)),
+                        muted:  !!parsed[key].muted,
+                    };
+                }
+            });
+        } catch (e) { /* 저장값이 깨졌으면 기본값 유지 */ }
+    }
     applySoundSettings();
 })();
 
-function updateMuteToggleVisual() {
-    const slider = document.getElementById('sound-mute-slider');
-    const knob   = document.getElementById('sound-mute-knob');
-    if (slider) slider.style.background = soundMuted ? '#38bdf8' : '#334155';
-    if (knob)   knob.style.transform    = soundMuted ? 'translateX(20px)' : 'translateX(0)';
+function saveSoundSettings() {
+    localStorage.setItem('soundSettings', JSON.stringify(soundSettings));
+}
+
+function updateSoundRowVisual(key) {
+    const s = soundSettings[key];
+    const slider = document.getElementById(`sound-mute-slider-${key}`);
+    const knob   = document.getElementById(`sound-mute-knob-${key}`);
+    if (slider) slider.style.background = s.muted ? '#38bdf8' : '#334155';
+    if (knob)   knob.style.transform    = s.muted ? 'translateX(20px)' : 'translateX(0)';
 }
 
 window.openSoundSettingsModal = function() {
-    document.getElementById('sound-volume-slider').value = soundVolume;
-    document.getElementById('sound-volume-label').innerText = `${soundVolume}%`;
-    document.getElementById('sound-mute-toggle').checked = soundMuted;
-    updateMuteToggleVisual();
+    const rows = document.getElementById('sound-settings-rows');
+    rows.innerHTML = Object.entries(SOUND_DEFS).map(([key, def]) => `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid #334155;border-radius:10px;padding:12px 14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <span style="font-size:13px;font-weight:700;">${def.label}</span>
+                <label style="position:relative;display:inline-block;width:40px;height:22px;">
+                    <input type="checkbox" id="sound-mute-toggle-${key}" onchange="window.toggleSoundMute('${key}', this.checked)" style="opacity:0;width:0;height:0;">
+                    <span id="sound-mute-slider-${key}" style="position:absolute;inset:0;background:#334155;border-radius:100px;cursor:pointer;transition:background 0.2s;" onclick="document.getElementById('sound-mute-toggle-${key}').click();">
+                        <span id="sound-mute-knob-${key}" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;pointer-events:none;"></span>
+                    </span>
+                </label>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-sub);margin-bottom:4px;">
+                <span>볼륨</span>
+                <span id="sound-volume-label-${key}">${soundSettings[key].volume}%</span>
+            </div>
+            <input type="range" id="sound-volume-slider-${key}" min="0" max="100" value="${soundSettings[key].volume}"
+                oninput="window.updateSoundVolume('${key}', this.value)"
+                style="width:100%;accent-color:#38bdf8;">
+        </div>
+    `).join('');
+
+    Object.keys(SOUND_DEFS).forEach((key) => {
+        document.getElementById(`sound-mute-toggle-${key}`).checked = soundSettings[key].muted;
+        updateSoundRowVisual(key);
+    });
     document.getElementById('sound-settings-modal')?.classList.add('active');
 };
 window.closeSoundSettingsModal = function() {
     document.getElementById('sound-settings-modal')?.classList.remove('active');
 };
-window.toggleSoundMute = function(checked) {
-    soundMuted = checked;
-    localStorage.setItem('soundMuted', soundMuted ? '1' : '0');
-    updateMuteToggleVisual();
+window.toggleSoundMute = function(key, checked) {
+    soundSettings[key].muted = checked;
+    saveSoundSettings();
+    updateSoundRowVisual(key);
     applySoundSettings();
 };
-window.updateSoundVolume = function(value) {
-    soundVolume = parseInt(value, 10) || 0;
-    localStorage.setItem('soundVolume', String(soundVolume));
-    document.getElementById('sound-volume-label').innerText = `${soundVolume}%`;
+window.updateSoundVolume = function(key, value) {
+    soundSettings[key].volume = parseInt(value, 10) || 0;
+    saveSoundSettings();
+    document.getElementById(`sound-volume-label-${key}`).innerText = `${soundSettings[key].volume}%`;
     applySoundSettings();
 };
 
