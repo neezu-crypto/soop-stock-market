@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스트리머 주식시장 — 정식 오픈 안내</title>
+<style>
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
+
+  :root {
+    --paper:      #f5efdc;
+    --paper-alt:  #ede4c8;
+    --ink:        #1c2333;
+    --ink-sub:    #5b5847;
+    --rule:       #d6c9a0;
+    --up:         #b8362c;
+    --up-soft:    #b8362c14;
+    --down:       #2c5f8a;
+    --down-soft:  #2c5f8a14;
+    --gold:       #92701f;
+    --card-bg:    #fffcf2;
+    --shadow:     0 1px 0 rgba(28,35,51,0.06);
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #15181f;
+    --paper-alt:  #1b1f28;
+    --ink:        #ece6d3;
+    --ink-sub:    #a6a08a;
+    --rule:       #363c4c;
+    --up:         #e2685c;
+    --up-soft:    #e2685c1f;
+    --down:       #6ba3d6;
+    --down-soft:  #6ba3d61f;
+    --gold:       #d9b354;
+    --card-bg:    #1c2029;
+    --shadow:     0 1px 0 rgba(0,0,0,0.3);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #15181f;
+      --paper-alt:  #1b1f28;
+      --ink:        #ece6d3;
+      --ink-sub:    #a6a08a;
+      --rule:       #363c4c;
+      --up:         #e2685c;
+      --up-soft:    #e2685c1f;
+      --down:       #6ba3d6;
+      --down-soft:  #6ba3d61f;
+      --gold:       #d9b354;
+      --card-bg:    #1c2029;
+      --shadow:     0 1px 0 rgba(0,0,0,0.3);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .mono {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  .page { max-width: 700px; margin: 0 auto; padding: 0 20px 80px; }
+
+  /* ── 티커 스트립 ── */
+  .ticker-wrap {
+    background: var(--ink);
+    color: var(--paper);
+    overflow: hidden;
+    white-space: nowrap;
+    border-bottom: 3px double var(--gold);
+  }
+  .ticker {
+    display: inline-flex;
+    padding: 9px 0;
+    animation: ticker-scroll 26s linear infinite;
+  }
+  .ticker span {
+    padding: 0 28px;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .ticker span.up { color: #ff9a8f; }
+  .ticker span::before { content: "● "; opacity: 0.5; font-size: 8px; vertical-align: middle; }
+  @keyframes ticker-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ticker { animation: none; white-space: normal; display: flex; flex-wrap: wrap; padding: 10px 16px; }
+  }
+
+  /* ── 히어로 ── */
+  .hero {
+    padding: 56px 0 40px;
+    text-align: center;
+    border-bottom: 1px solid var(--rule);
+    position: relative;
+  }
+  .eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--ink-sub);
+    border: 1px solid var(--rule);
+    border-radius: 100px;
+    padding: 5px 14px;
+    margin-bottom: 22px;
+  }
+  .eyebrow b { color: var(--up); }
+  h1.headline {
+    font-size: clamp(30px, 6vw, 44px);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .hero .sub {
+    font-size: 15.5px;
+    color: var(--ink-sub);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .stamp {
+    position: relative;
+    display: inline-block;
+    margin: 28px auto 4px;
+    padding: 14px 30px;
+    border: 3px solid var(--up);
+    border-radius: 8px;
+    color: var(--up);
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: 0.06em;
+    transform: rotate(-4deg) scale(0.7);
+    opacity: 0;
+    animation: stamp-in 0.5s cubic-bezier(.2,1.4,.4,1) 0.15s forwards;
+  }
+  .stamp::before, .stamp::after {
+    content: "★";
+    font-size: 11px;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.6;
+  }
+  .stamp::before { left: 10px; }
+  .stamp::after  { right: 10px; }
+  @keyframes stamp-in {
+    to { opacity: 1; transform: rotate(-4deg) scale(1); }
+  }
+
+  /* ── 섹션 공통 ── */
+  section.block { padding: 46px 0; border-bottom: 1px solid var(--rule); }
+  section.block:last-of-type { border-bottom: none; }
+
+  .kicker {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  h2.title {
+    font-size: 23px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .block p { font-size: 15px; color: var(--ink); max-width: 62ch; }
+  .block p.muted { color: var(--ink-sub); font-size: 13.5px; }
+
+  /* ── 종목 카드 스타일 그리드 ── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 20px;
+  }
+  @media (max-width: 520px) { .card-grid { grid-template-columns: 1fr; } }
+
+  .ticket {
+    background: var(--card-bg);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .ticket .ticket-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .ticket .ticket-name { font-weight: 800; font-size: 14.5px; }
+  .ticket .ticket-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 100px;
+  }
+  .ticket .ticket-tag.up   { background: var(--up-soft);   color: var(--up); }
+  .ticket .ticket-tag.down { background: var(--down-soft); color: var(--down); }
+  .ticket p { font-size: 12.5px; color: var(--ink-sub); margin: 0; }
+
+  /* ── 비교 표 (전/후) ── */
+  .compare {
+    margin-top: 18px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card-bg);
+  }
+  .compare .row {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1.4fr;
+    gap: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .compare .row:last-child { border-bottom: none; }
+  .compare .row > div { padding: 12px 14px; font-size: 13px; }
+  .compare .row.head > div { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-sub); background: var(--paper-alt); }
+  .compare .row > div:nth-child(2) { color: var(--down); border-right: 1px dashed var(--rule); border-left: 1px dashed var(--rule); text-decoration: line-through; text-decoration-color: var(--rule); }
+  .compare .row > div:nth-child(3) { color: var(--up); font-weight: 700; }
+  .compare .row.head > div:nth-child(2), .compare .row.head > div:nth-child(3) { text-decoration: none; font-weight: 700; color: var(--ink-sub); }
+
+  /* ── 시작하는 법 (실제 순서라 번호 사용) ── */
+  .steps { counter-reset: step; margin-top: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .step { display: flex; gap: 16px; align-items: flex-start; }
+  .step .n {
+    counter-increment: step;
+    flex-shrink: 0;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 2px solid var(--up);
+    color: var(--up);
+    font-weight: 800;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step .n::before { content: counter(step); }
+  .step .body strong { display: block; font-size: 14.5px; margin-bottom: 2px; }
+  .step .body span { font-size: 13px; color: var(--ink-sub); }
+
+  /* ── CTA ── */
+  .cta {
+    text-align: center;
+    padding: 52px 0 20px;
+  }
+  .cta h2 { font-size: 24px; margin: 0 0 10px; }
+  .cta p { color: var(--ink-sub); font-size: 14px; margin: 0 0 26px; }
+  .cta-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 26px;
+    border-radius: 9px;
+    font-weight: 800;
+    font-size: 14.5px;
+    text-decoration: none;
+    border: 2px solid transparent;
+  }
+  .btn.primary { background: var(--up); color: #fff8ee; }
+  .btn.ghost { border-color: var(--ink); color: var(--ink); }
+
+  footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--ink-sub);
+    padding: 30px 0 10px;
+  }
+</style>
+</head>
+<body>
+<div class="ticker-wrap">
+  <div class="ticker mono">
+    <span class="up">초기자산 100만원 통일</span>
+    <span class="up">스트리머 인증 오픈</span>
+    <span class="up">로그인 유저 이용시간 무제한</span>
+    <span>잭팟 200만원</span>
+    <span>복권함 배당 90%</span>
+    <span class="up">초기자산 100만원 통일</span>
+    <span class="up">스트리머 인증 오픈</span>
+    <span class="up">로그인 유저 이용시간 무제한</span>
+    <span>잭팟 200만원</span>
+    <span>복권함 배당 90%</span>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="hero">
+    <span class="eyebrow">OPEN · <b class="num mono">2026.07.13</b></span>
+    <h1 class="headline">스트리머 주식시장,<br>정식 오픈했습니다</h1>
+    <p class="sub">테스트 기간 동안 남아있던 마지막 제한까지 모두 풀렸습니다.<br>그동안 함께 매매해주시고 버그도 잡아주신 모든 분들께 감사드려요.</p>
+    <div class="stamp">정식 OPEN</div>
+  </div>
+
+  <section class="block">
+    <div class="kicker">Change 01</div>
+    <h2 class="title">💰 시작 자금, 이제 다 같이 100만원</h2>
+    <p>예전엔 익명으로 시작하면 50만원, 카카오·구글을 연동해야 50만원을 더 받아 100만원이 됐어요. 이제는 그런 구분 없이 <b>접속하는 순간 누구나 100만원</b>으로 시작합니다.</p>
+  </section>
+
+  <section class="block">
+    <div class="kicker">Change 02</div>
+    <h2 class="title">🎙️ 로그인이 부담스럽다면, 스트리머 인증</h2>
+    <p>카카오·구글 연동이 꺼려지는 분들을 위한 새로운 계정 보호 방법이 열렸습니다. 방송 닉네임으로 신청하면 4자리 인증번호가 발급되고, <b>그 번호를 방송 화면에 3초간 노출</b>하면 관리자가 다시보기로 확인한 뒤 승인해드려요.</p>
+    <p class="muted">승인되면 카카오·구글 연동과 완전히 동일하게 모든 콘텐츠를 이용할 수 있습니다. 다른 기기로 넘어갈 땐 매번 새 인증번호로 다시 검증하니, 남의 닉네임으로는 가로챌 수 없어요.</p>
+  </section>
+
+  <section class="block">
+    <div class="kicker">Change 03</div>
+    <h2 class="title">⏱ 로그인 유저, 이용시간 완전 무제한</h2>
+    <p>테스트 기간 동안 막혀있던 시간 충전 제한을 풀면서, 아예 <b>계정 보호(카카오·구글·스트리머 인증) 유저는 하루 이용시간 자체를 무제한</b>으로 바꿨습니다. 더 이상 타이머도, 충전도 신경 쓸 필요 없어요.</p>
+    <p class="muted">익명 계정은 기존처럼 하루 15분이고, 필요하면 1시간 단위로 충전할 수 있어요(살수록 할증). 무한정 새로 만들 수 있는 익명 계정만 제한을 두는 게 맞다고 판단했습니다.</p>
+    <div class="compare mono">
+      <div class="row head"><div></div><div>이전</div><div>지금</div></div>
+      <div class="row"><div>익명 유저</div><div>하루 15분</div><div>하루 15분 (동일)</div></div>
+      <div class="row"><div>계정 보호 유저</div><div>하루 60분</div><div>무제한</div></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="kicker">Contents</div>
+    <h2 class="title">그 사이 늘어난 즐길거리</h2>
+    <p class="muted">테스트 기간 중에 추가된 콘텐츠, 다시 한번 정리해드려요.</p>
+    <div class="card-grid">
+      <div class="ticket">
+        <div class="ticket-head"><span class="ticket-name">🎰 잭팟 종목</span><span class="ticket-tag up">200만원</span></div>
+        <p>매일 랜덤 선정되는 종목, 전체 유저 합산 매매량이 목표치를 채우는 순간 그 매매를 실행한 유저가 당첨돼요.</p>
+      </div>
+      <div class="ticket">
+        <div class="ticket-head"><span class="ticket-name">🎟️ 복권함</span><span class="ticket-tag up">배당 90%</span></div>
+        <p>20만원에 한 장, 세 자리 숫자가 전부 7이면 누적 모금액의 90%를 받아요. 모금액은 실시간으로 공개됩니다.</p>
+      </div>
+      <div class="ticket">
+        <div class="ticket-head"><span class="ticket-name">🎁 출석 보상</span><span class="ticket-tag down">7일 순환</span></div>
+        <p>매일 접속해 받는 보상, 하루라도 놓치면 1일차부터 다시 시작이에요.</p>
+      </div>
+      <div class="ticket">
+        <div class="ticket-head"><span class="ticket-name">🏅 도전과제</span><span class="ticket-tag down">총 12개</span></div>
+        <p>현금 보상은 없지만, 첫 매매부터 잭팟 당첨까지 순수 기록용 배지를 모을 수 있어요.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="kicker">How to start</div>
+    <h2 class="title">시작하는 방법</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="n"></div>
+        <div class="body"><strong>접속하면 100만원이 자동으로 지급돼요</strong><span>회원가입 없이 바로 매매를 시작할 수 있어요.</span></div>
+      </div>
+      <div class="step">
+        <div class="n"></div>
+        <div class="body"><strong>원하는 스트리머 종목을 매수·매도해보세요</strong><span>검색해도 없는 스트리머는 상장 신청도 가능해요.</span></div>
+      </div>
+      <div class="step">
+        <div class="n"></div>
+        <div class="body"><strong>계정을 보호해서 자산을 지켜두세요</strong><span>카카오·구글 연동 또는 스트리머 인증 중 편한 방법으로요.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta">
+    <h2>지금 바로 시작해보세요</h2>
+    <p>궁금한 규칙은 게임 설명서에서 전부 확인할 수 있어요.</p>
+    <div class="cta-buttons">
+      <a class="btn primary" href="./index.html">📈 거래소 입장하기</a>
+    </div>
+  </div>
+
+  <footer>
+    스트리머 주식시장 · 정식 오픈 안내 · 2026.07.13
+  </footer>
+
+</div>
+</body>
+</html>
