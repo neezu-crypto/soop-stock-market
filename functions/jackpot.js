@@ -139,13 +139,13 @@ async function contributeToJackpot(db, uid, stockId, qty, isProtected) {
 }
 
 /**
- * 잭팟 진행률을 매매와 무관하게 1시간마다 자동으로 조금씩 채워, 실제 거래가
+ * 잭팟 진행률을 매매와 무관하게 90분마다 자동으로 조금씩 채워, 실제 거래가
  * 뜸해도 진행 상황이 보이도록 하는 스케줄 함수. 다만 자동 증가만으로는
  * 당첨(target 도달)이 나지 않도록 목표치의 JACKPOT_AUTO_TICK_CAP_RATIO
  * (95%)까지만 올리고, 그 이후 마지막 구간은 반드시 실제 매매(contributeToJackpot)로
  * 채워야 당첨이 성립한다.
  */
-const autoTickJackpotProgress = onSchedule("every 1 hours", async () => {
+const autoTickJackpotProgress = onSchedule("every 90 minutes", async () => {
   const db = admin.database();
   const jackpotRef = db.ref("jackpot/state");
   await jackpotRef.transaction((current) => {
