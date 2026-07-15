@@ -63,6 +63,8 @@ const JACKPOT_PER_ACCOUNT_CAP    = 100;     // 계정당 목표치에 반영되�
 const JACKPOT_TARGET_MIN         = 1000;    // 목표치 하한선(트래픽이 적어도 이 아래로는 안 내려감)
 const JACKPOT_TARGET_RATIO       = 0.2;     // 목표치 = 전일 최고 매매량 델타 × 이 비율
 const JACKPOT_TARGET_VARIANCE    = 0.2;     // 목표치에 적용하는 랜덤 변동폭(±20%)
+const JACKPOT_AUTO_TICK_RATIO    = 0.01;    // 1시간마다 목표치의 이 비율만큼 진행률을 자동으로 채움(1%)
+const JACKPOT_AUTO_TICK_CAP_RATIO = 0.95;   // 자동 증가만으로는 이 비율(95%)까지만 채워짐 — 나머지는 실제 매매로 채워야 당첨
 
 // ── 복권함 ───────────────────────────────────────────────────
 // 계정 보호 유저만 20만원에 복권 1장을 살 수 있고, 구매 즉시 서버가 세
@@ -354,6 +356,8 @@ module.exports = {
   JACKPOT_TARGET_MIN,
   JACKPOT_TARGET_RATIO,
   JACKPOT_TARGET_VARIANCE,
+  JACKPOT_AUTO_TICK_RATIO,
+  JACKPOT_AUTO_TICK_CAP_RATIO,
   LOTTERY_TICKET_PRICE,
   LOTTERY_POOL_FLOOR,
   LOTTERY_PAYOUT_RATIO,

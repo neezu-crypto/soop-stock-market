@@ -1,10 +1,13 @@
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const {
   JACKPOT_PRIZE_AMOUNT,
   JACKPOT_PER_ACCOUNT_CAP,
   JACKPOT_TARGET_MIN,
   JACKPOT_TARGET_RATIO,
   JACKPOT_TARGET_VARIANCE,
+  JACKPOT_AUTO_TICK_RATIO,
+  JACKPOT_AUTO_TICK_CAP_RATIO,
   todayKeyKST,
   creditUserCash,
   grantAchievement,
@@ -135,4 +138,31 @@ async function contributeToJackpot(db, uid, stockId, qty, isProtected) {
   await pickNewJackpot(db);
 }
 
-module.exports = { updateStockDailySnapshot, contributeToJackpot, pickNewJackpot };
+/**
+ * 잭팟 진행률을 매매와 무관하게 1시간마다 자동으로 조금씩 채워, 실제 거래가
+ * 뜸해도 진행 상황이 보이도록 하는 스케줄 함수. 다만 자동 증가만으로는
+ * 당첨(target 도달)이 나지 않도록 목표치의 JACKPOT_AUTO_TICK_CAP_RATIO
+ * (95%)까지만 올리고, 그 이후 마지막 구간은 반드시 실제 매매(contributeToJackpot)로
+ * 채워야 당첨이 성립한다.
+ */
+const autoTickJackpotProgress = onSchedule("every 1 hours", async () => {
+  const db = admin.database();
+  const jackpotRef = db.ref("jackpot/state");
+  await jackpotRef.transaction((current) => {
+    if (!current || current.wonAt) return current;
+    const target = current.target || 0;
+    if (target <= 0) return current;
+    const cap = Math.floor(target * JACKPOT_AUTO_TICK_CAP_RATIO);
+    const progress = current.progress || 0;
+    if (progress >= cap) return current;
+    const tick = Math.max(1, Math.round(target * JACKPOT_AUTO_TICK_RATIO));
+    return { ...current, progress: Math.min(cap, progress + tick) };
+  });
+});
+
+module.exports = {
+  updateStockDailySnapshot,
+  contributeToJackpot,
+  pickNewJackpot,
+  autoTickJackpotProgress,
+};
