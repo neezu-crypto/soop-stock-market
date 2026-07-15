@@ -102,78 +102,55 @@
   }
   .exchange-code b { color: var(--gold); }
 
-  /* ── 중앙 히어로 ── */
+  /* ── 상단 히어로 ── */
   .hero {
     position: absolute;
-    top: 50%;
+    top: 118px;
     left: 50%;
-    transform: translate(-50%, -54%);
+    transform: translateX(-50%);
     text-align: center;
     width: 1500px;
-  }
-
-  .eyebrow {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 14px;
-    font-size: 24px;
-    font-weight: 700;
-    letter-spacing: 0.24em;
-    color: var(--paper-dim);
-    margin-bottom: 30px;
-    opacity: 0;
-    animation: fade-up 0.7s ease-out 0.15s forwards;
-  }
-  .eyebrow::before, .eyebrow::after {
-    content: "";
-    width: 64px;
-    height: 1px;
-    background: var(--line);
+    justify-content: center;
+    gap: 36px;
   }
 
   h1.game-name {
-    font-size: 118px;
+    font-size: 56px;
     font-weight: 900;
     color: var(--paper);
     letter-spacing: -0.01em;
-    margin: 0 0 6px;
+    margin: 0;
     opacity: 0;
     animation: fade-up 0.7s ease-out 0.3s forwards;
-  }
-
-  .tagline {
-    font-size: 30px;
-    color: var(--paper-dim);
-    margin: 0 0 46px;
-    opacity: 0;
-    animation: fade-up 0.7s ease-out 0.45s forwards;
   }
 
   .stamp {
     position: relative;
     display: inline-block;
-    padding: 22px 64px;
-    border: 5px solid var(--up);
-    border-radius: 14px;
+    padding: 10px 30px;
+    border: 4px solid var(--up);
+    border-radius: 10px;
     color: var(--up);
     font-weight: 900;
-    font-size: 56px;
-    letter-spacing: 0.1em;
+    font-size: 28px;
+    letter-spacing: 0.08em;
     transform: rotate(-3deg) scale(0.6);
     opacity: 0;
     animation: stamp-in 0.55s cubic-bezier(.19,1.6,.4,1) 0.75s forwards;
-    text-shadow: 0 0 30px rgba(226,104,92,0.35);
+    text-shadow: 0 0 20px rgba(226,104,92,0.35);
   }
   .stamp::before, .stamp::after {
     content: "★";
-    font-size: 22px;
+    font-size: 14px;
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
     opacity: 0.65;
   }
-  .stamp::before { left: 22px; }
-  .stamp::after  { right: 22px; }
+  .stamp::before { left: 12px; }
+  .stamp::after  { right: 12px; }
 
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(18px); }
@@ -181,6 +158,59 @@
   }
   @keyframes stamp-in {
     to { opacity: 1; transform: rotate(-3deg) scale(1); }
+  }
+
+  /* ── 중앙 개발자 코멘트 게시판 ── */
+  /* 위치 고정용 래퍼(.dev-board)와 애니메이션용 안쪽 요소(.dev-board-inner)를
+     분리한다 — 같은 요소에 위치 지정용 transform과 fade-up 애니메이션의
+     transform을 같이 걸면, 애니메이션이 transform 전체를 덮어써서 centering이
+     날아가 버린다(실제로 이 버그로 게시판이 화면 오른쪽 밖으로 잘렸었음). */
+  .dev-board {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 1180px;
+  }
+
+  .dev-board-inner {
+    padding: 52px 76px;
+    background: rgba(23,27,38,0.72);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.35);
+    text-align: left;
+    opacity: 0;
+    animation: fade-up 0.7s ease-out 0.5s forwards;
+  }
+
+  .dev-board .board-title {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--gold);
+    margin-bottom: 28px;
+  }
+  .dev-board .board-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  .dev-board p {
+    font-size: 27px;
+    line-height: 1.75;
+    color: var(--paper);
+    margin: 0 0 20px;
+  }
+  .dev-board p:last-child { margin-bottom: 0; }
+  .dev-board p b {
+    color: var(--gold);
+    font-weight: 700;
   }
 
   /* ── 하단 티커 바 ── */
@@ -236,10 +266,16 @@
   <div class="exchange-code mono">SOOP STOCK EXCHANGE<br><b>2026.07.13</b></div>
 
   <div class="hero">
-    <div class="eyebrow mono">STREAMER STOCK MARKET</div>
     <h1 class="game-name">스트리머 주식시장</h1>
-    <p class="tagline">방송 보며 즐기는 나만의 스트리머 증권거래소</p>
     <div class="stamp">정식 OPEN</div>
+  </div>
+
+  <div class="dev-board">
+    <div class="dev-board-inner">
+      <div class="board-title mono">📢 개발자 코멘트</div>
+      <p>현재 <b>내수서버</b>, <b>삼국지</b> 등 대형 서버 이벤트가 진행 중이라 게임 홍보가 원활하지 않을 수 있는 점 양해 부탁드립니다.</p>
+      <p>그럼에도 <b>차기작은 꾸준히 기획 중</b>이니, 앞으로도 많은 관심과 기대 부탁드립니다!</p>
+    </div>
   </div>
 
   <div class="ticker-wrap">
@@ -271,14 +307,26 @@
   var candleW = 34, gap = 20;
   var count = Math.ceil(W / (candleW + gap)) + 2;
   var candles = [];
-  var baseY = H * 0.6;
+  var baseY = H * 0.5;
+
+  // 값이 이 범위(중심선 기준 ±px)를 넘어서면 반대 방향 캔들이 나올 확률과
+  // 폭을 크게 높여 자연스럽게 되돌아오게 하고, RANGE_HARD는 화면 위/아래
+  // 밖으로 나가지 않도록 하는 최종 안전장치다. 화면 높이(H)의 상/하 30%
+  // 안에서만 머물도록 wick 여유폭(24px)까지 합쳐 0.3*H를 넘지 않게 맞춘다.
+  var RANGE_SOFT = H * 0.21;
+  var RANGE_HARD = H * 0.3 - 24;
 
   function makeCandle(prevClose) {
     var open = prevClose;
-    var change = (Math.random() - 0.46) * 70;
-    var close = open + change;
-    var high = Math.max(open, close) + Math.random() * 30;
-    var low = Math.min(open, close) - Math.random() * 30;
+    var change = (Math.random() - 0.5) * 70;
+    if (prevClose > RANGE_SOFT) {
+      change -= 18 + Math.random() * 32;
+    } else if (prevClose < -RANGE_SOFT) {
+      change += 18 + Math.random() * 32;
+    }
+    var close = Math.max(-RANGE_HARD, Math.min(RANGE_HARD, open + change));
+    var high = Math.min(Math.max(open, close) + Math.random() * 30, RANGE_HARD + 24);
+    var low = Math.max(Math.min(open, close) - Math.random() * 30, -(RANGE_HARD + 24));
     return { open: open, close: close, high: high, low: low };
   }
 
@@ -314,7 +362,7 @@
   }
 
   function tick() {
-    offset += 0.35;
+    offset += 1;
     if (offset > candleW + gap) {
       offset -= (candleW + gap);
       candles.shift();
