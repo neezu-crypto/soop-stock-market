@@ -3,8 +3,45 @@
             --up-color: #ef4444; --down-color: #3b82f6;
             --text-main: #f8fafc; --text-sub: #94a3b8;
         }
-        body { font-family: 'Pretendard', sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        body { font-family: 'Pretendard', sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 66px 20px 20px; display: flex; flex-direction: column; align-items: center; }
         .wrapper { width: 100%; max-width: 800px; }
+
+        /* ── 상단 네비게이션 바 ── */
+        .topnav {
+            position: fixed; top: 0; left: 0; right: 0; height: 46px; z-index: 200;
+            display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+            padding: 0 16px; background: rgba(15,23,42,0.92); backdrop-filter: blur(6px);
+            border-bottom: 1px solid #334155;
+        }
+        .topnav-dropdown { position: relative; }
+        .topnav-btn {
+            background: #334155; color: var(--text-main); border: none; padding: 7px 12px;
+            border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; gap: 4px; white-space: nowrap;
+        }
+        .topnav-btn:hover { background: #3f4f68; }
+        .topnav-station-btn {
+            background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.4);
+            text-decoration: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700;
+            display: flex; align-items: center; gap: 6px; white-space: nowrap;
+        }
+        .topnav-station-btn:hover { background: rgba(239,68,68,0.22); }
+        .topnav-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+        .topnav-menu {
+            display: none; position: absolute; top: calc(100% + 6px); right: 0; min-width: 170px;
+            background: var(--card-bg); border: 1px solid #334155; border-radius: 10px; overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 210;
+        }
+        .topnav-menu.open { display: block; }
+        .topnav-menu a {
+            display: block; padding: 11px 14px; font-size: 12px; font-weight: 600; color: var(--text-main);
+            text-decoration: none; border-bottom: 1px solid #334155;
+        }
+        .topnav-menu a:last-child { border-bottom: none; }
+        .topnav-menu a:hover { background: #334155; color: var(--primary); }
+        @media (max-width: 480px) {
+            .topnav-btn span.topnav-label, .topnav-station-btn span.topnav-label { display: none; }
+        }
         .wallet-bar {
             position: sticky; top: 0; background: #1e293b; padding: 15px 20px; border-radius: 12px;
             display: flex; flex-direction: column; z-index: 100;
