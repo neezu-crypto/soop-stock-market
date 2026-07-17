@@ -10,18 +10,12 @@ const {
 // ══════════════════════════════════════════════════════════
 // 스트리머 인증 — 카카오/구글 연동을 꺼리는 유저를 위한 대체 계정 보호 경로.
 //
-// 닉네임은 아무 텍스트나 입력 가능해 그 자체로는 소유권 증명이 안 된다.
-// 그래서 신청 시 서버가 4자리 코드를 발급하고, 신청자는 본인 방송에서 그
-// 코드를 언급해 소유권을 증명한다 — 관리자가 다시보기에서 코드 일치를
-// 확인한 뒤에만 승인한다. 이미 다른 uid로 인증된 닉네임을 또 다른 기기에서
-// 신청하면(=계정 전환 요청) 카카오/구글처럼 즉시 토큰을 내주지 않고, 매번
-// 새 코드로 다시 방송 검증을 거치게 한다 — 그렇지 않으면 남의 방송에 나온
-// 스트리머 닉네임을 아무나 입력해 그 계정을 그대로 탈취할 수 있기 때문.
+// 신청하면 닉네임과 신청 시각만 즉시 관리자에게 전달되고, 관리자가 별도로
+// 신원을 확인한 뒤 승인/거절한다. 이미 다른 uid로 인증된 닉네임을 또 다른
+// 기기에서 신청하면(=계정 전환 요청) 카카오/구글처럼 즉시 토큰을 내주지
+// 않고, 매번 관리자 확인을 다시 거치게 한다 — 그렇지 않으면 남의 방송에
+// 나온 스트리머 닉네임을 아무나 입력해 그 계정을 그대로 탈취할 수 있기 때문.
 // ══════════════════════════════════════════════════════════
-
-function generateCode() {
-  return String(Math.floor(1000 + Math.random() * 9000)); // 1000~9999
-}
 
 /**
  * 신청/재확인을 겸하는 단일 엔드포인트. 호출할 때마다 이 uid의 현재 상태를
@@ -54,7 +48,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   const latest = myRequests[0];
 
   if (latest?.status === "pending") {
-    return { ok: true, action: "pending", code: latest.code, nickname: latest.nickname, isSwitch: !!latest.isSwitch };
+    return { ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch };
   }
 
   if (latest?.status === "approved" && latest.isSwitch && latest.existingUid) {
@@ -103,19 +97,17 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   const isSwitch    = !!(existingEntry && existingEntry.uid !== uid);
   const existingUid = isSwitch ? existingEntry.uid : null;
 
-  const code = generateCode();
-  const ref  = db.ref("streamerVerificationRequests").push();
+  const ref = db.ref("streamerVerificationRequests").push();
   await ref.set({
     uid,
     nickname,
-    code,
     status:      "pending",
     requestedAt: now,
     isSwitch,
     existingUid,
   });
 
-  return { ok: true, action: "pending", code, nickname, isSwitch };
+  return { ok: true, action: "pending", nickname, isSwitch };
 });
 
 async function actionListStreamerVerificationRequests(db) {

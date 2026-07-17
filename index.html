@@ -886,8 +886,8 @@ document.addEventListener('click', function(e) {
 
         <div id="streamer-verify-form">
             <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:16px;">
-                방송 닉네임을 입력하고 신청하면 4자리 인증번호가 발급돼요.<br>
-                <b style="color:#38bdf8;">방송 화면에 인증번호를 노출</b>하시면, 관리자가 다시보기로 확인한 뒤 승인해드려요.
+                방송 닉네임을 입력하고 신청하면 <b style="color:#38bdf8;">즉시 관리자에게 신청이 전달</b>돼요.<br>
+                관리자가 확인 후 승인해드려요.
             </p>
             <input id="streamer-verify-nickname" type="text" maxlength="20" placeholder="방송 닉네임 입력"
                 style="width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:14px;margin-bottom:12px;">
@@ -907,13 +907,6 @@ document.addEventListener('click', function(e) {
 
         <button onclick="closeStreamerVerifyModal()" style="width:100%;background:#334155;color:white;border:none;padding:10px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:13px;">닫기</button>
     </div>
-</div>
-
-<!-- 인증번호 3초 플래시 오버레이 — 화면 녹화/캡처로 코드가 오래 남지 않도록 짧게만 보여준다 -->
-<div id="streamer-verify-code-flash" style="display:none;position:fixed;inset:0;z-index:5200;background:rgba(15,23,42,0.96);align-items:center;justify-content:center;flex-direction:column;">
-    <div style="font-size:14px;color:#94a3b8;margin-bottom:12px;">이 번호를 기억해주세요</div>
-    <div id="streamer-verify-code-flash-value" style="font-size:64px;font-weight:900;color:#38bdf8;letter-spacing:8px;"></div>
-    <div style="font-size:12px;color:#64748b;margin-top:16px;">3초 후 자동으로 사라져요</div>
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -2180,20 +2173,13 @@ window.closeStreamerVerifyModal = function() {
     document.getElementById('streamer-verify-modal')?.classList.remove('active');
 };
 
-function flashStreamerVerifyCode(code) {
-    const overlay = document.getElementById('streamer-verify-code-flash');
-    document.getElementById('streamer-verify-code-flash-value').innerText = code;
-    overlay.style.display = 'flex';
-    setTimeout(() => { overlay.style.display = 'none'; }, 3000);
-}
-
 function showStreamerVerifyPending(nickname, isSwitch) {
     document.getElementById('streamer-verify-form').style.display = 'none';
     const pending = document.getElementById('streamer-verify-pending');
     pending.style.display = 'block';
     document.getElementById('streamer-verify-pending-text').innerText = isSwitch
-        ? `"${nickname}" 계정 전환 신청이 접수됐어요. 방금 뜬 번호를 방송 화면에 노출해주시면, 관리자 확인 후 이 기기에서도 기존 계정을 이어서 쓸 수 있어요.`
-        : `"${nickname}" 인증 신청이 접수됐어요. 방금 뜬 번호를 방송 화면에 노출해주시면, 관리자가 다시보기 확인 후 승인해드려요.`;
+        ? `"${nickname}" 계정 전환 신청이 관리자에게 전달됐어요. 확인 후 이 기기에서도 기존 계정을 이어서 쓸 수 있어요.`
+        : `"${nickname}" 인증 신청이 관리자에게 전달됐어요. 확인 후 승인해드려요.`;
 }
 
 async function completeStreamerVerificationSwitch(customToken) {
@@ -2208,7 +2194,7 @@ window.submitStreamerVerification = async function() {
     if (!nickname) return alert('닉네임을 입력해주세요.');
     try {
         const result = await requestStreamerVerificationCallable({ nickname });
-        const { action, code, nickname: returnedNickname, isSwitch, customToken } = result.data;
+        const { action, nickname: returnedNickname, isSwitch, customToken } = result.data;
         if (action === 'switch') {
             closeStreamerVerifyModal();
             await completeStreamerVerificationSwitch(customToken);
@@ -2217,7 +2203,6 @@ window.submitStreamerVerification = async function() {
             alert('✅ 이미 스트리머 인증이 완료된 계정이에요.');
         } else {
             showStreamerVerifyPending(returnedNickname, isSwitch);
-            flashStreamerVerifyCode(code);
         }
     } catch (e) {
         alert('스트리머 인증 신청 중 오류가 발생했습니다: ' + (e?.message || e));
@@ -2227,7 +2212,7 @@ window.submitStreamerVerification = async function() {
 window.checkStreamerVerificationStatus = async function() {
     try {
         const result = await requestStreamerVerificationCallable({});
-        const { action, code, nickname, isSwitch, customToken } = result.data;
+        const { action, nickname, isSwitch, customToken } = result.data;
         if (action === 'switch') {
             closeStreamerVerifyModal();
             await completeStreamerVerificationSwitch(customToken);
@@ -2236,7 +2221,7 @@ window.checkStreamerVerificationStatus = async function() {
             alert('✅ 스트리머 인증이 완료됐어요! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
         } else {
             showStreamerVerifyPending(nickname, isSwitch);
-            alert('아직 관리자 확인 전이에요. 방송 화면에 인증번호를 노출한 뒤 다시 확인해주세요.');
+            alert('아직 관리자 확인 전이에요. 잠시 후 다시 확인해주세요.');
         }
     } catch (e) {
         alert('상태 확인 중 오류가 발생했습니다: ' + (e?.message || e));
