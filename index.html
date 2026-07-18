@@ -1352,6 +1352,9 @@ const HEARTBEAT_INTERVAL_MS = 20000; // 서버 checkPlayQuota MAX_HEARTBEAT_GAP_
 // 새로고침 직후 딱 1회 그 값을 받아와 버퍼를 채운 뒤부터는 동일하게 라이브
 // 틱을 이어붙인다 — 전체 종목이 아니라 "내 보유 종목"만 대상이라 다운로드
 // 비용이 매매 건수가 아니라 세션 수 × 보유 종목 수에만 비례한다.
+// 예외: 관리자 계정은 직접 플레이(보유)를 하지 않고 다른 플레이어 관점에서
+// 전체 시세 흐름을 살펴봐야 하므로, 전체 종목을 대상으로 채운다 — 계정이
+// 하나뿐이라 세션당 다운로드량이 늘어도(최대 종목 수 × 200B 수준) 무시 가능.
 const PRICE_HISTORY_MAX = 20;
 const priceHistoryBuffer = {}; // id -> 최근 관측 가격 배열 (최대 20개)
 const seededSparklineIds = new Set(); // 이번 세션에 이미 서버 이력을 채운 종목 id
@@ -1365,14 +1368,9 @@ function recordPriceTick(id, price) {
     return buf;
 }
 
-// 보유 종목 중 아직 서버 이력을 안 받아온 것만 골라 1회 조회(get) — 최초
-// 로그인 시뿐 아니라 세션 도중 신규 매수한 종목도 자동으로 채워진다(그
-// 종목 id가 처음으로 myData.stocks에 나타나는 시점에 이 함수가 다시 불려서).
-async function seedHeldSparklines(stocks) {
-    const idsToSeed = Object.entries(stocks || {})
-        .filter(([, pos]) => pos?.qty > 0)
-        .map(([id]) => id)
-        .filter((id) => !seededSparklineIds.has(id));
+// 주어진 종목 id 중 아직 서버 이력을 안 받아온 것만 골라 1회 조회(get).
+async function seedSparklines(ids) {
+    const idsToSeed = (ids || []).filter((id) => !seededSparklineIds.has(id));
     if (idsToSeed.length === 0) return false;
 
     await Promise.all(idsToSeed.map(async (id) => {
@@ -1389,6 +1387,20 @@ async function seedHeldSparklines(stocks) {
         }
     }));
     return true;
+}
+
+// 관리자면 전체 종목, 아니면 보유 종목만 대상으로 스파크라인을 채운다.
+// 최초 로그인 시뿐 아니라 세션 도중 신규 매수한 종목(보유자)이나 stocks/
+// 최초 로드가 이 시점 이후 끝나는 경우(관리자)에도 각 호출 지점에서 다시
+// 불려 자동으로 채워진다 — seededSparklineIds가 중복 조회를 막아준다.
+function seedSparklinesForCurrentUser(stocks) {
+    const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
+    const ids = isAdmin
+        ? allStocks.map(s => s.id)
+        : Object.entries(stocks || {}).filter(([, pos]) => pos?.qty > 0).map(([id]) => id);
+    return seedSparklines(ids).then((seededAny) => {
+        if (seededAny) renderStocks(document.getElementById('search-input')?.value || "");
+    });
 }
 
 function getChangePercent(id) {
@@ -1848,9 +1860,7 @@ onAuthStateChanged(auth, async (user) => {
             updateAttendanceUI();
             updateAchievementsUI();
             updateUI(true);
-            seedHeldSparklines(myData.stocks).then((seededAny) => {
-                if (seededAny) renderStocks(document.getElementById('search-input')?.value || "");
-            });
+            seedSparklinesForCurrentUser(myData.stocks);
         });
     } else {
         signInAnonymously(auth);
@@ -2864,6 +2874,11 @@ get(ref(db, 'stocks/')).then((snap) => {
     if (!isBannerRendered && allStocks.length > 0) {
         setTimeout(() => { renderBanners(); isBannerRendered = true; }, 100);
     }
+
+    // 관리자 로그인이 이 시점 이전에 이미 끝나 있었다면(seedSparklinesForCurrentUser가
+    // 그때는 allStocks가 비어 있어 아무것도 못 채웠을 수 있음) 여기서 한 번 더 시도한다.
+    // seededSparklineIds가 중복 조회를 막아주므로 이미 채워진 건 다시 안 부른다.
+    if (auth.currentUser?.email === ADMIN_EMAIL) seedSparklinesForCurrentUser(myData?.stocks);
 });
 
 // ── 중계방 최초 1회 로드 (배너와 동일하게 페이지 로드 시 1회만 조회) ──
