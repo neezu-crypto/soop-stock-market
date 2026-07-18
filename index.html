@@ -1961,10 +1961,20 @@ function unlockPlaytimeIfNeeded() {
     renderStocks(document.getElementById('search-input')?.value || ""); // 리스너 복구
 }
 
+let adminSnapshotTakenThisLoad = false;
+
 async function runHeartbeat() {
     if (auth.currentUser?.email === ADMIN_EMAIL) {
         playtimeUnlimited = true;
         updatePlaytimeDisplay();
+        // 이용시간 체크는 관리자에게 필요 없지만, 서버 heartbeat 안에 있는
+        // "최근 7일 자산 변동" 스냅샷 기록은 관리자 계정에도 필요하다.
+        // 매 20초 하트비트마다 부르면 낭비이므로(스냅샷은 서버에서 하루 1회로
+        // 제한됨) 페이지 로드당 1회만 호출해 그날 기록을 남긴다.
+        if (!adminSnapshotTakenThisLoad) {
+            adminSnapshotTakenThisLoad = true;
+            try { await heartbeatCallable(); } catch (e) { /* 다음 로드 때 재시도 */ }
+        }
         return;
     }
     try {
