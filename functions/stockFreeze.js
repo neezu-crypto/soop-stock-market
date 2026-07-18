@@ -234,8 +234,12 @@ async function actionForceUnfreezeStock(db, { stockId }) {
   return { ok: true };
 }
 
-/** 종목 삭제(상장폐지) 시 보유자 지분을 전액 소멸시키고 관련 orphan 데이터를 정리한다. */
-async function delistStock(db, stockId) {
+/**
+ * 종목 삭제(상장폐지) 시 보유자 지분을 전액 소멸시키고 관련 orphan 데이터를
+ * 정리한다. 삭제 직전 스냅샷(stock)을 delistedStocksLog에 남겨, 완전히
+ * 사라지는 stocks/{id}와 달리 관리자 페이지에서 이력을 조회할 수 있게 한다.
+ */
+async function delistStock(db, stockId, stock) {
   const usersSnap = await db.ref("users").get();
   const usersData = usersSnap.val() || {};
   const updates = {};
@@ -247,6 +251,14 @@ async function delistStock(db, stockId) {
   updates[`stocks/${stockId}`]       = null;
   updates[`chartBanner/${stockId}`]  = null;
   updates[`pinnedStocks/${stockId}`] = null;
+  updates[`delistedStocksLog/${stockId}`] = {
+    name:             stock?.name || stockId,
+    priceAtDelist:    stock?.price || 0,
+    frozenAt:         stock?.frozenAt || null,
+    freezeDeadline:   stock?.freezeDeadline || null,
+    freezeTriggerUid: stock?.freezeTriggerUid || null,
+    delistedAt:       Date.now(),
+  };
   await db.ref().update(updates);
 }
 
@@ -264,13 +276,22 @@ const checkFrozenStockDelistings = onSchedule("every 10 minutes", async () => {
   const now = Date.now();
 
   const toDelist = Object.entries(data)
-    .filter(([, s]) => s.frozenAt && s.freezeDeadline && s.freezeDeadline <= now)
-    .map(([id]) => id);
+    .filter(([, s]) => s.frozenAt && s.freezeDeadline && s.freezeDeadline <= now);
 
-  for (const stockId of toDelist) {
-    await delistStock(db, stockId);
+  for (const [stockId, stock] of toDelist) {
+    await delistStock(db, stockId, stock);
   }
 });
+
+/** 관리자 페이지 — 상장폐지 이력 조회 (최신순). */
+async function actionListDelistedStocks(db) {
+  const snap = await db.ref("delistedStocksLog").get();
+  const data = snap.val() || {};
+  const items = Object.entries(data)
+    .map(([stockId, d]) => ({ stockId, ...d }))
+    .sort((a, b) => (b.delistedAt || 0) - (a.delistedAt || 0));
+  return { ok: true, items };
+}
 
 module.exports = {
   unfreezeWithCash,
@@ -280,5 +301,6 @@ module.exports = {
   actionRejectUnfreezeDonationRequest,
   actionListFrozenStocks,
   actionForceUnfreezeStock,
+  actionListDelistedStocks,
   checkFrozenStockDelistings,
 };

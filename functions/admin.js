@@ -34,6 +34,7 @@ const {
   actionRejectUnfreezeDonationRequest,
   actionListFrozenStocks,
   actionForceUnfreezeStock,
+  actionListDelistedStocks,
 } = require("./stockFreeze");
 const {
   actionListListingRequests,
@@ -955,6 +956,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "rejectUnfreezeDonationRequest":  return actionRejectUnfreezeDonationRequest(db, payload);
     case "listFrozenStocks":               return actionListFrozenStocks(db);
     case "forceUnfreezeStock":             return actionForceUnfreezeStock(db, payload);
+    case "listDelistedStocks":             return actionListDelistedStocks(db);
     case "listListingRequests":    return actionListListingRequests(db);
     case "approveListingRequest":  return actionApproveListingRequest(db, payload);
     case "rejectListingRequest":   return actionRejectListingRequest(db, payload);
