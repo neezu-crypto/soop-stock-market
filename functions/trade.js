@@ -21,6 +21,7 @@ const SELL_FEE            = 0.003;  // 매도 수수료
 const MAX_QTY_PER_ORDER   = 10;     // 1회 주문 최대 수량 (클라이언트 매수/매도 버튼이 1주/10주 단위뿐이라 서버도 동일하게 제한 — API 직접 호출로 대량 주문을 넣는 것을 막는다)
 const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
 const RANKING_DEBOUNCE_MS = 30000;  // 랭킹 반영 최소 간격
+const SPARKLINE_MAX       = 20;     // 카드 스파크라인 보관 개수(클라이언트 priceHistoryBuffer와 동일)
 
 function currentMinuteTs() {
   return Math.floor(Date.now() / 60000) * 60;
@@ -294,6 +295,22 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     }
   } catch (e) {
     // 캔들 갱신 실패는 무시 (다음 거래 때 재시도됨)
+  }
+
+  // 3.4) 스파크라인(카드 미니차트) 갱신 — best-effort. stocks/{id}와 별도
+  //      경로에 둬서, 이 종목을 구경만 하는(보유하지 않은) 뷰어의 실시간
+  //      구독(stocks/{id})에는 실리지 않게 한다 — 새로고침 시 클라이언트가
+  //      "내가 보유한 종목"만 골라 이 경로를 1회 조회하는 구조이기 때문에,
+  //      여기 얹으면 다운로드 범위를 보유자로 좁힌 의미가 없어진다.
+  try {
+    await db.ref(`sparklines/${stockId}`).transaction((current) => {
+      const buf = Array.isArray(current) ? current.slice() : [];
+      buf.push(finalTradePrice);
+      if (buf.length > SPARKLINE_MAX) buf.shift();
+      return buf;
+    });
+  } catch (e) {
+    // 스파크라인 갱신 실패는 무시 (다음 거래 때 재시도됨)
   }
 
   // 3.5) 동결 판정 (best-effort — 매수로 가격이 오를 때만 의미가 있음)

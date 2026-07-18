@@ -251,6 +251,7 @@ async function delistStock(db, stockId, stock) {
   updates[`stocks/${stockId}`]       = null;
   updates[`chartBanner/${stockId}`]  = null;
   updates[`pinnedStocks/${stockId}`] = null;
+  updates[`sparklines/${stockId}`]   = null; // 상장폐지 시 스파크라인 이력도 함께 삭제(orphan 방지)
   updates[`delistedStocksLog/${stockId}`] = {
     name:             stock?.name || stockId,
     priceAtDelist:    stock?.price || 0,

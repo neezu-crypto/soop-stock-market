@@ -219,14 +219,15 @@
             <li><strong>보유 중인 종목</strong>은 목록에 노출되지 않아도 내 보유 주식 패널의 실시간 손익 반영을 위해 예외적으로 항상 구독 유지</li>
             <li>목적: 종목 수가 많아져도 불필요한 실시간 트래픽/DB 읽기 비용이 늘지 않도록 화면에 보이는 데이터만 최신 상태로 유지</li>
         </ul>
-        <h3>4.1.2 스파크라인 서버 저장 <span class="badge" style="background:#334155;color:#fbbf24;">설계 확정 · 미구현</span></h3>
-        <p>4.1에서 설명한 현재 방식(클라이언트 로컬 최대 20개 누적)은 새로고침하면 히스토리가 초기화돼 스파크라인이 납작하게 다시 시작된다는 한계가 있다. 이를 <strong>"내가 보유 중인 종목만" 새로고침에도 유지</strong>되도록 개선하는 방안을 확정했다(아직 미구현).</p>
+        <h3>4.1.2 스파크라인 서버 저장 <span class="badge" style="background:rgba(34,197,94,0.15);color:#4ade80;">구현 완료</span></h3>
+        <p>4.1의 기존 방식(클라이언트 로컬 최대 20개 누적)은 새로고침하면 히스토리가 초기화된다는 한계가 있었다. <strong>"내가 보유 중인 종목만" 새로고침에도 유지</strong>되도록 개선했다.</p>
         <ul>
-            <li><strong>저장(쓰기) — 매매마다, 전체 종목 대상:</strong> <code>trade()</code> 체결 시 최근 가격 N개(기존 클라이언트 버퍼와 동일하게 20개)를 <strong>기존 <code>stocks/{stockId}</code>와는 별도의 경로</strong>(가칭 <code>sparklines/{stockId}</code>)에 롤링 버퍼로 기록한다. 매매 트랜잭션에 얹혀가는 추가 필드라 쓰기 비용은 무시할 수준이고, 롤링 버퍼라 저장 용량도 늘지 않는다. <strong>반드시 별도 경로여야 하는 이유</strong> — <code>stocks/{id}</code> 안에 필드로 얹으면 그 종목을 구경만 하는(보유하지 않은) 모든 뷰어의 카드 리스너에도 그대로 브로드캐스트돼 "보유자만" 조건이 무의미해진다.</li>
-            <li><strong>다운로드(읽기) — 세션당 1회, 보유 종목만 대상:</strong> 페이지 접속·새로고침 시점에 <strong>내가 보유 중인 종목에 한해서만</strong> <code>sparklines/{id}</code>를 <code>get()</code>으로 1회 조회해 초기값을 채운다. 그 이후는 지금처럼 <code>stocks/{id}</code> 실시간 구독으로 들어오는 가격 틱을 클라이언트에서 계속 이어붙인다(4.1.1의 "보유 종목 항상 구독" 로직을 그대로 재사용 — 추가 구독 없음). 매매 <strong>건수</strong>가 아니라 <strong>세션 수 × 평균 보유 종목 수</strong>에만 비례하는 구조라, 전체 종목을 항상 브로드캐스트하는 방식보다 다운로드량이 대폭 줄어든다.</li>
+            <li><strong>저장(쓰기) — 매매마다, 전체 종목 대상:</strong> <code>trade()</code> 체결 마지막 단계에서 최근 체결가 20개(<code>SPARKLINE_MAX</code>, 클라이언트 <code>PRICE_HISTORY_MAX</code>와 동일)를 <strong>기존 <code>stocks/{stockId}</code>와는 별도 경로인 <code>sparklines/{stockId}</code></strong>에 롤링 버퍼(트랜잭션)로 기록한다(best-effort — 실패해도 매매 결과에는 영향 없음). 매매 트랜잭션에 얹혀가는 추가 쓰기라 비용은 무시할 수준이고, 롤링 버퍼라 저장 용량도 늘지 않는다. <strong>별도 경로로 둔 이유</strong> — <code>stocks/{id}</code> 안에 필드로 얹으면 그 종목을 구경만 하는(보유하지 않은) 모든 뷰어의 카드 리스너에도 그대로 브로드캐스트돼 "보유자만" 조건이 무의미해진다.</li>
+            <li><strong>접근 제어:</strong> <code>sparklines/{id}</code>는 가격 이력일 뿐 개인정보가 아니므로 <code>candlesticks</code>와 동일하게 <strong>전체 공개 읽기</strong>(<code>.read: true</code>) · 클라이언트 쓰기는 차단(<code>.write: false</code>)으로 설정 — 별도 콜러블 없이 클라이언트가 필요한 stockId만 골라 직접 <code>get()</code>할 수 있어 구조가 단순하다.</li>
+            <li><strong>다운로드(읽기) — 세션당 1회, 보유 종목만 대상:</strong> <code>onValue(users/{uid})</code> 콜백에서 <code>myData.stocks</code> 중 보유 수량 &gt; 0인 종목 id만 골라(<code>seedHeldSparklines()</code>) <code>sparklines/{id}</code>를 <code>get()</code>으로 1회 조회해 <code>priceHistoryBuffer</code>를 채운다. 이미 채운 id는 <code>seededSparklineIds</code>로 기억해 다시 조회하지 않고, 그 이후는 지금처럼 <code>stocks/{id}</code> 실시간 구독으로 들어오는 가격 틱을 이어붙인다(4.1.1의 "보유 종목 항상 구독" 로직 재사용 — 추가 구독 없음). 매매 <strong>건수</strong>가 아니라 <strong>세션 수 × 평균 보유 종목 수</strong>에만 비례해, 전체 종목을 항상 브로드캐스트하는 방식보다 다운로드량이 대폭 줄어든다.</li>
             <li><strong>비보유 종목은 기존 방식 그대로:</strong> 리스트를 탐색 중인(보유하지 않은) 종목 카드는 서버 저장/조회 대상에서 제외 — 지금처럼 클라이언트 전용으로 계산하고 새로고침 시 초기화되는 동작을 그대로 유지한다.</li>
-            <li><strong>엣지케이스:</strong> 세션 도중 신규 매수한 종목은 매수 시점부터의 라이브 틱만 쌓이고 매수 이전 이력은 비어 있다 — 의도된 동작으로 두되, 필요하면 매수 성공 시점에 그 종목만 1회 추가 조회하는 보완을 고려할 수 있다.</li>
-            <li><strong>필요한 변경:</strong> <code>functions/trade.js</code>(체결 시 <code>sparklines/{id}</code> 갱신 추가), <code>database.rules.json</code>(<code>sparklines</code> 경로 접근 통제 — 보유자 본인 read만 허용할지, 클라이언트 직접 read를 전면 차단하고 조회용 콜러블을 따로 둘지 검토), <code>index.html</code>(접속·새로고침 시 보유 종목 초기 fetch 로직 추가).</li>
+            <li><strong>세션 중 신규 매수 자동 반영:</strong> <code>seedHeldSparklines()</code>는 <code>users/{uid}</code> 값이 바뀔 때마다(=이 유저가 매매할 때마다) 다시 호출되므로, 세션 도중 새로 산 종목도 <code>myData.stocks</code>에 처음 나타나는 시점에 자동으로 서버 이력을 1회 채워온다(별도 처리 불필요).</li>
+            <li><strong>orphan 정리:</strong> 종목 삭제(<code>deleteStocks</code>/<code>cleanupDuplicateStocks</code>)·상장폐지(<code>delistStock</code>) 시 <code>chartBanner</code>·<code>pinnedStocks</code>와 함께 <code>sparklines/{id}</code>도 같이 삭제한다.</li>
         </ul>
         <h3>4.2 캔들 차트</h3>
         <ul>

@@ -1346,9 +1346,15 @@ let heartbeatIntervalId    = null;
 let playtimeTickIntervalId = null;
 const HEARTBEAT_INTERVAL_MS = 20000; // 서버 checkPlayQuota MAX_HEARTBEAT_GAP_SECONDS(90s)보다 충분히 짧게
 
-// ── 스파크라인/등락률용 클라이언트 가격 이력 (서버 저장 없이 관측치만 누적) ──
+// ── 스파크라인/등락률용 클라이언트 가격 이력 ──────────────────
+// 보유하지 않은 종목은 지금까지처럼 라이브 틱만 로컬에 누적(서버 저장 없음).
+// 보유 중인 종목만 예외적으로 서버(sparklines/{id})에 매매마다 저장돼 있어,
+// 새로고침 직후 딱 1회 그 값을 받아와 버퍼를 채운 뒤부터는 동일하게 라이브
+// 틱을 이어붙인다 — 전체 종목이 아니라 "내 보유 종목"만 대상이라 다운로드
+// 비용이 매매 건수가 아니라 세션 수 × 보유 종목 수에만 비례한다.
 const PRICE_HISTORY_MAX = 20;
 const priceHistoryBuffer = {}; // id -> 최근 관측 가격 배열 (최대 20개)
+const seededSparklineIds = new Set(); // 이번 세션에 이미 서버 이력을 채운 종목 id
 
 function recordPriceTick(id, price) {
     const buf = priceHistoryBuffer[id] || (priceHistoryBuffer[id] = []);
@@ -1357,6 +1363,32 @@ function recordPriceTick(id, price) {
         if (buf.length > PRICE_HISTORY_MAX) buf.shift();
     }
     return buf;
+}
+
+// 보유 종목 중 아직 서버 이력을 안 받아온 것만 골라 1회 조회(get) — 최초
+// 로그인 시뿐 아니라 세션 도중 신규 매수한 종목도 자동으로 채워진다(그
+// 종목 id가 처음으로 myData.stocks에 나타나는 시점에 이 함수가 다시 불려서).
+async function seedHeldSparklines(stocks) {
+    const idsToSeed = Object.entries(stocks || {})
+        .filter(([, pos]) => pos?.qty > 0)
+        .map(([id]) => id)
+        .filter((id) => !seededSparklineIds.has(id));
+    if (idsToSeed.length === 0) return false;
+
+    await Promise.all(idsToSeed.map(async (id) => {
+        seededSparklineIds.add(id); // 실패해도 매번 재시도하지 않도록 먼저 마킹(다음 접속 때 재시도됨)
+        try {
+            const snap = await get(ref(db, `sparklines/${id}`));
+            const arr = snap.val();
+            // 그 사이 라이브 틱으로 이미 채워졌으면 서버 이력(과거)으로 덮어쓰지 않는다.
+            if (Array.isArray(arr) && arr.length && !priceHistoryBuffer[id]) {
+                priceHistoryBuffer[id] = arr.slice(-PRICE_HISTORY_MAX);
+            }
+        } catch (e) {
+            // 실패해도 무시 — 이후 라이브 틱만으로 계속 그려짐
+        }
+    }));
+    return true;
 }
 
 function getChangePercent(id) {
@@ -1816,6 +1848,9 @@ onAuthStateChanged(auth, async (user) => {
             updateAttendanceUI();
             updateAchievementsUI();
             updateUI(true);
+            seedHeldSparklines(myData.stocks).then((seededAny) => {
+                if (seededAny) renderStocks(document.getElementById('search-input')?.value || "");
+            });
         });
     } else {
         signInAnonymously(auth);

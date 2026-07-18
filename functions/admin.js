@@ -147,6 +147,7 @@ async function actionDeleteStocks(db, { names }) {
     if (namesToDelete.includes(stock.name)) {
       updates[`stocks/${id}`] = null;
       updates[`chartBanner/${id}`] = null; // 종목 삭제 시 연결된 차트 배너도 함께 삭제(orphan 방지)
+      updates[`sparklines/${id}`] = null;  // 종목 삭제 시 스파크라인 이력도 함께 삭제(orphan 방지)
       foundCount++;
     }
   });
@@ -191,6 +192,7 @@ async function actionCleanupDuplicateStocks(db) {
       if (isMatch) {
         deleteUpdates[`stocks/${target.id}`] = null;
         deleteUpdates[`chartBanner/${target.id}`] = null; // 종목 삭제 시 연결된 차트 배너도 함께 삭제(orphan 방지)
+        deleteUpdates[`sparklines/${target.id}`] = null;  // 종목 삭제 시 스파크라인 이력도 함께 삭제(orphan 방지)
         duplicateFoundCount++;
       }
     }
