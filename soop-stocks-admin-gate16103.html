@@ -647,6 +647,7 @@
     // 메인페이지는 접속 시 1회만 조회하지만(동시 접속자 다수라 비용 절감 목적),
     // 관리자 페이지는 인스턴스가 사실상 1개뿐이라 실시간 구독으로 붙여도 비용
     // 부담이 없다.
+    const PRESENCE_GRACE_MS = 60 * 60 * 1000; // 메인페이지와 동일 — 끊김 후 60분 유예
     let onlineCountWatched = false;
     function watchOnlineCount() {
         if (onlineCountWatched) return;
@@ -654,7 +655,13 @@
         onValue(ref(db, 'presence/users'), (snap) => {
             const el = document.getElementById('admin-online-count');
             if (!el) return;
-            const count = snap.exists() ? Object.keys(snap.val()).length : 0;
+            if (!snap.exists()) { el.innerText = '0'; return; }
+            const now = Date.now();
+            let count = 0;
+            snap.forEach(child => {
+                const lastSeen = child.val()?.lastSeen;
+                if (typeof lastSeen === 'number' && now - lastSeen <= PRESENCE_GRACE_MS) count++;
+            });
             el.innerText = count.toLocaleString();
         });
     }
