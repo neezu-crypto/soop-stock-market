@@ -1379,8 +1379,10 @@ async function seedSparklines(ids) {
         try {
             const snap = await get(ref(db, `sparklines/${id}`));
             const arr = snap.val();
-            // 그 사이 라이브 틱으로 이미 채워졌으면 서버 이력(과거)으로 덮어쓰지 않는다.
-            if (Array.isArray(arr) && arr.length && !priceHistoryBuffer[id]) {
+            // 그 사이 라이브 틱으로 실제 이력(2개 이상)이 쌓였으면 서버 이력(과거)으로
+            // 덮어쓰지 않는다 — 최초 로드 시 recordPriceTick이 현재가 1개짜리 배열을
+            // 먼저 만들어두므로, length<2는 "아직 진짜 이력이 없다"는 뜻이라 덮어써도 된다.
+            if (Array.isArray(arr) && arr.length && (!priceHistoryBuffer[id] || priceHistoryBuffer[id].length < 2)) {
                 priceHistoryBuffer[id] = arr.slice(-PRICE_HISTORY_MAX);
             }
         } catch (e) {
