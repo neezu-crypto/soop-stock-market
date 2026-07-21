@@ -466,6 +466,10 @@
         <div class="info-box">카카오/구글 연동을 꺼리는 유저가 닉네임으로 신청한 대체 계정 보호 요청입니다. <span style="color:#38bdf8;">신청자가 실제로 해당 닉네임의 스트리머인지 별도로 확인한 뒤에만 승인하세요</span> — 닉네임 자체는 아무나 입력할 수 있어 증명력이 없습니다. "계정 전환"으로 표시된 신청은 이미 다른 계정으로 인증된 닉네임을 다른 기기에서 다시 신청한 경우로, 승인하면 새 계정이 아니라 기존 인증 계정으로 전환됩니다.</div>
         <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadStreamerVerificationRequests()">🔄 신청 목록 새로고침</button>
         <div id="streamer-verification-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+
+        <div style="font-size:13px;color:#38bdf8;font-weight:700;margin-top:24px;margin-bottom:8px;">✅ 이미 승인된 스트리머 (조회 전용)</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadVerifiedStreamers()">🔄 목록 새로고침</button>
+        <div id="verified-streamer-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
     <!-- 🎥 중계방 홍보 관리 -->
@@ -1907,6 +1911,32 @@
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
         }
+    };
+
+    async function loadVerifiedStreamers() {
+        const listEl = document.getElementById('verified-streamer-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { streamers } = await callAdminAction('listVerifiedStreamers');
+            if (!streamers || streamers.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">승인된 스트리머가 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            streamers.forEach(s => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;';
+                row.innerHTML = `
+                    <div style="font-size:15px;font-weight:800;">${escapeAttr(s.nickname)}</div>
+                    <div style="font-size:12px;color:#94a3b8;">uid: ${escapeAttr(s.uid)}</div>
+                    <div style="font-size:12px;color:#94a3b8;">인증 시각 ${new Date(s.verifiedAt || 0).toLocaleString('ko-KR')}</div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    }
+    window.loadVerifiedStreamers = loadVerifiedStreamers;
     };
 
     // ══════════════════════════════════════════════════════

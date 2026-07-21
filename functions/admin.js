@@ -44,6 +44,7 @@ const {
 const { pickNewJackpot } = require("./jackpot");
 const {
   actionListStreamerVerificationRequests,
+  actionListVerifiedStreamers,
   actionApproveStreamerVerification,
   actionRejectStreamerVerification,
 } = require("./streamerVerification");
@@ -963,6 +964,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "approveListingRequest":  return actionApproveListingRequest(db, payload);
     case "rejectListingRequest":   return actionRejectListingRequest(db, payload);
     case "listStreamerVerificationRequests":    return actionListStreamerVerificationRequests(db);
+    case "listVerifiedStreamers":                return actionListVerifiedStreamers(db);
     case "approveStreamerVerification":         return actionApproveStreamerVerification(db, payload);
     case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload);
     case "previewRankings":        return actionPreviewRankings(db);

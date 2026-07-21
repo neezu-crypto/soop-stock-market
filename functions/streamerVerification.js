@@ -120,6 +120,15 @@ async function actionListStreamerVerificationRequests(db) {
   return { ok: true, requests };
 }
 
+async function actionListVerifiedStreamers(db) {
+  const snap = await db.ref("streamerVerifications").get();
+  const data = snap.val() || {};
+  const streamers = Object.entries(data)
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => (b.verifiedAt || 0) - (a.verifiedAt || 0));
+  return { ok: true, streamers };
+}
+
 async function actionApproveStreamerVerification(db, { requestId }) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
@@ -166,6 +175,7 @@ async function actionRejectStreamerVerification(db, { requestId }) {
 module.exports = {
   requestStreamerVerification,
   actionListStreamerVerificationRequests,
+  actionListVerifiedStreamers,
   actionApproveStreamerVerification,
   actionRejectStreamerVerification,
 };
