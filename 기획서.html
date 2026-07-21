@@ -520,6 +520,7 @@
             <tr><td><code>listCashChargeRequests</code> / <code>approveCashChargeRequest</code> / <code>rejectCashChargeRequest</code></td><td>자산 충전 신청 검수 — 승인 시 관리자가 지급액을 직접 입력(방송 후원 확인 또는 룰렛 결과 기준)</td></tr>
             <tr><td><code>listListingRequests</code> / <code>approveListingRequest</code> / <code>rejectListingRequest</code></td><td>종목 상장 신청 검수 — 승인 시 시작가 10,000원으로 즉시 상장(오타 수정 후 승인 가능)</td></tr>
             <tr><td><code>listStreamerVerificationRequests</code> / <code>approveStreamerVerification</code> / <code>rejectStreamerVerification</code></td><td>스트리머 인증 신청 검수 — 목록에 신청자 닉네임과 신청 시각만 표시되며(2026-07-17부터 인증번호 표시 제거), <strong>관리자가 별도로 신원을 확인한 뒤에만 승인</strong>. "계정 전환"(<code>isSwitch</code>) 신청은 이미 인증된 닉네임을 다른 기기에서 재신청한 경우로, 승인해도 새 보호 플래그를 켜지 않고 신청 상태만 승인 처리 — 실제 커스텀 토큰 발급은 신청자가 클라이언트에서 재확인을 호출할 때 이뤄짐</td></tr>
+            <tr><td><code>listVerifiedStreamers</code></td><td>이미 승인 완료된 스트리머 조회 전용(2026-07-22 추가) — <code>streamerVerifications</code>(닉네임↔uid 매핑)를 인증 시각 최신순으로 나열만 함. 취소·수정 기능은 없음</td></tr>
             <tr><td><code>listFrozenStocks</code> / <code>forceUnfreezeStock</code></td><td>동결(서킷브레이커) 중인 종목 목록 조회 / 관리자 강제 해제(보상 지급 없이)</td></tr>
             <tr><td><code>listUnfreezeDonationRequests</code> / <code>approveUnfreezeDonationRequest</code> / <code>rejectUnfreezeDonationRequest</code></td><td>방송 후원으로 동결 해제 신청한 내역 검수 — 승인 시 보상금(100만원) 지급</td></tr>
             <tr><td><code>setMaintenanceMode</code></td><td>소프트 점검모드 on/off — 켜면 30초 카운트다운 후 활동 차단 시작, 끄면 즉시 정상화</td></tr>
