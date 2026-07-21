@@ -18,26 +18,18 @@
 
 <!-- ── 상단 네비게이션 바 ── -->
 <nav class="topnav">
-    <div class="topnav-dropdown">
-        <button class="topnav-btn" onclick="document.getElementById('topnav-other-games-menu').classList.toggle('open')">
-            🎮 <span class="topnav-label">개발자의 다른 게임</span> ▾
-        </button>
-        <div class="topnav-menu" id="topnav-other-games-menu">
-            <a href="https://neezu-crypto.github.io/dont-click-ads/" target="_blank" rel="noopener">절대 광고를 클릭하지 마</a>
-            <a href="https://neezu-crypto.github.io/midnight-mart-run/" target="_blank" rel="noopener">미드나잇 마트런</a>
-        </div>
+    <div class="topnav-brand">
+        <span class="topnav-title">📈 SOOP STOCK</span>
+        <span class="topnav-creator">제작: 오목지면시그</span>
     </div>
-    <a class="topnav-station-btn" href="https://www.sooplive.com/station/skftodwocks2" target="_blank" rel="noopener">
-        <span class="topnav-live-dot"></span> <span class="topnav-label">개발자 방송국 바로가기</span>
-    </a>
+    <div class="topnav-right">
+        <a class="topnav-btn" href="https://neezu-crypto.github.io/dont-click-ads/" target="_blank" rel="noopener">🎮 <span class="topnav-label">절대 광고를 클릭하지 마</span></a>
+        <a class="topnav-btn" href="https://neezu-crypto.github.io/midnight-mart-run/" target="_blank" rel="noopener">🎮 <span class="topnav-label">미드나잇 마트런</span></a>
+        <a class="topnav-station-btn" href="https://www.sooplive.com/station/skftodwocks2" target="_blank" rel="noopener">
+            <span class="topnav-live-dot"></span> <span class="topnav-label">개발자 방송국 바로가기</span>
+        </a>
+    </div>
 </nav>
-<script>
-document.addEventListener('click', function(e) {
-    var menu = document.getElementById('topnav-other-games-menu');
-    if (!menu) return;
-    if (!e.target.closest('.topnav-dropdown')) menu.classList.remove('open');
-});
-</script>
 
 <div id="maintenance-overlay" style="display:none;">
     <div class="maintenance-content">

@@ -9,15 +9,18 @@
         /* ── 상단 네비게이션 바 ── */
         .topnav {
             position: fixed; top: 0; left: 0; right: 0; height: 46px; z-index: 200;
-            display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
             padding: 0 16px; background: rgba(15,23,42,0.92); backdrop-filter: blur(6px);
             border-bottom: 1px solid #334155;
         }
-        .topnav-dropdown { position: relative; }
+        .topnav-brand { display: flex; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; }
+        .topnav-title { font-size: 14px; font-weight: 800; color: var(--text-main); white-space: nowrap; }
+        .topnav-creator { font-size: 11px; font-weight: 600; color: var(--text-sub); white-space: nowrap; }
+        .topnav-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
         .topnav-btn {
             background: #334155; color: var(--text-main); border: none; padding: 7px 12px;
             border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
-            display: flex; align-items: center; gap: 4px; white-space: nowrap;
+            text-decoration: none; display: flex; align-items: center; gap: 4px; white-space: nowrap;
         }
         .topnav-btn:hover { background: #3f4f68; }
         .topnav-station-btn {
@@ -27,18 +30,9 @@
         }
         .topnav-station-btn:hover { background: rgba(239,68,68,0.22); }
         .topnav-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 6px #ef4444; }
-        .topnav-menu {
-            display: none; position: absolute; top: calc(100% + 6px); right: 0; min-width: 170px;
-            background: var(--card-bg); border: 1px solid #334155; border-radius: 10px; overflow: hidden;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 210;
+        @media (max-width: 640px) {
+            .topnav-creator { display: none; }
         }
-        .topnav-menu.open { display: block; }
-        .topnav-menu a {
-            display: block; padding: 11px 14px; font-size: 12px; font-weight: 600; color: var(--text-main);
-            text-decoration: none; border-bottom: 1px solid #334155;
-        }
-        .topnav-menu a:last-child { border-bottom: none; }
-        .topnav-menu a:hover { background: #334155; color: var(--primary); }
         @media (max-width: 480px) {
             .topnav-btn span.topnav-label, .topnav-station-btn span.topnav-label { display: none; }
         }
