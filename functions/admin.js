@@ -571,7 +571,7 @@ async function actionListPurchaseHistory(db) {
 
   Object.entries(lotterySnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "lottery", typeLabel: "🎟️ 복권함",
-    label: r.won ? `🎉 당첨! +${(r.prizeAmount || 0).toLocaleString()}원` : "미당첨",
+    label: `${r.digits || "???"} · ${r.won ? `🎉 당첨! +${(r.prizeAmount || 0).toLocaleString()}원` : "미당첨"}`,
     amount: r.chargedAmount || 0, uid: r.uid, status: "approved",
     at: r.purchasedAt || 0,
   }));
@@ -579,6 +579,33 @@ async function actionListPurchaseHistory(db) {
   purchases.sort((a, b) => b.at - a.at);
 
   return { ok: true, purchases: purchases.slice(0, PURCHASE_HISTORY_LIMIT), totalCount: purchases.length };
+}
+
+const TRIPLE_SEVEN_MATCH_WINDOW_MS = 10 * 60 * 1000; // 감사 로그와 실제 구매기록 매칭 허용 오차(비동기 처리 지연 감안)
+
+/**
+ * 복권 777 감사 로그 — buyLotteryTicket이 777을 뽑는 순간(지급/트랜잭션보다
+ * 먼저) 남기는 lotteryTripleSevenLog를 lotteryPurchases의 당첨(won:true)
+ * 기록과 대조해, "777은 떴는데 당첨 처리(지급)는 안 된" 케이스를 찾아낸다.
+ * 정상 처리됐다면 두 기록이 항상 같이 있어야 하므로, matched:false 항목은
+ * 지급 로직이 중간에 실패했다는 뜻이라 최우선으로 수동 확인·지급이 필요하다.
+ */
+async function actionListLotteryTripleSevenLog(db) {
+  const [logSnap, lotterySnap] = await Promise.all([
+    db.ref("lotteryTripleSevenLog").get(),
+    db.ref("lotteryPurchases").get(),
+  ]);
+
+  const wins = Object.values(lotterySnap.val() || {}).filter((r) => r.won);
+
+  const entries = Object.entries(logSnap.val() || {}).map(([id, r]) => {
+    const matched = wins.some((w) => w.uid === r.uid && Math.abs((w.purchasedAt || 0) - (r.at || 0)) <= TRIPLE_SEVEN_MATCH_WINDOW_MS);
+    return { id, uid: r.uid, digits: r.digits || "777", at: r.at || 0, matched };
+  });
+
+  entries.sort((a, b) => b.at - a.at);
+
+  return { ok: true, entries, unmatchedCount: entries.filter((e) => !e.matched).length };
 }
 
 // ── 크루 프리픽스 일괄 적용 ──────────────────────────────────
@@ -981,6 +1008,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "rerollJackpot":          return actionRerollJackpot(db);
     case "listProfitRankings":     return actionListProfitRankings(db);
     case "listPurchaseHistory":    return actionListPurchaseHistory(db);
+    case "listLotteryTripleSevenLog": return actionListLotteryTripleSevenLog(db);
     case "getPendingSummary":      return actionGetPendingSummary(db);
     case "previewAnonTopUp":       return actionPreviewAnonTopUp(db);
     case "applyAnonTopUp":         return actionApplyAnonTopUp(db);

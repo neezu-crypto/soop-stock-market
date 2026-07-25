@@ -225,6 +225,18 @@
         <div id="purchase-history-list" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
 
+    <!-- 🎰 복권 777 감사 로그 -->
+    <div id="section-lottery-audit" class="container" style="display:block; border-color: #f43f5e;">
+        <h1>🎰 복권 777 감사 로그</h1>
+        <div class="info-box" style="color:#fecaca;">
+            서버가 777을 뽑는 순간(지급 처리보다 먼저) 남기는 로그입니다. 정상 처리됐다면 아래 각 항목은 구매 이력의
+            당첨 기록과 항상 짝이 맞아야 합니다 — <b style="color:#f87171;">"미매칭"</b>으로 표시되면 777은 떴는데
+            지급 로직이 중간에 실패해 당첨 처리가 안 됐다는 뜻이니 uid를 확인해 수동 지급하세요.
+        </div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadLotteryTripleSevenLog()">🔄 새로고침</button>
+        <div id="lottery-triple-seven-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
     <!-- 💰 손익 랭킹 조회 -->
     <div id="section-profit-ranking" class="container" style="display:block; border-color: #38bdf8;">
         <h1>💰 손익 랭킹 조회</h1>
@@ -578,6 +590,7 @@
         { id: 'section-announcement',       label: '📢 공지 배너' },
         { id: 'section-jackpot',            label: '🎰 잭팟 종목' },
         { id: 'section-purchase-history',   label: '🧾 구매 현황' },
+        { id: 'section-lottery-audit',      label: '🎰 777 감사 로그' },
         { id: 'section-profit-ranking',     label: '💰 손익 랭킹' },
         { id: 'section-ranking-top5',       label: '🏆 랭킹 TOP5' },
         { id: 'section-stock-search',       label: '🔍 개별 종목' },
@@ -876,6 +889,42 @@
                         <div style="font-size:11px;color:#64748b;">uid: ${escapeAttr(p.uid || '-')} · ${at} · <span style="color:${statusColor};">${statusLabel}</span></div>
                     </div>
                     <div style="font-weight:800;font-size:15px;color:#38bdf8;white-space:nowrap;">${(p.amount || 0).toLocaleString()}원</div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    };
+
+    // ── 복권 777 감사 로그 (읽기 전용 — 777 판정 직후 로그와 실제 당첨 지급 기록을 대조) ──
+    window.loadLotteryTripleSevenLog = async function() {
+        const listEl = document.getElementById('lottery-triple-seven-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { entries, unmatchedCount } = await callAdminAction('listLotteryTripleSevenLog');
+            if (!entries || entries.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">아직 777이 뜬 기록이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            if (unmatchedCount > 0) {
+                const warn = document.createElement('div');
+                warn.className = 'info-box';
+                warn.style.cssText = 'margin:0 0 4px;color:#fca5a5;font-weight:800;';
+                warn.innerText = `⚠️ 미매칭 ${unmatchedCount}건 — 당첨 처리가 안 됐을 수 있으니 아래에서 확인하세요.`;
+                listEl.appendChild(warn);
+            }
+            entries.forEach(e => {
+                const at = e.at ? new Date(e.at).toLocaleString() : '-';
+                const row = document.createElement('div');
+                const borderColor = e.matched ? '#334155' : '#f43f5e';
+                row.style.cssText = `background:#0f172a;border:1px solid ${borderColor};border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;`;
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">🎰 ${escapeAttr(e.digits)}</div>
+                        <div style="font-size:11px;color:#64748b;">uid: ${escapeAttr(e.uid || '-')} · ${at}</div>
+                    </div>
+                    <div style="font-weight:800;font-size:13px;white-space:nowrap;color:${e.matched ? '#4ade80' : '#f87171'};">${e.matched ? '✅ 지급 매칭됨' : '❌ 미매칭'}</div>`;
                 listEl.appendChild(row);
             });
         } catch (e) {

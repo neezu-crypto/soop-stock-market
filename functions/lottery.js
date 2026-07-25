@@ -40,7 +40,20 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   await chargeUserCash(db, uid, LOTTERY_TICKET_PRICE);
 
   const digits = [rollDigit(), rollDigit(), rollDigit()];
+  const digitsStr = digits.join("");
   const won = digits.every((d) => d === LOTTERY_DIGIT_MAX); // 7-7-7
+
+  if (won) {
+    // 이후 단계(모금액 트랜잭션·지급·업적)에서 예외가 나 함수가 중간에
+    // 죽더라도 "777이 실제로 떴었다"는 사실 자체는 남기기 위해, 당첨 판정
+    // 직후·다른 처리보다 먼저 별도 감사 로그에 기록한다. 이 로그 실패가
+    // 실제 지급을 막아서는 안 되므로 실패해도 무시하고 계속 진행한다.
+    try {
+      await db.ref("lotteryTripleSevenLog").push({ uid, digits: digitsStr, at: Date.now() });
+    } catch (e) {
+      console.error("lotteryTripleSevenLog 기록 실패", e);
+    }
+  }
 
   const poolRef = db.ref("lottery/pool");
   let prizeAmount = 0;
@@ -65,6 +78,7 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
 
   await db.ref("lotteryPurchases").push({
     uid,
+    digits: digitsStr,
     won,
     prizeAmount,
     chargedAmount: LOTTERY_TICKET_PRICE,
