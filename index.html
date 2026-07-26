@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20260722a">
+    <link rel="stylesheet" href="styles.css?v=20260727a">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -380,7 +380,95 @@
 </div>
 
 <!-- ══════════════════════════════════════════
-     자산 충전 모달 (라이브 방송 후원 → 신청 → 관리자 승인)
+     자산 충전 — 방식 선택 (보물상자 구매 / 보물상자 열기)
+══════════════════════════════════════════ -->
+<div id="asset-charge-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
+        <div class="promo-modal-header"><h2>💰 자산 충전</h2></div>
+        <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
+            <li>🎁 <b>보물상자 구매:</b> 후원창(별풍선 33개/개)으로 구매 → 관리자 확인 후 지급</li>
+            <li>📦 <b>보물상자 열기:</b> 보유한 상자를 열어 95% 50만원 / 5% 500만원 획득</li>
+        </ul>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <button onclick="openTreasureChestBuyModal()" class="btn-confirm-contact">🎁 보물상자 구매</button>
+            <button onclick="openTreasureChestOpenModal()" style="width:100%;background:#a855f7;color:white;border:none;padding:14px;border-radius:12px;cursor:pointer;font-weight:800;font-size:15px;">📦 보물상자 열기</button>
+            <button onclick="closeAssetChargeModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     보물상자 구매 (별풍선 33개/개, 10개 이상 한 번에 구매 시 10% 보너스)
+══════════════════════════════════════════ -->
+<div id="treasure-chest-buy-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:420px;">
+        <div class="promo-modal-header"><h2>🎁 보물상자 구매</h2></div>
+        <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
+            <li>💰 <b>가격:</b> 1개당 별풍선 33개</li>
+            <li>🎉 <b>보너스:</b> 10개 이상 한 번에 구매 시 상자 10% 추가 지급</li>
+            <li>✅ <b>확인:</b> 관리자가 후원 내역을 직접 확인한 뒤 상자를 지급합니다</li>
+        </ul>
+
+        <div style="background:rgba(255,255,255,0.05);border:1px solid #475569;border-radius:10px;padding:14px;margin-bottom:14px;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px;">
+                <button onclick="adjustChestQty(-10)" style="background:#334155;color:white;border:none;width:44px;height:36px;border-radius:8px;cursor:pointer;font-weight:700;">-10</button>
+                <button onclick="adjustChestQty(-1)" style="background:#334155;color:white;border:none;width:36px;height:36px;border-radius:8px;cursor:pointer;font-weight:700;">-1</button>
+                <input type="number" id="chest-qty-input" value="1" min="1" max="200" oninput="renderChestQty()"
+                    style="width:70px;text-align:center;background:#1e293b;border:1px solid #475569;color:#facc15;font-size:18px;font-weight:900;padding:8px 4px;border-radius:8px;">
+                <button onclick="adjustChestQty(1)" style="background:#334155;color:white;border:none;width:36px;height:36px;border-radius:8px;cursor:pointer;font-weight:700;">+1</button>
+                <button onclick="adjustChestQty(10)" style="background:#334155;color:white;border:none;width:44px;height:36px;border-radius:8px;cursor:pointer;font-weight:700;">+10</button>
+            </div>
+            <div style="text-align:center;font-size:13px;color:#94a3b8;">별풍선 <b id="chest-balloon-cost" style="color:#facc15;">33</b>개 필요</div>
+            <div id="chest-bonus-text" style="text-align:center;font-size:12px;color:#4ade80;font-weight:700;margin-top:4px;display:none;"></div>
+            <div style="text-align:center;font-size:14px;color:#f8fafc;font-weight:800;margin-top:6px;">받을 상자: <span id="chest-total-count">1</span>개</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+            <input type="text" id="chest-buy-nickname" placeholder="닉네임"
+                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+            <input type="text" id="chest-buy-soopid" placeholder="아이디 (예: skftodwocks2)"
+                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
+        </div>
+        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
+            "구매하기"를 누르면 신청이 접수되고 후원창이 열립니다. 후원창에서 위에 표시된 별풍선 개수만큼 후원해주세요 — 후원할 때 사용한 닉네임/아이디와 위 입력값이 같아야 관리자가 확인할 수 있어요.
+        </div>
+
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
+            <button onclick="backToAssetChargeModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">뒤로</button>
+            <button id="chest-buy-submit-btn" onclick="submitTreasureChestPurchase()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">🎁 구매하기</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     보물상자 열기 (95% 50만원 / 5% 500만원)
+══════════════════════════════════════════ -->
+<div id="treasure-chest-open-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
+        <div class="promo-modal-header"><h2>📦 보물상자 열기</h2></div>
+        <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.4);border-radius:10px;padding:14px;margin-bottom:16px;">
+            <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">보유한 보물상자</div>
+            <div><span id="chest-owned-count" style="font-size:26px;font-weight:900;color:#facc15;">0</span>개</div>
+        </div>
+        <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
+            <li>🎯 <b>확률:</b> 95% 50만원 / 5% 500만원</li>
+        </ul>
+
+        <div id="chest-open-effect-area" style="margin-bottom:16px;">
+            <div id="chest-open-icon" class="chest-icon">🎁</div>
+            <div id="chest-open-result-text" style="font-size:14px;color:var(--text-sub);min-height:20px;margin-top:10px;"></div>
+        </div>
+
+        <button id="chest-open-btn" onclick="openTreasureChest()" style="width:100%;margin-bottom:10px;background:#a855f7;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">📦 열기</button>
+        <button onclick="closeTreasureChestOpenModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     [레거시] 자산 충전 모달 (라이브 방송 후원 → 신청 → 관리자 승인)
+     보물상자 방식으로 대체되어 메인 화면에서는 더 이상 연결되지 않지만,
+     관리자 페이지에 남아있을 수 있는 과거 대기 신청 처리를 위해 백엔드
+     (cashCharge.js/submitCashChargeRequest)와 관리자 검수 UI는 유지한다.
 ══════════════════════════════════════════ -->
 <div id="cash-charge-modal" class="promo-modal-overlay" style="z-index:4000;">
     <div class="promo-modal-content" style="max-width:420px;">
@@ -997,7 +1085,7 @@
         <div class="wallet-bar-top">
             <div class="wallet-info">
                 <span onclick="openAssetHistoryModal()" style="cursor:pointer;" title="최근 7일 자산 변동 보기">내 잔고: <span id="my-cash">0</span>원</span>
-                <button onclick="openCashChargeModal()"
+                <button onclick="openAssetChargeModal()"
                     style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
                     💰 자산 충전
                 </button>
@@ -1160,6 +1248,8 @@ const linkKakaoAccountCallable = httpsCallable(functions, 'linkKakaoAccount');
 const linkGoogleAccountCallable = httpsCallable(functions, 'linkGoogleAccount');
 const initializeUserCallable   = httpsCallable(functions, 'initializeUser');
 const submitCashChargeRequestCallable = httpsCallable(functions, 'submitCashChargeRequest');
+const submitTreasureChestPurchaseRequestCallable = httpsCallable(functions, 'submitTreasureChestPurchaseRequest');
+const openTreasureChestCallable = httpsCallable(functions, 'openTreasureChest');
 const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
 const heartbeatCallable = httpsCallable(functions, 'heartbeat');
 const buyPlayTimeCallable = httpsCallable(functions, 'buyPlayTime');
@@ -2196,6 +2286,8 @@ initPromotions({
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
         submitCashChargeRequestCallable,
+        submitTreasureChestPurchaseRequestCallable,
+        openTreasureChestCallable,
         unfreezeWithCashCallable,
         submitUnfreezeDonationRequestCallable,
         submitListingRequestCallable,
@@ -2939,6 +3031,9 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('lottery-modal').classList.contains('active')) closeLotteryModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
         if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
+        if (document.getElementById('asset-charge-modal').classList.contains('active')) closeAssetChargeModal();
+        if (document.getElementById('treasure-chest-buy-modal').classList.contains('active')) closeTreasureChestBuyModal();
+        if (document.getElementById('treasure-chest-open-modal').classList.contains('active')) closeTreasureChestOpenModal();
         if (document.getElementById('pin-modal').classList.contains('active')) closePinModal();
         if (document.getElementById('listing-modal').classList.contains('active')) closeListingModal();
         if (document.getElementById('playtime-modal').classList.contains('active')) closePlayTimeModal();

@@ -80,6 +80,21 @@ const LOTTERY_PAYOUT_RATIO   = 0.9;     // 당첨 시 누적 모금액 중 지�
 const LOTTERY_DIGIT_MIN      = 1;       // 각 자리 숫자 범위 하한
 const LOTTERY_DIGIT_MAX      = 7;       // 각 자리 숫자 범위 상한(당첨 조합은 7-7-7)
 
+// ══════════════════════════════════════════════════════════
+// 보물상자 — 자산 충전 방식을 "라이브 방송 후원 확인 후 관리자가 임의
+// 금액을 지급"에서 "정찰제 상자 구매(후원창) → 관리자 승인 → 유저가 직접
+// 개봉해 랜덤 보상" 방식으로 개편한 것. 구매 신청 자체는 (cashCharge와
+// 동일하게) 차감/지급 없이 pending만 남기고, 실제 상자 지급은 관리자가
+// 후원을 확인한 뒤 승인해야 이뤄진다.
+// ══════════════════════════════════════════════════════════
+const TREASURE_CHEST_BALLOON_PRICE       = 33;      // 보물상자 1개당 필요한 별풍선 개수
+const TREASURE_CHEST_MAX_BUY_COUNT       = 200;      // 1회 신청 최대 개수(오입력/파밍 방지)
+const TREASURE_CHEST_BULK_BONUS_THRESHOLD = 10;      // 이 개수 이상 한 번에 구매 시 보너스 지급
+const TREASURE_CHEST_BULK_BONUS_RATE     = 0.10;     // 보너스 비율(10%, 상자 개수 기준 내림)
+const TREASURE_CHEST_OPEN_BIG_RATE       = 0.05;     // 개봉 시 고액 당첨 확률(5%)
+const TREASURE_CHEST_REWARD_SMALL        = 500000;   // 95% 확률로 지급
+const TREASURE_CHEST_REWARD_BIG          = 5000000;  // 5% 확률로 지급
+
 // 최근 7일 자산 변동 그래프용 — 화면엔 7일치만 보여주지만, 자정 근처
 // 타임존 오차나 하루 접속을 건너뛴 경우까지 여유 있게 보려고 이틀치를 더
 // 남겨둔다. 하루 1번(그날 첫 하트비트)만 기록해 저장량을 최소화한다.
@@ -363,6 +378,13 @@ module.exports = {
   LOTTERY_PAYOUT_RATIO,
   LOTTERY_DIGIT_MIN,
   LOTTERY_DIGIT_MAX,
+  TREASURE_CHEST_BALLOON_PRICE,
+  TREASURE_CHEST_MAX_BUY_COUNT,
+  TREASURE_CHEST_BULK_BONUS_THRESHOLD,
+  TREASURE_CHEST_BULK_BONUS_RATE,
+  TREASURE_CHEST_OPEN_BIG_RATE,
+  TREASURE_CHEST_REWARD_SMALL,
+  TREASURE_CHEST_REWARD_BIG,
   ASSET_HISTORY_RETENTION_DAYS,
   DAILY_ATTENDANCE_REWARDS,
   ANON_DAILY_SECONDS,

@@ -212,6 +212,32 @@
         @media (prefers-reduced-motion: reduce) {
             .lottery-particle { animation: none; display: none; }
         }
+        /* 보물상자 개봉 연출 — 흔들림(shaking) → 결과 아이콘 팝(opened), 대박(big-win)은 은은한 발광 추가 */
+        .chest-icon { font-size: 64px; line-height: 1; display: inline-block; }
+        .chest-icon.shaking { animation: chest-shake 0.5s ease-in-out; }
+        .chest-icon.opened { animation: chest-pop 0.4s ease-out; }
+        .chest-icon.big-win { filter: drop-shadow(0 0 14px #facc15); }
+        @keyframes chest-shake {
+            0%, 100% { transform: rotate(0deg); }
+            20% { transform: rotate(-10deg); }
+            40% { transform: rotate(10deg); }
+            60% { transform: rotate(-7deg); }
+            80% { transform: rotate(7deg); }
+        }
+        @keyframes chest-pop {
+            0%   { transform: scale(1); }
+            50%  { transform: scale(1.4); }
+            100% { transform: scale(1); }
+        }
+        .chest-particle {
+            position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 50%;
+            pointer-events: none; transform: translate(-50%, -50%);
+            animation: lottery-particle-burst 0.7s ease-out forwards;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .chest-icon.shaking, .chest-icon.opened { animation: none; }
+            .chest-particle { animation: none; display: none; }
+        }
         .relay-room-bar {
             background: var(--card-bg); width: 100%; padding: 12px 20px; border-radius: 12px;
             margin-bottom: 20px; border: 1px dashed #334155; box-sizing: border-box;

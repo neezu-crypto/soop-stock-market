@@ -22,6 +22,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
         submitCashChargeRequestCallable,
+        submitTreasureChestPurchaseRequestCallable,
+        openTreasureChestCallable,
         unfreezeWithCashCallable,
         submitUnfreezeDonationRequestCallable,
         submitListingRequestCallable,
@@ -590,6 +592,172 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
             },
             closeFn: window.closeCashChargeModal,
         });
+    };
+
+    // ── 보물상자 (자산 충전 — 후원창 구매 신청 → 관리자 승인 → 직접 개봉) ──
+    // 서버(functions/common.js)와 동일한 값을 표시용으로만 들고 있는다 —
+    // 최종 검증/차감은 항상 서버가 한다.
+    const TREASURE_CHEST_BALLOON_PRICE        = 33;
+    const TREASURE_CHEST_MAX_BUY_COUNT        = 200;
+    const TREASURE_CHEST_BULK_BONUS_THRESHOLD = 10;
+    const TREASURE_CHEST_BULK_BONUS_RATE      = 0.10;
+    const TREASURE_CHEST_DONATION_URL = 'https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station';
+
+    window.openAssetChargeModal = () => {
+        if (!requireLoginOrPrompt()) return;
+        document.getElementById('asset-charge-modal').classList.add('active');
+    };
+    window.closeAssetChargeModal = () => document.getElementById('asset-charge-modal').classList.remove('active');
+
+    function computeChestPurchase(chestCount) {
+        const bonusChestCount = chestCount >= TREASURE_CHEST_BULK_BONUS_THRESHOLD
+            ? Math.floor(chestCount * TREASURE_CHEST_BULK_BONUS_RATE)
+            : 0;
+        return { bonusChestCount, totalChestCount: chestCount + bonusChestCount, starBalloons: chestCount * TREASURE_CHEST_BALLOON_PRICE };
+    }
+
+    window.renderChestQty = function() {
+        const input = document.getElementById('chest-qty-input');
+        let chestCount = parseInt(input.value, 10);
+        if (!Number.isInteger(chestCount) || chestCount < 1) chestCount = 1;
+        if (chestCount > TREASURE_CHEST_MAX_BUY_COUNT) chestCount = TREASURE_CHEST_MAX_BUY_COUNT;
+        input.value = chestCount;
+
+        const { bonusChestCount, totalChestCount, starBalloons } = computeChestPurchase(chestCount);
+        document.getElementById('chest-balloon-cost').innerText = starBalloons.toLocaleString();
+        document.getElementById('chest-total-count').innerText  = totalChestCount.toLocaleString();
+        const bonusEl = document.getElementById('chest-bonus-text');
+        if (bonusChestCount > 0) {
+            bonusEl.style.display = 'block';
+            bonusEl.innerText = `🎉 보너스 ${bonusChestCount}개 추가 지급!`;
+        } else {
+            bonusEl.style.display = 'none';
+        }
+    };
+
+    window.adjustChestQty = function(delta) {
+        const input = document.getElementById('chest-qty-input');
+        const next  = Math.min(TREASURE_CHEST_MAX_BUY_COUNT, Math.max(1, (parseInt(input.value, 10) || 1) + delta));
+        input.value = next;
+        window.renderChestQty();
+    };
+
+    window.openTreasureChestBuyModal = () => {
+        window.closeAssetChargeModal();
+        document.getElementById('chest-qty-input').value = '1';
+        window.renderChestQty();
+        document.getElementById('treasure-chest-buy-modal').classList.add('active');
+    };
+    window.closeTreasureChestBuyModal = () => document.getElementById('treasure-chest-buy-modal').classList.remove('active');
+    window.backToAssetChargeModal = () => {
+        window.closeTreasureChestBuyModal();
+        window.closeTreasureChestOpenModal();
+        window.openAssetChargeModal();
+    };
+
+    window.submitTreasureChestPurchase = async function() {
+        await submitRequestForm({
+            submitBtnId: 'chest-buy-submit-btn',
+            submitLabel: '🎁 구매하기',
+            validateAndBuild() {
+                const nickname   = document.getElementById('chest-buy-nickname').value.trim();
+                const soopId     = document.getElementById('chest-buy-soopid').value.trim().toLowerCase();
+                const chestCount = parseInt(document.getElementById('chest-qty-input').value, 10);
+                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
+                if (!isValidSoopId(soopId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
+                if (!Number.isInteger(chestCount) || chestCount < 1 || chestCount > TREASURE_CHEST_MAX_BUY_COUNT) {
+                    alert(`구매 개수는 1~${TREASURE_CHEST_MAX_BUY_COUNT}개 사이로 입력해주세요.`);
+                    return null;
+                }
+                return { nickname, soopId, chestCount };
+            },
+            callable: submitTreasureChestPurchaseRequestCallable,
+            onSuccess(result) {
+                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 보물상자 ${result.data.totalChestCount.toLocaleString()}개를 지급합니다.`);
+                window.open(TREASURE_CHEST_DONATION_URL, '_blank');
+            },
+            resetFn() {
+                document.getElementById('chest-buy-nickname').value = '';
+                document.getElementById('chest-buy-soopid').value = '';
+                document.getElementById('chest-qty-input').value = '1';
+                window.renderChestQty();
+            },
+            closeFn: window.closeTreasureChestBuyModal,
+        });
+    };
+
+    // 상자를 열 때 아이콘 중심에서 톡 터지며 흩어지는 파티클 — 복권 긁기
+    // 연출(lottery-particle-burst)과 동일한 키프레임을 재사용한다.
+    function spawnChestParticles(el, big) {
+        el.style.position = 'relative';
+        const colors = big ? ['#facc15', '#fbbf24', '#fde68a'] : ['#a855f7', '#c084fc', '#e9d5ff'];
+        const count  = big ? 20 : 10;
+        for (let i = 0; i < count; i++) {
+            const p = document.createElement('span');
+            p.className = 'chest-particle';
+            const angle = (Math.PI * 2 * i) / count + (Math.random() * 0.6 - 0.3);
+            const dist  = 40 + Math.random() * (big ? 40 : 22);
+            p.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+            p.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+            p.style.background = colors[i % colors.length];
+            el.appendChild(p);
+            setTimeout(() => p.remove(), 750);
+        }
+    }
+
+    window.openTreasureChestOpenModal = () => {
+        window.closeAssetChargeModal();
+        const myData = getMyData();
+        document.getElementById('chest-owned-count').innerText = (myData?.treasureChests || 0).toLocaleString();
+        const icon = document.getElementById('chest-open-icon');
+        icon.className = 'chest-icon';
+        icon.innerText = '🎁';
+        document.getElementById('chest-open-result-text').innerText = '';
+        const btn = document.getElementById('chest-open-btn');
+        btn.style.display = 'block';
+        btn.disabled = false;
+        btn.innerText = '📦 열기';
+        document.getElementById('treasure-chest-open-modal').classList.add('active');
+    };
+    window.closeTreasureChestOpenModal = () => document.getElementById('treasure-chest-open-modal').classList.remove('active');
+
+    window.openTreasureChest = async function() {
+        if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
+        const myData = getMyData();
+        if (!(myData?.treasureChests > 0)) { alert('보유한 보물상자가 없습니다.'); return; }
+
+        const btn      = document.getElementById('chest-open-btn');
+        const icon     = document.getElementById('chest-open-icon');
+        const resultEl = document.getElementById('chest-open-result-text');
+        btn.disabled = true;
+        btn.innerText = '여는 중...';
+        icon.className = 'chest-icon shaking';
+        resultEl.innerText = '';
+
+        try {
+            const result = await openTreasureChestCallable();
+            const { reward, isBig, remaining } = result.data;
+            setTimeout(() => {
+                icon.className = `chest-icon opened${isBig ? ' big-win' : ''}`;
+                icon.innerText = isBig ? '💎' : '💰';
+                spawnChestParticles(icon, isBig);
+                resultEl.innerHTML = isBig
+                    ? `<span style="color:#facc15;font-weight:900;">💎 대박! ${reward.toLocaleString()}원 당첨!</span>`
+                    : `<span style="color:#4ade80;font-weight:800;">🎉 ${reward.toLocaleString()}원 당첨!</span>`;
+                document.getElementById('chest-owned-count').innerText = (remaining || 0).toLocaleString();
+                if (remaining > 0) {
+                    btn.disabled = false;
+                    btn.innerText = '📦 다음 상자 열기';
+                } else {
+                    btn.style.display = 'none';
+                }
+            }, 500); // 흔들리는 연출이 끝날 때까지 대기한 뒤 결과 표시
+        } catch (e) {
+            icon.className = 'chest-icon';
+            alert(e?.message || '상자 개봉 중 오류가 발생했습니다.');
+            btn.disabled = false;
+            btn.innerText = '📦 열기';
+        }
     };
 
     // ── 차트 하단 배너 신청 (이미지/링크 직접 입력 → 실시간 미리보기 → 신청) ──

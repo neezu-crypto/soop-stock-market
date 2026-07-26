@@ -451,6 +451,14 @@
         <div id="cash-charge-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
+    <!-- 🎁 보물상자 구매 신청 검수 -->
+    <div id="section-treasure-chest" class="container" style="display:block; border-color: #38bdf8;">
+        <h1>🎁 보물상자 구매 신청 검수</h1>
+        <div class="info-box">유저가 후원창(별풍선 33개/개)으로 실제 후원한 뒤 신청한 목록입니다. 후원 내역과 닉네임/아이디를 대조 확인한 뒤 승인하면, 신청된 개수(+10개 이상 구매 시 10% 보너스 포함)만큼 보물상자가 즉시 지급됩니다.</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadTreasureChestRequests()">🔄 신청 목록 새로고침</button>
+        <div id="treasure-chest-request-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <!-- 📌 최상단 고정 노출 관리 -->
     <div id="section-pin" class="container" style="display:block; border-color: #38bdf8;">
         <h1>📌 최상단 고정 노출 관리</h1>
@@ -606,6 +614,7 @@
         { id: 'section-user-detail',        label: '👤 유저 조회' },
         { id: 'section-banner',             label: '📢 배너 관리' },
         { id: 'section-cashcharge',         label: '💰 충전 검수' },
+        { id: 'section-treasure-chest',     label: '🎁 보물상자 검수' },
         { id: 'section-pin',                label: '📌 고정 노출' },
         { id: 'section-listing',            label: '🏷 상장 신청' },
         { id: 'section-streamer-verification', label: '🎙️ 스트리머 인증' },
@@ -643,6 +652,7 @@
             await loadRankingStatus();
             await loadAllBannerData();
             await loadCashChargeRequests();
+            await loadTreasureChestRequests();
             await loadAllPinData();
             await loadListingRequests();
             await loadAllRelayRoomData();
@@ -1734,6 +1744,63 @@
         try {
             await callAdminAction('rejectCashChargeRequest', { requestId });
             await loadCashChargeRequests();
+        } catch (e) {
+            alert('거절 중 오류 발생: ' + e.message);
+        }
+    };
+
+    // ══════════════════════════════════════════════════════
+    // 보물상자 구매 신청 검수
+    // ══════════════════════════════════════════════════════
+
+    window.loadTreasureChestRequests = async function() {
+        const listEl = document.getElementById('treasure-chest-request-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { requests } = await callAdminAction('listTreasureChestRequests');
+            if (!requests || requests.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">대기 중인 신청이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            requests.forEach(r => {
+                const row = document.createElement('div');
+                row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;';
+                const requestedAt = r.requestedAt ? new Date(r.requestedAt).toLocaleString() : '-';
+                const bonusText = r.bonusChestCount > 0 ? ` (+보너스 ${r.bonusChestCount}개 = 총 ${r.totalChestCount}개)` : '';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">${escapeAttr(r.nickname)}</div>
+                        <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.soopId)} · 신청 시각 ${requestedAt}</div>
+                        <div style="font-size:13px;color:#38bdf8;font-weight:700;margin-top:4px;">🎁 ${r.chestCount}개 신청 · 별풍선 ${r.starBalloons}개${bonusText}</div>
+                    </div>
+                    <div class="admin-action-row">
+                        <button class="btn-success" style="flex:1;padding:8px;" onclick="approveTreasureChestRequest('${r.id}')">✅ 승인 (상자 ${r.totalChestCount}개 지급)</button>
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="rejectTreasureChestRequest('${r.id}')">🚫 거절</button>
+                    </div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    };
+
+    window.approveTreasureChestRequest = async function(requestId) {
+        if (!confirm('별풍선 후원 내역을 확인하셨나요? 승인하면 보물상자가 즉시 지급됩니다.')) return;
+        try {
+            const result = await callAdminAction('approveTreasureChestRequest', { requestId });
+            alert(`✅ 보물상자 ${result.totalChestCount}개가 지급됐습니다!`);
+            await loadTreasureChestRequests();
+        } catch (e) {
+            alert('승인 중 오류 발생: ' + e.message);
+        }
+    };
+
+    window.rejectTreasureChestRequest = async function(requestId) {
+        if (!confirm('이 신청을 거절하시겠습니까?')) return;
+        try {
+            await callAdminAction('rejectTreasureChestRequest', { requestId });
+            await loadTreasureChestRequests();
         } catch (e) {
             alert('거절 중 오류 발생: ' + e.message);
         }

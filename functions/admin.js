@@ -15,6 +15,11 @@ const {
   actionRejectCashChargeRequest,
 } = require("./cashCharge");
 const {
+  actionListTreasureChestRequests,
+  actionApproveTreasureChestRequest,
+  actionRejectTreasureChestRequest,
+} = require("./treasureChest");
+const {
   actionListPinRequests,
   actionListActivePins,
   actionApprovePinRequest,
@@ -479,6 +484,7 @@ async function actionGetPendingSummary(db) {
   const sections = [
     { key: "banner",      sectionId: "section-banner",      label: "배너 광고",       paths: ["bannerRequests", "chartBannerRequests"] },
     { key: "cashcharge",  sectionId: "section-cashcharge",  label: "자산 충전 신청", paths: ["cashChargeRequests"] },
+    { key: "treasurechest", sectionId: "section-treasure-chest", label: "보물상자 구매 신청", paths: ["treasureChestRequests"] },
     { key: "pin",         sectionId: "section-pin",         label: "최상단 고정 노출", paths: ["pinRequests"] },
     { key: "listing",     sectionId: "section-listing",     label: "종목 상장 신청", paths: ["listingRequests"] },
     { key: "relay",       sectionId: "section-relay",       label: "중계방 홍보",     paths: ["relayRoomRequests"] },
@@ -971,6 +977,9 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "listCashChargeRequests":   return actionListCashChargeRequests(db);
     case "approveCashChargeRequest": return actionApproveCashChargeRequest(db, payload);
     case "rejectCashChargeRequest":  return actionRejectCashChargeRequest(db, payload);
+    case "listTreasureChestRequests":   return actionListTreasureChestRequests(db);
+    case "approveTreasureChestRequest": return actionApproveTreasureChestRequest(db, payload);
+    case "rejectTreasureChestRequest":  return actionRejectTreasureChestRequest(db, payload);
     case "listPinRequests":    return actionListPinRequests(db);
     case "listActivePins":     return actionListActivePins(db);
     case "approvePinRequest":  return actionApprovePinRequest(db, payload);
