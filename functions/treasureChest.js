@@ -81,14 +81,24 @@ const openTreasureChest = onCall({ cors: true, timeoutSeconds: 30, memory: "256M
   const uid = auth.uid;
   await requireNotInMaintenance(db, auth);
 
+  // transaction()의 updateFunction은 재시도 과정에서 실제 서버 값을 확인하기
+  // 전에 한 번 더(때로는 null로) 불릴 수 있다 — 그 시점에 바로 return
+  // undefined로 중단시키면 재시도 없이 잘못 실패 처리될 수 있어, 대신 매
+  // 호출마다 판정 결과를 클로저 변수에 남기고 최종 커밋된 값으로 판단한다.
   const chestRef = db.ref(`users/${uid}/treasureChests`);
+  let hadChest = false;
   const tx = await chestRef.transaction((current) => {
     const count = current || 0;
-    if (count < 1) return undefined; // abort — 소지한 상자 없음
+    if (count < 1) {
+      hadChest = false;
+      return count; // 변화 없음(그대로 유지)
+    }
+    hadChest = true;
     return count - 1;
   });
 
-  if (!tx.committed) {
+  if (!tx.committed || !hadChest) {
+    console.error("openTreasureChest 실패", { uid, committed: tx.committed, snapshotVal: tx.snapshot.val() });
     throw new HttpsError("failed-precondition", "보유한 보물상자가 없습니다.");
   }
 
