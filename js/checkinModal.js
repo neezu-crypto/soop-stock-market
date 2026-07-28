@@ -146,6 +146,31 @@ export function initCheckinModal({ claimCallable, getTodayRewardAmount }) {
     // (로딩 성공)가 오면 즉시 해제해야 한다. 안 그러면 광고 영상 길이와 겹쳐
     // 실제로 광고가 끝까지 재생됐는데도 타임아웃이 먼저 발동해 adsManager를
     // 파괴하고 완료 이벤트를 놓치는 버그가 생긴다.
+
+    // 광고 차단기 감지 — 광고 차단 확장/브라우저 내장 차단 기능은 대부분
+    // "adsbygoogle", "ads", "advertisement" 같은 흔한 클래스명을 가진 엘리먼트를
+    // CSS로 숨기거나 크기를 0으로 만드는 방식(코스메틱 필터)으로 동작한다. 실제
+    // 광고 요청은 전혀 안 하고, 화면에만 잠깐 미끼(bait) 엘리먼트를 넣어서 그게
+    // 숨겨지는지로 판별한다 — 네트워크/DNS 문제와는 별개의, 차단기 전용 신호.
+    function detectAdBlocker() {
+        return new Promise((resolve) => {
+            try {
+                const bait = document.createElement('div');
+                bait.className = 'adsbygoogle ad ads ad-banner advertisement banner-ad';
+                bait.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:2px;height:2px;';
+                document.body.appendChild(bait);
+                setTimeout(() => {
+                    const blocked = !bait.offsetParent || bait.offsetHeight === 0 || bait.clientHeight === 0 ||
+                        window.getComputedStyle(bait).display === 'none' || window.getComputedStyle(bait).visibility === 'hidden';
+                    if (bait.parentNode) bait.parentNode.removeChild(bait);
+                    resolve(blocked);
+                }, 100);
+            } catch (e) {
+                resolve(false);
+            }
+        });
+    }
+
     function onAdError(errorEvent) {
         if (adRequestSettled) return;
         adRequestSettled = true;
@@ -158,10 +183,14 @@ export function initCheckinModal({ claimCallable, getTodayRewardAmount }) {
                 console.error('출석체크 광고 오류', err.getErrorCode(), err.getMessage(), err);
             }
         } catch (e) { /* noop */ }
-        setStatus('광고를 불러오지 못했습니다.' + detail);
         cleanupAd();
         plainBtn.disabled = false;
         adBtn.disabled = false;
+        detectAdBlocker().then((blocked) => {
+            setStatus(blocked
+                ? '광고 차단 기능이 감지되었습니다. 꺼주신 뒤 다시 시도해주세요.'
+                : '광고를 불러오지 못했습니다.' + detail);
+        });
     }
 
     function onAdRewardEarned() {
