@@ -20,6 +20,13 @@ const {
   actionRejectTreasureChestRequest,
 } = require("./treasureChest");
 const {
+  actionCreateStockSimSession,
+  actionListStockSimSessions,
+  actionUpdateStockSimSession,
+  actionEndStockSimSession,
+  actionRunStockSimTrade,
+} = require("./stockSimulator");
+const {
   actionListPinRequests,
   actionListActivePins,
   actionApprovePinRequest,
@@ -1032,6 +1039,11 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "setAnnouncement":        return actionSetAnnouncement(db, payload);
     case "getAttendanceStats":     return actionGetAttendanceStats(db);
     case "getOverviewStats":       return actionGetOverviewStats(db);
+    case "createStockSimSession":  return actionCreateStockSimSession(db, payload);
+    case "listStockSimSessions":   return actionListStockSimSessions(db);
+    case "updateStockSimSession":  return actionUpdateStockSimSession(db, payload);
+    case "endStockSimSession":     return actionEndStockSimSession(db, payload);
+    case "runStockSimTrade":       return actionRunStockSimTrade(db, payload);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }

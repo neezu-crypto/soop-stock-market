@@ -237,6 +237,38 @@
         <div id="lottery-triple-seven-list" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
 
+    <!-- 🤖 주식매매 시뮬레이터 -->
+    <div id="section-stock-simulator" class="container" style="display:block; border-color: #a855f7;">
+        <h1>🤖 주식매매 시뮬레이터</h1>
+        <div class="info-box">
+            키워드를 등록하면 종목명에 그 키워드가 포함된 모든 종목을 대상으로, 실제 매매와 동일한 가격 공식으로
+            랜덤 매수/매도를 반복 체결해 차트가 살아있는 것처럼 움직입니다. <b style="color:#c084fc;">이 페이지(탭)가 열려있는
+            동안만 동작</b>합니다 — 상시 서버 작업이 아니라 이 브라우저가 설정한 간격마다 직접 반복 호출하는 방식이라,
+            탭을 닫거나 새로고침하면 즉시 멈춥니다. 다시 열면 진행 중이던 세션을 목록에서 "▶ 재개"로 이어갈 수 있습니다.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+            <input type="text" id="sim-keyword-input" placeholder="키워드 (예: 테스트)"
+                style="width:100%;background:#1e293b;border:1px solid #475569;color:white;padding:10px 12px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:140px;">
+                    <label style="font-size:12px;color:#94a3b8;display:block;margin-bottom:4px;">매매 간격(초)</label>
+                    <input type="number" id="sim-interval-input" value="10" min="3"
+                        style="width:100%;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:10px 12px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+                </div>
+                <div style="flex:1;min-width:140px;">
+                    <label style="font-size:12px;color:#94a3b8;display:block;margin-bottom:4px;">종료 예약(분, 비우면 무제한)</label>
+                    <input type="number" id="sim-end-minutes-input" placeholder="예: 30" min="1"
+                        style="width:100%;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:10px 12px;border-radius:8px;box-sizing:border-box;font-size:13px;">
+                </div>
+            </div>
+        </div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:14px;background:#a855f7;" onclick="startStockSimSession()">▶ 세션 시작</button>
+
+        <div style="font-size:13px;color:#c084fc;font-weight:700;margin-bottom:8px;">세션 목록</div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadStockSimSessions()">🔄 새로고침</button>
+        <div id="stock-sim-session-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <!-- 💰 손익 랭킹 조회 -->
     <div id="section-profit-ranking" class="container" style="display:block; border-color: #38bdf8;">
         <h1>💰 손익 랭킹 조회</h1>
@@ -599,6 +631,7 @@
         { id: 'section-jackpot',            label: '🎰 잭팟 종목' },
         { id: 'section-purchase-history',   label: '🧾 구매 현황' },
         { id: 'section-lottery-audit',      label: '🎰 777 감사 로그' },
+        { id: 'section-stock-simulator',    label: '🤖 매매 시뮬레이터' },
         { id: 'section-profit-ranking',     label: '💰 손익 랭킹' },
         { id: 'section-ranking-top5',       label: '🏆 랭킹 TOP5' },
         { id: 'section-stock-search',       label: '🔍 개별 종목' },
@@ -662,6 +695,7 @@
             watchJackpotStatus();
             watchPendingSummary();
             await loadOverviewStats();
+            await loadStockSimSessions();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
             document.getElementById('login-section').style.display = 'flex';
@@ -935,6 +969,144 @@
                         <div style="font-size:11px;color:#64748b;">uid: ${escapeAttr(e.uid || '-')} · ${at}</div>
                     </div>
                     <div style="font-weight:800;font-size:13px;white-space:nowrap;color:${e.matched ? '#4ade80' : '#f87171'};">${e.matched ? '✅ 지급 매칭됨' : '❌ 미매칭'}</div>`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    };
+
+    // ══════════════════════════════════════════════════════
+    // 🤖 주식매매 시뮬레이터 — 상시 서버 폴링 대신, 이 브라우저 탭이
+    // setInterval로 세션의 매매 간격마다 runStockSimTrade를 직접 반복
+    // 호출해서 구동한다. 탭을 닫으면 반복 호출이 끊겨 자동으로 멈춘다
+    // (세션은 DB에 running으로 남아있을 수 있지만, 아무도 반복 호출을
+    // 안 하면 매매도 안 일어나는 안전한 실패 모드). activeSimTimers는
+    // "지금 이 탭이 구동 중인 세션"만 추적하는 로컬 상태다.
+    // ══════════════════════════════════════════════════════
+    const activeSimTimers = {}; // sessionId -> { timerId, lastResultText }
+
+    function detachSimDriver(sessionId) {
+        const entry = activeSimTimers[sessionId];
+        if (entry) { clearInterval(entry.timerId); delete activeSimTimers[sessionId]; }
+    }
+
+    function attachSimDriver(sessionId, intervalSeconds) {
+        detachSimDriver(sessionId);
+        const timerId = setInterval(async () => {
+            try {
+                const result = await callAdminAction('runStockSimTrade', { sessionId });
+                if (result.ended) {
+                    detachSimDriver(sessionId);
+                    await loadStockSimSessions();
+                    return;
+                }
+                const statusEl = document.getElementById(`sim-status-${sessionId}`);
+                if (statusEl) {
+                    statusEl.innerText = result.traded
+                        ? `마지막 체결: ${result.stockName} ${result.type === 'buy' ? '매수' : '매도'} ${result.qty}주 @ ${(result.price || 0).toLocaleString()}원 (${new Date().toLocaleTimeString()})`
+                        : `대기 중 (${result.reason === 'no-match' ? '일치 종목 없음' : '체결 실패, 재시도 예정'})`;
+                }
+            } catch (e) {
+                const statusEl = document.getElementById(`sim-status-${sessionId}`);
+                if (statusEl) statusEl.innerText = `오류: ${e.message}`;
+            }
+        }, intervalSeconds * 1000);
+        activeSimTimers[sessionId] = { timerId };
+    }
+
+    window.startStockSimSession = async function() {
+        const keyword = document.getElementById('sim-keyword-input').value.trim();
+        const intervalSeconds = parseInt(document.getElementById('sim-interval-input').value, 10);
+        const endMinutesRaw = document.getElementById('sim-end-minutes-input').value.trim();
+        const endMinutes = endMinutesRaw === '' ? null : parseInt(endMinutesRaw, 10);
+        if (!keyword) return alert('키워드를 입력해주세요.');
+        if (!Number.isInteger(intervalSeconds) || intervalSeconds < 3) return alert('매매 간격은 3초 이상으로 입력해주세요.');
+
+        try {
+            const result = await callAdminAction('createStockSimSession', { keyword, intervalSeconds, endMinutes });
+            alert(`✅ 세션이 시작됐습니다. 일치 종목 ${result.matchedStocks.length}개: ${result.matchedStocks.map(s => s.name).join(', ')}`);
+            attachSimDriver(result.id, intervalSeconds);
+            document.getElementById('sim-keyword-input').value = '';
+            document.getElementById('sim-end-minutes-input').value = '';
+            await loadStockSimSessions();
+        } catch (e) {
+            alert('세션 시작 실패: ' + e.message);
+        }
+    };
+
+    window.resumeStockSimSession = function(sessionId, intervalSeconds) {
+        attachSimDriver(sessionId, intervalSeconds);
+        loadStockSimSessions();
+    };
+
+    window.pauseStockSimSession = function(sessionId) {
+        detachSimDriver(sessionId);
+        loadStockSimSessions();
+    };
+
+    window.applyStockSimInterval = async function(sessionId) {
+        const input = document.getElementById(`sim-interval-edit-${sessionId}`);
+        const intervalSeconds = parseInt(input.value, 10);
+        if (!Number.isInteger(intervalSeconds) || intervalSeconds < 3) return alert('매매 간격은 3초 이상으로 입력해주세요.');
+        try {
+            await callAdminAction('updateStockSimSession', { sessionId, intervalSeconds });
+            if (activeSimTimers[sessionId]) attachSimDriver(sessionId, intervalSeconds); // 구동 중이면 새 간격으로 재시작
+            alert('✅ 매매 간격이 변경됐습니다.');
+        } catch (e) {
+            alert('변경 실패: ' + e.message);
+        }
+    };
+
+    window.endStockSimSession = async function(sessionId) {
+        if (!confirm('이 세션을 종료하시겠습니까?')) return;
+        try {
+            await callAdminAction('endStockSimSession', { sessionId });
+            detachSimDriver(sessionId);
+            await loadStockSimSessions();
+        } catch (e) {
+            alert('종료 실패: ' + e.message);
+        }
+    };
+
+    window.loadStockSimSessions = async function() {
+        const listEl = document.getElementById('stock-sim-session-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { sessions } = await callAdminAction('listStockSimSessions');
+            if (!sessions || sessions.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">아직 생성된 세션이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            sessions.forEach(s => {
+                const row = document.createElement('div');
+                const isRunning = s.status === 'running';
+                const isDriving = !!activeSimTimers[s.id];
+                row.style.cssText = `background:#0f172a;border:1px solid ${isRunning ? (isDriving ? '#4ade80' : '#a855f7') : '#334155'};border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;`;
+                const endText = s.endAt ? `종료 예정 ${new Date(s.endAt).toLocaleString()}` : '종료 예약 없음(수동 종료)';
+                const statusBadge = !isRunning
+                    ? '<span style="color:#94a3b8;">⏹ 종료됨</span>'
+                    : (isDriving ? '<span style="color:#4ade80;">🟢 이 탭에서 구동 중</span>' : '<span style="color:#c084fc;">⚪ 대기 중(구동 안 됨)</span>');
+                row.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+                        <div>
+                            <div style="font-weight:800;font-size:14px;">🔍 "${escapeAttr(s.keyword)}" · ${statusBadge}</div>
+                            <div style="font-size:11px;color:#64748b;margin-top:2px;">생성 ${new Date(s.createdAt).toLocaleString()} · 체결 ${s.tradeCount || 0}회 · ${endText}</div>
+                        </div>
+                    </div>
+                    ${isRunning ? `
+                    <div class="admin-action-row" style="flex-wrap:wrap;">
+                        <input type="number" id="sim-interval-edit-${s.id}" value="${s.intervalSeconds}" min="3"
+                            style="width:80px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
+                        <button class="btn-primary" style="flex:0;padding:8px 12px;" onclick="applyStockSimInterval('${s.id}')">간격 적용</button>
+                        ${isDriving
+                            ? `<button class="btn-danger" style="flex:1;padding:8px;" onclick="pauseStockSimSession('${s.id}')">⏸ 이 탭에서 정지</button>`
+                            : `<button class="btn-success" style="flex:1;padding:8px;" onclick="resumeStockSimSession('${s.id}', ${s.intervalSeconds})">▶ 재개</button>`}
+                        <button class="btn-danger" style="flex:1;padding:8px;" onclick="endStockSimSession('${s.id}')">🛑 세션 종료</button>
+                    </div>
+                    <div id="sim-status-${s.id}" style="font-size:11px;color:#94a3b8;">${isDriving ? '구동 중...' : '이 탭에서는 구동되고 있지 않습니다.'}</div>
+                    ` : ''}`;
                 listEl.appendChild(row);
             });
         } catch (e) {
