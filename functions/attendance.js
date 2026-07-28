@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const {
+  ADMIN_EMAIL,
   DAILY_ATTENDANCE_REWARDS,
   todayKeyKST,
   creditUserCash,
@@ -61,11 +62,18 @@ const claimDailyAttendance = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     throw new HttpsError("already-exists", "오늘 출석 보상은 이미 받았습니다.");
   }
 
-  await creditUserCash(db, uid, claimed.reward);
+  // 광고 시청 2배 지급 — 우선 관리자 시범 운영 단계라, 일반 유저가 watchedAd를
+  // true로 보내도 서버가 무시하고 기본 보상만 지급한다(클라이언트 UI가 관리자
+  // 전용으로 숨겨져 있어도, 이 검증이 최종 방어선이다).
+  const isAdmin   = auth.token?.email === ADMIN_EMAIL;
+  const watchedAd = !!request.data?.watchedAd;
+  const reward    = (watchedAd && isAdmin) ? claimed.reward * 2 : claimed.reward;
+
+  await creditUserCash(db, uid, reward);
   if (claimed.streak === DAILY_ATTENDANCE_REWARDS.length) {
     await grantAchievement(db, uid, "attendance_streak");
   }
-  return { ok: true, streak: claimed.streak, reward: claimed.reward };
+  return { ok: true, streak: claimed.streak, reward };
 });
 
 module.exports = { claimDailyAttendance };

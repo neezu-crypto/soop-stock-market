@@ -188,6 +188,25 @@
     </div>
 </div>
 
+<!-- ── 🎁 출석 체크 — "오늘 그대로 받기" / "광고보고 2배 받기" 선택 (관리자 시범 기능) ── -->
+<div id="checkin-modal" class="promo-modal-overlay" style="z-index:4000;">
+    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
+        <div class="promo-modal-header"><h2>🎁 출석 보상</h2></div>
+        <p style="font-size:12px;color:var(--text-sub);margin:-8px 0 16px;">오늘의 출석 보상을 선택해서 받으세요. (관리자 시범 기능)</p>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <button id="checkin-claim-plain-btn" type="button" class="btn-confirm-contact">🗓️ <span id="checkin-plain-label">오늘 받기</span></button>
+            <button id="checkin-claim-ad-btn" type="button" style="width:100%;background:#a855f7;color:white;border:none;padding:14px;border-radius:12px;cursor:pointer;font-weight:800;font-size:15px;">📺 <span id="checkin-ad-label">광고보고 받기</span></button>
+        </div>
+        <div id="checkin-ad-stage" style="display:none;margin-top:14px;">
+            <div id="checkin-ad-container" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;">
+                <video id="checkin-ad-video" style="width:100%;height:100%;" playsinline></video>
+            </div>
+        </div>
+        <div id="checkin-modal-status" style="font-size:12px;color:var(--text-sub);min-height:18px;margin-top:12px;"></div>
+        <button onclick="closeCheckinModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;margin-top:14px;">닫기</button>
+    </div>
+</div>
+
 <!-- ── 🎟️ 복권함 — 20만원에 복권 1장, 서버가 즉시 확정한 세 자리(1~7)를 긁어서 확인 ── -->
 <div id="lottery-modal" class="promo-modal-overlay">
     <div class="promo-modal-content" style="max-width:380px;text-align:center;">
@@ -1201,6 +1220,7 @@ import { getFunctions, httpsCallable }
 import { initChartModal } from "./js/chartModal.js";
 import { initPromotions } from "./js/promotions.js";
 import { initAssetHistory } from "./js/assetHistory.js";
+import { initCheckinModal } from "./js/checkinModal.js";
 
 (function () {
 
@@ -2300,6 +2320,11 @@ initAssetHistory({
     getAllStocks: () => allStocks,
 });
 
+initCheckinModal({
+    claimCallable: claimDailyAttendanceCallable,
+    getTodayRewardAmount: () => DAILY_ATTENDANCE_REWARDS[getNextAttendanceStreak() - 1],
+});
+
 // window.confirm() 대체 — 팝업 로그인 직후처럼 브라우저가 "이 탭이 활성
 // 상태가 아니다"로 오판하는 타이밍에 네이티브 confirm()을 부르면 크롬이
 // 다이얼로그를 아예 띄우지도 않고 조용히 억제해버리는 문제가 있다. 이
@@ -2435,15 +2460,28 @@ function updateAccountProtectionUI() {
 // ── 출석 보상 (계정 보호 유저 전용, 1~7일차 순환) ──
 const DAILY_ATTENDANCE_REWARDS = [30000, 50000, 70000, 100000, 130000, 160000, 300000]; // 서버 값과 동일하게 유지(표시용)
 
+// 다음 출석 시 받을 일차(streak)를 계산 — updateAttendanceUI와 체크인 모달
+// (js/checkinModal.js에 넘기는 getTodayRewardAmount)이 동일 로직을 공유한다.
+function getNextAttendanceStreak() {
+    const yesterday = (() => {
+        const d = new Date(Date.now() + 9 * 3600 * 1000 - 86400000);
+        return d.toISOString().split('T')[0];
+    })();
+    return myData?.lastAttendanceDate === yesterday
+        ? ((myData.attendanceStreak || 0) % DAILY_ATTENDANCE_REWARDS.length) + 1
+        : 1;
+}
+
 function updateAttendanceUI() {
     const btn = document.getElementById('daily-attendance-btn');
     if (!btn) return;
 
-    // 관리자 또는 계정 미보호 유저에게는 노출하지 않는다(어뷰징 방지 —
-    // 익명 계정은 대상이 아니고, 관리자는 애초에 자산 관리가 무의미함).
+    // 계정 미보호 유저에게는 노출하지 않는다(어뷰징 방지 — 익명 계정은 대상이
+    // 아님). 관리자는 원래 자산 관리가 무의미해 숨겨왔지만, "광고보고 2배
+    // 받기" 시범 기능을 테스트하려면 버튼 자체는 봐야 하므로 예외로 노출한다.
     const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
     const linked  = isMyAccountProtected();
-    if (isAdmin || !linked) {
+    if (!isAdmin && !linked) {
         btn.style.display = 'none';
         return;
     }
@@ -2457,13 +2495,7 @@ function updateAttendanceUI() {
         btn.style.boxShadow = 'none';
         btn.innerText = '✅ 오늘 출석 완료';
     } else {
-        const yesterday = (() => {
-            const d = new Date(Date.now() + 9 * 3600 * 1000 - 86400000);
-            return d.toISOString().split('T')[0];
-        })();
-        const nextStreak = myData?.lastAttendanceDate === yesterday
-            ? ((myData.attendanceStreak || 0) % DAILY_ATTENDANCE_REWARDS.length) + 1
-            : 1;
+        const nextStreak = getNextAttendanceStreak();
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
@@ -2474,10 +2506,14 @@ function updateAttendanceUI() {
 
 window.claimDailyAttendance = async function() {
     if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
+    // 관리자는 "오늘 그대로 받기 / 광고보고 2배 받기" 선택 모달로(우선 관리자
+    // 시범 운영), 그 외 계정은 기존처럼 바로 기본 보상을 받는다.
+    const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
+    if (isAdmin && window.openCheckinModal) { window.openCheckinModal(); return; }
     const btn = document.getElementById('daily-attendance-btn');
     if (btn) btn.disabled = true;
     try {
-        const result = await claimDailyAttendanceCallable();
+        const result = await claimDailyAttendanceCallable({ watchedAd: false });
         const { streak, reward } = result.data;
         alert(`🎁 ${streak}일차 출석 보상 ${reward.toLocaleString()}원을 받았어요!\n내일 또 오시면 ${streak >= 7 ? '1일차부터 다시' : (streak + 1) + '일차'} 보상이 기다려요.`);
         // 실제 UI 갱신은 users/{uid} 실시간 구독이 처리한다.
@@ -3028,6 +3064,7 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
         if (document.getElementById('card-banner-modal').classList.contains('active')) closeCardBannerModal();
+        if (document.getElementById('checkin-modal').classList.contains('active')) closeCheckinModal();
         if (document.getElementById('lottery-modal').classList.contains('active')) closeLotteryModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
         if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
