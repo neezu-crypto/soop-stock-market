@@ -1009,9 +1009,9 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "rejectListingRequest":   return actionRejectListingRequest(db, payload);
     case "listStreamerVerificationRequests":    return actionListStreamerVerificationRequests(db);
     case "listVerifiedStreamers":                return actionListVerifiedStreamers(db);
-    case "approveStreamerVerification":         return actionApproveStreamerVerification(db, payload);
-    case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload);
-    case "revokeStreamerVerification":           return actionRevokeStreamerVerification(db, payload);
+    case "approveStreamerVerification":         return actionApproveStreamerVerification(db, payload, request.auth);
+    case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload, request.auth);
+    case "revokeStreamerVerification":           return actionRevokeStreamerVerification(db, payload, request.auth);
     case "previewRankings":        return actionPreviewRankings(db);
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);

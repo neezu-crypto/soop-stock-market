@@ -7,6 +7,7 @@ const {
   requireNotInMaintenance,
   grantAchievement,
 } = require("./common");
+const { logAdminAction } = require("./adminAuditLog");
 
 // streamerVerifications는 스트리머 배팅시장과 공유하는 노드다. 그쪽 앱은 SOOP
 // 아이디를 정체성의 기준(canonical key)으로 삼는데, 이 앱은 원래 닉네임으로만
@@ -152,7 +153,7 @@ async function actionListVerifiedStreamers(db) {
   return { ok: true, streamers };
 }
 
-async function actionApproveStreamerVerification(db, { requestId }) {
+async function actionApproveStreamerVerification(db, { requestId }, auth) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`streamerVerificationRequests/${requestId}`).get();
@@ -194,19 +195,26 @@ async function actionApproveStreamerVerification(db, { requestId }) {
     await db.ref().update(updates);
   }
 
+  await logAdminAction(
+    db, auth,
+    reqData.isSwitch ? "스트리머 인증 재신청 승인 (계정 전환)" : "스트리머 인증 승인",
+    reqData.nickname + " (" + (reqData.soopId || "SOOP 아이디 미기재") + ")"
+  );
   return { ok: true };
 }
 
-async function actionRejectStreamerVerification(db, { requestId }) {
+async function actionRejectStreamerVerification(db, { requestId }, auth) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`streamerVerificationRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
+  const reqData = reqSnap.val();
 
   await db.ref(`streamerVerificationRequests/${requestId}`).update({
     status:     "rejected",
     reviewedAt: Date.now(),
   });
+  await logAdminAction(db, auth, "스트리머 인증 반려", reqData.nickname + " (" + (reqData.soopId || "SOOP 아이디 미기재") + ")");
   return { ok: true };
 }
 
@@ -214,16 +222,19 @@ async function actionRejectStreamerVerification(db, { requestId }) {
 // 찾는데, 이 앱에서 최초 인증된 레코드는 soopId 필드 자체가 없어 그 함수로는 못 지운다.
 // 그래서 이 앱 자체의 인증 상태(users/{uid}/streamerVerified)를 uid 기준으로 직접
 // 해제하고, 공유 노드에 아직 레코드가 남아있으면 그것도 같이 지운다.
-async function actionRevokeStreamerVerification(db, { uid }) {
+async function actionRevokeStreamerVerification(db, { uid }, auth) {
   if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
 
   const verifiedSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(uid).limitToFirst(1).get();
   const updates = { [`users/${uid}/streamerVerified`]: false };
+  let nickname = "";
   if (verifiedSnap.exists()) {
     const key = Object.keys(verifiedSnap.val())[0];
+    nickname = verifiedSnap.val()[key].nickname || "";
     updates[`streamerVerifications/${key}`] = null;
   }
   await db.ref().update(updates);
+  await logAdminAction(db, auth, "스트리머 인증 해제", (nickname ? nickname + " " : "") + "(uid: " + uid.slice(0, 10) + ")");
   return { ok: true };
 }
 
