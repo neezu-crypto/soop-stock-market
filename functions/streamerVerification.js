@@ -3,9 +3,23 @@ const admin = require("firebase-admin");
 const {
   STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH,
   STREAMER_VERIFICATION_COOLDOWN_MS,
+  STREAMER_ID_RE,
   requireNotInMaintenance,
   grantAchievement,
 } = require("./common");
+
+// streamerVerifications는 스트리머 배팅시장과 공유하는 노드다. 그쪽 앱은 SOOP
+// 아이디를 정체성의 기준(canonical key)으로 삼는데, 이 앱은 원래 닉네임으로만
+// 매칭했다 — 그래서 같은 사람이 두 앱에서 각각 인증받으면 서로 다른 uid로
+// 매핑된 레코드가 두 개 생기는 사고가 실제로 있었다(SOOP 아이디 우선, 닉네임은
+// 폴백으로 찾아야 두 앱 중 어느 쪽에서 먼저 인증됐어도 같은 레코드로 합쳐진다).
+async function findExistingStreamerRecord(db, nickname, soopId) {
+  if (soopId) {
+    const bySoopId = await db.ref("streamerVerifications").orderByChild("soopId").equalTo(soopId).limitToFirst(1).get();
+    if (bySoopId.exists()) return bySoopId;
+  }
+  return db.ref("streamerVerifications").orderByChild("nickname").equalTo(nickname).limitToFirst(1).get();
+}
 
 // ══════════════════════════════════════════════════════════
 // 스트리머 인증 — 카카오/구글 연동을 꺼리는 유저를 위한 대체 계정 보호 경로.
@@ -63,16 +77,24 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   if (nickname.length > STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH) {
     throw new HttpsError("invalid-argument", `닉네임은 ${STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH}자 이하로 입력해주세요.`);
   }
+  // SOOP 아이디 — 스트리머 배팅시장과 공유하는 정체성 기준 키. 형식은 그쪽 앱과
+  // 동일(영문 소문자/숫자 2~20자, 이 저장소의 STREAMER_ID_RE와 동일한 패턴).
+  const soopId = String(request.data?.soopId || "").trim();
+  if (!STREAMER_ID_RE.test(soopId)) {
+    throw new HttpsError("invalid-argument", "SOOP 아이디는 영문 소문자/숫자 2~20자로 입력해주세요.");
+  }
 
-  // 같은 닉네임으로 다른 uid가 이미 대기 중인 신청을 넣어뒀으면 막는다 —
-  // 안 막으면 실제 스트리머의 신청이 검토되기 전에 다른 사람이 같은 닉네임으로
-  // 먼저(또는 동시에) 신청해둘 수 있고, 관리자가 실수로 그 신청을 승인하면
-  // 같은 닉네임이 서로 다른 uid 두 개에 영구히 매핑되는 상태가 된다.
-  const duplicatePending = Object.values(allReq).some((r) => r.nickname === nickname && r.status === "pending" && r.uid !== uid);
+  // 같은 닉네임 또는 같은 SOOP 아이디로 다른 uid가 이미 대기 중인 신청을 넣어뒀으면
+  // 막는다 — 안 막으면 실제 스트리머의 신청이 검토되기 전에 다른 사람이 먼저(또는
+  // 동시에) 신청해둘 수 있고, 관리자가 실수로 그 신청을 승인하면 같은 사람이 서로
+  // 다른 uid 두 개에 영구히 매핑되는 상태가 된다.
+  const duplicatePending = Object.values(allReq).some((r) =>
+    r.status === "pending" && r.uid !== uid && (r.nickname === nickname || (soopId && r.soopId === soopId))
+  );
   if (duplicatePending) {
     throw new HttpsError(
       "already-exists",
-      "이미 같은 닉네임으로 인증 검토를 기다리는 신청이 있습니다. 해당 신청이 처리된 후 다시 시도해주세요."
+      "이미 같은 닉네임 또는 SOOP 아이디로 인증 검토를 기다리는 신청이 있습니다. 해당 신청이 처리된 후 다시 시도해주세요."
     );
   }
 
@@ -89,11 +111,11 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     throw new HttpsError("resource-exhausted", "신청이 너무 빠릅니다. 잠시 후 다시 시도해주세요.");
   }
 
-  // 이미 다른 uid로 인증된 닉네임이면 "계정 전환" 신청으로 분류한다 — 그래도
-  // 코드 발급·방송 검증·관리자 승인 절차는 최초 인증과 동일하게 거친다.
-  const verifiedSnap = await db.ref("streamerVerifications").get();
-  const verifiedData = verifiedSnap.val() || {};
-  const existingEntry = Object.values(verifiedData).find((v) => v.nickname === nickname);
+  // 이미 인증된 SOOP 아이디(우선) 또는 닉네임(폴백, SOOP 아이디 없는 레거시 레코드
+  // 호환용)이면 "계정 전환" 신청으로 분류한다 — 그래도 방송 검증·관리자 승인
+  // 절차는 최초 인증과 동일하게 거친다.
+  const existingSnap = await findExistingStreamerRecord(db, nickname, soopId);
+  const existingEntry = existingSnap.exists() ? Object.values(existingSnap.val())[0] : null;
   const isSwitch    = !!(existingEntry && existingEntry.uid !== uid);
   const existingUid = isSwitch ? existingEntry.uid : null;
 
@@ -101,6 +123,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   await ref.set({
     uid,
     nickname,
+    soopId,
     status:      "pending",
     requestedAt: now,
     isSwitch,
@@ -137,10 +160,13 @@ async function actionApproveStreamerVerification(db, { requestId }) {
   const reqData = reqSnap.val();
 
   if (!reqData.isSwitch) {
-    // 최초 인증 — 닉네임↔uid 매핑을 등록하고 계정 보호 플래그를 켠다.
+    // 최초 인증 — 닉네임↔uid 매핑을 등록하고 계정 보호 플래그를 켠다. SOOP 아이디도
+    // 같이 저장해야 배팅시장 쪽에서 이 레코드를 SOOP 아이디 기준으로 찾을 수 있다.
     const linkRef = db.ref("streamerVerifications").push();
     await db.ref().update({
-      [`streamerVerifications/${linkRef.key}`]: { nickname: reqData.nickname, uid: reqData.uid, verifiedAt: Date.now() },
+      [`streamerVerifications/${linkRef.key}`]: {
+        nickname: reqData.nickname, soopId: reqData.soopId || null, uid: reqData.uid, verifiedAt: Date.now(),
+      },
       [`users/${reqData.uid}/streamerVerified`]: true,
       [`streamerVerificationRequests/${requestId}/status`]:     "approved",
       [`streamerVerificationRequests/${requestId}/reviewedAt`]: Date.now(),
@@ -150,10 +176,22 @@ async function actionApproveStreamerVerification(db, { requestId }) {
     // 계정 전환 — 기존 uid는 이미 인증돼 있으므로 신청 상태만 승인 처리한다.
     // 실제 커스텀 토큰 발급은 신청자가 requestStreamerVerification을 다시
     // 호출할 때 이뤄진다(위 함수의 approved+isSwitch 분기).
-    await db.ref(`streamerVerificationRequests/${requestId}`).update({
-      status:     "approved",
-      reviewedAt: Date.now(),
-    });
+    // 기존 레코드가 SOOP 아이디 없이(레거시 또는 배팅시장에서) 만들어졌었다면
+    // 이번 승인으로 같이 보완한다.
+    const updates = {
+      [`streamerVerificationRequests/${requestId}/status`]:     "approved",
+      [`streamerVerificationRequests/${requestId}/reviewedAt`]: Date.now(),
+    };
+    if (reqData.soopId && reqData.existingUid) {
+      const existingSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(reqData.existingUid).limitToFirst(1).get();
+      if (existingSnap.exists()) {
+        const existingKey = Object.keys(existingSnap.val())[0];
+        if (!existingSnap.val()[existingKey].soopId) {
+          updates[`streamerVerifications/${existingKey}/soopId`] = reqData.soopId;
+        }
+      }
+    }
+    await db.ref().update(updates);
   }
 
   return { ok: true };
