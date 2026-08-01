@@ -172,10 +172,28 @@ async function actionRejectStreamerVerification(db, { requestId }) {
   return { ok: true };
 }
 
+// 배팅시장의 인증 해제(revokeVerification)는 soopId 기준으로 공유 streamerVerifications를
+// 찾는데, 이 앱에서 최초 인증된 레코드는 soopId 필드 자체가 없어 그 함수로는 못 지운다.
+// 그래서 이 앱 자체의 인증 상태(users/{uid}/streamerVerified)를 uid 기준으로 직접
+// 해제하고, 공유 노드에 아직 레코드가 남아있으면 그것도 같이 지운다.
+async function actionRevokeStreamerVerification(db, { uid }) {
+  if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
+
+  const verifiedSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(uid).limitToFirst(1).get();
+  const updates = { [`users/${uid}/streamerVerified`]: false };
+  if (verifiedSnap.exists()) {
+    const key = Object.keys(verifiedSnap.val())[0];
+    updates[`streamerVerifications/${key}`] = null;
+  }
+  await db.ref().update(updates);
+  return { ok: true };
+}
+
 module.exports = {
   requestStreamerVerification,
   actionListStreamerVerificationRequests,
   actionListVerifiedStreamers,
   actionApproveStreamerVerification,
   actionRejectStreamerVerification,
+  actionRevokeStreamerVerification,
 };

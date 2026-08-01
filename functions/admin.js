@@ -59,6 +59,7 @@ const {
   actionListVerifiedStreamers,
   actionApproveStreamerVerification,
   actionRejectStreamerVerification,
+  actionRevokeStreamerVerification,
 } = require("./streamerVerification");
 
 // ══════════════════════════════════════════════════════════
@@ -1010,6 +1011,7 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "listVerifiedStreamers":                return actionListVerifiedStreamers(db);
     case "approveStreamerVerification":         return actionApproveStreamerVerification(db, payload);
     case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload);
+    case "revokeStreamerVerification":           return actionRevokeStreamerVerification(db, payload);
     case "previewRankings":        return actionPreviewRankings(db);
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);
