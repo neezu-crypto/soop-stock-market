@@ -22,6 +22,26 @@ async function findExistingStreamerRecord(db, nickname, soopId) {
   return db.ref("streamerVerifications").orderByChild("nickname").equalTo(nickname).limitToFirst(1).get();
 }
 
+// 로그인 세션은 공유되지만, 배팅시장의 프로필(bettingMarket/profiles/{uid})은
+// 그쪽 앱의 approveVerification이 승인할 때만 채워진다 — 그래서 이 앱에서
+// 인증됐을 뿐인 uid가 배팅시장에 처음 들어가면 프로필이 비어서 초기 상태(랜덤
+// 닉네임 등)로 보이는 문제가 있었다. 여기서도 같이 채워준다(배팅시장의
+// functions/src/lib/avatar.js avatarUrlFor와 동일한 규칙 — 별개 저장소라 상수
+// 공유가 안 되므로 그쪽이 바뀌면 여기도 맞춰야 한다).
+function avatarUrlForSoopId(soopId) {
+  if (!soopId) return "";
+  const folder = soopId.slice(0, 2);
+  return "https://stimg.sooplive.com/LOGO/" + folder + "/" + soopId + "/" + soopId + ".jpg";
+}
+async function fillBettingMarketProfileIfEmpty(db, uid, nickname, soopId) {
+  if (!uid) return;
+  const profileRef = db.ref("bettingMarket/profiles/" + uid);
+  const snap = await profileRef.get();
+  const current = snap.val();
+  if (current && current.nickname) return;
+  await profileRef.update({ nickname, soopId: soopId || null, avatarUrl: avatarUrlForSoopId(soopId) });
+}
+
 // ══════════════════════════════════════════════════════════
 // 스트리머 인증 — 카카오/구글 연동을 꺼리는 유저를 위한 대체 계정 보호 경로.
 //
@@ -173,6 +193,7 @@ async function actionApproveStreamerVerification(db, { requestId }, auth) {
       [`streamerVerificationRequests/${requestId}/reviewedAt`]: Date.now(),
     });
     await grantAchievement(db, reqData.uid, "account_protected");
+    await fillBettingMarketProfileIfEmpty(db, reqData.uid, reqData.nickname, reqData.soopId);
   } else {
     // 계정 전환 — 기존 uid는 이미 인증돼 있으므로 신청 상태만 승인 처리한다.
     // 실제 커스텀 토큰 발급은 신청자가 requestStreamerVerification을 다시
@@ -193,6 +214,9 @@ async function actionApproveStreamerVerification(db, { requestId }, auth) {
       }
     }
     await db.ref().update(updates);
+    // 전환 승인 후 실제로 로그인하게 되는 건 existingUid라, 배팅시장 프로필도
+    // 그 uid 기준으로 채워야 한다(reqData.uid는 신청 당시의 임시 세션일 뿐).
+    await fillBettingMarketProfileIfEmpty(db, reqData.existingUid, reqData.nickname, reqData.soopId);
   }
 
   await logAdminAction(
