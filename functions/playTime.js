@@ -2,7 +2,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const {
   TEST_PERIOD_ACTIVE,
-  ADMIN_EMAIL,
+  isAdmin: checkIsAdmin,
   ANON_DAILY_SECONDS,
   PLAYTIME_BASE_RATE,
   PLAYTIME_SURCHARGE_STEP,
@@ -33,7 +33,7 @@ const {
 
 /** 유저의 현재 일일 이용 한도/사용량/남은 시간을 계산한다 (하트비트 갱신 없이 조회만). */
 async function getQuotaState(db, uid, auth) {
-  if (auth.token?.email === ADMIN_EMAIL) return { unlimited: true };
+  if (await checkIsAdmin(db, uid, auth.token?.email)) return { unlimited: true };
 
   const user = (await db.ref(`users/${uid}`).get()).val() || {};
   if (isUserProtected(user)) return { unlimited: true };
@@ -102,7 +102,7 @@ async function touchHeartbeat(db, uid) {
  * 안 된다(트랜잭션 자체가 시계 역할을 겸함).
  */
 async function checkPlayQuota(db, uid, auth) {
-  if (auth.token?.email === ADMIN_EMAIL) return;
+  if (await checkIsAdmin(db, uid, auth.token?.email)) return;
 
   const userTx = await touchHeartbeat(db, uid);
   if (!userTx.committed || !userTx.snapshot.exists()) return; // 아직 유저 데이터가 없는 극초반 — initializeUser가 곧 처리
@@ -135,7 +135,7 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
 
   const db = admin.database();
 
-  if (auth.token?.email === ADMIN_EMAIL) {
+  if (await checkIsAdmin(db, auth.uid, auth.token?.email)) {
     // 관리자는 이용시간 무제한이라 touchHeartbeat를 타지 않지만, 자산 변동
     // 그래프 기능은 관리자 계정으로도 확인해볼 수 있게 스냅샷만 별도로 남긴다.
     try {
@@ -185,7 +185,7 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   const db   = admin.database();
   await requireNotInMaintenance(db, auth);
   const uid  = auth.uid;
-  const isAdmin = auth.token?.email === ADMIN_EMAIL;
+  const isAdmin = await checkIsAdmin(db, uid, auth.token?.email);
   const today = todayKeyKST();
   const user = (await db.ref(`users/${uid}`).get()).val() || { cash: 0, stocks: {} };
   const isProtected = isUserProtected(user);

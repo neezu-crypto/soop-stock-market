@@ -965,9 +965,9 @@ async function actionDeleteUser(db, { uid }) {
  * chartBanner 쓰기·users 읽기는 전부 여기서 Admin SDK로 처리한다.
  */
 const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }, async (request) => {
-  requireAdmin(request.auth);
+  const db = admin.database();
+  await requireAdmin(db, request.auth);
 
-  const db      = admin.database();
   const action  = String(request.data?.action || "");
   const payload = request.data?.payload || {};
 

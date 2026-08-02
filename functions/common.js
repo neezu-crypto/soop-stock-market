@@ -185,9 +185,27 @@ function todayKeyKST(offsetDays = 0) {
   return kst.toISOString().split("T")[0];
 }
 
-function requireAdmin(auth) {
+// 09번 마이그레이션 — 관리자 판별을 이메일 문자열 비교에서 공유
+// adminCenter/adminUids uid 조회로 옮긴다(StreamBet-Market·admin-center와 동일
+// 전환 방식). uid가 아직 미등록이면 기존 이메일 비교로 폴백하고, 폴백이
+// 쓰이면 로그를 남긴다.
+async function isAdminUid(db, uid) {
+  const snap = await db.ref(`adminCenter/adminUids/${uid}`).get();
+  return snap.val() === true;
+}
+
+async function isAdmin(db, uid, email) {
+  if (uid && (await isAdminUid(db, uid))) return true;
+  if (email === ADMIN_EMAIL) {
+    console.warn("관리자 판별 이메일 폴백 사용됨(uid 미등록):", uid);
+    return true;
+  }
+  return false;
+}
+
+async function requireAdmin(db, auth) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
-  if (auth.token?.email !== ADMIN_EMAIL) {
+  if (!(await isAdmin(db, auth.uid, auth.token?.email))) {
     throw new HttpsError("permission-denied", "관리자 권한이 없습니다.");
   }
 }
@@ -205,7 +223,7 @@ function isUserProtected(user) {
  * 실제 신원이 있는 유저만 게임자산을 실제 홍보 슬롯으로 바꿀 수 있게 하기 위함.
  */
 async function requireLinkedUser(db, uid, auth) {
-  if (auth.token?.email === ADMIN_EMAIL) return; // 관리자는 이미 Google 로그인 상태
+  if (await isAdmin(db, uid, auth.token?.email)) return; // 관리자는 이미 Google 로그인 상태
   const user = (await db.ref(`users/${uid}`).get()).val();
   if (!isUserProtected(user)) {
     throw new HttpsError(
@@ -223,7 +241,7 @@ async function requireLinkedUser(db, uid, auth) {
  * 차단하는 것까지 클라이언트와 동일하게 맞춘다.
  */
 async function requireNotInMaintenance(db, auth) {
-  if (auth?.token?.email === ADMIN_EMAIL) return;
+  if (await isAdmin(db, auth?.uid, auth?.token?.email)) return;
   const data = (await db.ref("maintenance").get()).val();
   if (data?.active && Date.now() >= (data.startAt || 0)) {
     throw new HttpsError("failed-precondition", "현재 점검 중입니다. 점검이 끝난 후 다시 시도해주세요.");
@@ -407,6 +425,8 @@ module.exports = {
   UNFREEZE_DONATION_BALLOONS,
   ACHIEVEMENTS,
   todayKeyKST,
+  isAdminUid,
+  isAdmin,
   requireAdmin,
   requireLinkedUser,
   requireNotInMaintenance,
