@@ -574,12 +574,15 @@
     const auth      = getAuth(app);
     const provider  = new GoogleAuthProvider();
     const functions = getFunctions(app);
-    const ADMIN_EMAIL = "skftodwocks2@gmail.com";
     const ACHIEVEMENT_COUNT = 12; // functions/common.js의 ACHIEVEMENTS 개수와 맞춰 유지
 
     // 관리자 쓰기·users 읽기는 전부 이 콜러블(functions/index.js의 adminAction)이
     // Admin SDK로 처리한다 — RTDB 규칙의 이메일 매칭에 의존하지 않는다.
     const adminActionCallable = httpsCallable(functions, 'adminAction');
+    // 09번/13번 — 이 페이지 자체를 보여줄지 판단하는 게이트도 로컬 이메일 비교 대신
+    // 서버 확인(stockWhoAmI)으로 옮긴다. adminCenter/adminUids는 .read:false라
+    // 클라이언트가 직접 못 읽는다.
+    const stockWhoAmICallable = httpsCallable(functions, 'stockWhoAmI');
     async function callAdminAction(action, payload = {}) {
         const result = await adminActionCallable({ action, payload });
         return result.data;
@@ -671,7 +674,16 @@
     window.logout = () => signOut(auth);
 
     onAuthStateChanged(auth, async (user) => {
-        if (user && user.email === ADMIN_EMAIL) {
+        let isAdminUser = false;
+        if (user) {
+            try {
+                const result = await stockWhoAmICallable();
+                isAdminUser = !!(result.data && result.data.isAdmin);
+            } catch (err) {
+                console.error('관리자 여부 확인 실패:', err);
+            }
+        }
+        if (isAdminUser) {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-section').style.display = 'block';
             document.getElementById('admin-info').innerHTML = `
