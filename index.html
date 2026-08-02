@@ -23,7 +23,8 @@
         <span class="topnav-title">📈 SOOP STOCK</span>
         <span class="topnav-creator">제작: 오목지면시그</span>
     </div>
-    <div class="topnav-right">
+    <div class="topnav-viewport" id="topnavViewport">
+      <div class="topnav-right" id="topnavTrack">
         <a class="topnav-btn" data-game-id="dontClickAds" href="https://neezu-crypto.github.io/dont-click-ads/" target="_blank" rel="noopener">👆 <span class="topnav-label">절대 광고를 클릭하지 마</span></a>
         <a class="topnav-btn" data-game-id="midnightMartRun" href="https://neezu-crypto.github.io/midnight-mart-run/" target="_blank" rel="noopener">🌙🛒 <span class="topnav-label">미드나잇 마트런</span></a>
         <a class="topnav-btn" data-game-id="bettingMarket" href="https://neezu-crypto.github.io/StreamBet-Market/" target="_blank" rel="noopener">💰 <span class="topnav-label">스트리머 배팅시장</span></a>
@@ -31,8 +32,48 @@
         <a class="topnav-station-btn" href="https://www.sooplive.com/station/skftodwocks2" target="_blank" rel="noopener">
             <span class="topnav-live-dot"></span> <span class="topnav-label">개발자 방송국 바로가기</span>
         </a>
+      </div>
     </div>
 </nav>
+<script>
+  // devbar/배경시장과 동일한 마퀴 패턴 - 넘칠 때만 트랙을 복제해 이어붙이고
+  // translateX(-50%) 애니메이션으로 이음매 없이 무한 반복한다. topnav는 마퀴
+  // 자체가 이 시리즈에서 유일하게 없던 저장소라 이번에 처음 추가한다.
+  (function setupTopnavMarquee() {
+    var viewport = document.getElementById('topnavViewport');
+    var track = document.getElementById('topnavTrack');
+    if (!viewport || !track) return;
+
+    function rebuild() {
+      track.querySelectorAll('[data-clone]').forEach(function (el) { el.remove(); });
+      track.classList.remove('auto-scroll');
+      track.style.removeProperty('--topnav-duration');
+
+      if (track.scrollWidth <= viewport.clientWidth) return;
+
+      var originalWidth = track.scrollWidth;
+      Array.prototype.slice.call(track.children).forEach(function (child) {
+        var clone = child.cloneNode(true);
+        clone.setAttribute('data-clone', 'true');
+        clone.setAttribute('aria-hidden', 'true');
+        clone.setAttribute('tabindex', '-1');
+        track.appendChild(clone);
+      });
+
+      var PX_PER_SECOND = 40;
+      var duration = Math.max(8, originalWidth / PX_PER_SECOND);
+      track.style.setProperty('--topnav-duration', duration + 's');
+      track.classList.add('auto-scroll');
+    }
+
+    rebuild();
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(rebuild, 200);
+    });
+  })();
+</script>
 
 <div id="maintenance-overlay" style="display:none;">
     <div class="maintenance-content">
@@ -1301,7 +1342,7 @@ const db        = getDatabase(app);
             .map((id) => Object.assign({ id }, data[id]))
             .sort((a, b) => (a.order || 0) - (b.order || 0));
         if (!links.length) return;
-        const container = document.querySelector('.topnav-right');
+        const container = document.getElementById('topnavTrack');
         if (!container) return;
         container.querySelectorAll('a[data-game-id]').forEach((el) => el.remove());
         const stationBtn = container.querySelector('.topnav-station-btn');
@@ -1317,6 +1358,7 @@ const db        = getDatabase(app);
             a.querySelector('.topnav-label').textContent = link.label;
             container.insertBefore(a, stationBtn || null);
         });
+        window.dispatchEvent(new Event('resize')); // topnav 마퀴 재계산 트리거
     } catch (e) {
         console.error('topnav 링크 갱신 실패(기존 링크 유지):', e);
     }

@@ -16,7 +16,15 @@
         .topnav-brand { display: flex; align-items: baseline; gap: 7px; min-width: 0; overflow: hidden; }
         .topnav-title { font-size: 12.5px; font-weight: 700; color: var(--text-main); white-space: nowrap; }
         .topnav-creator { font-size: 10.5px; font-weight: 500; color: var(--text-sub); white-space: nowrap; }
-        .topnav-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .topnav-viewport { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; justify-content: flex-end; }
+        .topnav-right { display: flex; align-items: center; gap: 8px; width: max-content; }
+        .topnav-right.auto-scroll { animation: topnav-scroll var(--topnav-duration, 20s) linear infinite; }
+        .topnav-right.auto-scroll:hover { animation-play-state: paused; }
+        @keyframes topnav-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @media (prefers-reduced-motion: reduce) {
+            .topnav-right.auto-scroll { animation: none; }
+            .topnav-viewport { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        }
         .topnav-btn {
             background: #334155; color: var(--text-main); border: none; padding: 7px 12px;
             border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
