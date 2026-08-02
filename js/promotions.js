@@ -9,12 +9,12 @@
  * @param {() => object|null} deps.getMyData
  * @param {() => Array} deps.getAllStocks
  * @param {import('firebase/auth').Auth} deps.auth
- * @param {string} deps.ADMIN_EMAIL
+ * @param {() => boolean} deps.getIsAdmin - 서버 확인(whoAmI)으로 캐시된 관리자 여부 (09번/13번)
  * @param {() => void} deps.closeChartModal - 차트 하단 배너 신청 모달을 열 때 차트창을 먼저 닫기 위함
  * @param {() => string|null} deps.getCurrentChartStockId - 지금 열려 있는 차트 모달의 종목ID (없으면 null)
  * @param {object} deps.callables - httpsCallable로 미리 생성된 콜러블 참조 모음
  */
-export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, closeChartModal, getCurrentChartStockId, db, dbRef, dbGet, dbQuery, orderByChild, limitToLast, startAt, callables }) {
+export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, closeChartModal, getCurrentChartStockId, db, dbRef, dbGet, dbQuery, orderByChild, limitToLast, startAt, callables }) {
     const {
         submitBannerRequestCallable,
         submitChartBannerRequestCallable,
@@ -55,7 +55,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, ADMIN_EMAIL, clo
     // 작성한 뒤에야 막히면 답답하므로 모달을 열기 전에 미리 안내한다.
     function requireLoginOrPrompt() {
         const myData = getMyData();
-        const isLinked = !!(myData?.kakaoLinked || myData?.googleLinked || myData?.streamerVerified) || auth.currentUser?.email === ADMIN_EMAIL;
+        const isLinked = !!(myData?.kakaoLinked || myData?.googleLinked || myData?.streamerVerified) || getIsAdmin();
         if (isLinked) return true;
         window.openAccountProtectModal();
         return false;

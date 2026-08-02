@@ -1230,7 +1230,22 @@ import { initCheckinModal } from "./js/checkinModal.js";
 // 장기 점검 (관리자 계정으로 로그인하면 점검 화면을 건너뜀)
 // ══════════════════════════════════════════════════════════
 const LONG_MAINTENANCE = false;
-const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정
+const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정(whoAmI 폴백 참고용, UI 판별엔 더 이상 직접 쓰지 않음)
+
+// 09번/13번 — 관리자 UI 판별을 로컬 이메일 비교 대신 서버 확인(whoAmI)으로 옮긴다.
+// adminCenter/adminUids는 .read:false라 클라이언트가 직접 읽을 수 없다.
+// isAdminUser는 auth 상태가 바뀔 때마다 refreshAdminStatus()가 갱신하는 캐시값이다.
+let isAdminUser = false;
+async function refreshAdminStatus(user) {
+    if (!user || user.isAnonymous) { isAdminUser = false; return; }
+    try {
+        const result = await whoAmICallable();
+        isAdminUser = !!(result.data && result.data.isAdmin);
+    } catch (e) {
+        console.error('관리자 여부 확인 실패:', e);
+        isAdminUser = false;
+    }
+}
 
 // 테스트 기간 동안 플레이 시간 충전(유료)만 막았었다 — 2026-07-12 해제.
 // 서버(functions/common.js의 TEST_PERIOD_ACTIVE)와 항상 함께 바꿔야 한다.
@@ -1269,6 +1284,7 @@ const db        = getDatabase(app);
 const auth      = getAuth(app);
 const provider  = new GoogleAuthProvider();
 const functions = getFunctions(app);
+const whoAmICallable             = httpsCallable(functions, 'stockWhoAmI'); // 09번 - StreamBet-Market의 whoAmI와 이름 충돌 방지
 const tradeCallable              = httpsCallable(functions, 'trade');
 const submitBannerRequestCallable = httpsCallable(functions, 'submitBannerRequest');
 const submitChartBannerRequestCallable = httpsCallable(functions, 'submitChartBannerRequest');
@@ -1360,7 +1376,7 @@ onValue(ref(db, 'announcement'), (snap) => {
 // 여기서만 예외), 점검 중에도 직접 확인·테스트할 수 있도록 활동 차단에서는 제외한다.
 function blockIfMaintenance() {
     if (!maintenanceActive) return false;
-    if (auth.currentUser?.email === ADMIN_EMAIL) return false;
+    if (isAdminUser) return false;
     alert('🛠️ 현재 점검 중입니다. 점검이 끝난 후 다시 시도해주세요.');
     return true;
 }
@@ -1382,8 +1398,9 @@ function hideMaintenanceOverlay() {
 }
 
 // 관리자 계정 로그인 여부에 따라 점검 화면 표시/스킵 결정
-onAuthStateChanged(auth, (user) => {
-    if (user && user.email === ADMIN_EMAIL) {
+onAuthStateChanged(auth, async (user) => {
+    await refreshAdminStatus(user);
+    if (user && isAdminUser) {
         hideMaintenanceOverlay();
         if (!appStarted) { appStarted = true; startApp(); }
     } else if (LONG_MAINTENANCE && !appStarted) {
@@ -1410,7 +1427,7 @@ async function clearMyPresence() {
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
-        if (auth.currentUser?.email === ADMIN_EMAIL) {
+        if (isAdminUser) {
             clearMyPresence()
                 .then(() => signOut(auth))
                 .then(() => window.location.reload()) // 익명 세션으로 깔끔하게 되돌아가도록 새로고침
@@ -1510,7 +1527,7 @@ async function seedSparklines(ids) {
 // 최초 로드가 이 시점 이후 끝나는 경우(관리자)에도 각 호출 지점에서 다시
 // 불려 자동으로 채워진다 — seededSparklineIds가 중복 조회를 막아준다.
 function seedSparklinesForCurrentUser(stocks) {
-    const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
+    const isAdmin = isAdminUser;
     const ids = isAdmin
         ? allStocks.map(s => s.id)
         : Object.entries(stocks || {}).filter(([, pos]) => pos?.qty > 0).map(([id]) => id);
@@ -1739,7 +1756,7 @@ onValue(ref(db, 'lotteryLastWin'), (snap) => {
 });
 
 window.openLotteryModal = function() {
-    const isLinked = isMyAccountProtected() || auth.currentUser?.email === ADMIN_EMAIL;
+    const isLinked = isMyAccountProtected() || isAdminUser;
     if (!isLinked) {
         window.openAccountProtectModal();
         return;
@@ -1939,6 +1956,7 @@ setTimeout(() => {
 
 // ── 인증 & 내 데이터 동기화 ─────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
+    await refreshAdminStatus(user); // 이 핸들러 안의 관리자 분기(seedSparklinesForCurrentUser 등)가 최신값을 보도록 먼저 확정
     if (user) {
         userUID = user.uid;
         const userRef  = ref(db, `users/${userUID}`);
@@ -2077,7 +2095,7 @@ window.showPlayTimeExpired = function() {
 // myData가 나중에 채워지므로, 이용시간 표시가 갱신될 때마다(updatePlaytimeDisplay)
 // 함께 재평가한다 — 페이지 로드 시점의 한 번짜리 체크로는 로그인 여부를 반영 못 함.
 function isPlaytimeTestPeriodExempt() {
-    return isMyAccountProtected() || auth.currentUser?.email === ADMIN_EMAIL;
+    return isMyAccountProtected() || isAdminUser;
 }
 
 function unlockPlaytimeIfNeeded() {
@@ -2091,7 +2109,7 @@ function unlockPlaytimeIfNeeded() {
 let adminSnapshotTakenThisLoad = false;
 
 async function runHeartbeat() {
-    if (auth.currentUser?.email === ADMIN_EMAIL) {
+    if (isAdminUser) {
         playtimeUnlimited = true;
         updatePlaytimeDisplay();
         // 이용시간 체크는 관리자에게 필요 없지만, 서버 heartbeat 안에 있는
@@ -2304,7 +2322,7 @@ initPromotions({
     getMyData: () => myData,
     getAllStocks: () => allStocks,
     auth,
-    ADMIN_EMAIL,
+    getIsAdmin: () => isAdminUser,
     closeChartModal,
     getCurrentChartStockId: getCurrentStockId,
     db, dbRef: ref, dbGet: get, dbQuery: query, orderByChild, limitToLast, startAt,
@@ -2445,7 +2463,7 @@ function updateAccountProtectionUI() {
 
     // 관리자(구글) 계정으로 로그인 중이면 보호 유도 UI는 의미가 없으니
     // 숨기고, 이미 구글로 연동돼있다는 배지만 보여준다.
-    if (auth.currentUser?.email === ADMIN_EMAIL) {
+    if (isAdminUser) {
         btn.style.display   = 'none';
         note.style.display  = 'none';
         badge.style.display = 'inline';
@@ -2491,7 +2509,7 @@ function updateAttendanceUI() {
     // 계정 미보호 유저에게는 노출하지 않는다(어뷰징 방지 — 익명 계정은 대상이
     // 아님). 관리자는 원래 자산 관리가 무의미해 숨겨왔지만, "광고보고 2배
     // 받기" 시범 기능을 테스트하려면 버튼 자체는 봐야 하므로 예외로 노출한다.
-    const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
+    const isAdmin = isAdminUser;
     const linked  = isMyAccountProtected();
     if (!isAdmin && !linked) {
         btn.style.display = 'none';
@@ -2520,7 +2538,7 @@ window.claimDailyAttendance = async function() {
     if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
     // 관리자는 "오늘 그대로 받기 / 광고보고 2배 받기" 선택 모달로(우선 관리자
     // 시범 운영), 그 외 계정은 기존처럼 바로 기본 보상을 받는다.
-    const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
+    const isAdmin = isAdminUser;
     if (isAdmin && window.openCheckinModal) { window.openCheckinModal(); return; }
     const btn = document.getElementById('daily-attendance-btn');
     if (btn) btn.disabled = true;
@@ -2587,7 +2605,7 @@ window.closeAchievementsModal = function() {
 // "지킬 자산이 생긴" 시점이라 손실회피 프레이밍이 자연스럽게 먹히는 타이밍.
 function checkAccountProtectionMilestone(totalAssets) {
     if (!userUID) return;
-    if (auth.currentUser?.email === ADMIN_EMAIL) return;                     // 관리자는 대상 아님
+    if (isAdminUser) return;                     // 관리자는 대상 아님
     if (isMyAccountProtected()) return;                                      // 이미 보호된 유저는 대상 아님
     // 시작 자산이 100만원이므로, 그 이상은 "성장했다"는 신호가 못 된다. 자산이
     // 시작 자산의 2배(200만원)를 넘어선 시점 = 실제로 불려낸 순간을 기준으로 유도.
@@ -3059,7 +3077,7 @@ get(ref(db, 'stocks/')).then((snap) => {
     // 관리자 로그인이 이 시점 이전에 이미 끝나 있었다면(seedSparklinesForCurrentUser가
     // 그때는 allStocks가 비어 있어 아무것도 못 채웠을 수 있음) 여기서 한 번 더 시도한다.
     // seededSparklineIds가 중복 조회를 막아주므로 이미 채워진 건 다시 안 부른다.
-    if (auth.currentUser?.email === ADMIN_EMAIL) seedSparklinesForCurrentUser(myData?.stocks);
+    if (isAdminUser) seedSparklinesForCurrentUser(myData?.stocks);
 });
 
 // ── 중계방 최초 1회 로드 (배너와 동일하게 페이지 로드 시 1회만 조회) ──

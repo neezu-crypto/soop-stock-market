@@ -30,6 +30,7 @@ setGlobalOptions({
 //   treasureChest.js  — 보물상자(후원창 구매 신청 → 관리자 승인 → 직접 개봉해 랜덤 보상)
 //   streamerVerification.js — 카카오/구글 대체 계정 보호(방송 검증 기반)
 //   common.js         — 위 모듈들이 공유하는 상수/헬퍼 (Cloud Function 없음)
+const { stockWhoAmI } = require("./whoami");
 const { initializeUser, trade } = require("./trade");
 const { adminAction } = require("./admin");
 const { submitBannerRequest, submitChartBannerRequest } = require("./bannerRequests");
@@ -77,3 +78,4 @@ exports.requestStreamerVerification   = requestStreamerVerification;
 exports.autoTickJackpotProgress       = autoTickJackpotProgress;
 exports.submitTreasureChestPurchaseRequest = submitTreasureChestPurchaseRequest;
 exports.openTreasureChest                  = openTreasureChest;
+exports.stockWhoAmI                        = stockWhoAmI;
