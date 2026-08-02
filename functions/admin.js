@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, LEGACY_INITIAL_CASH_500K, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, LOTTERY_POOL_FLOOR, todayKeyKST, creditUserCash, chargeUserCash, isUserProtected } = require("./common");
+const { logAdminAction } = require("./adminAuditLog");
 const {
   actionListBannerRequests,
   actionApproveBannerRequest,
@@ -959,6 +960,47 @@ async function actionDeleteUser(db, { uid }) {
   return { ok: true };
 }
 
+// 감사 로그 확장 — 재화/데이터를 실제로 바꾸는 액션만 포함한다(조회성
+// list*/preview*/get* 액션은 로그 대상이 아님). approveStreamerVerification/
+// rejectStreamerVerification/revokeStreamerVerification은 각 함수 내부에서
+// 이미 개별적으로 adminAuditLog에 기록하므로 여기 다시 넣지 않는다(중복 방지).
+// runStockSimTrade는 세션의 매매 간격마다 클라이언트가 setInterval로 반복
+// 호출하는 액션이라(수 초 간격) 로그 대상에 넣으면 200개 캡이 순식간에 이
+// 항목으로만 채워진다 - 의도적으로 제외.
+// 이 목록에 있는 액션만 디스패처가 호출 성공 후 자동으로 감사 로그를 남긴다 -
+// 27개 함수를 하나하나 고치는 대신 디스패처 한 곳에서 처리한다.
+const AUDIT_LOGGED_ACTIONS = new Set([
+  "updateSinglePrice", "updateStockData", "adjustAllPrices", "resetAllPrices",
+  "uploadStocks", "deleteStocks", "cleanupDuplicateStocks",
+  "updateBanner", "deleteBanner",
+  "approveCashChargeRequest", "rejectCashChargeRequest",
+  "approveTreasureChestRequest", "rejectTreasureChestRequest",
+  "approvePinRequest", "rejectPinRequest", "deletePin",
+  "approveRelayRoomRequest", "rejectRelayRoomRequest", "deleteRelayRoom",
+  "approveUnfreezeDonationRequest", "rejectUnfreezeDonationRequest",
+  "forceUnfreezeStock",
+  "approveListingRequest", "rejectListingRequest",
+  "saveRankings", "cleanupInactiveUsers",
+  "approveBannerRequest", "rejectBannerRequest",
+  "approveChartBannerRequest", "rejectChartBannerRequest",
+  "setMaintenanceMode", "rerollJackpot", "applyAnonTopUp",
+  "applyCrewPrefix", "applyCrewPrefixRemove",
+  "adjustUserCash", "resetUserProfitRanking", "deleteUser", "setAnnouncement",
+  "createStockSimSession", "updateStockSimSession", "endStockSimSession",
+]);
+
+// 로그에 남길 상세 텍스트 — payload를 통째로 남기면 너무 길고 민감정보가 섞일
+// 수 있어, 실무에서 알아보기 쉬운 몇몇 필드만 골라 한 줄로 요약한다.
+function summarizeAuditPayload(payload) {
+  const parts = [];
+  if (payload?.requestId) parts.push("requestId:" + payload.requestId);
+  if (payload?.uid) parts.push("uid:" + payload.uid);
+  if (payload?.stockId) parts.push("stockId:" + payload.stockId);
+  if (payload?.stockName) parts.push("stockName:" + payload.stockName);
+  if (payload?.name) parts.push("name:" + payload.name);
+  return parts.join(" · ");
+}
+
 /**
  * 관리자 페이지 전용 액션 디스패처.
  * 클라이언트는 { action, payload }만 전달하고, 실제 stocks/users/rankings/
@@ -971,6 +1013,14 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
   const action  = String(request.data?.action || "");
   const payload = request.data?.payload || {};
 
+  const result = await dispatchAdminAction(db, action, payload, request.auth);
+  if (AUDIT_LOGGED_ACTIONS.has(action)) {
+    await logAdminAction(db, request.auth, action, summarizeAuditPayload(payload));
+  }
+  return result;
+});
+
+async function dispatchAdminAction(db, action, payload, auth) {
   switch (action) {
     case "updateSinglePrice":      return actionUpdateSinglePrice(db, payload);
     case "updateStockData":        return actionUpdateStockData(db, payload);
@@ -1009,9 +1059,9 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     case "rejectListingRequest":   return actionRejectListingRequest(db, payload);
     case "listStreamerVerificationRequests":    return actionListStreamerVerificationRequests(db);
     case "listVerifiedStreamers":                return actionListVerifiedStreamers(db);
-    case "approveStreamerVerification":         return actionApproveStreamerVerification(db, payload, request.auth);
-    case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload, request.auth);
-    case "revokeStreamerVerification":           return actionRevokeStreamerVerification(db, payload, request.auth);
+    case "approveStreamerVerification":         return actionApproveStreamerVerification(db, payload, auth);
+    case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload, auth);
+    case "revokeStreamerVerification":           return actionRevokeStreamerVerification(db, payload, auth);
     case "previewRankings":        return actionPreviewRankings(db);
     case "saveRankings":           return actionSaveRankings(db);
     case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);
@@ -1049,6 +1099,6 @@ const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }
-});
+}
 
 module.exports = { adminAction };
