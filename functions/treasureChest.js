@@ -12,6 +12,7 @@ const {
   requireLinkedUser,
   requireNotInMaintenance,
   creditUserCash,
+  assertNotBanned
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -41,6 +42,7 @@ const submitTreasureChestPurchaseRequest = onCall({ cors: true, timeoutSeconds: 
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   const nickname   = String(request.data?.nickname || "").trim();
   const soopId     = String(request.data?.soopId || "").trim().toLowerCase();
@@ -80,6 +82,7 @@ const openTreasureChest = onCall({ cors: true, timeoutSeconds: 30, memory: "256M
   const db  = admin.database();
   const uid = auth.uid;
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   // transaction()의 updateFunction은 재시도 과정에서 실제 서버 값을 확인하기
   // 전에 한 번 더(때로는 null로) 불릴 수 있다 — 그 시점에 바로 return

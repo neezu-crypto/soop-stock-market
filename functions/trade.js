@@ -9,6 +9,7 @@ const {
   requireNotInMaintenance,
   grantAchievement,
   isUserProtected,
+  assertNotBanned
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
 const { updateStockDailySnapshot, contributeToJackpot } = require("./jackpot");
@@ -110,6 +111,7 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
 
   const db = admin.database();
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
   await checkPlayQuota(db, uid, auth);
 
   const stockRef = db.ref(`stocks/${stockId}`);

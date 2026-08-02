@@ -248,6 +248,30 @@ async function requireNotInMaintenance(db, auth) {
   }
 }
 
+/**
+ * 20번 2단계 — 계정 정지. 지금까지 이 저장소엔 "이 유저 하나를 막는" 개념
+ * 자체가 없었다(점검모드는 전체 유저, 종목 동결은 특정 종목이지 유저가 아님).
+ * StreamBet-Market의 assertNotBanned와 같은 원장(bannedAccounts/{uid})을
+ * 공유해서 본다 — 04번(인증 상태 미러 동기화 사고)에서 배운 대로, 저장소마다
+ * 따로 정지 노드를 두지 않고 uid 기준 공유 원장 하나로 시작한다.
+ *
+ * 정지는 기본이 "게임별"이다(all이 없으면 games.stockMarket만 확인) — 배팅시장에서
+ * 정지된 계정이 이 저장소에서도 자동으로 막히는 건 all:true(관리자가 통합 관리
+ * 센터에서 명시적으로 "전체 게임 정지"를 선택했을 때)뿐이다.
+ */
+async function assertNotBanned(db, auth) {
+  if (await isAdmin(db, auth?.uid, auth?.token?.email)) return;
+  const snap = await db.ref(`bannedAccounts/${auth?.uid}`).get();
+  if (!snap.exists()) return;
+  const ban = snap.val();
+  if (ban.all) {
+    throw new HttpsError("permission-denied", `정지된 계정입니다${ban.allReason ? " (사유: " + ban.allReason + ")" : ""}.`);
+  }
+  if (ban.games && ban.games.stockMarket) {
+    throw new HttpsError("permission-denied", `정지된 계정입니다${ban.games.stockMarket.reason ? " (사유: " + ban.games.stockMarket.reason + ")" : ""}.`);
+  }
+}
+
 async function findStockIdByName(db, name) {
   const snap = await db.ref("stocks").get();
   const data = snap.val() || {};
@@ -430,6 +454,7 @@ module.exports = {
   requireAdmin,
   requireLinkedUser,
   requireNotInMaintenance,
+  assertNotBanned,
   isUserProtected,
   findStockIdByName,
   bannerStatus,

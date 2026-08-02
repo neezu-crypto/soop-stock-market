@@ -6,6 +6,7 @@ const {
   STREAMER_ID_RE,
   requireNotInMaintenance,
   grantAchievement,
+  assertNotBanned
 } = require("./common");
 const { logAdminAction } = require("./adminAuditLog");
 
@@ -67,6 +68,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   const db  = admin.database();
   const uid = auth.uid;
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   const userSnap = await db.ref(`users/${uid}`).get();
   const user = userSnap.val() || {};

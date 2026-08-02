@@ -15,6 +15,7 @@ const {
   computeTotalAssets,
   recordDailyAssetSnapshot,
   isUserProtected,
+  assertNotBanned
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -184,6 +185,7 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
 
   const db   = admin.database();
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
   const uid  = auth.uid;
   const isAdmin = await checkIsAdmin(db, uid, auth.token?.email);
   const today = todayKeyKST();

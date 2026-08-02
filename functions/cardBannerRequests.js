@@ -10,6 +10,7 @@ const {
   requireLinkedUser,
   requireNotInMaintenance,
   grantAchievement,
+  assertNotBanned
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -50,6 +51,7 @@ const submitCardBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();

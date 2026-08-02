@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { STREAMER_ID_RE, creditUserCash, requireLinkedUser, requireNotInMaintenance } = require("./common");
+const { STREAMER_ID_RE, creditUserCash, requireLinkedUser, requireNotInMaintenance, assertNotBanned } = require("./common");
 
 // ══════════════════════════════════════════════════════════
 // 자산 충전 신청 — 라이브 방송 후원 확인 후 관리자가 지급액을 직접 입력해 승인
@@ -19,6 +19,7 @@ const submitCashChargeRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   const nickname = String(request.data?.nickname || "").trim();
   const soopId    = String(request.data?.soopId || "").trim().toLowerCase();

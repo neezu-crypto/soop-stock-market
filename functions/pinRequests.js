@@ -10,6 +10,7 @@ const {
   requireLinkedUser,
   requireNotInMaintenance,
   grantAchievement,
+  assertNotBanned
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -35,6 +36,7 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   const stockName = String(request.data?.stockName || "").trim();
   const hours     = parseInt(request.data?.hours, 10);

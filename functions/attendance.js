@@ -8,6 +8,7 @@ const {
   requireLinkedUser,
   requireNotInMaintenance,
   grantAchievement,
+  assertNotBanned
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -27,6 +28,7 @@ const claimDailyAttendance = onCall({ cors: true, timeoutSeconds: 30, memory: "2
 
   await requireLinkedUser(db, uid, auth);
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   const today     = todayKeyKST();
   const yesterday = todayKeyKST(-1);

@@ -62,6 +62,11 @@ const {
   actionRejectStreamerVerification,
   actionRevokeStreamerVerification,
 } = require("./streamerVerification");
+const {
+  actionListBannedAccounts,
+  actionBanAccount,
+  actionUnbanAccount,
+} = require("./bannedAccounts");
 
 // ══════════════════════════════════════════════════════════
 // 관리자 페이지 기능 — 전부 Admin SDK로 처리해 RTDB 규칙의
@@ -892,6 +897,17 @@ async function actionGetUserDetail(db, { uid }) {
   if (!snap.exists()) throw new HttpsError("not-found", "해당 uid의 유저를 찾을 수 없습니다.");
   const user = snap.val();
 
+  // 20번 2단계 — 공유 bannedAccounts/{uid} 원장에서 이 저장소(stockMarket) 관점의
+  // 정지 상태를 같이 내려준다(StreamBet-Market의 adminLookupUser가 banned를
+  // 반환하는 것과 동일한 형태 - admin-center가 두 게임 모두 같은 방식으로 표시).
+  const banSnap = await db.ref(`bannedAccounts/${uid}`).get();
+  const banData = banSnap.val();
+  let banned = null;
+  if (banData) {
+    if (banData.all) banned = { reason: banData.allReason || "", bannedAt: banData.allBannedAt || 0, all: true };
+    else if (banData.games && banData.games.stockMarket) banned = { ...banData.games.stockMarket, all: false };
+  }
+
   const holdingEntries = Object.entries(user.stocks || {}).filter(([, s]) => (s?.qty || 0) > 0);
   const stockSnaps = await Promise.all(holdingEntries.map(([id]) => db.ref(`stocks/${id}`).get()));
   const holdings = holdingEntries.map(([id, pos], i) => {
@@ -920,6 +936,7 @@ async function actionGetUserDetail(db, { uid }) {
     attendanceStreak: user.attendanceStreak || 0,
     achievements: Object.keys(user.achievements || {}),
     holdings,
+    banned,
   };
 }
 
@@ -986,6 +1003,7 @@ const AUDIT_LOGGED_ACTIONS = new Set([
   "setMaintenanceMode", "rerollJackpot", "applyAnonTopUp",
   "applyCrewPrefix", "applyCrewPrefixRemove",
   "adjustUserCash", "resetUserProfitRanking", "deleteUser", "setAnnouncement",
+  "banAccount", "unbanAccount",
   "createStockSimSession", "updateStockSimSession", "endStockSimSession",
 ]);
 
@@ -1088,6 +1106,9 @@ async function dispatchAdminAction(db, action, payload, auth) {
     case "adjustUserCash":         return actionAdjustUserCash(db, payload);
     case "resetUserProfitRanking": return actionResetUserProfitRanking(db, payload);
     case "deleteUser":             return actionDeleteUser(db, payload);
+    case "listBannedAccounts":     return actionListBannedAccounts(db);
+    case "banAccount":             return actionBanAccount(db, payload, auth);
+    case "unbanAccount":           return actionUnbanAccount(db, payload);
     case "setAnnouncement":        return actionSetAnnouncement(db, payload);
     case "getAttendanceStats":     return actionGetAttendanceStats(db);
     case "getOverviewStats":       return actionGetOverviewStats(db);

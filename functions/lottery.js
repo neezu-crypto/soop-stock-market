@@ -11,6 +11,7 @@ const {
   chargeUserCash,
   creditUserCash,
   grantAchievement,
+  assertNotBanned
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
@@ -36,6 +37,7 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
 
   await requireLinkedUser(db, uid, auth);
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   await chargeUserCash(db, uid, LOTTERY_TICKET_PRICE);
 

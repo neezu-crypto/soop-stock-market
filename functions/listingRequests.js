@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireLinkedUser, requireNotInMaintenance, findStockIdByName, grantAchievement } = require("./common");
+const { requireLinkedUser, requireNotInMaintenance, findStockIdByName, grantAchievement, assertNotBanned } = require("./common");
 
 // ══════════════════════════════════════════════════════════
 // 종목 상장 신청 — 검색해도 없는 스트리머를 유저가 직접 상장 요청할 수
@@ -19,6 +19,7 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
   await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
 
   // 매크로/도배성 연속 신청을 막기 위한 쿨다운 — 트랜잭션으로 검사와 갱신을
   // 원자적으로 처리해 동시에 여러 번 호출해도 하나만 통과한다.
