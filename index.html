@@ -24,9 +24,10 @@
         <span class="topnav-creator">제작: 오목지면시그</span>
     </div>
     <div class="topnav-right">
-        <a class="topnav-btn" href="https://neezu-crypto.github.io/dont-click-ads/" target="_blank" rel="noopener">👆 <span class="topnav-label">절대 광고를 클릭하지 마</span></a>
-        <a class="topnav-btn" href="https://neezu-crypto.github.io/midnight-mart-run/" target="_blank" rel="noopener">🌙🛒 <span class="topnav-label">미드나잇 마트런</span></a>
-        <a class="topnav-btn" href="https://neezu-crypto.github.io/StreamBet-Market/" target="_blank" rel="noopener">💰 <span class="topnav-label">스트리머 배팅시장</span></a>
+        <a class="topnav-btn" data-game-id="dontClickAds" href="https://neezu-crypto.github.io/dont-click-ads/" target="_blank" rel="noopener">👆 <span class="topnav-label">절대 광고를 클릭하지 마</span></a>
+        <a class="topnav-btn" data-game-id="midnightMartRun" href="https://neezu-crypto.github.io/midnight-mart-run/" target="_blank" rel="noopener">🌙🛒 <span class="topnav-label">미드나잇 마트런</span></a>
+        <a class="topnav-btn" data-game-id="bettingMarket" href="https://neezu-crypto.github.io/StreamBet-Market/" target="_blank" rel="noopener">💰 <span class="topnav-label">스트리머 배팅시장</span></a>
+        <a class="topnav-btn" data-game-id="backgroundMarket" href="https://neezu-crypto.github.io/interior-3d-viewer/" target="_blank" rel="noopener">🏠 <span class="topnav-label">스트리머 배경시장</span></a>
         <a class="topnav-station-btn" href="https://www.sooplive.com/station/skftodwocks2" target="_blank" rel="noopener">
             <span class="topnav-live-dot"></span> <span class="topnav-label">개발자 방송국 바로가기</span>
         </a>
@@ -1281,6 +1282,46 @@ const firebaseConfig = {
 };
 const app       = initializeApp(firebaseConfig);
 const db        = getDatabase(app);
+
+// 08번 — topnav(devbar와 같은 역할) 게임 링크를 RTDB(devbarLinks, admin-center에서
+// 관리)에서 가져와 하드코딩된 링크를 대체한다. 노드가 비어있거나 조회 실패 시
+// 기존 하드코딩된 data-game-id 링크를 그대로 둔다(목록이 통째로 사라지는 사고
+// 방지) — "개발자 방송국 바로가기"(topnav-station-btn)는 devbarLinks 대상이
+// 아니라 항상 하드코딩 그대로 유지된다. 아이콘은 이 페이지의 기존 스타일에
+// 맞춰 로컬 매핑을 쓴다(RTDB엔 순수 텍스트 label만 저장돼 다른 페이지와 공유됨).
+(async function () {
+    const SELF_GAME_ID = 'stockMarket';
+    const ICON_MAP = { dontClickAds: '👆', midnightMartRun: '🌙🛒', bettingMarket: '💰', backgroundMarket: '🏠' };
+    try {
+        const snap = await get(ref(db, 'devbarLinks'));
+        const data = snap.val();
+        if (!data) return;
+        const links = Object.keys(data)
+            .filter((id) => id !== SELF_GAME_ID && data[id] && data[id].url)
+            .map((id) => Object.assign({ id }, data[id]))
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+        if (!links.length) return;
+        const container = document.querySelector('.topnav-right');
+        if (!container) return;
+        container.querySelectorAll('a[data-game-id]').forEach((el) => el.remove());
+        const stationBtn = container.querySelector('.topnav-station-btn');
+        links.forEach((link) => {
+            const a = document.createElement('a');
+            a.className = 'topnav-btn';
+            a.dataset.gameId = link.id;
+            a.href = link.url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            const icon = ICON_MAP[link.id] || '🔗';
+            a.innerHTML = icon + ' <span class="topnav-label"></span>';
+            a.querySelector('.topnav-label').textContent = link.label;
+            container.insertBefore(a, stationBtn || null);
+        });
+    } catch (e) {
+        console.error('topnav 링크 갱신 실패(기존 링크 유지):', e);
+    }
+})();
+
 const auth      = getAuth(app);
 const provider  = new GoogleAuthProvider();
 const functions = getFunctions(app);
