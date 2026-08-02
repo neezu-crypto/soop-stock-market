@@ -716,7 +716,7 @@
         }
     });
 
-    // ── 현재 접속자 수 (presence/users — 메인페이지와 동일 경로, 실시간 구독) ──
+    // ── 현재 접속자 수 (presence/stockMarket — 메인페이지와 동일 경로, 실시간 구독) ──
     // 메인페이지는 접속 시 1회만 조회하지만(동시 접속자 다수라 비용 절감 목적),
     // 관리자 페이지는 인스턴스가 사실상 1개뿐이라 실시간 구독으로 붙여도 비용
     // 부담이 없다.
@@ -725,7 +725,7 @@
     function watchOnlineCount() {
         if (onlineCountWatched) return;
         onlineCountWatched = true;
-        onValue(ref(db, 'presence/users'), (snap) => {
+        onValue(ref(db, 'presence/stockMarket'), (snap) => {
             const el = document.getElementById('admin-online-count');
             if (!el) return;
             if (!snap.exists()) { el.innerText = '0'; return; }

@@ -1417,7 +1417,7 @@ onAuthStateChanged(auth, async (user) => {
 async function clearMyPresence() {
     if (!auth.currentUser) return;
     try {
-        await set(ref(db, `presence/users/${auth.currentUser.uid}`), null);
+        await set(ref(db, `presence/stockMarket/${auth.currentUser.uid}`), null);
     } catch (e) {
         // 지우기 실패해도 이후 로그아웃/전환 흐름은 계속 진행
     }
@@ -1971,12 +1971,12 @@ onAuthStateChanged(auth, async (user) => {
             // 유저별 전용 노드에 접속 표시 — 접속이 끊겨도 즉시 지우지 않고
             // lastSeen만 남겨서, 접속자 수 집계 시 PRESENCE_GRACE_MS(60분)
             // 이내면 계속 접속자로 카운트한다(끊김 즉시 감소 방지).
-            const myPresenceRef = ref(db, `presence/users/${userUID}`);
+            const myPresenceRef = ref(db, `presence/stockMarket/${userUID}`);
             await set(myPresenceRef, { lastSeen: Date.now() });
             startPresenceRefreshLoop();
 
             // 접속 시 1회만 읽기 → 이후 갱신 없음 (데이터 절약)
-            const snap = await get(ref(db, 'presence/users'));
+            const snap = await get(ref(db, 'presence/stockMarket'));
             const el = document.getElementById('online-count');
             if (snap.exists()) {
                 const now = Date.now();
@@ -2152,12 +2152,12 @@ function startHeartbeatLoop() {
     startPresenceRefreshLoop();
 }
 
-// presence/users/{uid}의 lastSeen을 주기적으로 갱신 — 탭이 보이는 동안만
+// presence/stockMarket/{uid}의 lastSeen을 주기적으로 갱신 — 탭이 보이는 동안만
 // 돌며(백그라운드 시 하트비트와 함께 정지), 접속자 수 집계가 60분
 // 유예 안에서 "아직 접속 중"으로 인식하도록 유지한다.
 function refreshMyPresence() {
     if (!userUID) return;
-    set(ref(db, `presence/users/${userUID}`), { lastSeen: Date.now() }).catch(() => {});
+    set(ref(db, `presence/stockMarket/${userUID}`), { lastSeen: Date.now() }).catch(() => {});
 }
 function startPresenceRefreshLoop() {
     stopPresenceRefreshLoop();
