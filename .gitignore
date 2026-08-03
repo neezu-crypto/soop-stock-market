@@ -13,4 +13,3 @@ firebase-debug.log*
 # Firebase RTDB 보안 규칙 (로컬·배포용 사본 — 레포에 커밋하지 않음)
 database.rules.json
 functions/rules/open.json
-.DS_Store
