@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, LEGACY_INITIAL_CASH_500K, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, LOTTERY_POOL_FLOOR, todayKeyKST, creditUserCash, chargeUserCash, isUserProtected } = require("./common");
+const { requireAdmin, requireAdminOrDelegatedPermission, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, LEGACY_INITIAL_CASH_500K, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, LOTTERY_POOL_FLOOR, todayKeyKST, creditUserCash, chargeUserCash, isUserProtected } = require("./common");
 const { logAdminAction } = require("./adminAuditLog");
 const {
   actionListBannerRequests,
@@ -1122,4 +1122,15 @@ async function dispatchAdminAction(db, action, payload, auth) {
   }
 }
 
-module.exports = { adminAction };
+// 통합 관리 센터 — 관리자 전용인 adminAction 디스패처와 별개로, "전체 통계 요약"
+// 카드를 인증 스트리머에게도 위임 권한(viewMonitoring)으로 열어주기 위한 전용
+// 함수. adminAction 자체의 최상단 requireAdmin은 손대지 않는다(그 안엔 잔고 조정·
+// 계좌 정지 등 훨씬 민감한 액션이 훨씬 많아, 디스패처 전체를 여는 건 위험하다) -
+// 대신 조회 전용 로직(actionGetOverviewStats)만 재사용하는 새 진입점을 만들었다.
+const getOverviewStatsForMonitoring = onCall(async (request) => {
+  const db = admin.database();
+  await requireAdminOrDelegatedPermission(db, request.auth, "viewMonitoring");
+  return actionGetOverviewStats(db);
+});
+
+module.exports = { adminAction, getOverviewStatsForMonitoring };

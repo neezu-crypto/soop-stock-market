@@ -210,6 +210,22 @@ async function requireAdmin(db, auth) {
   }
 }
 
+// admin-center의 위임 권한 카탈로그(PERMISSION_CATALOG)와 동일한 개념·동일한 RTDB
+// 노드를 그대로 공유한다 - admin-center/functions/index.js의
+// requireAdminOrDelegatedPermission과 판정 로직이 같아야 하고, 실제로 같은 노드
+// (adminCenter/streamerPermissions/{key}, streamerVerifications)를 읽으므로 그쪽
+// 관리 화면에서 권한을 켜고 끄면 이 저장소의 함수에도 그대로 반영된다.
+async function requireAdminOrDelegatedPermission(db, auth, permissionKey) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (await isAdmin(db, auth.uid, auth.token?.email)) return;
+  const verifiedSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(auth.uid).limitToFirst(1).get();
+  if (verifiedSnap.exists()) {
+    const granted = (await db.ref(`adminCenter/streamerPermissions/${permissionKey}`).get()).val();
+    if (granted === true) return;
+  }
+  throw new HttpsError("permission-denied", "이 작업을 수행할 권한이 없습니다.");
+}
+
 /** 카카오/구글 연동 또는 스트리머 인증 중 하나라도 됐으면 "계정 보호됨"으로 취급한다. */
 function isUserProtected(user) {
   return !!(user?.kakaoLinked || user?.googleLinked || user?.streamerVerified);
@@ -452,6 +468,7 @@ module.exports = {
   isAdminUid,
   isAdmin,
   requireAdmin,
+  requireAdminOrDelegatedPermission,
   requireLinkedUser,
   requireNotInMaintenance,
   assertNotBanned,
