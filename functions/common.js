@@ -28,18 +28,18 @@ const LEGACY_INITIAL_CASH_500K = 500000; // 이번 변경 직전까지의 익명
 const STREAMER_ID_RE           = /^[a-z0-9]{2,20}$/;
 const URL_RE                   = /^https?:\/\/.+/i;
 const MAX_BANNER_REQUEST_DAYS  = 7;        // 신청 시 신청자가 고를 수 있는 노출 기간 상한
-const BANNER_COST_PER_DAY      = 250000;   // 우측 랭킹 배너 신청 1일당 차감되는 게임자산 (2026-07-29 반값 할인)
-const CHART_BANNER_COST_PER_DAY = 500000;  // 차트 하단 배너 신청 1일당 차감되는 게임자산 (2026-07-29 반값 할인)
+const BANNER_COST_PER_DAY      = 50000;    // 우측 랭킹 배너 신청 1일당 차감되는 게임자산 (2026-07-29 반값 할인 → 2026-08-14 추가 인하)
+const CHART_BANNER_COST_PER_DAY = 100000;  // 차트 하단 배너 신청 1일당 차감되는 게임자산 (2026-07-29 반값 할인 → 2026-08-14 추가 인하)
 // 종목 카드 프로필 배너 — "이 종목의 실제 소유주(대량 보유자)"만 신청할 수
 // 있는 홍보 상품. 우측 배너와 달리 종목 리스트의 카드 자체(가장 노출 빈도가
 // 높은 화면)에 원형 프로필 사진을 띄운다. 신청 후 보유 수량이 기준 미만으로
 // 떨어지면(되팔기 등) 자동으로 삭제된다 — trade.js의 매도 처리에서 검사.
-const CARD_BANNER_COST_PER_DAY    = 250000; // 1일당 차감되는 게임자산 (2026-07-29 반값 할인)
+const CARD_BANNER_COST_PER_DAY    = 50000;  // 1일당 차감되는 게임자산 (2026-07-29 반값 할인 → 2026-08-14 추가 인하)
 const CARD_BANNER_MIN_HOLDING_QTY = 10;     // 신청/유지에 필요한 최소 보유 수량
 const MAX_PIN_HOURS            = 12;       // 최상단 고정 노출 신청 시 고를 수 있는 시간 상한
-const PIN_COST_PER_HOUR        = 250000;   // 최상단 고정 노출 1시간당 차감되는 게임자산
+const PIN_COST_PER_HOUR        = 10000;    // 최상단 고정 노출 1시간당 차감되는 게임자산 (2026-08-14 인하)
 const MAX_PINNED_SLOTS         = 3;        // 동시에 고정 노출 가능한 최대 종목 수
-const PROFIT_RANKING_CHECK_COST = 500000;  // 손익 랭킹 확인(및 내 순위 갱신) 1회당 차감되는 게임자산
+const PROFIT_RANKING_CHECK_COST = 100000;  // 손익 랭킹 확인(및 내 순위 갱신) 1회당 차감되는 게임자산 (2026-08-14 인하)
 const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 인원 수
 
 // ── 스트리머 인증 ────────────────────────────────────────────
@@ -124,7 +124,7 @@ const MAX_PLAYTIME_BUY_HOURS   = 1;        // 1회 요청으로 구매 가능한
 const MAX_HEARTBEAT_GAP_SECONDS = 90;      // 하트비트 1회당 인정되는 최대 경과 시간(절전/재접속 등 이상치 방지)
 
 const MAX_RELAY_ROOM_HOURS     = 8;        // 중계방 홍보 신청 시 고를 수 있는 시간 상한 (최소 1시간)
-const RELAY_ROOM_COST_PER_HOUR = 150000;   // 중계방 홍보 1시간당 차감되는 게임자산 (2026-07-29 반값 할인)
+const RELAY_ROOM_COST_PER_HOUR = 10000;    // 중계방 홍보 1시간당 차감되는 게임자산 (2026-07-29 반값 할인 → 2026-08-14 추가 인하)
 const MAX_RELAY_ROOMS          = 3;        // 동시에 등록 가능한 최대 중계방 수
 
 // ── 종목 거래 동결(서킷브레이커) 관련 상수 ──────────────────────

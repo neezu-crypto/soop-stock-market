@@ -135,7 +135,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     // 상장된 종목명만 받고(datalist 자동완성 + 실시간 검증), 상장되지 않은
     // 이름이면 제출을 막고 종목 상장 신청부터 하도록 안내한다 — 관리자는
     // 노출 기간/비용만 보면 되므로 검수 부담이 크게 줄어든다.
-    const BANNER_COST_PER_DAY = 250000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const BANNER_COST_PER_DAY = 50000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
     const updatePromoCost = setupCostCalculator({ unitInputId: 'promo-days', costElId: 'promo-cost', pricePerDay: BANNER_COST_PER_DAY });
 
@@ -210,7 +210,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     // 재사용하되, "해당 종목을 10주 이상 보유했는지"를 클라이언트에서도
     // 미리 확인해 보여준다 — 실제 차단은 서버(submitCardBannerRequest)가
     // 최종 판정하므로 이건 어디까지나 UX 편의용 사전 안내다.
-    const CARD_BANNER_COST_PER_DAY    = 250000; // 서버 값과 동일하게 유지(표시용)
+    const CARD_BANNER_COST_PER_DAY    = 50000; // 서버 값과 동일하게 유지(표시용)
     const CARD_BANNER_MIN_HOLDING_QTY = 10;
 
     window.openCardBannerModal = (prefillStockName) => {
@@ -371,7 +371,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     // 우측 홍보 배너와 동일하게 자유 닉네임 대신 이미 상장된 종목명만 받는다
     // (datalist 자동완성 + 실시간 검증) — 상장 여부가 유일한 검수 포인트였으므로
     // 신청 시점에 걸러지면 관리자 승인 없이 바로 등록할 수 있다.
-    const RELAY_ROOM_COST_PER_HOUR = 150000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const RELAY_ROOM_COST_PER_HOUR = 10000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
     window.openRelayRoomModal  = () => {
         if (!requireLoginOrPrompt()) return;
@@ -480,7 +480,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     }
     document.getElementById('pin-stock-name')?.addEventListener('input', checkPinStockListed);
 
-    const PIN_COST_PER_HOUR = 250000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const PIN_COST_PER_HOUR = 10000; // 1시간당 차감되는 게임자산 (서버 값과 동일하게 유지)
     const updatePinCost = setupCostCalculator({ unitInputId: 'pin-hours', costElId: 'pin-cost', pricePerDay: PIN_COST_PER_HOUR });
 
     window.submitPinRequest = async function() {
@@ -761,7 +761,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     };
 
     // ── 차트 하단 배너 신청 (이미지/링크 직접 입력 → 실시간 미리보기 → 신청) ──
-    const CHART_BANNER_COST_PER_DAY = 500000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
+    const CHART_BANNER_COST_PER_DAY = 100000; // 1일당 차감되는 게임자산 (서버 값과 동일하게 유지)
 
     const updateChartAdCost = setupCostCalculator({ unitInputId: 'chart-ad-days', costElId: 'chart-ad-cost', pricePerDay: CHART_BANNER_COST_PER_DAY });
 
