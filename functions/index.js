@@ -53,6 +53,7 @@ const { autoTickJackpotProgress } = require("./jackpot");
 const { buyLotteryTicket } = require("./lottery");
 const { requestStreamerVerification } = require("./streamerVerification");
 const { submitTreasureChestPurchaseRequest, openTreasureChest } = require("./treasureChest");
+const { logStockMarketVisit } = require("./streamerVisitLog");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -80,3 +81,4 @@ exports.autoTickJackpotProgress       = autoTickJackpotProgress;
 exports.submitTreasureChestPurchaseRequest = submitTreasureChestPurchaseRequest;
 exports.openTreasureChest                  = openTreasureChest;
 exports.stockWhoAmI                        = stockWhoAmI;
+exports.logStockMarketVisit                = logStockMarketVisit;

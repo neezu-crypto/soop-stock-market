@@ -1389,6 +1389,7 @@ const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking'
 const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttendance');
 const buyLotteryTicketCallable = httpsCallable(functions, 'buyLotteryTicket');
 const requestStreamerVerificationCallable = httpsCallable(functions, 'requestStreamerVerification');
+const logStockMarketVisitCallable = httpsCallable(functions, 'logStockMarketVisit');
 
 const INITIAL_CASH = 1000000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 const CARD_BANNER_MIN_HOLDING_QTY = 10; // 서버 CARD_BANNER_MIN_HOLDING_QTY와 동일하게 유지
@@ -1539,6 +1540,7 @@ function isMyAccountProtected() {
 let userUID          = null;
 let allStocks        = [];
 let isTrading        = false;
+let stockVisitLogged = false; // 인증 스트리머 접속 알림 - 페이지 로드당 한 번만 서버에 알린다(중복 발송 방지는 서버가 하루 단위로 처리)
 let isBannerRendered = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
@@ -2089,6 +2091,14 @@ onAuthStateChanged(auth, async (user) => {
             updateAchievementsUI();
             updateUI(true);
             seedSparklinesForCurrentUser(myData.stocks);
+
+            // 인증 스트리머 접속 알림 - onValue는 잔고 변동 등으로 여러 번 다시
+            // 불릴 수 있어서, 플래그로 페이지 로드당 한 번만 서버를 호출한다.
+            // 실제로 알림을 보낼지(하루 한 번 제한 등)는 서버가 판단한다.
+            if (myData.streamerVerified && !stockVisitLogged) {
+                stockVisitLogged = true;
+                logStockMarketVisitCallable().catch(() => {});
+            }
         });
     } else {
         signInAnonymously(auth);
