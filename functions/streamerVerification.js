@@ -142,6 +142,11 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   const isSwitch    = !!(existingEntry && existingEntry.uid !== uid);
   const existingUid = isSwitch ? existingEntry.uid : null;
 
+  // source(2026-08-22, streamer-life-game 16장 도입) — 이 신청이 어느 앱에서
+  // 왔는지 admin-center 디스코드 알림이 구분할 수 있게 저장한다. 기존
+  // 호출부(주식시장 자체)는 이 필드를 안 보내므로 기본값으로 하위 호환.
+  const source = String(request.data?.source || "stock-market").trim() || "stock-market";
+
   const ref = db.ref("streamerVerificationRequests").push();
   await ref.set({
     uid,
@@ -151,6 +156,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     requestedAt: now,
     isSwitch,
     existingUid,
+    source,
   });
 
   return { ok: true, action: "pending", nickname, isSwitch };
