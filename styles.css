@@ -65,11 +65,20 @@
         }
         .wallet-info span { color: var(--primary); font-weight: 800; }
         header { padding: 10px 0; border-bottom: 1px solid #1e293b; margin-bottom: 10px; }
-        .search-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; margin-bottom: 12px; }
-        #search-input {
-            flex: 1; min-width: 0; padding: 14px; border-radius: 12px; background: var(--card-bg);
-            border: 1px solid #334155; color: white; box-sizing: border-box;
+        .search-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; margin-bottom: 14px; position: relative; }
+        .search-icon {
+            position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+            font-size: 15px; pointer-events: none; opacity: 0.85;
         }
+        #search-input {
+            flex: 1; min-width: 0; padding: 14px 14px 14px 38px; border-radius: 12px; background: var(--card-bg);
+            border: 1.5px solid var(--primary); color: white; box-sizing: border-box;
+            box-shadow: 0 0 0 3px rgba(56,189,248,0.15), 0 0 14px rgba(56,189,248,0.2);
+        }
+        #search-input:focus {
+            outline: none; box-shadow: 0 0 0 3px rgba(56,189,248,0.28), 0 0 18px rgba(56,189,248,0.35);
+        }
+        #search-input::placeholder { color: var(--text-sub); }
         #stock-list { display: grid; gap: 12px; }
         .stock-card {
             background: var(--card-bg); padding: 20px; border-radius: 16px;
