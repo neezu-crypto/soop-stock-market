@@ -595,7 +595,7 @@
             <tr><td><code>users/{uid}</code></td><td>유저 보유 현금(cash, 최초 지급 100만원 — 익명·로그인 동일), 보유 종목(stocks: qty/avg), 최근 거래 시각·누적 매매 횟수(lastTradeTime/tradeCount), 계정 보호 여부(kakaoLinked/googleLinked/streamerVerified), 스트리머 인증 재신청 쿨다운 기준시각(lastStreamerVerificationRequestAt), 순수 매매 실현손익 누적(realizedPL), 초기자산 소급 보정 지급 시각(anonTopUpAppliedAt), 출석 보상 상태(lastAttendanceDate/attendanceStreak), 도전과제 달성 기록(achievements/{id}: 달성 시각), 최근 자산 변동 스냅샷(assetHistory/{YYYY-MM-DD}: totalAssets/cash/stockValue/at, lastAssetSnapshotDate로 하루 1회만 기록되도록 제어), 플레이타임 사용량(playQuotaDate/playSecondsUsedToday/bonusSecondsToday/purchasedHoursToday/lastHeartbeatAt)</td></tr>
             <tr><td><code>candlesticks/{stockId}/{분단위 timestamp}</code></td><td>OHLCV 분봉 데이터 (최대 360분 보관)</td></tr>
             <tr><td><code>rankings/top5</code></td><td>거래량 기준 상위 5개 종목 (서버가 매매 체결 시 디바운스 반영, 클라이언트는 읽기 전용)</td></tr>
-            <tr><td><code>presence/users/{uid}</code></td><td>접속자 등록 (lastSeen 타임스탬프를 접속 시 및 5분 주기로 갱신) — 접속자 수는 lastSeen이 60분 이내인 노드 개수로 집계(끊김 즉시 감소 대신 60분 유예), 메인페이지는 접속 시 1회 조회·관리자 페이지는 실시간 구독</td></tr>
+            <tr><td><code>presence/stockMarket/{uid}</code></td><td>접속자 등록 (lastSeen 타임스탬프를 접속 시 및 5분 주기로 갱신) — 접속자 수는 lastSeen이 60분 이내인 노드 개수로 집계(끊김 즉시 감소 대신 60분 유예), 메인페이지는 접속 시 1회 조회·관리자 페이지는 실시간 구독. <code>connectedAt</code>(2026-08-27, 트레이딩 봇 기능)은 최초 접속 시각 — 주기 갱신(update)이 이 값을 덮어쓰지 않아, "언제부터 접속해 있었는지"를 서버가 판단할 수 있다</td></tr>
             <tr><td><code>chartBanner/{stockId}</code></td><td>종목별 차트 모달 하단 광고 배너 이미지/링크/종료일 (종목마다 개별 설정, 전체 공동 노출 아님)</td></tr>
             <tr><td><code>bannerRequests/{id}</code></td><td>우측 랭킹 배너 셀프 신청 내역 (닉네임/아이디/기간/차감액/상태 pending·approved·rejected)</td></tr>
             <tr><td><code>chartBannerRequests/{id}</code></td><td>차트 하단 배너 셀프 신청 내역 (대상 stockId·신청 시점 종목명 스냅샷/닉네임(신청자 확인용)/아이디/배너 이미지 링크/홍보 페이지 링크/기간/차감액/상태)</td></tr>
@@ -612,6 +612,8 @@
             <tr><td><code>maintenance</code></td><td>소프트 점검모드 상태 <code>{active, startAt}</code> — 공개 읽기, 클라이언트 직접 쓰기 차단(<code>adminAction</code> 경유)</td></tr>
             <tr><td><code>rankings/profitEntries/{uid}</code></td><td>손익 랭킹 항목 <code>{anonId, value, updatedAt}</code> — <code>value</code>에 <code>.indexOn</code> 인덱스를 걸어 <code>orderByChild('value')</code> 쿼리만으로 상위 N명 조회. 유저가 확인할 때마다 서버가 본인 항목만 갱신</td></tr>
             <tr><td><code>adminCashAdjustments/{id}</code></td><td>관리자가 유저 상세 조회에서 수동으로 자산을 지급/차감한 감사 기록 <code>{uid, amount, reason, adjustedAt}</code></td></tr>
+            <tr><td><code>botUsers/{botUid}</code></td><td>(2026-08-27, 트레이딩 봇 기능) 봇의 가상 포트폴리오 — <code>users/{uid}</code>와 완전히 같은 스키마(cash/stocks/lastTradeTime/tradeCount)에 <code>isBot: true</code>만 추가. 클라이언트는 읽기·쓰기 모두 불가(Admin SDK 전용), 화면에 직접 노출되지 않고 오직 시세/거래량에만 흔적을 남긴다</td></tr>
+            <tr><td><code>botAssignments/{realUid}</code></td><td>실제 유저 1명과 짝지어진 봇의 매핑 <code>{botUid, createdAt}</code> — 한 번 생성되면 그 유저가 접속해 있는 동안 계속 유지(1:1 비율), 클라이언트 접근 불가</td></tr>
         </table>
     </section>
 
@@ -646,7 +648,70 @@
         </ul>
     </section>
 
-    <footer>SOOP STOCK 거래소 · 기획서 v3.0 · index.html 코드 기준 작성 (배너/고정노출/중계방 즉시적용 전환 · 종목 상장 신청 · 서킷브레이커(동결) · 소프트 점검모드 + 서버측 강제 · 플레이타임 우회 수정 · 손익 랭킹 · 관리자 손익 랭킹 조회 반영)</footer>
+    <section id="sec11">
+        <h2><span class="num">11</span>트레이딩 봇 — 실제 유저와 짝지어지는 가상 참여자 (2026-08-27,
+        사용자 지시 — 구현 완료)</h2>
+        <p><b>배경.</b> "실제 유저처럼 사고팔고 포트폴리오까지 갖춰진 봇"을 만들어달라는 요청. 요청
+        중 "봇도 접속자 수를 올린다"는 부분이 실제 사람 수를 나타내는 지표를 봇으로 채우는 것이라,
+        구현 전 기존 <code>stockSimulator.js</code>(관리자 전용 차트 활성화 도구)가 이미 "봇 거래는
+        차트만 살아있게 하고 유저 보상·랭킹 등 실제 유저를 대표하는 값은 절대 건드리지 않는다"는
+        원칙을 갖고 있던 점을 근거로 우려를 전달했다. 사용자가 검토 후 "봇도 접속자 수에 그대로
+        포함"을 확정해, 요청 원안대로 구현했다.</p>
+        <h3>발동 조건 (둘 다 충족해야 봇 생성)</h3>
+        <ul>
+            <li><b>조건1 — 접속 30초 경과.</b> 클라이언트가 최초 접속 시
+            <code>presence/stockMarket/{'{uid}'}.connectedAt</code>을 심어두고(주기 갱신은
+            <code>update()</code>라 이 값을 덮어쓰지 않음), 서버가 이 값 기준으로 판정.</li>
+            <li><b>조건2 — 실제 유저가 거래할 때마다 20% 확률.</b> 이미 짝지어진 봇이 있으면 이
+            조건은 건너뛰고(1인당 1개, 재추첨 없음) 항상 반응한다.</li>
+        </ul>
+        <h3>거래 반응 패턴 (5종, 각 20%)</h3>
+        <p>매 반응마다 아래 중 하나를 무작위로 골라 실행 — 1~3번은 사용자 지정, 4~5번은 "기타 다양한
+        패턴 추천" 요청에 맞춰 추가.</p>
+        <table>
+            <tr><th>패턴</th><th>동작</th></tr>
+            <tr><td>① 모멘텀 추종</td><td>같은 방향으로 5~10회 연속 매매</td></tr>
+            <tr><td>② 역추세</td><td>반대 방향으로 5~10회 연속 매매</td></tr>
+            <tr><td>③ 추종 후 반전</td><td>같은 방향 5~10회 → 반대 방향 5~10회</td></tr>
+            <tr><td>④ 분할 매집 후 일부 차익실현</td><td>같은 방향으로 5~10회 나눠 담았다가, 반대
+            방향으로 더 적은 횟수(2~4회)만 정리 — 물타기/불타기 후 일부만 차익실현하는 흔한 리테일
+            패턴</td></tr>
+            <tr><td>⑤ 관망 후 뒤늦은 반응</td><td>잠깐 대기한 뒤 같은 방향으로 소수(2~4회)의 주문만
+            몰아서 실행 — 느리게 반응하지만 확신은 강한 트레이더</td></tr>
+        </table>
+        <p class="note">모든 주문은 봇 자신의 자산(<code>botUsers/{'{botUid}'}</code>)과 보유 수량
+        안에서만 체결된다 — 매수는 현재가 기준 감당 가능한 최대 수량, 매도는 실제 보유 수량으로
+        자동으로 캡핑되고, 부족하면 그 주문만 조용히 건너뛴다(실제 유저의 잔액 부족 처리와 같은
+        결).</p>
+        <h3>구현 — 기존 인프라 재사용</h3>
+        <p>새 폴링/스케줄러를 만들지 않기 위해(<code>stockSimulator.js</code>의 기존 설계 원칙과
+        동일), 봇 반응은 실제 유저의 <code>trade()</code> 호출 안에서 그 자리에서 실행된다(끝까지
+        <code>await</code> — Cloud Functions가 응답 후 인스턴스를 곧바로 재활용할 수 있어 background
+        fire-and-forget은 중간에 끊길 위험이 있기 때문). 시세·거래량·캔들·스파크라인 갱신은
+        <code>stockSimulator.js</code>의 <code>executeSimulatedTrade</code>를 그대로 재사용해 실제
+        거래와 동일한 흔적을 남기고, 봇 존재 동안의 presence 유지는 기존 <code>heartbeat()</code>
+        함수에 얹어(실제 유저의 하트비트가 오는 동안만 봇의 lastSeen도 갱신) 별도 로직 없이 기존
+        "60분 유예 후 자동 감소" 규칙을 그대로 함께 따르게 했다. 잭팟 기여·도전과제 지급은
+        <code>stockSimulator.js</code>와 같은 이유(보상 대상이 될 실제 사람이 없음)로 봇 거래에서
+        제외했다.</p>
+        <h3>검증</h3>
+        <ul>
+            <li><code>node -c</code>로 전체 신규/수정 파일 구문 검사 통과, 가짜 RTDB로 격리
+            시뮬레이션해 조건1(30초 미만 시 미발동)·조건2(확률 발동)·1인당 1개 고정·자산/보유량
+            초과 시 주문 스킵·2인 이상 접속 시 서로 다른 봇 배정을 전부 확인.</li>
+            <li>배포 직후 실제 사이트 접속 테스트 중 <code>presence</code> 쓰기가
+            <code>permission_denied</code>로 막히는 걸 발견 — <code>database.rules.json</code>이
+            <code>lastSeen</code> 외 필드를 전부 거부하는 화이트리스트 구조였다.
+            <code>connectedAt</code>을 허용 필드로 추가하고 4개 자매 레포(StreamBet-Market,
+            soop-stock-market, interior-3d-viewer, streamer-life-game)에 동일하게 동기화한 뒤
+            <code>--dry-run</code> 확인 후 배포해 해결.</li>
+            <li>라이브 실거래 클릭 테스트는 실제 운영 중인 공유 데이터(시세·잭팟 등)를 건드리는
+            작업이라 자동 승인 분류기가 차단 — 격리 시뮬레이션과 코드 리뷰로 로직을 검증했고, 실제
+            화면에서의 최종 확인은 사용자가 직접 진행.</li>
+        </ul>
+    </section>
+
+    <footer>SOOP STOCK 거래소 · 기획서 v3.0 · index.html 코드 기준 작성 (배너/고정노출/중계방 즉시적용 전환 · 종목 상장 신청 · 서킷브레이커(동결) · 소프트 점검모드 + 서버측 강제 · 플레이타임 우회 수정 · 손익 랭킹 · 관리자 손익 랭킹 조회 반영 · 트레이딩 봇)</footer>
 </div>
 </body>
 </html>

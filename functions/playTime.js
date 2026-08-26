@@ -136,6 +136,20 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
 
   const db = admin.database();
 
+  // 트레이딩 봇 presence 유지(2026-08-27, best-effort) — 이 유저와 짝지어진
+  // 봇이 있으면, 이 하트비트가 계속 오는 동안(=실제 유저가 접속 중인 동안)
+  // 봇의 lastSeen도 같이 갱신해 접속자 수에서 계속 잡히게 한다. 유저가
+  // 떠나 하트비트가 끊기면 봇도 갱신이 멈춰, 기존 "60분 유예 후 자동
+  // 감소" 규칙을 그대로 따라 함께 빠진다(별도 즉시-삭제 로직 불필요).
+  try {
+    const botUid = (await db.ref(`botAssignments/${auth.uid}/botUid`).get()).val();
+    if (botUid) {
+      await db.ref(`presence/stockMarket/${botUid}`).update({ lastSeen: Date.now() });
+    }
+  } catch (e) {
+    // best-effort
+  }
+
   if (await checkIsAdmin(db, auth.uid, auth.token?.email)) {
     // 관리자는 이용시간 무제한이라 touchHeartbeat를 타지 않지만, 자산 변동
     // 그래프 기능은 관리자 계정으로도 확인해볼 수 있게 스냅샷만 별도로 남긴다.

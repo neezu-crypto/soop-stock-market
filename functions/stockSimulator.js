@@ -223,4 +223,5 @@ module.exports = {
   actionUpdateStockSimSession,
   actionEndStockSimSession,
   actionRunStockSimTrade,
+  executeSimulatedTrade, // tradingBot.js가 시세/캔들/스파크라인 갱신 로직을 그대로 재사용
 };

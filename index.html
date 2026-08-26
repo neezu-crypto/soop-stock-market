@@ -1256,7 +1256,7 @@
 ══════════════════════════════════════════ -->
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getDatabase, ref, onValue, get, set, query, orderByChild, limitToLast, startAt }
+import { getDatabase, ref, onValue, get, set, update, query, orderByChild, limitToLast, startAt }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, signOut, linkWithPopup, GoogleAuthProvider, onAuthStateChanged }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
@@ -2057,8 +2057,12 @@ onAuthStateChanged(auth, async (user) => {
             // 유저별 전용 노드에 접속 표시 — 접속이 끊겨도 즉시 지우지 않고
             // lastSeen만 남겨서, 접속자 수 집계 시 PRESENCE_GRACE_MS(60분)
             // 이내면 계속 접속자로 카운트한다(끊김 즉시 감소 방지).
+            // connectedAt(2026-08-27, 트레이딩 봇 기능) - 이 세션이 "언제부터"
+            // 접속해 있었는지 서버가 판단할 수 있게 최초 접속 시각을 별도로
+            // 남긴다(봇 발동 조건 "접속 30초 이후"의 기준값). refreshMyPresence의
+            // 주기 갱신은 update()라 이 필드를 덮어쓰지 않는다.
             const myPresenceRef = ref(db, `presence/stockMarket/${userUID}`);
-            await set(myPresenceRef, { lastSeen: Date.now() });
+            await set(myPresenceRef, { lastSeen: Date.now(), connectedAt: Date.now() });
             startPresenceRefreshLoop();
 
             // 접속 시 1회만 읽기 → 이후 갱신 없음 (데이터 절약)
@@ -2251,7 +2255,8 @@ function startHeartbeatLoop() {
 // 유예 안에서 "아직 접속 중"으로 인식하도록 유지한다.
 function refreshMyPresence() {
     if (!userUID) return;
-    set(ref(db, `presence/stockMarket/${userUID}`), { lastSeen: Date.now() }).catch(() => {});
+    // update() 사용 — set()이면 최초 접속 때 심어둔 connectedAt이 매번 지워진다.
+    update(ref(db, `presence/stockMarket/${userUID}`), { lastSeen: Date.now() }).catch(() => {});
 }
 function startPresenceRefreshLoop() {
     stopPresenceRefreshLoop();

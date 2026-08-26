@@ -13,6 +13,7 @@ const {
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
 const { updateStockDailySnapshot, contributeToJackpot } = require("./jackpot");
+const { maybeSpawnAndRunBot } = require("./tradingBot");
 
 // ── 매매 파라미터 (기존 클라이언트 로직과 동일) ──────────────
 const TRADE_COOLDOWN_MS   = 1000;   // 연속 거래 최소 간격
@@ -396,6 +397,16 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     await contributeToJackpot(db, uid, stockId, qty, isProtected);
   } catch (e) {
     // 잭팟 반영 실패는 무시 (다음 거래 때 재시도됨)
+  }
+
+  // 8) 트레이딩 봇 반응(2026-08-27, best-effort — 실패해도 실제 유저의
+  //    거래 결과에는 전혀 영향 없음). 여기서 끝까지 await 해야 한다 —
+  //    Cloud Functions는 응답을 반환하면 인스턴스가 곧 재활용될 수 있어,
+  //    await 없이 흘려보내면 백그라운드 작업이 중간에 끊길 수 있다.
+  try {
+    await maybeSpawnAndRunBot(db, uid, stockId, type);
+  } catch (e) {
+    // 봇 반응 실패는 무시
   }
 
   return {
