@@ -26,6 +26,11 @@ const { executeSimulatedTrade } = require("./stockSimulator");
 
 const BOT_SPAWN_CHANCE  = 0.2;   // 조건2 - 실제 유저 거래마다 봇 생성 확률
 const MIN_CONNECTED_MS  = 30000; // 조건1 - 접속 30초 이후부터 봇 발동 가능
+// 락이 걸린 채로 60초가 지나면 만료된 것으로 간주하고 강제로 풀어준다 —
+// 패턴 하나가 아무리 길어도(③④, 최대 20건) 20~25초 안에는 끝나므로 넉넉한
+// 안전 마진. 인스턴스가 중간에 죽어 finally를 못 타는 극단적인 경우에도
+// 락이 영영 안 풀리는 걸 막기 위한 자기 치유 장치.
+const LOCK_STALE_MS     = 60000;
 const MIN_ORDERS        = 5;
 const MAX_ORDERS        = 10;
 const MIN_ORDER_QTY     = 1;
@@ -52,6 +57,30 @@ function sleep(ms) {
 }
 function opposite(type) {
   return type === "buy" ? "sell" : "buy";
+}
+
+/**
+ * 실제 유저 1명당 봇 반응은 한 번에 하나만 — 유저가 연속으로 두 번 거래해
+ * 20% 트리거가 두 번 다 발동해도(2026-08-27, 사용자 지적 - "봇이 거래
+ * 진행중일땐 이후 연속으로 트리거가 작동해도 중복거래 발생 안하는게
+ * 좋겠는데"), 앞선 패턴이 끝나기 전까진 뒤이은 트리거를 그냥 건너뛴다.
+ * botAssignments 생성 자체도 이 락 안에서 이뤄지므로("봇이 아직 없을 때"
+ * 트리거가 겹치면 봇이 2개 만들어질 수 있는 스폰 경합도 같이 막아준다).
+ * RTDB 트랜잭션으로 "현재 잠겨 있지 않을 때만 내가 잠근다"를 원자적으로
+ * 처리 — 두 요청이 동시에 도착해도 하나만 락을 얻는다.
+ */
+async function acquireBotLock(realUid, db) {
+  const lockRef = db.ref(`botLocks/${realUid}`);
+  const result = await lockRef.transaction((current) => {
+    if (current && current.lockedAt && Date.now() - current.lockedAt < LOCK_STALE_MS) {
+      return; // abort - 이미 다른 실행이 진행 중
+    }
+    return { lockedAt: Date.now() };
+  });
+  return result.committed;
+}
+async function releaseBotLock(realUid, db) {
+  await db.ref(`botLocks/${realUid}`).set(null).catch(() => {});
 }
 
 /**
@@ -174,32 +203,43 @@ const PATTERNS = [
  * 반응, 없으면 조건 충족 시 새로 생성한다. 이 함수 내부 에러는 절대
  * 실제 유저의 거래 응답에 영향을 주면 안 되므로, 호출부(trade.js)에서
  * try/catch로 감싸 호출한다.
+ *
+ * 락 획득에 실패하면(=이 유저의 봇이 이미 다른 패턴을 진행 중이면) 아무
+ * 것도 하지 않고 조용히 리턴한다 — "중복거래 방지"가 목적이라 대기열에
+ * 쌓아 나중에 실행하지 않고, 이번 트리거는 그냥 건너뛴다.
  */
 async function maybeSpawnAndRunBot(db, realUid, stockId, direction) {
   const presenceSnap = await db.ref(`presence/stockMarket/${realUid}`).get();
   const connectedAt = presenceSnap.val()?.connectedAt;
   if (!connectedAt || Date.now() - connectedAt < MIN_CONNECTED_MS) return; // 조건1 미충족
 
-  const assignRef = db.ref(`botAssignments/${realUid}`);
-  let assignment = (await assignRef.get()).val();
+  const gotLock = await acquireBotLock(realUid, db);
+  if (!gotLock) return; // 이미 진행 중인 패턴이 있음 - 이번 트리거는 건너뜀
 
-  if (!assignment) {
-    if (Math.random() >= BOT_SPAWN_CHANCE) return; // 조건2 - 20% 실패
-    const botUid = "bot_" + db.ref().push().key;
-    const now = Date.now();
-    await db.ref(`botUsers/${botUid}`).set({ cash: INITIAL_CASH, stocks: {}, isBot: true, createdAt: now });
-    await db.ref(`presence/stockMarket/${botUid}`).set({ lastSeen: now, connectedAt: now, isBot: true });
-    assignment = { botUid, createdAt: now };
-    await assignRef.set(assignment);
-  } else {
-    // 이미 짝지어진 봇이 있으면 접속 유지(하트비트 사이에도 이번 거래
-    // 반응으로 lastSeen이 갱신되게) - 실제 유저가 활동 중인 동안엔 계속
-    // "접속 중"으로 보이게 하는 보조 장치, 별도 하트비트 훅과 병행.
-    await db.ref(`presence/stockMarket/${assignment.botUid}`).update({ lastSeen: Date.now() });
+  try {
+    const assignRef = db.ref(`botAssignments/${realUid}`);
+    let assignment = (await assignRef.get()).val();
+
+    if (!assignment) {
+      if (Math.random() >= BOT_SPAWN_CHANCE) return; // 조건2 - 20% 실패
+      const botUid = "bot_" + db.ref().push().key;
+      const now = Date.now();
+      await db.ref(`botUsers/${botUid}`).set({ cash: INITIAL_CASH, stocks: {}, isBot: true, createdAt: now });
+      await db.ref(`presence/stockMarket/${botUid}`).set({ lastSeen: now, connectedAt: now, isBot: true });
+      assignment = { botUid, createdAt: now };
+      await assignRef.set(assignment);
+    } else {
+      // 이미 짝지어진 봇이 있으면 접속 유지(하트비트 사이에도 이번 거래
+      // 반응으로 lastSeen이 갱신되게) - 실제 유저가 활동 중인 동안엔 계속
+      // "접속 중"으로 보이게 하는 보조 장치, 별도 하트비트 훅과 병행.
+      await db.ref(`presence/stockMarket/${assignment.botUid}`).update({ lastSeen: Date.now() });
+    }
+
+    const pattern = PATTERNS[randInt(0, PATTERNS.length - 1)];
+    await pattern(db, assignment.botUid, stockId, direction);
+  } finally {
+    await releaseBotLock(realUid, db);
   }
-
-  const pattern = PATTERNS[randInt(0, PATTERNS.length - 1)];
-  await pattern(db, assignment.botUid, stockId, direction);
 }
 
 // 봇이 "1초에 한 거래" 속도 제한을 지키면서 5~20건짜리 패턴을 다 도는 데

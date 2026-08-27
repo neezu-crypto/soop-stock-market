@@ -614,6 +614,7 @@
             <tr><td><code>adminCashAdjustments/{id}</code></td><td>관리자가 유저 상세 조회에서 수동으로 자산을 지급/차감한 감사 기록 <code>{uid, amount, reason, adjustedAt}</code></td></tr>
             <tr><td><code>botUsers/{botUid}</code></td><td>(2026-08-27, 트레이딩 봇 기능) 봇의 가상 포트폴리오 — <code>users/{uid}</code>와 완전히 같은 스키마(cash/stocks/lastTradeTime/tradeCount)에 <code>isBot: true</code>만 추가. 클라이언트는 읽기·쓰기 모두 불가(Admin SDK 전용), 화면에 직접 노출되지 않고 오직 시세/거래량에만 흔적을 남긴다</td></tr>
             <tr><td><code>botAssignments/{realUid}</code></td><td>실제 유저 1명과 짝지어진 봇의 매핑 <code>{botUid, createdAt}</code> — 한 번 생성되면 그 유저가 접속해 있는 동안 계속 유지(1:1 비율), 클라이언트 접근 불가</td></tr>
+            <tr><td><code>botLocks/{realUid}</code></td><td>(2026-08-27) 그 유저의 봇이 지금 패턴을 실행 중인지 나타내는 뮤텍스 <code>{lockedAt}</code> — 진행 중인 패턴이 있으면 뒤이은 트리거를 건너뛰어 중복 거래를 막는다. 60초 지나면 자동 만료(자기 치유), 클라이언트 접근 불가</td></tr>
         </table>
     </section>
 
@@ -716,6 +717,18 @@
             검사를 방어선으로 하나 더 뒀다(타이밍 상수가 나중에 바뀌어도 이 규칙만은 항상
             지켜지도록).</li>
         </ul>
+        <p class="note"><b>중복 거래 방지 — 유저 1명당 봇 반응은 한 번에 하나만(2026-08-27, 사용자
+        지적 — "봇이 거래 진행중일땐 이후 연속으로 트리거가 작동해도 중복거래 발생 안하는게
+        좋겠는데").</b> <code>triggerBotReaction</code>이 독립 호출로 분리되면서, 유저가 짧은
+        간격으로 두 번 거래하면 트리거도 두 번 겹쳐서 들어올 수 있게 됐다 — 그대로 두면 같은 봇이
+        패턴 두 개를 동시에 실행해 매매가 뒤섞이거나(봇 존재 확인 전에 두 요청이 겹치면 봇이
+        2개 생기는 스폰 경합까지 발생할 수 있었다). <code>botLocks/{'{realUid}'}</code>에 RTDB
+        트랜잭션으로 "현재 잠겨 있지 않을 때만 내가 잠근다"를 원자적으로 처리하는 락을 추가해,
+        <code>maybeSpawnAndRunBot</code> 전체(스폰 판정 + 패턴 실행)를 이 락으로 감쌌다. 이미
+        진행 중인 패턴이 있으면 뒤이은 트리거는 대기열에 쌓지 않고 그냥 건너뛴다(사용자가 원한 건
+        "나중에 실행"이 아니라 "중복 자체가 안 생기는 것"). 인스턴스가 중간에 죽어 락 해제를 못
+        타는 극단적인 경우를 대비해 60초 지나면 자동으로 만료되는 안전장치도 뒀다(패턴 최장
+        시간 20~25초의 넉넉한 배수).</p>
         <p class="note"><b>거래량 랭킹(TOP5) 갱신도 봇에 동일 적용(2026-08-27, 사용자 지시 — "봇
         거래량 갱신도 똑같이 적용해줘").</b> 원래 <code>rankings/top5</code> 갱신 로직은
         <code>trade.js</code>의 실제 거래 경로 안에만 있었는데, 실제 유저의 거래 직후 봇이
