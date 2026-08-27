@@ -1,6 +1,6 @@
 const { onCall } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { INITIAL_CASH, TRADE_COOLDOWN_MS, updateVolumeRanking } = require("./common");
+const { INITIAL_CASH, TRADE_COOLDOWN_MS, PRESENCE_GRACE_MS, updateVolumeRanking } = require("./common");
 const { executeSimulatedTrade } = require("./stockSimulator");
 
 // ══════════════════════════════════════════════════════════
@@ -141,6 +141,12 @@ async function placeBotOrder(db, botUid, stockId, type) {
     b.stocks = stocks;
     b.lastTradeTime = Date.now();
     b.tradeCount = (b.tradeCount || 0) + 1;
+    // 관리자 페이지 봇 관리 세션(2026-08-27)에서 "최근 거래 종목"을 보여주기
+    // 위한 필드 — stocks 맵만으로는 "가장 최근에" 거래한 종목을 알 수 없어
+    // (여러 종목을 들고 있을 수 있으므로) 별도로 남긴다.
+    b.lastStockId = stockId;
+    b.lastStockName = stock.name;
+    b.lastTradeType = type;
     return b;
   });
 
@@ -277,4 +283,68 @@ const triggerBotReaction = onCall({ cors: true, timeoutSeconds: 30, memory: "256
   return { ok: true };
 });
 
-module.exports = { maybeSpawnAndRunBot, triggerBotReaction };
+/**
+ * 관리자 페이지 "🤖 봇 관리" 세션용 조회(2026-08-27) — adminAction
+ * 디스패처의 한 액션으로 등록해서 쓴다(다른 관리자 조회들과 같은 패턴).
+ * botAssignments 전체를 훑으며 각 봇의 포트폴리오·최근 거래·활성/거래중
+ * 상태를 한 번에 모아 반환한다. 봇 개수가 "실제 유저 1명당 최대 1개"로
+ * 애초에 제한돼 있어(1:1 비율) 동시 접속자 규모를 감안하면 전체 스캔 비용이
+ * 크지 않다.
+ */
+async function actionGetBotSessions(db) {
+  const [assignmentsSnap, botUsersSnap, presenceSnap, locksSnap] = await Promise.all([
+    db.ref("botAssignments").get(),
+    db.ref("botUsers").get(),
+    db.ref("presence/stockMarket").get(),
+    db.ref("botLocks").get(),
+  ]);
+
+  const assignments = assignmentsSnap.val() || {};
+  const botUsers    = botUsersSnap.val() || {};
+  const presence    = presenceSnap.val() || {};
+  const locks       = locksSnap.val() || {};
+  const now = Date.now();
+
+  const sessions = Object.entries(assignments).map(([realUid, assignment]) => {
+    const botUid = assignment?.botUid;
+    const bot = botUsers[botUid] || {};
+    const botPresence = presence[botUid];
+    const lastSeen = botPresence?.lastSeen || 0;
+    const isOnline = lastSeen > 0 && now - lastSeen <= PRESENCE_GRACE_MS;
+    const lock = locks[realUid];
+    const isTrading = !!(lock?.lockedAt && now - lock.lockedAt < LOCK_STALE_MS);
+
+    const holdings = Object.entries(bot.stocks || {})
+      .filter(([, pos]) => (pos?.qty || 0) > 0)
+      .map(([stockId, pos]) => ({ stockId, qty: pos.qty, avg: pos.avg }));
+
+    return {
+      realUid,
+      botUid,
+      createdAt: assignment?.createdAt || bot.createdAt || null,
+      isOnline,
+      lastSeen: lastSeen || null,
+      isTrading,
+      cash: bot.cash ?? null,
+      tradeCount: bot.tradeCount || 0,
+      lastTradeTime: bot.lastTradeTime || null,
+      lastStockId: bot.lastStockId || null,
+      lastStockName: bot.lastStockName || null,
+      lastTradeType: bot.lastTradeType || null,
+      holdings,
+    };
+  });
+
+  // 최근 거래한 봇이 위로 오도록 정렬 — 관리자가 가장 최근 활동을 먼저 보게.
+  sessions.sort((a, b) => (b.lastTradeTime || 0) - (a.lastTradeTime || 0));
+
+  return {
+    ok: true,
+    totalCount: sessions.length,
+    onlineCount: sessions.filter((s) => s.isOnline).length,
+    tradingCount: sessions.filter((s) => s.isTrading).length,
+    sessions,
+  };
+}
+
+module.exports = { maybeSpawnAndRunBot, triggerBotReaction, actionGetBotSessions };

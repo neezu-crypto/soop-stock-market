@@ -269,6 +269,24 @@
         <div id="stock-sim-session-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
+    <!-- 🤖 봇 관리 -->
+    <div id="section-bot-sessions" class="container" style="display:block; border-color: #22c55e;">
+        <h1>🤖 봇 관리</h1>
+        <div class="info-box">
+            실제 유저와 1:1로 짝지어져 자산·보유량 안에서 매매를 흉내내는 트레이딩 봇 세션 목록입니다.
+            <b style="color:#4ade80;">활성</b>은 접속자 수 집계와 같은 기준(60분 lastSeen 유예)이고,
+            <b style="color:#fbbf24;">거래중</b>은 지금 패턴 하나를 실행하고 있어 다음 트리거가
+            건너뛰어지는 상태를 뜻합니다.
+        </div>
+        <div style="display:flex; gap:14px; margin-bottom:12px; font-size:12px; color:#94a3b8;">
+            <span>전체 <b id="bot-session-total-count" style="color:#e2e8f0;">-</b>개</span>
+            <span>활성 <b id="bot-session-online-count" style="color:#4ade80;">-</b>개</span>
+            <span>거래중 <b id="bot-session-trading-count" style="color:#fbbf24;">-</b>개</span>
+        </div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadBotSessions()">🔄 새로고침</button>
+        <div id="bot-session-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+
     <!-- 💰 손익 랭킹 조회 -->
     <div id="section-profit-ranking" class="container" style="display:block; border-color: #38bdf8;">
         <h1>💰 손익 랭킹 조회</h1>
@@ -635,6 +653,7 @@
         { id: 'section-purchase-history',   label: '🧾 구매 현황' },
         { id: 'section-lottery-audit',      label: '🎰 777 감사 로그' },
         { id: 'section-stock-simulator',    label: '🤖 매매 시뮬레이터' },
+        { id: 'section-bot-sessions',       label: '🤖 봇 관리' },
         { id: 'section-profit-ranking',     label: '💰 손익 랭킹' },
         { id: 'section-ranking-top5',       label: '🏆 랭킹 TOP5' },
         { id: 'section-stock-search',       label: '🔍 개별 종목' },
@@ -1119,6 +1138,54 @@
                     </div>
                     <div id="sim-status-${s.id}" style="font-size:11px;color:#94a3b8;">${isDriving ? '구동 중...' : '이 탭에서는 구동되고 있지 않습니다.'}</div>
                     ` : ''}`;
+                listEl.appendChild(row);
+            });
+        } catch (e) {
+            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    };
+
+    // ── 🤖 봇 관리 (읽기 전용 — actionGetBotSessions, tradingBot.js 참고) ──
+    window.loadBotSessions = async function() {
+        const listEl = document.getElementById('bot-session-list');
+        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
+        try {
+            const { sessions, totalCount, onlineCount, tradingCount } = await callAdminAction('getBotSessions');
+            document.getElementById('bot-session-total-count').innerText = totalCount ?? 0;
+            document.getElementById('bot-session-online-count').innerText = onlineCount ?? 0;
+            document.getElementById('bot-session-trading-count').innerText = tradingCount ?? 0;
+
+            if (!sessions || sessions.length === 0) {
+                listEl.innerHTML = '<div class="info-box" style="margin:0;">아직 생성된 봇이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            sessions.forEach(s => {
+                const row = document.createElement('div');
+                row.style.cssText = `background:#0f172a;border:1px solid ${s.isOnline ? '#22c55e' : '#334155'};border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;`;
+                const onlineBadge = s.isOnline
+                    ? '<span class="status-chip active">🟢 활성</span>'
+                    : '<span class="status-chip none">⚪ 비활성</span>';
+                const tradingBadge = s.isTrading
+                    ? '<span class="status-chip" style="background:#78350f;color:#fbbf24;">🔄 거래중</span>'
+                    : '';
+                const lastTradeText = s.lastTradeTime
+                    ? `${new Date(s.lastTradeTime).toLocaleString('ko-KR')}${s.lastStockName ? ` · ${escapeAttr(s.lastStockName)} ${s.lastTradeType === 'buy' ? '매수' : '매도'}` : ''}`
+                    : '거래 기록 없음';
+                const holdingsText = (s.holdings && s.holdings.length > 0)
+                    ? s.holdings.map(h => `${escapeAttr(h.stockId)} ${h.qty}주`).join(', ')
+                    : '보유 종목 없음';
+                row.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+                        <div>
+                            <div style="font-weight:800;font-size:14px;">🤖 ${escapeAttr(s.botUid)} ${onlineBadge} ${tradingBadge}</div>
+                            <div style="font-size:11px;color:#64748b;margin-top:2px;">실제 유저 ${escapeAttr(s.realUid)} · 생성 ${s.createdAt ? new Date(s.createdAt).toLocaleString('ko-KR') : '-'}</div>
+                        </div>
+                        <div style="text-align:right;font-size:13px;color:#38bdf8;font-weight:700;">${(s.cash ?? 0).toLocaleString()}원</div>
+                    </div>
+                    <div style="font-size:12px;color:#cbd5e1;">거래 ${s.tradeCount || 0}회 · 최근 거래: ${lastTradeText}</div>
+                    <div style="font-size:12px;color:#94a3b8;">보유: ${holdingsText}</div>
+                `;
                 listEl.appendChild(row);
             });
         } catch (e) {

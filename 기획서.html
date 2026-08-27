@@ -754,6 +754,28 @@
             작업이라 자동 승인 분류기가 차단 — 격리 시뮬레이션과 코드 리뷰로 로직을 검증했고, 실제
             화면에서의 최종 확인은 사용자가 직접 진행.</li>
         </ul>
+        <h3>관리자 페이지 — 🤖 봇 관리 세션(2026-08-27, 사용자 지시 — "관리자 페이지에서 봇 관리
+        세션 하나 만들어줘")</h3>
+        <p>다른 조회 전용 관리 기능들과 같은 패턴 — <code>adminAction</code> 디스패처에
+        <code>getBotSessions</code> 액션을 추가하고(<code>tradingBot.js</code>의
+        <code>actionGetBotSessions</code>), 관리자 페이지가 <code>callAdminAction('getBotSessions')</code>로
+        호출한다. <code>botAssignments</code>·<code>botUsers</code>·
+        <code>presence/stockMarket</code>·<code>botLocks</code> 4개 노드를 한 번에 모아 봇별로
+        아래 정보를 합쳐 보여준다:</p>
+        <ul>
+            <li><b>활성 상태</b> — <code>PRESENCE_GRACE_MS</code>(60분, 접속자 수 집계와 동일 기준)
+            안에 presence가 갱신됐는지</li>
+            <li><b>거래중 상태</b> — <code>botLocks</code>에 유효한 락이 걸려 있는지(패턴 실행 중)</li>
+            <li>보유 현금, 거래 횟수, 보유 종목(수량 0인 건 제외), <b>최근 거래 종목/방향/시각</b></li>
+        </ul>
+        <p class="note">"최근 거래 종목"을 보여주기 위해 <code>botUsers/{'{botUid}'}</code>에
+        <code>lastStockId</code>·<code>lastStockName</code>·<code>lastTradeType</code> 필드를 새로
+        추가했다(<code>stocks</code> 맵만으로는 여러 종목을 들고 있을 때 "가장 최근에" 거래한 종목을
+        알 수 없어서). 최근 거래한 봇이 위로 오도록 정렬. 봇 개수가 실제 유저 1명당 최대 1개로
+        제한돼 있어(1:1 비율) 전체 스캔 비용은 크지 않다.</p>
+        <p class="note"><b>검증.</b> <code>node -c</code> 전체 통과. 중첩 구조를 갖춘 가짜 RTDB로
+        <code>actionGetBotSessions</code>를 격리 실행해 온라인/거래중 판정, 보유량 0 필터링, 최근
+        거래 순 정렬이 전부 정확한 것 확인. <code>adminAction</code> 재배포로 반영.</p>
     </section>
 
     <footer>SOOP STOCK 거래소 · 기획서 v3.0 · index.html 코드 기준 작성 (배너/고정노출/중계방 즉시적용 전환 · 종목 상장 신청 · 서킷브레이커(동결) · 소프트 점검모드 + 서버측 강제 · 플레이타임 우회 수정 · 손익 랭킹 · 관리자 손익 랭킹 조회 반영 · 트레이딩 봇)</footer>

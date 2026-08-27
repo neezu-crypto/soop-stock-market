@@ -27,6 +27,7 @@ const {
   actionEndStockSimSession,
   actionRunStockSimTrade,
 } = require("./stockSimulator");
+const { actionGetBotSessions } = require("./tradingBot");
 const {
   actionListPinRequests,
   actionListActivePins,
@@ -1117,6 +1118,7 @@ async function dispatchAdminAction(db, action, payload, auth) {
     case "updateStockSimSession":  return actionUpdateStockSimSession(db, payload);
     case "endStockSimSession":     return actionEndStockSimSession(db, payload);
     case "runStockSimTrade":       return actionRunStockSimTrade(db, payload);
+    case "getBotSessions":         return actionGetBotSessions(db);
     default:
       throw new HttpsError("invalid-argument", `알 수 없는 action: ${action}`);
   }
