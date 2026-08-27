@@ -1173,7 +1173,7 @@
                     ? `${new Date(s.lastTradeTime).toLocaleString('ko-KR')}${s.lastStockName ? ` · ${escapeAttr(s.lastStockName)} ${s.lastTradeType === 'buy' ? '매수' : '매도'}` : ''}`
                     : '거래 기록 없음';
                 const holdingsText = (s.holdings && s.holdings.length > 0)
-                    ? s.holdings.map(h => `${escapeAttr(h.stockId)} ${h.qty}주`).join(', ')
+                    ? s.holdings.map(h => `${escapeAttr(h.stockName || h.stockId)} ${h.qty}주`).join(', ')
                     : '보유 종목 없음';
                 row.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">

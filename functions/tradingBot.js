@@ -292,17 +292,19 @@ const triggerBotReaction = onCall({ cors: true, timeoutSeconds: 30, memory: "256
  * 크지 않다.
  */
 async function actionGetBotSessions(db) {
-  const [assignmentsSnap, botUsersSnap, presenceSnap, locksSnap] = await Promise.all([
+  const [assignmentsSnap, botUsersSnap, presenceSnap, locksSnap, stocksSnap] = await Promise.all([
     db.ref("botAssignments").get(),
     db.ref("botUsers").get(),
     db.ref("presence/stockMarket").get(),
     db.ref("botLocks").get(),
+    db.ref("stocks").get(), // 보유 종목 id → 스트리머 이름 변환용(2026-08-27, 관리자 페이지에 id 그대로 노출되던 문제 수정)
   ]);
 
   const assignments = assignmentsSnap.val() || {};
   const botUsers    = botUsersSnap.val() || {};
   const presence    = presenceSnap.val() || {};
   const locks       = locksSnap.val() || {};
+  const stocks      = stocksSnap.val() || {};
   const now = Date.now();
 
   const sessions = Object.entries(assignments).map(([realUid, assignment]) => {
@@ -316,7 +318,12 @@ async function actionGetBotSessions(db) {
 
     const holdings = Object.entries(bot.stocks || {})
       .filter(([, pos]) => (pos?.qty || 0) > 0)
-      .map(([stockId, pos]) => ({ stockId, qty: pos.qty, avg: pos.avg }));
+      .map(([stockId, pos]) => ({
+        stockId,
+        stockName: stocks[stockId]?.name || stockId,
+        qty: pos.qty,
+        avg: pos.avg,
+      }));
 
     return {
       realUid,
