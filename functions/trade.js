@@ -9,7 +9,8 @@ const {
   requireNotInMaintenance,
   grantAchievement,
   isUserProtected,
-  assertNotBanned
+  assertNotBanned,
+  updateVolumeRanking
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
 const { updateStockDailySnapshot, contributeToJackpot } = require("./jackpot");
@@ -22,7 +23,6 @@ const SPREAD              = 0.0005; // 매수/매도 스프레드
 const SELL_FEE            = 0.003;  // 매도 수수료
 const MAX_QTY_PER_ORDER   = 10;     // 1회 주문 최대 수량 (클라이언트 매수/매도 버튼이 1주/10주 단위뿐이라 서버도 동일하게 제한 — API 직접 호출로 대량 주문을 넣는 것을 막는다)
 const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
-const RANKING_DEBOUNCE_MS = 30000;  // 랭킹 반영 최소 간격
 const SPARKLINE_MAX       = 20;     // 카드 스파크라인 보관 개수(클라이언트 priceHistoryBuffer와 동일)
 
 function currentMinuteTs() {
@@ -328,29 +328,12 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   // 4) 거래량 랭킹 갱신 (best-effort — 실패해도 매매 결과에는 영향 없음)
   //    클라이언트가 직접 rankings/top5를 덮어쓰던 방식은 조작 가능한 구멍이라
   //    서버로 이전. totalQty는 델타 누적이 아니라 stocks/{id}.volume(누적 거래량)
-  //    절대값을 그대로 사용해 드리프트가 생기지 않는다. 너무 잦은 쓰기를 막기
-  //    위해 마지막 저장 후 RANKING_DEBOUNCE_MS 이내면 건너뛴다.
+  //    절대값을 그대로 사용해 드리프트가 생기지 않는다. 실제 갱신 로직은
+  //    common.js의 updateVolumeRanking으로 공용화됨(2026-08-27) — 봇 거래도
+  //    같은 함수를 호출해 동일한 방식(매번 시도 + 디바운스)으로 반영된다.
   try {
     const updatedStock = stockTx.snapshot.val();
-    await db.ref("rankings/top5").transaction((current) => {
-      const now = Date.now();
-      if (current && current.savedAt && now - current.savedAt < RANKING_DEBOUNCE_MS) {
-        return; // 너무 빠름 → 이번 반영은 건너뜀 (abort)
-      }
-      const itemMap = {};
-      ((current && current.items) || []).forEach((item) => { itemMap[item.id] = item; });
-      itemMap[stockId] = {
-        id:       stockId,
-        name:     updatedStock.name,
-        price:    finalTradePrice,
-        totalQty: updatedStock.volume || 0,
-      };
-      const newTop5 = Object.values(itemMap)
-        .sort((a, b) => b.totalQty - a.totalQty)
-        .slice(0, 5);
-      newTop5.forEach((item, i) => { item.rank = i + 1; });
-      return { savedAt: now, items: newTop5 };
-    });
+    await updateVolumeRanking(db, stockId, updatedStock.name, finalTradePrice, updatedStock.volume);
   } catch (e) {
     // 랭킹 갱신 실패는 무시 (다음 거래 때 재시도됨)
   }

@@ -179,6 +179,32 @@ async function grantAchievement(db, uid, achievementId) {
   return true;
 }
 
+const RANKING_DEBOUNCE_MS = 30000; // 랭킹 반영 최소 간격 — trade.js와 tradingBot.js가 공유
+
+/**
+ * 거래량 랭킹(rankings/top5) 갱신 — 원래 trade.js의 실제 유저 거래 경로에만
+ * 있던 로직을 공용화(2026-08-27, 사용자 지시 - "봇 거래량 갱신도 똑같이
+ * 적용해줘"). 봇 거래도 이 함수를 호출해 실제 거래와 동일한 방식(매번
+ * 시도하되 RANKING_DEBOUNCE_MS 안이면 건너뜀)으로 랭킹에 반영되게 한다.
+ * best-effort 성격이라 호출부에서 try/catch로 감싸 쓴다.
+ */
+async function updateVolumeRanking(db, stockId, stockName, price, volume) {
+  await db.ref("rankings/top5").transaction((current) => {
+    const now = Date.now();
+    if (current && current.savedAt && now - current.savedAt < RANKING_DEBOUNCE_MS) {
+      return; // 너무 빠름 → 이번 반영은 건너뜀 (abort)
+    }
+    const itemMap = {};
+    ((current && current.items) || []).forEach((item) => { itemMap[item.id] = item; });
+    itemMap[stockId] = { id: stockId, name: stockName, price, totalQty: volume || 0 };
+    const newTop5 = Object.values(itemMap)
+      .sort((a, b) => b.totalQty - a.totalQty)
+      .slice(0, 5);
+    newTop5.forEach((item, i) => { item.rank = i + 1; });
+    return { savedAt: now, items: newTop5 };
+  });
+}
+
 /** KST(한국시간) 기준 날짜 키(YYYY-MM-DD). offsetDays로 "어제"/"내일"도 계산할 수 있다. */
 function todayKeyKST(offsetDays = 0) {
   const kst = new Date(Date.now() + 9 * 3600 * 1000 + offsetDays * 86400000);
@@ -480,4 +506,5 @@ module.exports = {
   grantAchievement,
   computeTotalAssets,
   recordDailyAssetSnapshot,
+  updateVolumeRanking,
 };

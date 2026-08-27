@@ -1,4 +1,4 @@
-const { INITIAL_CASH } = require("./common");
+const { INITIAL_CASH, updateVolumeRanking } = require("./common");
 const { executeSimulatedTrade } = require("./stockSimulator");
 
 // ══════════════════════════════════════════════════════════
@@ -98,6 +98,18 @@ async function placeBotOrder(db, botUid, stockId, type) {
     b.tradeCount = (b.tradeCount || 0) + 1;
     return b;
   });
+
+  // 거래량 랭킹 갱신(2026-08-27, 사용자 지시 - "봇 거래량 갱신도 똑같이
+  // 적용해줘") - 실제 유저 거래와 동일한 공용 함수를 호출한다. 매번 시도하되
+  // common.js의 RANKING_DEBOUNCE_MS(30초) 안이면 조용히 건너뛰므로, 패턴 하나가
+  // 5~20건을 연달아 내도 실제로 rankings/top5에 쓰는 횟수는 그 이하로 자연스레
+  // 제한된다.
+  try {
+    const freshStock = (await db.ref(`stocks/${stockId}`).get()).val();
+    await updateVolumeRanking(db, stockId, freshStock?.name, result.price, freshStock?.volume);
+  } catch (e) {
+    // best-effort
+  }
 
   return true;
 }

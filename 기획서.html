@@ -694,6 +694,16 @@
         "60분 유예 후 자동 감소" 규칙을 그대로 함께 따르게 했다. 잭팟 기여·도전과제 지급은
         <code>stockSimulator.js</code>와 같은 이유(보상 대상이 될 실제 사람이 없음)로 봇 거래에서
         제외했다.</p>
+        <p class="note"><b>거래량 랭킹(TOP5) 갱신도 봇에 동일 적용(2026-08-27, 사용자 지시 — "봇
+        거래량 갱신도 똑같이 적용해줘").</b> 원래 <code>rankings/top5</code> 갱신 로직은
+        <code>trade.js</code>의 실제 거래 경로 안에만 있었는데, 실제 유저의 거래 직후 봇이
+        반응하는 순서상 봇이 만든 거래량 증가분은 그 트리거가 된 거래의 랭킹 계산엔 잡히지 않고
+        다음 실거래 때까지 지연되는 문제가 있었다. 로직을 <code>common.js</code>의
+        <code>updateVolumeRanking(db, stockId, name, price, volume)</code>으로 공용화해
+        <code>trade.js</code>·<code>tradingBot.js</code> 양쪽에서 재사용 — 봇 주문 1건이 체결될
+        때마다 실제 거래와 똑같이 갱신을 "시도"하고, 기존 <code>RANKING_DEBOUNCE_MS</code>(30초)
+        디바운스도 동일하게 적용돼 한 패턴에서 5~20건이 연달아 나가도 실제 쓰기 횟수는 자연스럽게
+        제한된다.</p>
         <h3>검증</h3>
         <ul>
             <li><code>node -c</code>로 전체 신규/수정 파일 구문 검사 통과, 가짜 RTDB로 격리
