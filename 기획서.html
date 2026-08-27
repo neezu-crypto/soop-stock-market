@@ -685,15 +685,37 @@
         결).</p>
         <h3>구현 — 기존 인프라 재사용</h3>
         <p>새 폴링/스케줄러를 만들지 않기 위해(<code>stockSimulator.js</code>의 기존 설계 원칙과
-        동일), 봇 반응은 실제 유저의 <code>trade()</code> 호출 안에서 그 자리에서 실행된다(끝까지
-        <code>await</code> — Cloud Functions가 응답 후 인스턴스를 곧바로 재활용할 수 있어 background
-        fire-and-forget은 중간에 끊길 위험이 있기 때문). 시세·거래량·캔들·스파크라인 갱신은
+        동일) 별도 스케줄러는 두지 않았다. 시세·거래량·캔들·스파크라인 갱신은
         <code>stockSimulator.js</code>의 <code>executeSimulatedTrade</code>를 그대로 재사용해 실제
         거래와 동일한 흔적을 남기고, 봇 존재 동안의 presence 유지는 기존 <code>heartbeat()</code>
         함수에 얹어(실제 유저의 하트비트가 오는 동안만 봇의 lastSeen도 갱신) 별도 로직 없이 기존
         "60분 유예 후 자동 감소" 규칙을 그대로 함께 따르게 했다. 잭팟 기여·도전과제 지급은
         <code>stockSimulator.js</code>와 같은 이유(보상 대상이 될 실제 사람이 없음)로 봇 거래에서
         제외했다.</p>
+        <p class="note"><b>재설계 — 봇도 "1초에 한 거래" 속도 제한(2026-08-27, 사용자 지시 — "봇의
+        매매속도도 실제 유저처럼 1초당 1거래만 가능하게 해줘").</b> 처음엔 봇 반응을 실제 유저의
+        <code>trade()</code> 호출 안에서 끝까지 <code>await</code>해 실행했는데(Cloud Functions는
+        응답 후 인스턴스를 곧바로 재활용할 수 있어 순수 fire-and-forget은 위험하다고 판단했었음),
+        속도 제한을 걸자마자 이 설계가 무너졌다 — 패턴③④처럼 최대 20건짜리 반응은 1건당 1초 이상
+        간격을 두면 총 20초 가까이 걸리는데, 그동안 실제 유저는 자기 매수/매도 버튼 하나 누른
+        응답을 20초나 기다려야 했다. 그래서 완전히 분리했다:</p>
+        <ul>
+            <li><code>trade.js</code>는 더 이상 봇을 호출하지 않는다 — 실제 유저 거래는 봇과
+            무관하게 항상 즉시 응답한다.</li>
+            <li>새 onCall <code>triggerBotReaction({stockId, type})</code>을 추가해, 클라이언트가
+            <code>trade()</code> 응답을 받은 <b>직후 기다리지 않고(catch만 걸고 await 없이)</b>
+            별도로 호출한다 — 이 함수는 완전히 독립된 요청이라 자기 속도(1초에 한 거래)대로 20초를
+            쓰든 말든 실제 유저 화면에는 영향이 없다.</li>
+            <li>악용 방지 — 이 함수를 거래 없이 반복 호출해 20% 스폰 확률만 계속 재추첨하는 걸
+            막기 위해, 서버가 <code>users/{'{uid}'}.lastTradeTime</code>이 최근 10초 이내인지
+            검증한 뒤에만 동작한다.</li>
+            <li><code>TRADE_COOLDOWN_MS</code>(1000ms)를 <code>common.js</code>로 공용화해
+            <code>trade.js</code>·<code>tradingBot.js</code> 양쪽이 같은 값을 쓰게 했고, 봇의 주문
+            간격(<code>ORDER_DELAY_MS</code>)도 이 값보다 항상 크게 잡았다. 추가로
+            <code>placeBotOrder</code> 안에 봇 자신의 <code>lastTradeTime</code> 기준 쿨다운
+            검사를 방어선으로 하나 더 뒀다(타이밍 상수가 나중에 바뀌어도 이 규칙만은 항상
+            지켜지도록).</li>
+        </ul>
         <p class="note"><b>거래량 랭킹(TOP5) 갱신도 봇에 동일 적용(2026-08-27, 사용자 지시 — "봇
         거래량 갱신도 똑같이 적용해줘").</b> 원래 <code>rankings/top5</code> 갱신 로직은
         <code>trade.js</code>의 실제 거래 경로 안에만 있었는데, 실제 유저의 거래 직후 봇이

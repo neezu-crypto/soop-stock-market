@@ -1,4 +1,6 @@
-const { INITIAL_CASH, updateVolumeRanking } = require("./common");
+const { onCall } = require("firebase-functions/v2/https");
+const admin = require("firebase-admin");
+const { INITIAL_CASH, TRADE_COOLDOWN_MS, updateVolumeRanking } = require("./common");
 const { executeSimulatedTrade } = require("./stockSimulator");
 
 // ══════════════════════════════════════════════════════════
@@ -28,14 +30,19 @@ const MIN_ORDERS        = 5;
 const MAX_ORDERS        = 10;
 const MIN_ORDER_QTY     = 1;
 const MAX_ORDER_QTY     = 5;     // 주문 1건당 수량(실제 유저 1회 최대 10주보다 보수적으로 - 봇은 여러 건을 이어서 내므로 총량이 과해지지 않게)
-const ORDER_DELAY_MS    = [50, 130];    // 주문 사이 랜덤 대기(자연스러운 체결 속도 흉내)
-const LEG_GAP_DELAY_MS  = [200, 400];   // 패턴 내 방향 전환 시 추가 대기
-// 위 값들은 실제 유저 응답 지연과 직결된다(아래 8번 단계에서 끝까지
-// await하므로) - 최악의 경우(패턴3/4, 10회+10회) 대략 (10*130+400+10*130)
-// ≈ 3초 안팎으로 상한을 잡았다. 이보다 더 "빠릿하게" 만들고 싶으면 이
-// 배열들만 줄이면 되고, 반대로 체결 속도를 더 자연스럽게(느리게) 하고
-// 싶으면 늘리면 되는데, 그만큼 실제 유저의 매수/매도 버튼 응답도 같이
-// 느려진다는 점을 기억할 것.
+// 주문 사이 대기(2026-08-27, 사용자 지시 - "봇의 매매속도도 실제 유저처럼
+// 1초당 1거래만 가능하게") - TRADE_COOLDOWN_MS(1000ms)보다 살짝 여유를 둬
+// 매번 확실히 쿨다운을 넘기게 하고, 봇이 정확히 기계적인 리듬으로만
+// 움직이지 않도록 약간의 랜덤 지터를 더한다. placeBotOrder 안의
+// lastTradeTime 검사가 실제 방어선이고, 이 대기는 그 방어선에 걸려
+// 낭비되는 재시도가 없도록 미리 넉넉히 기다려주는 역할이다.
+const ORDER_DELAY_MS    = [TRADE_COOLDOWN_MS + 20, TRADE_COOLDOWN_MS + 180];
+const LEG_GAP_DELAY_MS  = [TRADE_COOLDOWN_MS + 200, TRADE_COOLDOWN_MS + 500]; // 패턴 내 방향 전환 시 추가 대기
+// 실제 유저 응답과는 더 이상 무관하다 - 봇 반응은 trade()가 아니라 별도
+// triggerBotReaction 호출 안에서 실행되고, 클라이언트는 그 호출을 기다리지
+// 않는다(아래 참고). 다만 이 값들 때문에 패턴 하나가 최악의 경우(③④,
+// 10회+10회) 대략 20초 가까이 걸릴 수 있다는 점은 감안할 것 - onCall
+// timeoutSeconds를 그에 맞춰 넉넉히 잡아야 한다.
 
 function randInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
@@ -61,6 +68,15 @@ async function placeBotOrder(db, botUid, stockId, type) {
 
   const botSnap = await db.ref(`botUsers/${botUid}`).get();
   const bot = botSnap.val() || { cash: INITIAL_CASH, stocks: {} };
+
+  // 실제 유저와 동일한 매매 속도 제한(TRADE_COOLDOWN_MS) - ORDER_DELAY_MS가
+  // 이미 이 값보다 크게 잡혀 있어 정상 흐름에선 거의 걸릴 일이 없지만,
+  // trade.js의 쿨다운 검사와 같은 자리에 방어선을 하나 더 둔다(방어적
+  // 프로그래밍 - 타이밍이 어떻게 바뀌어도 이 규칙만은 항상 지켜지게).
+  if (bot.lastTradeTime && Date.now() - bot.lastTradeTime < TRADE_COOLDOWN_MS) {
+    return false;
+  }
+
   const desiredQty = randInt(MIN_ORDER_QTY, MAX_ORDER_QTY);
 
   let qty = desiredQty;
@@ -186,4 +202,39 @@ async function maybeSpawnAndRunBot(db, realUid, stockId, direction) {
   await pattern(db, assignment.botUid, stockId, direction);
 }
 
-module.exports = { maybeSpawnAndRunBot };
+// 봇이 "1초에 한 거래" 속도 제한을 지키면서 5~20건짜리 패턴을 다 도는 데
+// 최악의 경우 20초 가까이 걸릴 수 있어(2026-08-27 재설계), 이 실행을
+// trade() 응답 안에서 기다리게 하면 실제 유저가 자기 거래 버튼 하나 누른
+// 결과를 그만큼 기다리게 된다. 그래서 완전히 독립된 onCall로 분리했다 —
+// 클라이언트는 trade() 응답을 받은 즉시 화면을 갱신하고, 이 함수는
+// 기다리지 않고("fire and forget") 별도로 호출한다.
+const triggerBotReaction = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) return { ok: false };
+
+  const stockId = String(request.data?.stockId || "").trim();
+  const type = String(request.data?.type || "").trim().toLowerCase();
+  if (!stockId || (type !== "buy" && type !== "sell")) return { ok: false };
+
+  const db = admin.database();
+
+  // 악용 방지 — 클라이언트가 이 함수를 트레이딩 없이 반복 호출해 봇 생성
+  // 확률만 계속 재추첨하는 걸 막는다. 진짜로 방금 거래했을 때만(서버가 기록한
+  // users/{uid}.lastTradeTime 기준 최근 10초 이내) 동작하게 한다 — 클라이언트가
+  // 보낸 stockId/type을 그대로 신뢰하는 대신, "정말 방금 거래했는가"만
+  // 서버 값으로 검증하고 실제 반응 대상 종목/방향은 클라이언트 값을 쓴다(어차피
+  // 이 값이 틀려도 봇 자산에만 영향이 있을 뿐 실제 유저 자산과는 무관해
+  // 보안상 치명적이지 않다 - 방지하려는 건 "무한 재추첨 스팸"뿐이다).
+  try {
+    const lastTradeTime = (await db.ref(`users/${auth.uid}/lastTradeTime`).get()).val();
+    if (!lastTradeTime || Date.now() - lastTradeTime > 10000) return { ok: false };
+
+    await maybeSpawnAndRunBot(db, auth.uid, stockId, type);
+  } catch (e) {
+    // best-effort — 실패해도 실제 유저에게는 아무 영향 없음(애초에 안 기다림)
+  }
+
+  return { ok: true };
+});
+
+module.exports = { maybeSpawnAndRunBot, triggerBotReaction };

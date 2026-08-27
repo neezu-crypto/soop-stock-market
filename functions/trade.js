@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const {
   INITIAL_CASH,
+  TRADE_COOLDOWN_MS,
   STOCK_FREEZE_THRESHOLD,
   STOCK_FREEZE_CANDLE_COUNT,
   STOCK_DELIST_DEADLINE_MS,
@@ -14,10 +15,8 @@ const {
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
 const { updateStockDailySnapshot, contributeToJackpot } = require("./jackpot");
-const { maybeSpawnAndRunBot } = require("./tradingBot");
 
 // ── 매매 파라미터 (기존 클라이언트 로직과 동일) ──────────────
-const TRADE_COOLDOWN_MS   = 1000;   // 연속 거래 최소 간격
 const IMPACT_PER_QTY      = 0.001;  // 수량당 시장 충격
 const SPREAD              = 0.0005; // 매수/매도 스프레드
 const SELL_FEE            = 0.003;  // 매도 수수료
@@ -382,15 +381,14 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     // 잭팟 반영 실패는 무시 (다음 거래 때 재시도됨)
   }
 
-  // 8) 트레이딩 봇 반응(2026-08-27, best-effort — 실패해도 실제 유저의
-  //    거래 결과에는 전혀 영향 없음). 여기서 끝까지 await 해야 한다 —
-  //    Cloud Functions는 응답을 반환하면 인스턴스가 곧 재활용될 수 있어,
-  //    await 없이 흘려보내면 백그라운드 작업이 중간에 끊길 수 있다.
-  try {
-    await maybeSpawnAndRunBot(db, uid, stockId, type);
-  } catch (e) {
-    // 봇 반응 실패는 무시
-  }
+  // 8) 트레이딩 봇 반응은 여기서 실행하지 않는다(2026-08-27 재설계 — 아래
+  //    triggerBotReaction 참고). 봇도 "1초에 한 거래" 속도 제한을 지키게
+  //    되면서, 5~20건짜리 패턴을 이 응답 안에서 끝까지 기다리면 실제 유저가
+  //    자기 거래 버튼 하나 누른 결과를 최대 20초 가까이 기다려야 하는
+  //    문제가 생긴다. 그래서 클라이언트가 이 trade() 응답을 받은 "직후,
+  //    기다리지 않고" triggerBotReaction을 별도로 호출하도록 분리했다 —
+  //    실제 유저 화면은 즉시 갱신되고, 봇은 완전히 독립된 함수 호출 안에서
+  //    자기 속도대로 체결을 이어간다.
 
   return {
     ok:       true,

@@ -13,6 +13,10 @@ const ADMIN_EMAIL              = "skftodwocks2@gmail.com"; // 관리자 페이�
 // 수령"할 수 있는 지급형 이벤트는 계속 로그인(계정 보호) 유저 전용으로
 // 남긴다 — 그 기능들만 실제 악용 경로가 있기 때문.
 const INITIAL_CASH             = 1000000;  // 접속 즉시 지급되는 시작 자금(익명/로그인 동일)
+// trade.js(실제 유저)와 tradingBot.js(봇) 둘 다 "1초에 한 거래"를 같은 값으로
+// 지켜야 해서(2026-08-27, 사용자 지시 - "봇의 매매속도도 실제 유저처럼 1초당
+// 1거래만 가능하게") 공용 상수로 뺐다.
+const TRADE_COOLDOWN_MS        = 1000;     // 연속 거래 최소 간격
 // 2026-07 정책 변경(익명 20만원+카카오 80만원 → 익명 50만원+카카오 50만원) 이전에
 // 이미 생성된 익명 유저는 20만원만, 그 다음 세대는 50만원만 받은 상태다. 실제로
 // 거래해본(=진짜 이용한) 익명 유저에 한해 새 기준(100만원)과의 차액을 1회 보정
@@ -507,4 +511,5 @@ module.exports = {
   computeTotalAssets,
   recordDailyAssetSnapshot,
   updateVolumeRanking,
+  TRADE_COOLDOWN_MS,
 };

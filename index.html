@@ -1370,6 +1370,7 @@ const provider  = new GoogleAuthProvider();
 const functions = getFunctions(app);
 const whoAmICallable             = httpsCallable(functions, 'stockWhoAmI'); // 09번 - StreamBet-Market의 whoAmI와 이름 충돌 방지
 const tradeCallable              = httpsCallable(functions, 'trade');
+const triggerBotReactionCallable = httpsCallable(functions, 'triggerBotReaction'); // 트레이딩 봇(2026-08-27) - fire-and-forget 전용, 절대 await하지 않는다(아래 호출부 참고)
 const submitBannerRequestCallable = httpsCallable(functions, 'submitBannerRequest');
 const submitChartBannerRequestCallable = httpsCallable(functions, 'submitChartBannerRequest');
 const submitCardBannerRequestCallable = httpsCallable(functions, 'submitCardBannerRequest');
@@ -2396,6 +2397,13 @@ window.trade = async function (id, type, qty = 1) {
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
+
+        // 트레이딩 봇 반응(2026-08-27) - 절대 await하지 않는다. 봇이 실제
+        // 유저와 같은 "1초에 한 거래" 속도 제한을 지키며 5~20건짜리 패턴을
+        // 다 돌면 최악의 경우 20초 가까이 걸릴 수 있는데, 여기서 기다리면
+        // 내 거래 버튼 반응이 그만큼 늦어져 버린다. 완전히 별개의 호출로
+        // 흘려보내 화면은 즉시 갱신되고, 봇은 자기 속도대로 뒤에서 처리된다.
+        triggerBotReactionCallable({ stockId: id, type }).catch(() => {});
 
     } catch (error) {
         const message = error?.message || "거래 중 오류가 발생했습니다.";

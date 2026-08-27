@@ -32,6 +32,7 @@ setGlobalOptions({
 //   common.js         — 위 모듈들이 공유하는 상수/헬퍼 (Cloud Function 없음)
 const { stockWhoAmI } = require("./whoami");
 const { initializeUser, trade } = require("./trade");
+const { triggerBotReaction } = require("./tradingBot");
 const { adminAction, getOverviewStatsForMonitoring } = require("./admin");
 const { submitBannerRequest, submitChartBannerRequest } = require("./bannerRequests");
 const { submitCardBannerRequest } = require("./cardBannerRequests");
@@ -57,6 +58,7 @@ const { logStockMarketVisit } = require("./streamerVisitLog");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
+exports.triggerBotReaction      = triggerBotReaction;
 exports.adminAction             = adminAction;
 exports.getOverviewStatsForMonitoring = getOverviewStatsForMonitoring;
 exports.submitBannerRequest     = submitBannerRequest;
