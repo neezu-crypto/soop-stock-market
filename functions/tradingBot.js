@@ -119,9 +119,24 @@ async function placeBotOrder(db, botUid, stockId, type) {
   if (qty < 1) return false; // 자산/보유량 부족 - 이번 주문은 건너뜀
 
   const result = await executeSimulatedTrade(db, stockId, type, qty);
-  if (!result) return false;
+  if (!result) {
+    console.log(`[bot] executeSimulatedTrade failed - botUid=${botUid} stockId=${stockId} type=${type} qty=${qty} (stock missing/frozen or price race)`);
+    return false;
+  }
 
-  await db.ref(`botUsers/${botUid}`).transaction((current) => {
+  // 트랜잭션 결과를 반드시 확인해야 한다(2026-08-31, 사용자 지시 - "봇이
+  // 매도해도 보유수량에 변화가 없는것같은데" 조사 중 발견) - 지금까지는 이
+  // .transaction() 호출의 반환값(committed 여부)을 전혀 안 보고 있었다.
+  // 콜백이 (b.cash||0)<cost나 pos.qty<qty에 걸려 undefined를 반환하면
+  // 트랜잭션은 조용히 abort되는데(공식 동작), 그래도 코드는 그냥 다음
+  // 줄로 넘어가 아래 랭킹 갱신을 하고 결국 return true까지 가버렸다. 그
+  // 결과 "시세/거래량은 이미 executeSimulatedTrade로 실제 움직였는데
+  // (모두가 보는 공용 상태), 봇 자신의 cash/stocks/tradeCount는 하나도
+  // 안 바뀐" 상태가 아무 신호 없이 성공으로 보고되는 게 가능했다 - 동시에
+  // 여러 트리거가 겹쳐 같은 봇에 대해 패턴이 겹쳐 도는 상황(락이 없던
+  // 배포본이거나, 락이 있어도 이론상 재시도 경합 시)에서 실제로 이 abort가
+  // 발생할 수 있다.
+  const txResult = await db.ref(`botUsers/${botUid}`).transaction((current) => {
     const b = current || { cash: INITIAL_CASH, stocks: {} };
     const stocks = { ...(b.stocks || {}) };
     const pos = stocks[stockId] || { qty: 0, avg: 0 };
@@ -149,6 +164,15 @@ async function placeBotOrder(db, botUid, stockId, type) {
     b.lastTradeType = type;
     return b;
   });
+
+  if (!txResult.committed) {
+    // 시세는 이미 움직였지만(executeSimulatedTrade 성공) 봇 자신의 포트폴리오
+    // 반영은 실패한 상태 - 정상적인 "이번 주문만 건너뜀"으로 취급하고, 랭킹
+    // 갱신도 하지 않는다(봇 쪽 거래가 실제로 성사된 게 아니므로).
+    console.log(`[bot] botUsers transaction aborted - botUid=${botUid} stockId=${stockId} type=${type} qty=${qty} price=${result.price} (portfolio update skipped, market price/volume already moved)`);
+    return false;
+  }
+  console.log(`[bot] order filled - botUid=${botUid} stockId=${stockId} type=${type} qty=${qty} price=${result.price} newQty=${txResult.snapshot.val()?.stocks?.[stockId]?.qty}`);
 
   // 거래량 랭킹 갱신(2026-08-27, 사용자 지시 - "봇 거래량 갱신도 똑같이
   // 적용해줘") - 실제 유저 거래와 동일한 공용 함수를 호출한다. 매번 시도하되
@@ -217,17 +241,26 @@ const PATTERNS = [
 async function maybeSpawnAndRunBot(db, realUid, stockId, direction) {
   const presenceSnap = await db.ref(`presence/stockMarket/${realUid}`).get();
   const connectedAt = presenceSnap.val()?.connectedAt;
-  if (!connectedAt || Date.now() - connectedAt < MIN_CONNECTED_MS) return; // 조건1 미충족
+  if (!connectedAt || Date.now() - connectedAt < MIN_CONNECTED_MS) {
+    console.log(`[bot] skip - presence not old enough: realUid=${realUid} connectedAt=${connectedAt}`);
+    return; // 조건1 미충족
+  }
 
   const gotLock = await acquireBotLock(realUid, db);
-  if (!gotLock) return; // 이미 진행 중인 패턴이 있음 - 이번 트리거는 건너뜀
+  if (!gotLock) {
+    console.log(`[bot] skip - lock already held (another pattern in progress): realUid=${realUid}`);
+    return; // 이미 진행 중인 패턴이 있음 - 이번 트리거는 건너뜀
+  }
 
   try {
     const assignRef = db.ref(`botAssignments/${realUid}`);
     let assignment = (await assignRef.get()).val();
 
     if (!assignment) {
-      if (Math.random() >= BOT_SPAWN_CHANCE) return; // 조건2 - 20% 실패
+      if (Math.random() >= BOT_SPAWN_CHANCE) {
+        console.log(`[bot] skip - spawn chance missed: realUid=${realUid}`);
+        return; // 조건2 - 20% 실패
+      }
       const botUid = "bot_" + db.ref().push().key;
       const now = Date.now();
       await db.ref(`botUsers/${botUid}`).set({ cash: INITIAL_CASH, stocks: {}, isBot: true, createdAt: now });
@@ -277,7 +310,12 @@ const triggerBotReaction = onCall({ cors: true, timeoutSeconds: 30, memory: "256
 
     await maybeSpawnAndRunBot(db, auth.uid, stockId, type);
   } catch (e) {
-    // best-effort — 실패해도 실제 유저에게는 아무 영향 없음(애초에 안 기다림)
+    // best-effort — 실패해도 실제 유저에게는 아무 영향 없음(애초에 안 기다림).
+    // 다만 지금까지는 e를 완전히 삼켜서 내부에서 진짜 예외가 터져도 로그에
+    // 전혀 안 남았다(2026-08-31, 사용자 지시로 조사 중 발견) - 최소한
+    // 흔적은 남기도록 로그만 추가한다(동작은 그대로 - 여전히 실제 유저
+    // 응답에는 영향 없음).
+    console.error(`[bot] triggerBotReaction internal error - realUid=${auth.uid} stockId=${stockId} type=${type}:`, e);
   }
 
   return { ok: true };
