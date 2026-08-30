@@ -125,19 +125,19 @@ async function placeBotOrder(db, botUid, stockId, type) {
   }
 
   // 트랜잭션 결과를 반드시 확인해야 한다(2026-08-31, 사용자 지시 - "봇이
-  // 매도해도 보유수량에 변화가 없는것같은데" 조사 중 발견) - 지금까지는 이
-  // .transaction() 호출의 반환값(committed 여부)을 전혀 안 보고 있었다.
-  // 콜백이 (b.cash||0)<cost나 pos.qty<qty에 걸려 undefined를 반환하면
-  // 트랜잭션은 조용히 abort되는데(공식 동작), 그래도 코드는 그냥 다음
-  // 줄로 넘어가 아래 랭킹 갱신을 하고 결국 return true까지 가버렸다. 그
-  // 결과 "시세/거래량은 이미 executeSimulatedTrade로 실제 움직였는데
-  // (모두가 보는 공용 상태), 봇 자신의 cash/stocks/tradeCount는 하나도
-  // 안 바뀐" 상태가 아무 신호 없이 성공으로 보고되는 게 가능했다 - 동시에
-  // 여러 트리거가 겹쳐 같은 봇에 대해 패턴이 겹쳐 도는 상황(락이 없던
-  // 배포본이거나, 락이 있어도 이론상 재시도 경합 시)에서 실제로 이 abort가
-  // 발생할 수 있다.
+  // 매도해도 보유수량에 변화가 없는것같은데" 조사 중 발견) - 실 서버 디버그
+  // 캡처로 확인한 진짜 원인: 이 .transaction() 콜백의 current가 실제 서버 값
+  // (직전 botSnap 조회로는 분명 정상 읽히는 값, 예: qty 68)이 아니라 매번
+  // null로 들어와, 콜백이 빈 기본값({cash:INITIAL_CASH, stocks:{}})으로
+  // 폴백하면서 "보유량 0"으로 오판해 거의 항상 조용히 abort됐다(공식 동작 -
+  // 콜백이 undefined를 반환하면 트랜잭션은 그냥 조용히 취소된다). abort된 걸
+  // 그동안 확인조차 안 하고 있었기 때문에(.committed 미확인), 시세/거래량은
+  // 이미 움직였는데 봇 자신의 cash/stocks/tradeCount는 하나도 안 바뀐 채
+  // "성공"으로 처리되고 있었다. current가 비어있을 때는 빈 기본값이 아니라
+  // 이미 신뢰할 수 있는 직전 조회 결과(bot)로 폴백해야 실제로 존재하는
+  // 포트폴리오를 0으로 잘못 취급하지 않는다.
   const txResult = await db.ref(`botUsers/${botUid}`).transaction((current) => {
-    const b = current || { cash: INITIAL_CASH, stocks: {} };
+    const b = current || bot;
     const stocks = { ...(b.stocks || {}) };
     const pos = stocks[stockId] || { qty: 0, avg: 0 };
 
@@ -274,7 +274,8 @@ async function maybeSpawnAndRunBot(db, realUid, stockId, direction) {
       await db.ref(`presence/stockMarket/${assignment.botUid}`).update({ lastSeen: Date.now() });
     }
 
-    const pattern = PATTERNS[randInt(0, PATTERNS.length - 1)];
+    const patternIdx = randInt(0, PATTERNS.length - 1);
+    const pattern = PATTERNS[patternIdx];
     await pattern(db, assignment.botUid, stockId, direction);
   } finally {
     await releaseBotLock(realUid, db);
