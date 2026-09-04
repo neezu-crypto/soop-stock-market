@@ -13,15 +13,15 @@
 
 - 작업 지시를 받았을 때, 그 작업이 Firebase(Realtime Database 읽기/쓰기, Cloud Functions 호출 등) 관련 데이터 소모량이 더 커지는 방향(예: 폴링 주기 단축, 실시간 리스너 추가, 불필요한 전체 스캔/재조회 증가 등)으로 이뤄질 것 같으면, 바로 작업을 시작하지 말고 먼저 사용자에게 경고하고 확인을 받는다.
 
-## database.rules.json 동기화 필수 (2026-08-14)
+## database.rules.json 동기화 필수 (2026-08-14, 2026-09-04 갱신)
 
-- 이 파일은 같은 RTDB(`soop-stock-market-default-rtdb`)를 공유하는 4개 레포
-  (StreamBet-Market, soop-stock-market, interior-3d-viewer, streamer-life-game)가
-  전부 바이트 단위로 동일한 사본을 갖고 있어야 한다. 이 중 아무 레포에서나
-  재배포하면 그 레포 로컬 파일 내용으로 실제 서버 규칙이 통째로 덮어써지기 때문 —
-  하나만 고치고 넘어가면 나중에 다른 레포에서 무심코 재배포했을 때 방금 추가한
-  변경이 조용히 사라진다.
-- **이 파일을 수정할 때마다 나머지 3개 레포의 `database.rules.json`에도 동일한
+- 이 파일은 같은 RTDB(`soop-stock-market-default-rtdb`)를 공유하는 6개 레포
+  (StreamBet-Market, soop-stock-market, interior-3d-viewer, streamer-life-game,
+  rocket-game, streamer-gallery)가 전부 바이트 단위로 동일한 사본을 갖고 있어야
+  한다. 이 중 아무 레포에서나 재배포하면 그 레포 로컬 파일 내용으로 실제 서버
+  규칙이 통째로 덮어써지기 때문 — 하나만 고치고 넘어가면 나중에 다른 레포에서
+  무심코 재배포했을 때 방금 추가한 변경이 조용히 사라진다.
+- **이 파일을 수정할 때마다 나머지 5개 레포의 `database.rules.json`에도 동일한
   변경을 그대로 복사(`cp`)해서 diff 0줄 확인 후 커밋한다.** 부분 수동 편집으로
   레포마다 파일이 미묘하게 갈라지지 않게 할 것.
 
