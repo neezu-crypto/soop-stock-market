@@ -2,10 +2,8 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const {
   MAX_PIN_HOURS,
-  PIN_COST_PER_HOUR,
+  PIN_BALLOON_PRICE_PER_HOUR,
   MAX_PINNED_SLOTS,
-  chargeUserCash,
-  creditUserCash,
   findStockIdByName,
   requireLinkedUser,
   requireNotInMaintenance,
@@ -23,11 +21,11 @@ const {
 // ══════════════════════════════════════════════════════════
 
 /**
- * 최상단 고정 노출 신청. 로그인(익명 포함)한 누구나 호출 가능. 대상은
- * 반드시 이미 상장된 종목이어야 하며(오타로 새 종목이 생기지 않도록 미리
- * 확인), 슬롯(최대 3개)에 여유가 있으면 검수 없이 즉시 적용한다 — 신청
- * 시점에 슬롯 상태를 바로 확인하므로 "승인 시점엔 이미 꽉 찼더라" 같은
- * 시차 문제도 사라진다.
+ * 최상단 고정 노출 신청 접수. 로그인(익명 포함)한 누구나 호출 가능. 대상은
+ * 반드시 이미 상장된 종목이어야 한다(오타로 새 종목이 생기지 않도록 미리
+ * 확인). 실제 후원은 라이브 방송에서 별도로 이뤄지고, 슬롯 반영은 관리자가
+ * 후원을 확인하고 승인(actionApprovePinRequest)해야만 이뤄진다(2026-09-09,
+ * 게임자산 즉시차감 방식에서 원래의 방송 후원 확인 방식으로 되돌림).
  */
 const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -47,53 +45,23 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   }
 
   // 고정 노출은 이미 상장된 종목만 가능 — 오타로 새 종목이 생기지 않도록 미리 확인.
-  const targetId = await findStockIdByName(db, stockName);
-  if (!targetId) {
+  if (!(await findStockIdByName(db, stockName))) {
     throw new HttpsError("not-found", "해당 종목명을 찾을 수 없습니다. 정확한 종목명을 입력해주세요.");
   }
 
-  const now = Date.now();
-  const existingStock = (await db.ref(`stocks/${targetId}`).get()).val();
-  const isAlreadyPinned = existingStock?.pinnedUntil && existingStock.pinnedUntil > now;
-
-  if (!isAlreadyPinned) {
-    // 새로 슬롯을 차지하는 경우에만 최대 슬롯 수를 확인한다 — 이미 고정
-    // 중인 종목의 재신청(연장)은 슬롯을 새로 차지하는 게 아니므로 제외.
-    const stocksSnap  = await db.ref("stocks").get();
-    const stocksData  = stocksSnap.val() || {};
-    const activeCount = Object.values(stocksData).filter((s) => s.pinnedUntil && s.pinnedUntil > now).length;
-    if (activeCount >= MAX_PINNED_SLOTS) {
-      throw new HttpsError(
-        "resource-exhausted",
-        `최상단 고정 슬롯이 이미 가득 찼습니다 (최대 ${MAX_PINNED_SLOTS}개). 기존 고정이 만료되거나 해제된 뒤 다시 시도해주세요.`
-      );
-    }
-  }
-
-  const cost = hours * PIN_COST_PER_HOUR;
-  await chargeUserCash(db, auth.uid, cost);
-  await grantAchievement(db, auth.uid, "first_support");
-
-  // 이미 고정 중인 종목의 재신청은 남은 시간에 이어서 연장한다(우측 배너와 동일한 원칙).
-  const baseTime    = isAlreadyPinned ? existingStock.pinnedUntil : now;
-  const pinnedUntil = baseTime + hours * 3600000;
-
+  const starBalloons = hours * PIN_BALLOON_PRICE_PER_HOUR;
   const ref = db.ref("pinRequests").push();
-  await db.ref().update({
-    [`stocks/${targetId}/pinnedUntil`]: pinnedUntil,
-    [`pinnedStocks/${targetId}`]:       true, // 클라이언트가 항상 실시간 구독하도록 하는 마커
-    [`pinRequests/${ref.key}`]: {
-      stockName,
-      hours,
-      chargedAmount: cost,
-      status:        "approved", // 관리자 승인 단계 없이 즉시 적용 — 기록은 이력 확인용으로 남긴다
-      requestedAt:   now,
-      reviewedAt:    now,
-      requesterUid:  auth.uid,
-    },
+
+  await ref.set({
+    stockName,
+    hours,
+    starBalloons,
+    status:       "pending",
+    requestedAt:  Date.now(),
+    requesterUid: auth.uid,
   });
 
-  return { ok: true, id: ref.key, chargedAmount: cost, pinnedUntil };
+  return { ok: true, id: ref.key, starBalloons };
 });
 
 async function actionListPinRequests(db) {
@@ -168,6 +136,7 @@ async function actionApprovePinRequest(db, { requestId, hours, stockName }) {
     [`pinRequests/${requestId}/status`]:      "approved",
     [`pinRequests/${requestId}/reviewedAt`]:  Date.now(),
   });
+  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
   return { ok: true, pinnedUntil };
 }
@@ -177,12 +146,6 @@ async function actionRejectPinRequest(db, { requestId }) {
 
   const reqSnap = await db.ref(`pinRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
-  const reqData = reqSnap.val();
-
-  // 신청 시 차감된 게임자산을 전액 환불한다.
-  if (reqData.status === "pending") {
-    await creditUserCash(db, reqData.requesterUid, reqData.chargedAmount);
-  }
 
   await db.ref(`pinRequests/${requestId}`).update({
     status:     "rejected",

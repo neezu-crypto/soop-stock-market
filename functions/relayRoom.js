@@ -3,10 +3,8 @@ const admin = require("firebase-admin");
 const {
   STREAMER_ID_RE,
   MAX_RELAY_ROOM_HOURS,
-  RELAY_ROOM_COST_PER_HOUR,
+  RELAY_ROOM_BALLOON_PRICE_PER_HOUR,
   MAX_RELAY_ROOMS,
-  chargeUserCash,
-  creditUserCash,
   findStockIdByName,
   requireLinkedUser,
   requireNotInMaintenance,
@@ -29,10 +27,12 @@ function buildRelayPreview(streamerId) {
 }
 
 /**
- * 중계방 홍보 신청. 로그인(익명 포함)한 누구나 호출 가능. 다른 셀프 신청
- * (최상단 고정 노출 등)과 동일하게 대상은 반드시 이미 상장된 종목명이어야
- * 하고, 슬롯(최대 3명) 여유와 중복 진행 여부만 확인되면 검수 없이 즉시
- * 등록한다.
+ * 중계방 홍보 신청 접수. 로그인(익명 포함)한 누구나 호출 가능. 다른 셀프
+ * 신청(최상단 고정 노출 등)과 동일하게 대상은 반드시 이미 상장된
+ * 종목명이어야 한다. 실제 후원은 라이브 방송에서 별도로 이뤄지고, 등록은
+ * 관리자가 후원을 확인하고 승인(actionApproveRelayRoomRequest)해야만
+ * 이뤄진다(2026-09-09, 게임자산 즉시차감 방식에서 원래의 방송 후원 확인
+ * 방식으로 되돌림).
  */
 const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -63,56 +63,23 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
     );
   }
 
-  const now = Date.now();
-
-  // 이미 진행 중인 중계방이면 신청 자체를 막는다 (연장 없이 단순 거부).
-  const activeSnap = await db.ref(`relayRooms/${streamerId}`).get();
-  if (activeSnap.exists() && activeSnap.val().endAt > now) {
-    throw new HttpsError("already-exists", "이미 진행 중인 중계방입니다. 종료된 뒤 다시 신청해주세요.");
-  }
-
-  // 최대 등록 인원(3명) 확인.
-  const allRoomsSnap = await db.ref("relayRooms").get();
-  const allRooms = allRoomsSnap.val() || {};
-  const activeCount = Object.values(allRooms).filter((r) => r.endAt > now).length;
-  if (activeCount >= MAX_RELAY_ROOMS) {
-    throw new HttpsError(
-      "resource-exhausted",
-      `중계방은 최대 ${MAX_RELAY_ROOMS}명까지만 등록할 수 있습니다. 기존 중계방이 종료된 뒤 다시 시도해주세요.`
-    );
-  }
-
-  const cost = hours * RELAY_ROOM_COST_PER_HOUR;
-  await chargeUserCash(db, auth.uid, cost);
-  await grantAchievement(db, auth.uid, "first_support");
-
   const { previewImg, stationLink } = buildRelayPreview(streamerId);
-  const endAt = now + hours * 3600000;
-
+  const starBalloons = hours * RELAY_ROOM_BALLOON_PRICE_PER_HOUR;
   const ref = db.ref("relayRoomRequests").push();
-  await db.ref().update({
-    [`relayRooms/${streamerId}`]: {
-      nickname: stockName,
-      previewImg,
-      stationLink,
-      startAt: now,
-      endAt,
-    },
-    [`relayRoomRequests/${ref.key}`]: {
-      nickname: stockName,
-      streamerId,
-      previewImg,
-      stationLink,
-      hours,
-      chargedAmount: cost,
-      status:        "approved", // 관리자 승인 단계 없이 즉시 적용 — 기록은 이력 확인용으로 남긴다
-      requestedAt:   now,
-      reviewedAt:    now,
-      requesterUid:  auth.uid,
-    },
+
+  await ref.set({
+    nickname: stockName,
+    streamerId,
+    previewImg,
+    stationLink,
+    hours,
+    starBalloons,
+    status:       "pending",
+    requestedAt:  Date.now(),
+    requesterUid: auth.uid,
   });
 
-  return { ok: true, id: ref.key, chargedAmount: cost, endAt };
+  return { ok: true, id: ref.key, starBalloons };
 });
 
 async function actionListRelayRoomRequests(db) {
@@ -183,6 +150,7 @@ async function actionApproveRelayRoomRequest(db, { requestId, hours, nickname })
     [`relayRoomRequests/${requestId}/status`]:     "approved",
     [`relayRoomRequests/${requestId}/reviewedAt`]: Date.now(),
   });
+  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
   return { ok: true, endAt };
 }
@@ -192,11 +160,6 @@ async function actionRejectRelayRoomRequest(db, { requestId }) {
 
   const reqSnap = await db.ref(`relayRoomRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
-  const reqData = reqSnap.val();
-
-  if (reqData.status === "pending") {
-    await creditUserCash(db, reqData.requesterUid, reqData.chargedAmount);
-  }
 
   await db.ref(`relayRoomRequests/${requestId}`).update({
     status:     "rejected",

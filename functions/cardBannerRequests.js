@@ -3,9 +3,8 @@ const admin = require("firebase-admin");
 const {
   STREAMER_ID_RE,
   MAX_BANNER_REQUEST_DAYS,
-  CARD_BANNER_COST_PER_DAY,
+  CARD_BANNER_BALLOON_PRICE_PER_DAY,
   CARD_BANNER_MIN_HOLDING_QTY,
-  chargeUserCash,
   findStockIdByName,
   requireLinkedUser,
   requireNotInMaintenance,
@@ -14,13 +13,19 @@ const {
 } = require("./common");
 
 // ══════════════════════════════════════════════════════════
-// 종목 카드 프로필 배너 — 우측 랭킹 배너와 신청 방식(닉네임+아이디+기간,
-// 관리자 검수 없이 즉시 적용)은 동일하지만, "이 종목을 실제로 대량 보유한
-// 유저만" 신청할 수 있다는 점이 다르다. 노출 위치도 사이드 배너 레일이
-// 아니라 종목 리스트 카드 자체(원형 프로필 사진)라 노출 빈도가 훨씬 높다.
-// 되팔기(신청만 하고 바로 매도)를 막기 위해, 신청 이후 보유 수량이
-// CARD_BANNER_MIN_HOLDING_QTY 미만으로 떨어지면 trade.js가 자동으로
-// 배너를 삭제한다(신청 모달에 이 규칙을 미리 고지).
+// 종목 카드 프로필 배너 — 우측 랭킹 배너와 신청 방식(닉네임+아이디+기간)은
+// 동일하지만, "이 종목을 실제로 대량 보유한 유저만" 신청할 수 있다는 점이
+// 다르다. 노출 위치도 사이드 배너 레일이 아니라 종목 리스트 카드 자체(원형
+// 프로필 사진)라 노출 빈도가 훨씬 높다. 되팔기(신청만 하고 바로 매도)를
+// 막기 위해, 신청 이후 보유 수량이 CARD_BANNER_MIN_HOLDING_QTY 미만으로
+// 떨어지면 trade.js가 자동으로 배너를 삭제한다(신청 모달에 이 규칙을 미리
+// 고지).
+//
+// 실제 후원은 라이브 방송에서 별도로 이뤄지고, 이 함수는 신청만 접수한다.
+// 적용은 관리자가 방송에서 후원을 직접 확인한 뒤 actionApproveCardBannerRequest
+// 에서 처리한다(2026-09-09, 게임자산 즉시차감 방식에서 원래의 방송 후원 확인
+// 방식으로 되돌림 — 다른 4종 배너/고정노출/중계방과 동일 원칙. 이 파일만
+// 원래 관리자 승인 단계 자체가 없었어서 이번에 처음 만든다).
 // ══════════════════════════════════════════════════════════
 
 function buildCardBannerPreview(streamerId) {
@@ -74,6 +79,7 @@ const submitCardBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
   }
 
   // 실제 소유주만 신청 가능 — 되팔기 방지 규칙과 짝을 이루는 최소 보유 수량 검증.
+  // (최종 판정은 승인 시점에 다시 한다 — 신청 후 승인 전에 매도했을 수 있음.)
   const qtySnap = await db.ref(`users/${auth.uid}/stocks/${targetId}/qty`).get();
   const qty = qtySnap.val() || 0;
   if (qty < CARD_BANNER_MIN_HOLDING_QTY) {
@@ -83,45 +89,109 @@ const submitCardBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
     );
   }
 
+  const { previewImg, stationLink } = buildCardBannerPreview(streamerId);
+  const starBalloons = days * CARD_BANNER_BALLOON_PRICE_PER_DAY;
+  const ref = db.ref("cardBannerRequests").push();
+
+  await ref.set({
+    nickname,
+    stockId:      targetId,
+    streamerId,
+    previewImg,
+    stationLink,
+    days,
+    starBalloons,
+    status:       "pending",
+    requestedAt:  Date.now(),
+    requesterUid: auth.uid,
+  });
+
+  return { ok: true, id: ref.key, starBalloons };
+});
+
+async function actionListCardBannerRequests(db) {
+  const snap = await db.ref("cardBannerRequests").get();
+  const data = snap.val() || {};
+  const requests = Object.entries(data)
+    .map(([id, r]) => ({ id, ...r }))
+    .filter((r) => r.status === "pending")
+    .sort((a, b) => (a.requestedAt || 0) - (b.requestedAt || 0));
+  return { ok: true, requests };
+}
+
+async function actionApproveCardBannerRequest(db, { requestId, days, nickname }) {
+  if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
+  const daysNum = parseInt(days, 10);
+  if (!Number.isFinite(daysNum) || daysNum < 1) {
+    throw new HttpsError("invalid-argument", "노출 기간(일)을 올바르게 입력해주세요.");
+  }
+
+  const reqSnap = await db.ref(`cardBannerRequests/${requestId}`).get();
+  if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
+  const reqData = reqSnap.val();
+
+  const finalNickname = String(nickname || "").trim() || reqData.nickname;
+  const targetId = (nickname && nickname.trim() && nickname.trim() !== reqData.nickname)
+    ? await findStockIdByName(db, finalNickname)
+    : (reqData.stockId || await findStockIdByName(db, finalNickname));
+  if (!targetId) {
+    throw new HttpsError(
+      "failed-precondition",
+      `"${finalNickname}"은(는) 상장되지 않은 종목입니다. 종목명을 정확히 고치거나, 먼저 상장 신청을 승인한 뒤 다시 시도해주세요.`
+    );
+  }
+
+  // 신청 후 승인 전에 매도해 최소 보유 수량 미달이 됐을 수 있으므로 승인 시점에 다시 확인한다.
+  const qtySnap = await db.ref(`users/${reqData.requesterUid}/stocks/${targetId}/qty`).get();
+  const qty = qtySnap.val() || 0;
+  if (qty < CARD_BANNER_MIN_HOLDING_QTY) {
+    throw new HttpsError(
+      "failed-precondition",
+      `신청자가 더 이상 최소 보유 수량(${CARD_BANNER_MIN_HOLDING_QTY}주)을 충족하지 않습니다(현재 ${qty}주). 거절해주세요.`
+    );
+  }
+
   const existingStock = (await db.ref(`stocks/${targetId}`).get()).val();
-  if (existingStock?.cardBannerHolderUid && existingStock.cardBannerHolderUid !== auth.uid) {
+  if (existingStock?.cardBannerHolderUid && existingStock.cardBannerHolderUid !== reqData.requesterUid) {
     const endStr = existingStock.cardBannerEndDate;
     const stillActive = endStr && new Date(new Date(endStr).setHours(23, 59, 59, 999)).getTime() >= Date.now();
     if (stillActive) {
-      throw new HttpsError("already-exists", "이미 다른 유저가 이 종목의 카드 홍보를 진행 중입니다. 만료 후 다시 신청해주세요.");
+      throw new HttpsError("already-exists", "이미 다른 유저가 이 종목의 카드 홍보를 진행 중입니다. 만료 후 승인해주세요.");
     }
   }
 
-  const endDateStr = computeCardBannerEndDate(existingStock, days);
-  const cost = days * CARD_BANNER_COST_PER_DAY;
-  await chargeUserCash(db, auth.uid, cost);
-  await grantAchievement(db, auth.uid, "first_support");
-
-  const { previewImg, stationLink } = buildCardBannerPreview(streamerId);
-  const ref = db.ref("cardBannerRequests").push();
-  const now = Date.now();
+  const endDateStr = computeCardBannerEndDate(existingStock, daysNum);
 
   await db.ref().update({
-    [`stocks/${targetId}/cardBannerImg`]:       previewImg,
+    [`stocks/${targetId}/cardBannerImg`]:       reqData.previewImg,
     [`stocks/${targetId}/cardBannerEndDate`]:   endDateStr,
-    [`stocks/${targetId}/cardBannerLink`]:      stationLink,
-    [`stocks/${targetId}/cardBannerHolderUid`]: auth.uid,
-    [`cardBannerRequests/${ref.key}`]: {
-      nickname,
-      stockId:       targetId,
-      streamerId,
-      previewImg,
-      stationLink,
-      days,
-      chargedAmount: cost,
-      status:        "approved", // 관리자 승인 단계 없이 즉시 적용 — 기록은 이력 확인용으로 남긴다
-      requestedAt:   now,
-      reviewedAt:    now,
-      requesterUid:  auth.uid,
-    },
+    [`stocks/${targetId}/cardBannerLink`]:      reqData.stationLink,
+    [`stocks/${targetId}/cardBannerHolderUid`]: reqData.requesterUid,
+    [`cardBannerRequests/${requestId}/nickname`]:   finalNickname,
+    [`cardBannerRequests/${requestId}/status`]:     "approved",
+    [`cardBannerRequests/${requestId}/reviewedAt`]: Date.now(),
   });
+  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
-  return { ok: true, id: ref.key, chargedAmount: cost, endDate: endDateStr };
-});
+  return { ok: true, endDate: endDateStr };
+}
 
-module.exports = { submitCardBannerRequest };
+async function actionRejectCardBannerRequest(db, { requestId }) {
+  if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
+
+  const reqSnap = await db.ref(`cardBannerRequests/${requestId}`).get();
+  if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
+
+  await db.ref(`cardBannerRequests/${requestId}`).update({
+    status:     "rejected",
+    reviewedAt: Date.now(),
+  });
+  return { ok: true };
+}
+
+module.exports = {
+  submitCardBannerRequest,
+  actionListCardBannerRequests,
+  actionApproveCardBannerRequest,
+  actionRejectCardBannerRequest,
+};

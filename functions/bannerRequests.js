@@ -4,10 +4,8 @@ const {
   STREAMER_ID_RE,
   URL_RE,
   MAX_BANNER_REQUEST_DAYS,
-  BANNER_COST_PER_DAY,
-  CHART_BANNER_COST_PER_DAY,
-  chargeUserCash,
-  creditUserCash,
+  BANNER_BALLOON_PRICE_PER_DAY,
+  CHART_BANNER_BALLOON_PRICE_PER_DAY,
   findStockIdByName,
   requireLinkedUser,
   requireNotInMaintenance,
@@ -17,7 +15,7 @@ const {
 
 // ══════════════════════════════════════════════════════════
 // 홍보 배너 신청 (우측 랭킹 배너) — 신청은 카카오 연동(또는 관리자) 유저만,
-// 승인/거절은 관리자만
+// 실제 적용은 방송 후원을 관리자가 확인해 승인해야만 이뤄진다.
 // ══════════════════════════════════════════════════════════
 
 function buildBannerPreview(streamerId) {
@@ -28,29 +26,16 @@ function buildBannerPreview(streamerId) {
   };
 }
 
-/** 이미 홍보 중(만료 전)인 종목에 재신청하면, 오늘부터 새로 계산하지 않고 남은 기간에 이어서 연장한다. */
-function computeBannerEndDate(existingStock, days) {
-  let baseDate = new Date();
-  if (existingStock?.bannerImg && existingStock.bannerEndDate) {
-    const existingEnd = new Date(existingStock.bannerEndDate);
-    existingEnd.setHours(23, 59, 59, 999);
-    if (existingEnd > baseDate) baseDate = existingEnd;
-  }
-  const endDate = new Date(baseDate);
-  endDate.setDate(endDate.getDate() + days);
-  return endDate.toISOString().split("T")[0];
-}
-
 /**
- * 홍보 배너 신청. 카카오 연동된(또는 관리자) 유저만 호출 가능.
+ * 홍보 배너 신청 접수. 카카오 연동된(또는 관리자) 유저만 호출 가능. 실제
+ * 후원은 라이브 방송에서 별도로 이뤄지고, 이 함수는 "후원할 예정"이라는
+ * 신청만 접수한다 — 적용은 관리자가 방송에서 후원을 직접 확인한 뒤
+ * actionApproveBannerRequest에서 처리한다(2026-09-09, 게임자산 즉시차감
+ * 방식에서 원래의 방송 후원 확인 방식으로 되돌림).
  *
  * nickname은 최상단 고정 노출 신청(pinRequests)과 동일하게 "이미 상장된
- * 종목명"이어야 한다 — 예전엔 아무 텍스트나 받아 관리자가 매번 "이 닉네임이
- * 진짜 상장된 스트리머가 맞는지" 검수한 뒤 승인해야 했다. 이제는 신청
- * 시점에 기존 상장 종목인지 바로 확인해 없으면 상장 신청을 먼저 하도록
- * 안내하고, 있으면 검수 없이 즉시 배너를 적용한다(관리자 승인 단계 자체가
- * 불필요해짐 — "종목이 실재하는가"가 유일한 검수 포인트였는데, 상장 신청
- * 승인 시점에 이미 한 번 걸러졌기 때문).
+ * 종목명"이어야 한다 — 신청 시점에 기존 상장 종목인지 미리 확인해 없으면
+ * 상장 신청을 먼저 하도록 안내한다.
  */
 const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -80,37 +65,25 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
       "현재 상장되지 않은 종목입니다. 먼저 종목 상장 신청을 통해 상장한 뒤 다시 신청해주세요."
     );
   }
-  const existingStock = (await db.ref(`stocks/${targetId}`).get()).val();
-  const endDateStr = computeBannerEndDate(existingStock, days);
-
-  const cost = days * BANNER_COST_PER_DAY;
-  await chargeUserCash(db, auth.uid, cost);
-  await grantAchievement(db, auth.uid, "first_support");
 
   const { previewImg, stationLink } = buildBannerPreview(streamerId);
+  const starBalloons = days * BANNER_BALLOON_PRICE_PER_DAY;
   const ref = db.ref("bannerRequests").push();
-  const now = Date.now();
 
-  await db.ref().update({
-    [`stocks/${targetId}/bannerImg`]:     previewImg,
-    [`stocks/${targetId}/bannerEndDate`]: endDateStr,
-    [`stocks/${targetId}/link`]:          stationLink,
-    [`bannerRequests/${ref.key}`]: {
-      nickname,
-      stockId:       targetId,
-      streamerId,
-      previewImg,
-      stationLink,
-      days,
-      chargedAmount: cost,
-      status:        "approved", // 관리자 승인 단계 없이 즉시 적용 — 기록은 이력 확인용으로 남긴다
-      requestedAt:   now,
-      reviewedAt:    now,
-      requesterUid:  auth.uid,
-    },
+  await ref.set({
+    nickname,
+    stockId:      targetId,
+    streamerId,
+    previewImg,
+    stationLink,
+    days,
+    starBalloons,
+    status:       "pending",
+    requestedAt:  Date.now(),
+    requesterUid: auth.uid,
   });
 
-  return { ok: true, id: ref.key, chargedAmount: cost, endDate: endDateStr };
+  return { ok: true, id: ref.key, starBalloons };
 });
 
 async function actionListBannerRequests(db) {
@@ -174,6 +147,7 @@ async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
     [`bannerRequests/${requestId}/status`]:     "approved",
     [`bannerRequests/${requestId}/reviewedAt`]: Date.now(),
   });
+  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
   return { ok: true, endDate: endDateStr };
 }
@@ -183,12 +157,6 @@ async function actionRejectBannerRequest(db, { requestId }) {
 
   const reqSnap = await db.ref(`bannerRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
-  const reqData = reqSnap.val();
-
-  // 신청 시 차감된 게임자산을 전액 환불한다.
-  if (reqData.status === "pending") {
-    await creditUserCash(db, reqData.requesterUid, reqData.chargedAmount);
-  }
 
   await db.ref(`bannerRequests/${requestId}`).update({
     status:     "rejected",
@@ -202,22 +170,17 @@ async function actionRejectBannerRequest(db, { requestId }) {
 // ══════════════════════════════════════════════════════════
 
 /**
- * 차트 하단 배너 신청. 이 배너는 신청자가 지금 열어둔 "그 종목"의 차트
+ * 차트 하단 배너 신청 접수. 이 배너는 신청자가 지금 열어둔 "그 종목"의 차트
  * 하단에 붙는 것이 목적이므로, 대상은 클라이언트가 넘긴 stockId로
- * 고정한다 — 닉네임으로 종목을 찾거나 없으면 새로 상장하지 않는다(예전엔
- * 그래서 신청자가 입력한 닉네임과 종목명이 다르면 의도치 않은 새 종목이
- * 생성됐다). 닉네임(홍보할 스트리머)도 우측 랭킹 배너와 동일하게 이미
- * 상장된 종목명이어야 한다. 클릭 시 이동할 홍보 페이지 링크는 우측 랭킹
- * 배너와 동일하게 streamerId 기준 방송국 페이지로 자동 생성하고 별도
- * 입력을 받지 않는다.
+ * 고정한다 — 닉네임으로 종목을 찾거나 없으면 새로 상장하지 않는다. 닉네임
+ * (홍보할 스트리머)도 우측 랭킹 배너와 동일하게 이미 상장된 종목명이어야
+ * 한다. 클릭 시 이동할 홍보 페이지 링크는 streamerId 기준 방송국 페이지로
+ * 자동 생성하고 별도 입력을 받지 않는다.
  *
- * 슬롯(노출 기간)은 신청 즉시 확정한다(비용 차감 + chartBanner 노드에
- * 기간/닉네임/링크 예약) — 관리자가 매번 기간·비용을 검수할 필요가 없다.
- * 다만 배너 이미지는 신청자가 직접 올리는 임의의 이미지라 부적절한 이미지가
- * 검수 없이 바로 노출될 위험이 있으므로, img 필드만은 비워둔 채 예약하고
- * 관리자가 이미지를 확인해 승인(actionApproveChartBannerRequest)해야
- * 실제로 화면에 뜬다 — 승인 시 이미 확정된 기간을 그대로 쓰고 새로
- * 늘리지 않는다.
+ * 실제 후원은 라이브 방송에서 별도로 이뤄지고, 여기서는 신청만 접수한다.
+ * 슬롯 예약과 이미지 노출 모두 관리자가 후원을 확인하고
+ * actionApproveChartBannerRequest에서 승인해야만 이뤄진다(2026-09-09,
+ * 게임자산 즉시차감 방식에서 원래의 방송 후원 확인 방식으로 되돌림).
  */
 const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -262,54 +225,24 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
     );
   }
 
-  // 이 종목에 이미지 승인 대기 중인 예약(img 없음, 만료 전)이 있으면 중복
-  // 신청을 막는다 — 안 막으면 여러 명이 동시에 결제하고 마지막 신청이
-  // chartBanner/{stockId} 예약을 덮어써 앞선 결제자만 손해를 본다.
-  const existingChartBannerSnap = await db.ref(`chartBanner/${stockId}`).get();
-  const existingChartBanner = existingChartBannerSnap.val();
-  if (existingChartBanner && !existingChartBanner.img) {
-    const stillReserved = !existingChartBanner.endDate
-      || (() => { const d = new Date(existingChartBanner.endDate); d.setHours(23, 59, 59, 999); return d >= new Date(); })();
-    if (stillReserved) {
-      throw new HttpsError(
-        "already-exists",
-        "이 종목은 이미 배너 홍보 승인 검수중입니다. 승인/거절 처리된 뒤 다시 신청해주세요."
-      );
-    }
-  }
-
-  const cost = days * CHART_BANNER_COST_PER_DAY;
-  await chargeUserCash(db, auth.uid, cost);
-  await grantAchievement(db, auth.uid, "first_support");
-
-  const endDate = new Date();
-  endDate.setDate(endDate.getDate() + days);
-  const endDateStr = endDate.toISOString().split("T")[0];
-
+  const starBalloons = days * CHART_BANNER_BALLOON_PRICE_PER_DAY;
   const ref = db.ref("chartBannerRequests").push();
-  const now = Date.now();
 
-  await db.ref().update({
-    // img는 의도적으로 비워둔다 — 관리자가 이미지를 승인하기 전까지는
-    // js/chartModal.js의 "!data.img" 체크에 걸려 "모집 안내" 상태로 보인다.
-    [`chartBanner/${stockId}`]: { name: nickname, link: promoLink, endDate: endDateStr },
-    [`chartBannerRequests/${ref.key}`]: {
-      stockId,
-      stockName, // 신청 시점 종목명 스냅샷 (관리자 목록 표시용)
-      nickname,
-      streamerId,
-      bannerImg,
-      promoLink,
-      days,
-      endDate:       endDateStr, // 승인 시 이 값을 그대로 써서 기간이 새로 늘어나지 않게 한다
-      chargedAmount: cost,
-      status:        "pending", // 이미지 승인 대기 — 슬롯 자체는 이미 예약 완료
-      requestedAt:   now,
-      requesterUid:  auth.uid,
-    },
+  await ref.set({
+    stockId,
+    stockName, // 신청 시점 종목명 스냅샷 (관리자 목록 표시용)
+    nickname,
+    streamerId,
+    bannerImg,
+    promoLink,
+    days,
+    starBalloons,
+    status:       "pending",
+    requestedAt:  Date.now(),
+    requesterUid: auth.uid,
   });
 
-  return { ok: true, id: ref.key, chargedAmount: cost, stockId, endDate: endDateStr };
+  return { ok: true, id: ref.key, stockId, starBalloons };
 });
 
 async function actionListChartBannerRequests(db) {
@@ -323,11 +256,9 @@ async function actionListChartBannerRequests(db) {
 }
 
 /**
- * 배너 이미지 승인 — 신청 시점에 이미 슬롯(노출 기간/닉네임/링크)이
- * chartBanner/{stockId}에 예약돼 있으므로, 여기서는 img만 채워 넣어
- * 실제로 화면에 뜨게 한다. reqData.endDate(신청 시점에 확정된 기간)가
- * 있으면 그대로 쓰고, 없는 예전 방식 신청만 관리자가 입력한 기간으로
- * 새로 계산한다.
+ * 배너 이미지 승인 — 신청 접수 시점엔 슬롯을 예약하지 않으므로, 승인 시점의
+ * days(관리자가 검수하며 고칠 수 있음)로 노출 기간을 계산해 slot(chartBanner
+ * /{stockId})과 이미지를 한 번에 확정한다.
  */
 async function actionApproveChartBannerRequest(db, { requestId, days, nickname, bannerImg, promoLink }) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
@@ -376,6 +307,7 @@ async function actionApproveChartBannerRequest(db, { requestId, days, nickname, 
     [`chartBannerRequests/${requestId}/status`]:     "approved",
     [`chartBannerRequests/${requestId}/reviewedAt`]: Date.now(),
   });
+  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
   return { ok: true, stockId: targetId, endDate: endDateStr };
 }
@@ -385,29 +317,11 @@ async function actionRejectChartBannerRequest(db, { requestId }) {
 
   const reqSnap = await db.ref(`chartBannerRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
-  const reqData = reqSnap.val();
 
-  const updates = {
-    [`chartBannerRequests/${requestId}/status`]:     "rejected",
-    [`chartBannerRequests/${requestId}/reviewedAt`]: Date.now(),
-  };
-
-  if (reqData.status === "pending") {
-    await creditUserCash(db, reqData.requesterUid, reqData.chargedAmount);
-
-    // 이미지 승인 전에 신청 시점에 예약해둔 슬롯이 있으면 함께 정리한다 —
-    // img가 아직 비어있고(=미승인 상태) 이 신청의 링크와 일치할 때만
-    // 지운다(그 사이 다른 경로로 승인된 배너를 실수로 지우지 않기 위함).
-    if (reqData.stockId) {
-      const bannerSnap = await db.ref(`chartBanner/${reqData.stockId}`).get();
-      const banner = bannerSnap.val();
-      if (banner && !banner.img && banner.link === reqData.promoLink) {
-        updates[`chartBanner/${reqData.stockId}`] = null;
-      }
-    }
-  }
-
-  await db.ref().update(updates);
+  await db.ref(`chartBannerRequests/${requestId}`).update({
+    status:     "rejected",
+    reviewedAt: Date.now(),
+  });
   return { ok: true };
 }
 

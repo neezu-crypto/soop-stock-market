@@ -11,6 +11,11 @@ const {
   actionRejectChartBannerRequest,
 } = require("./bannerRequests");
 const {
+  actionListCardBannerRequests,
+  actionApproveCardBannerRequest,
+  actionRejectCardBannerRequest,
+} = require("./cardBannerRequests");
+const {
   actionListCashChargeRequests,
   actionApproveCashChargeRequest,
   actionRejectCashChargeRequest,
@@ -497,7 +502,7 @@ async function actionListProfitRankings(db) {
  */
 async function actionGetPendingSummary(db) {
   const sections = [
-    { key: "banner",      sectionId: "section-banner",      label: "배너 광고",       paths: ["bannerRequests", "chartBannerRequests"] },
+    { key: "banner",      sectionId: "section-banner",      label: "배너 광고",       paths: ["bannerRequests", "chartBannerRequests", "cardBannerRequests"] },
     { key: "cashcharge",  sectionId: "section-cashcharge",  label: "자산 충전 신청", paths: ["cashChargeRequests"] },
     { key: "treasurechest", sectionId: "section-treasure-chest", label: "보물상자 구매 신청", paths: ["treasureChestRequests"] },
     { key: "pin",         sectionId: "section-pin",         label: "최상단 고정 노출", paths: ["pinRequests"] },
@@ -528,12 +533,15 @@ async function actionGetPendingSummary(db) {
 const PURCHASE_HISTORY_LIMIT = 300; // 오래된 이력까지 매번 전부 내려보내지 않도록 최신 N건만 반환
 
 /**
- * 유저 구매 현황 — 우측/차트/카드 배너·최상단 고정·중계방·플레이타임 충전·복권함처럼
- * 게임자산을 직접 차감해 즉시 적용되는 7가지 셀프 상품의 구매 이력을
- * 한 화면에서 통합 조회한다. 각 기능별 패널은 "신규/진행중/만료"만
- * 보여주도록 설계돼 있어, 시간이 지나 만료·삭제된 과거 구매까지 한눈에
- * 보긴 어려웠던 빈틈을 메운다. (자산 충전은 반대로 "지급"이라 구매가
- * 아니므로, 종목 상장 신청은 무료라 제외 — 각각 별도 패널에서 확인 가능)
+ * 유저 구매 현황 — 우측/차트/카드 배너·최상단 고정·중계방(방송 후원 확인 후
+ * 관리자 승인)·플레이타임 충전·복권함(게임자산 즉시차감)까지 7가지 셀프
+ * 상품의 구매 이력을 한 화면에서 통합 조회한다. amount는 배너 5종은
+ * 별풍선 개수(starBalloons), 플레이타임/복권은 게임자산(원)이라 단위가
+ * 섞여 있으니 typeLabel로 구분해서 봐야 한다. 각 기능별 패널은
+ * "신규/진행중/만료"만 보여주도록 설계돼 있어, 시간이 지나 만료·삭제된
+ * 과거 구매까지 한눈에 보긴 어려웠던 빈틈을 메운다. (자산 충전은 반대로
+ * "지급"이라 구매가 아니므로, 종목 상장 신청은 무료라 제외 — 각각 별도
+ * 패널에서 확인 가능)
  */
 async function actionListPurchaseHistory(db) {
   const [bannerSnap, chartBannerSnap, cardBannerSnap, pinSnap, relaySnap, playTimeSnap, lotterySnap] = await Promise.all([
@@ -551,35 +559,35 @@ async function actionListPurchaseHistory(db) {
   Object.entries(bannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "banner", typeLabel: "📢 우측 배너",
     label: `${r.nickname || "-"} (${r.days || 0}일)`,
-    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
     at: r.requestedAt || 0,
   }));
 
   Object.entries(cardBannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "cardBanner", typeLabel: "🎴 종목 카드 배너",
     label: `${r.nickname || "-"} (${r.days || 0}일)`,
-    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
     at: r.requestedAt || 0,
   }));
 
   Object.entries(chartBannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "chartBanner", typeLabel: "🖼 차트 하단 배너",
     label: `${r.stockName || r.nickname || "-"} (${r.days || 0}일)`,
-    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
     at: r.requestedAt || 0,
   }));
 
   Object.entries(pinSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "pin", typeLabel: "📌 최상단 고정",
     label: `${r.stockName || "-"} (${r.hours || 0}시간)`,
-    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
     at: r.requestedAt || 0,
   }));
 
   Object.entries(relaySnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "relayRoom", typeLabel: "🎥 중계방",
     label: `${r.nickname || "-"} (${r.hours || 0}시간)`,
-    amount: r.chargedAmount || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
     at: r.requestedAt || 0,
   }));
 
@@ -835,26 +843,44 @@ async function actionGetOverviewStats(db) {
   const toKSTDateKey = (ms) => new Date((ms || 0) + 9 * 3600 * 1000).toISOString().split("T")[0];
 
   // 실제로 매출로 잡을 수 있는 건: 승인 완료(approved)된 배너/차트배너/카드배너/고정/중계방
-  // 신청 + 즉시 적용되는 플레이타임 충전(별도 status 없이 전부 유효).
-  // 자산 충전(지급)·종목 상장(무료)은 성격이 달라 구매 현황과 동일하게 제외한다.
-  const revenueEntries = [
-    ...Object.values(bannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
-    ...Object.values(chartBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
-    ...Object.values(cardBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
-    ...Object.values(pinSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
-    ...Object.values(relaySnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.chargedAmount || 0, at: r.requestedAt || 0 })),
+  // 신청(별풍선, 방송 후원 확인 후 관리자 승인) + 즉시 적용되는 플레이타임
+  // 충전(게임자산, 별도 status 없이 전부 유효). 단위가 서로 달라(별풍선 개수 vs
+  // 게임자산 원) 2026-09-09부터 하나의 totalRevenue로 합산하지 않고 분리한다
+  // — 배너 5종을 게임자산 즉시차감에서 방송 후원 확인 방식으로 되돌리며 발견:
+  // 예전엔 전부 게임자산 단위라 그냥 더해도 됐지만 이제 섞어 더하면 의미 없는
+  // 숫자가 된다. 자산 충전(지급)·종목 상장(무료)은 성격이 달라 구매 현황과
+  // 동일하게 제외한다.
+  const donationEntries = [
+    ...Object.values(bannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(chartBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(cardBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(pinSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(relaySnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+  ];
+  const cashEntries = [
     ...Object.values(playTimeSnap.val() || {}).map((r) => ({ amount: r.chargedAmount || 0, at: r.purchasedAt || 0 })),
   ];
 
-  const purchase = revenueEntries.reduce((acc, e) => {
+  const sumEntries = (entries) => entries.reduce((acc, e) => {
     acc.totalCount++;
-    acc.totalRevenue += e.amount;
+    acc.total += e.amount;
     if (toKSTDateKey(e.at) === today) {
       acc.todayCount++;
-      acc.todayRevenue += e.amount;
+      acc.today += e.amount;
     }
     return acc;
-  }, { totalCount: 0, totalRevenue: 0, todayCount: 0, todayRevenue: 0 });
+  }, { totalCount: 0, total: 0, todayCount: 0, today: 0 });
+
+  const donationStats = sumEntries(donationEntries);
+  const cashStats     = sumEntries(cashEntries);
+  const purchase = {
+    totalCount:     donationStats.totalCount + cashStats.totalCount,
+    todayCount:     donationStats.todayCount + cashStats.todayCount,
+    totalRevenue:   cashStats.total,       // 게임자산(원) — 플레이타임 충전
+    todayRevenue:   cashStats.today,
+    totalBalloons:  donationStats.total,   // 별풍선 개수 — 배너 5종(방송 후원 확인)
+    todayBalloons:  donationStats.today,
+  };
 
   const usersData = usersSnap.val() || {};
   const userList  = Object.values(usersData);
@@ -1001,6 +1027,7 @@ const AUDIT_LOGGED_ACTIONS = new Set([
   "saveRankings", "cleanupInactiveUsers",
   "approveBannerRequest", "rejectBannerRequest",
   "approveChartBannerRequest", "rejectChartBannerRequest",
+  "approveCardBannerRequest", "rejectCardBannerRequest",
   "setMaintenanceMode", "rerollJackpot", "applyAnonTopUp",
   "applyCrewPrefix", "applyCrewPrefixRemove",
   "adjustUserCash", "resetUserProfitRanking", "deleteUser", "setAnnouncement",
@@ -1091,6 +1118,9 @@ async function dispatchAdminAction(db, action, payload, auth) {
     case "listChartBannerRequests":   return actionListChartBannerRequests(db);
     case "approveChartBannerRequest": return actionApproveChartBannerRequest(db, payload);
     case "rejectChartBannerRequest":  return actionRejectChartBannerRequest(db, payload);
+    case "listCardBannerRequests":    return actionListCardBannerRequests(db);
+    case "approveCardBannerRequest":  return actionApproveCardBannerRequest(db, payload);
+    case "rejectCardBannerRequest":   return actionRejectCardBannerRequest(db, payload);
     case "setMaintenanceMode":     return actionSetMaintenanceMode(db, payload);
     case "rerollJackpot":          return actionRerollJackpot(db);
     case "listProfitRankings":     return actionListProfitRankings(db);

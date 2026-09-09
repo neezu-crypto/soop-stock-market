@@ -476,7 +476,7 @@
     <!-- 📢 배너 광고 통합 관리 -->
     <div id="section-banner" class="container" style="display:block; border-color: #38bdf8;">
         <h1>📢 배너 광고 통합 관리</h1>
-        <div class="info-box">우측 랭킹 배너와 종목 카드 배너(10주 이상 보유자 전용)는 상장된 종목이면 신청 즉시 자동 등록됩니다. 차트 하단 배너는 노출 기간은 자동 예약되지만, 신청자가 직접 올리는 이미지는 여기서 확인 후 승인해야 실제로 노출됩니다. 아래 "진행중/만료" 탭에서 세 가지를 함께 확인할 수 있습니다.</div>
+        <div class="info-box">우측 랭킹 배너·종목 카드 배너(10주 이상 보유자 전용)·차트 하단 배너 모두 방송에서 실제 후원(별풍선)을 확인한 뒤 아래 "신규 신청" 탭에서 승인해야 노출됩니다(2026-09-09부터 게임자산 즉시차감 방식에서 되돌림). 카드 배너 신청은 이 페이지가 아니라 통합 관리센터의 "상품 구매 승인" 큐에서 처리합니다. 아래 "진행중/만료" 탭에서 세 가지를 함께 확인할 수 있습니다.</div>
 
         <div style="display:flex;gap:8px;margin-bottom:16px;">
             <button class="banner-tab-btn active" id="banner-tab-btn-new" onclick="switchBannerTab('new')">
@@ -916,8 +916,10 @@
             const { attendance, purchase, users, profitRankingEntryCount, lottery } = await callAdminAction('getOverviewStats');
             const cards = [
                 { label: `🎁 오늘 출석 (${attendance.today})`, value: `${attendance.claimedCount.toLocaleString()}명`, sub: `총 지급 ${attendance.totalPaidToday.toLocaleString()}원` },
-                { label: '🧾 오늘 매출', value: `${purchase.todayRevenue.toLocaleString()}원`, sub: `${purchase.todayCount.toLocaleString()}건` },
-                { label: '🧾 누적 매출', value: `${purchase.totalRevenue.toLocaleString()}원`, sub: `${purchase.totalCount.toLocaleString()}건` },
+                { label: '🧾 오늘 플레이타임 매출', value: `${purchase.todayRevenue.toLocaleString()}원`, sub: '게임자산 결제 기준' },
+                { label: '🧾 누적 플레이타임 매출', value: `${purchase.totalRevenue.toLocaleString()}원`, sub: '게임자산 결제 기준' },
+                { label: '⭐ 오늘 후원 접수(승인)', value: `${purchase.todayBalloons.toLocaleString()}개`, sub: '배너·고정·중계방 별풍선' },
+                { label: '⭐ 누적 후원 접수(승인)', value: `${purchase.totalBalloons.toLocaleString()}개`, sub: `${purchase.totalCount.toLocaleString()}건 (플레이타임 포함)` },
                 { label: '👥 전체 유저', value: `${users.totalUsers.toLocaleString()}명`, sub: `보호 ${users.protectedUsers.toLocaleString()} · 익명 ${users.anonUsers.toLocaleString()}` },
                 { label: '💰 손익 랭킹 게시', value: `${profitRankingEntryCount.toLocaleString()}건`, sub: '유저가 직접 게시한 건수' },
                 { label: '🎟️ 복권함 현재 모금액', value: `${lottery.currentPool.toLocaleString()}원`, sub: `누적 판매 ${lottery.totalSold.toLocaleString()}장` },
@@ -934,7 +936,10 @@
         }
     };
 
-    // ── 유저 구매 현황 (읽기 전용 — 5가지 셀프 상품 이력 통합 조회) ──
+    // ── 유저 구매 현황 (읽기 전용 — 7가지 셀프 상품 이력 통합 조회) ──
+    // 배너/카드배너/차트배너/고정/중계방 5종은 2026-09-09부터 게임자산이 아닌
+    // 방송 후원(별풍선) 확인 방식이라 amount 단위가 "개"다 — 플레이타임만 원.
+    const PURCHASE_HISTORY_DONATION_TYPES = new Set(['banner', 'cardBanner', 'chartBanner', 'pin', 'relayRoom']);
     window.loadPurchaseHistory = async function() {
         const listEl = document.getElementById('purchase-history-list');
         listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
@@ -954,8 +959,10 @@
             }
             purchases.forEach(p => {
                 const at = p.at ? new Date(p.at).toLocaleString() : '-';
+                const isDonation = PURCHASE_HISTORY_DONATION_TYPES.has(p.type);
                 const statusColor = p.status === 'pending' ? '#fbbf24' : p.status === 'rejected' ? '#f87171' : '#4ade80';
-                const statusLabel = p.status === 'pending' ? '승인 대기' : p.status === 'rejected' ? '거절(환불됨)' : '적용됨';
+                const statusLabel = p.status === 'pending' ? '승인 대기' : p.status === 'rejected' ? (isDonation ? '거절됨' : '거절(환불됨)') : '적용됨';
+                const unitSuffix = isDonation ? '개' : '원';
                 const row = document.createElement('div');
                 row.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;';
                 row.innerHTML = `
@@ -963,7 +970,7 @@
                         <div style="font-weight:800;font-size:14px;">${escapeAttr(p.typeLabel)} · ${escapeAttr(p.label)}</div>
                         <div style="font-size:11px;color:#64748b;">uid: ${escapeAttr(p.uid || '-')} · ${at} · <span style="color:${statusColor};">${statusLabel}</span></div>
                     </div>
-                    <div style="font-weight:800;font-size:15px;color:#38bdf8;white-space:nowrap;">${(p.amount || 0).toLocaleString()}원</div>`;
+                    <div style="font-weight:800;font-size:15px;color:#38bdf8;white-space:nowrap;">${(p.amount || 0).toLocaleString()}${unitSuffix}</div>`;
                 listEl.appendChild(row);
             });
         } catch (e) {
@@ -1727,7 +1734,7 @@
                         <input type="text" value="${escapeAttr(r.nickname)}" id="req-nickname-${r.id}"
                                style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
                     </div>
-                    <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
+                    <div style="font-size:12px;color:#94a3b8;">@${r.streamerId} · 신청 기간 ${r.days || 7}일 · 후원 별풍선 ${(r.starBalloons || 0).toLocaleString()}개 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
                 </div>
             </div>
             <div class="admin-action-row">
@@ -1753,7 +1760,7 @@
             <div style="font-size:13px;font-weight:800;color:#38bdf8;">📊 종목: ${escapeAttr(r.stockName || '(예전 방식 신청 — 정보 없음)')}</div>
             <div style="font-size:12px;color:#94a3b8;">
                 <span class="status-chip saved" style="margin-right:4px;">차트 배너</span>
-                신청자 @${r.streamerId} · 신청 기간 ${r.days || 7}일 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원
+                신청자 @${r.streamerId} · 신청 기간 ${r.days || 7}일 · 후원 별풍선 ${(r.starBalloons || 0).toLocaleString()}개
             </div>
             <input type="text" value="${escapeAttr(r.nickname)}" id="chart-req-nickname-${r.id}" placeholder="닉네임"
                    style="width:100%;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:8px;border-radius:6px;font-size:13px;font-weight:800;box-sizing:border-box;">
@@ -2124,7 +2131,7 @@
                         <input type="text" value="${escapeAttr(r.stockName)}" id="pin-req-stockname-${r.id}"
                                style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
                     </div>
-                    <div style="font-size:12px;color:#94a3b8;">신청 시간 ${r.hours}시간 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원</div>
+                    <div style="font-size:12px;color:#94a3b8;">신청 시간 ${r.hours}시간 · 후원 별풍선 ${(r.starBalloons || 0).toLocaleString()}개</div>
                     <div class="admin-action-row">
                         <input type="number" min="1" max="365" value="${r.hours || 1}" id="pin-req-hours-${r.id}"
                                style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
@@ -2374,7 +2381,7 @@
                         <input type="text" value="${escapeAttr(r.nickname)}" id="relay-req-nickname-${r.id}"
                                style="flex:1;background:#1e293b;border:1px solid #475569;color:#f8fafc;padding:6px 8px;border-radius:6px;font-size:14px;font-weight:800;box-sizing:border-box;">
                     </div>
-                    <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.streamerId)} · 신청 시간 ${r.hours}시간 · 차감액 ${(r.chargedAmount || 0).toLocaleString()}원 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
+                    <div style="font-size:12px;color:#94a3b8;">@${escapeAttr(r.streamerId)} · 신청 시간 ${r.hours}시간 · 후원 별풍선 ${(r.starBalloons || 0).toLocaleString()}개 · <a href="${r.stationLink}" target="_blank" style="color:#38bdf8;">방송국 바로가기</a></div>
                     <div class="admin-action-row">
                         <input type="number" min="1" max="8" value="${r.hours || 1}" id="relay-req-hours-${r.id}"
                                style="width:70px;background:#1e293b;border:1px solid #475569;color:#38bdf8;padding:8px;border-radius:8px;font-size:13px;">
