@@ -192,7 +192,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitBannerRequestCallable,
             onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 방송에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 배너를 등록합니다.`);
+                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 배너를 등록합니다.`);
                 window.open(TREASURE_CHEST_DONATION_URL, '_blank');
             },
             resetFn() {
@@ -316,7 +316,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitCardBannerRequestCallable,
             onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 방송에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 종목 카드에 홍보를 등록합니다.\n\n⚠️ 등록 후 보유 수량이 10주 미만으로 떨어지면 자동으로 삭제됩니다.`);
+                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 종목 카드에 홍보를 등록합니다.\n\n⚠️ 등록 후 보유 수량이 10주 미만으로 떨어지면 자동으로 삭제됩니다.`);
                 window.open(TREASURE_CHEST_DONATION_URL, '_blank');
             },
             resetFn() {
@@ -436,7 +436,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitRelayRoomRequestCallable,
             onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 방송에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 중계방에 등록합니다.`);
+                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 중계방에 등록합니다.`);
                 window.open(TREASURE_CHEST_DONATION_URL, '_blank');
             },
             resetFn() {
@@ -503,7 +503,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitPinRequestCallable,
             onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 방송에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 최상단에 고정 노출합니다.`);
+                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 최상단에 고정 노출합니다.`);
                 window.open(TREASURE_CHEST_DONATION_URL, '_blank');
             },
             resetFn() {
@@ -805,7 +805,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitChartBannerRequestCallable,
             onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 방송에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 후원과 배너 이미지를 확인한 뒤 노출합니다.`);
+                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 후원과 배너 이미지를 확인한 뒤 노출합니다.`);
                 window.open(TREASURE_CHEST_DONATION_URL, '_blank');
             },
             resetFn() {
