@@ -55,6 +55,7 @@ const { buyLotteryTicket } = require("./lottery");
 const { requestStreamerVerification } = require("./streamerVerification");
 const { submitTreasureChestPurchaseRequest, openTreasureChest } = require("./treasureChest");
 const { logStockMarketVisit } = require("./streamerVisitLog");
+const { syncStreamerNameOnStockChange } = require("./streamerNamesSync");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -84,3 +85,4 @@ exports.submitTreasureChestPurchaseRequest = submitTreasureChestPurchaseRequest;
 exports.openTreasureChest                  = openTreasureChest;
 exports.stockWhoAmI                        = stockWhoAmI;
 exports.logStockMarketVisit                = logStockMarketVisit;
+exports.syncStreamerNameOnStockChange      = syncStreamerNameOnStockChange;
