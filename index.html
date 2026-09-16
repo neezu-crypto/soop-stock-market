@@ -112,6 +112,29 @@
     </div>
 </div>
 
+<!-- ── 오목지면시그 시그니처 오프닝 ── -->
+<div id="sig-opening-stage" role="button" tabindex="0" aria-label="오프닝, 클릭 시 건너뛰기">
+    <div class="sig-noise"></div>
+    <div class="sig-series">
+        <p class="sig-series-tag">스트리머 게임시리즈</p>
+        <div class="sig-reel">
+            <div class="sig-reel-track">
+                <p class="sig-reel-item">스트리머 주식시장</p>
+                <p class="sig-reel-item">스트리머 배팅시장</p>
+                <p class="sig-reel-item">스트리머 인생게임</p>
+                <p class="sig-reel-item">절대 광고를 클릭하지 마</p>
+                <p class="sig-reel-item">미드나잇 마트런</p>
+                <p class="sig-reel-item is-current">스트리머 주식시장</p>
+            </div>
+        </div>
+        <div class="sig-series-under"></div>
+    </div>
+    <div class="sig-title-frame">
+        <p class="sig-title-kicker">제작</p>
+        <p class="sig-title-word">오목지면시그</p>
+    </div>
+</div>
+
 <!-- ── 내 보유 주식 패널 (좁은 화면에서는 좌측 슬라이드 서랍으로 전환) ── -->
 <button class="my-stocks-toggle-btn" onclick="openMyStocksPanel()">📊 내 보유 주식</button>
 <div class="my-stocks-backdrop" onclick="closeMyStocksPanel()"></div>
@@ -1258,6 +1281,7 @@
 <!-- ══════════════════════════════════════════
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
+<script src="js/sig-opening.js"></script>
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, get, set, update, query, orderByChild, limitToLast, startAt }
@@ -1548,6 +1572,7 @@ let allStocks        = [];
 let isTrading        = false;
 let stockVisitLogged = false; // 인증 스트리머 접속 알림 - 페이지 로드당 한 번만 서버에 알린다(중복 발송 방지는 서버가 하루 단위로 처리)
 let isBannerRendered = false;
+let sigOpeningStarted = false;
 let stockElements    = {};
 let lastTradeTime    = 0;
 let stockSubscriptions = {};        // id -> unsubscribe (개별 종목 실시간 구독 핸들)
@@ -2030,6 +2055,14 @@ function updateUI(isFullRender = true) {
         renderStocks(document.getElementById('search-input')?.value || "");
         if (overlay && !overlay.classList.contains('hidden')) {
             setTimeout(() => overlay.classList.add('hidden'), 500);
+        }
+        if (!sigOpeningStarted) {
+            sigOpeningStarted = true;
+            // 로그인/초기 종목 렌더링 인트로가 먼저 사라진 뒤 시그니처를 시작해,
+            // 로딩 화면과 오프닝이 겹치지 않게 한다.
+            setTimeout(() => {
+                if (window.ojmMaybeShowBootSplash) window.ojmMaybeShowBootSplash(() => {});
+            }, 550);
         }
     }
     // 모달은 열릴 때 스냅샷 가격을 표시하므로 실시간 갱신 없음

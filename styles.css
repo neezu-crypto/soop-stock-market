@@ -146,6 +146,40 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .hidden { opacity: 0; pointer-events: none; }
 
+        /* ── 오목지면시그 시그니처 오프닝 ── */
+        #sig-opening-stage {
+            position: fixed; inset: 0; z-index: 2000; display: none; opacity: 1;
+            align-items: center; justify-content: center; overflow: hidden;
+            background: radial-gradient(120% 140% at 50% 20%, #171c26, #10131a 70%);
+            font-family: 'Pretendard', sans-serif; cursor: pointer;
+        }
+        #sig-opening-stage.is-playing { display: flex; }
+        #sig-opening-stage.is-leaving { transition: opacity .4s ease; opacity: 0; }
+        .sig-noise { position: absolute; inset: 0; opacity: .05; background-image: repeating-linear-gradient(115deg, #fff 0 1px, transparent 1px 3px); pointer-events: none; }
+        .sig-series, .sig-title-frame { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; }
+        #sig-opening-stage.is-playing .sig-series { animation: ojmSigFadeUp .7s cubic-bezier(.2,.8,.3,1) forwards, ojmSigFadeOut .5s ease forwards 2.3s; }
+        .sig-series-tag { color: #c9a463; font-size: 13px; font-weight: 700; letter-spacing: .14em; margin: 0 0 16px; opacity: 0; }
+        #sig-opening-stage.is-playing .sig-series-tag { animation: ojmSigFadeUp .45s ease forwards; }
+        .sig-reel { height: 44px; overflow: hidden; }
+        .sig-reel-track { display: flex; flex-direction: column; align-items: center; }
+        .sig-reel-item { height: 44px; display: flex; align-items: center; justify-content: center; color: #f4f1e8; font-size: clamp(24px, 5vw, 38px); font-weight: 800; margin: 0; white-space: nowrap; opacity: .55; }
+        .sig-reel-item.is-current { opacity: 1; }
+        #sig-opening-stage.is-playing .sig-reel-track { animation: ojmSigReel 1s steps(5, end) forwards .5s; }
+        .sig-series-under { width: 0; height: 2px; background: #c9a463; margin-top: 16px; }
+        #sig-opening-stage.is-playing .sig-series-under { animation: ojmSigUnderline .5s ease forwards 1.5s; }
+        #sig-opening-stage.is-playing .sig-title-frame { animation: ojmSigFadeUp .6s cubic-bezier(.2,.8,.3,1) forwards 2.6s; }
+        .sig-title-kicker { color: #c9a463; font-size: 12px; letter-spacing: .2em; margin: 0 0 12px; }
+        .sig-title-word { color: #f4f1e8; font-size: clamp(26px, 6vw, 48px); font-weight: 800; letter-spacing: .08em; margin: 0; }
+        @keyframes ojmSigFadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes ojmSigFadeOut { to { opacity: 0; transform: translateY(-14px); } }
+        @keyframes ojmSigReel { from { transform: translateY(0); } to { transform: translateY(-220px); } }
+        @keyframes ojmSigUnderline { from { width: 0; } to { width: 180px; } }
+        @media (prefers-reduced-motion: reduce) {
+            #sig-opening-stage.is-playing .sig-series, #sig-opening-stage.is-playing .sig-series-tag,
+            #sig-opening-stage.is-playing .sig-reel-track, #sig-opening-stage.is-playing .sig-series-under,
+            #sig-opening-stage.is-playing .sig-title-frame { animation-duration: .01s !important; }
+        }
+
         /* ── 랭킹 바 ── */
         /* 예전엔 title(왼쪽)과 list(오른쪽)가 한 줄을 나눠 썼는데, title에
            버튼이 늘어나면서 list가 차지할 폭이 줄어 5위 항목이 옆으로
