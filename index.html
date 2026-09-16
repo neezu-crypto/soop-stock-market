@@ -135,6 +135,10 @@
     </div>
 </div>
 
+<!-- Firebase 앱 모듈보다 먼저 시그니처 오프닝을 시작한다. 오프닝은 상위
+     레이어에 표시되고, 아래 페이지 파싱과 데이터 로딩은 동시에 진행된다. -->
+<script src="js/sig-opening.js"></script>
+
 <!-- ── 내 보유 주식 패널 (좁은 화면에서는 좌측 슬라이드 서랍으로 전환) ── -->
 <button class="my-stocks-toggle-btn" onclick="openMyStocksPanel()">📊 내 보유 주식</button>
 <div class="my-stocks-backdrop" onclick="closeMyStocksPanel()"></div>
@@ -1281,7 +1285,6 @@
 <!-- ══════════════════════════════════════════
      Firebase + 앱 로직
 ══════════════════════════════════════════ -->
-<script src="js/sig-opening.js"></script>
 <script type="module">
 import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 import { getDatabase, ref, onValue, get, set, update, query, orderByChild, limitToLast, startAt }

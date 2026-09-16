@@ -5,6 +5,7 @@
 
 var OJM_SIG_SEEN_KEY = 'ojmSigSplashSeen_v1';
 var OJM_SIG_DURATION_MS = 3400;
+var ojmSigStarted = false;
 
 function ojmPlaySigOpening(onDone) {
   var stage = document.getElementById('sig-opening-stage');
@@ -33,11 +34,23 @@ function ojmPlaySigOpening(onDone) {
 }
 
 function ojmMaybeShowBootSplash(onDone) {
+  if (ojmSigStarted) {
+    if (typeof onDone === 'function') onDone();
+    return;
+  }
+  ojmSigStarted = true;
   var seen = false;
   try { seen = localStorage.getItem(OJM_SIG_SEEN_KEY) === '1'; } catch (e) {}
-  if (seen) { onDone(); return; }
+  if (seen) {
+    if (typeof onDone === 'function') onDone();
+    return;
+  }
   ojmPlaySigOpening(function () {
     try { localStorage.setItem(OJM_SIG_SEEN_KEY, '1'); } catch (e) {}
-    onDone();
+    if (typeof onDone === 'function') onDone();
   });
 }
+
+// 이 스크립트는 오프닝 레이어 직후에 로드된다. 로그인·종목 데이터 초기화와
+// 무관하게 최초 방문 오프닝을 즉시 시작해, 모든 로딩을 하위 레이어에서 진행한다.
+ojmMaybeShowBootSplash();
