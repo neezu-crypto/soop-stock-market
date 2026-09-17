@@ -168,6 +168,13 @@
         .sig-series-under { width: 0; height: 2px; background: #c9a463; margin-top: 16px; }
         #sig-opening-stage.is-playing .sig-series-under { animation: ojmSigUnderline .5s ease forwards 1.5s; }
         #sig-opening-stage.is-playing .sig-title-frame { animation: ojmSigFadeUp .6s cubic-bezier(.2,.8,.3,1) forwards 2.6s; }
+        /* sig-opening.js가 performance.now() 기준으로 시간축을 직접 그릴 때는 CSS
+           애니메이션과 중복 적용하지 않는다. 주사율이 달라도 오프닝 속도를 고정한다. */
+        #sig-opening-stage.is-playing.is-js-timeline .sig-series,
+        #sig-opening-stage.is-playing.is-js-timeline .sig-series-tag,
+        #sig-opening-stage.is-playing.is-js-timeline .sig-reel-track,
+        #sig-opening-stage.is-playing.is-js-timeline .sig-series-under,
+        #sig-opening-stage.is-playing.is-js-timeline .sig-title-frame { animation: none; }
         .sig-title-kicker { color: #c9a463; font-size: 12px; letter-spacing: .2em; margin: 0 0 12px; }
         .sig-title-word { color: #f4f1e8; font-size: clamp(26px, 6vw, 48px); font-weight: 800; letter-spacing: .08em; margin: 0; }
         @keyframes ojmSigFadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
