@@ -9,6 +9,7 @@ const {
   grantAchievement,
   assertNotBanned
 } = require("./common");
+const { ensurePublicId } = require('./publicIdentity');
 
 // ══════════════════════════════════════════════════════════
 // 순수 매매 손익 랭킹
@@ -27,8 +28,8 @@ const {
 // 표시 이름은 실제 닉네임이 없으므로 uid 기반 익명 ID를 고정 사용한다.
 // ══════════════════════════════════════════════════════════
 
-function anonIdFor(uid) {
-  return `트레이더-${uid.slice(-6).toUpperCase()}`;
+function anonIdFor(publicId) {
+  return `트레이더-${publicId.replace(/[^A-Z0-9]/gi, '').slice(-6).toUpperCase()}`;
 }
 
 const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
@@ -50,15 +51,22 @@ const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256
   await chargeUserCash(db, uid, PROFIT_RANKING_CHECK_COST);
 
   // 2) 내 순위표 항목 갱신
-  const anonId = anonIdFor(uid);
+  const publicId = await ensurePublicId(db, 'stock', uid);
+  const anonId = anonIdFor(publicId);
   await db.ref(`rankings/profitEntries/${uid}`).set({
+    anonId,
+    publicId,
+    value: totalPL,
+    updatedAt: Date.now(),
+  });
+  await db.ref(`rankings/profitEntriesPublic/${publicId}`).set({
     anonId,
     value: totalPL,
     updatedAt: Date.now(),
   });
 
   // 3) 상위 N명 조회
-  const topSnap = await db.ref("rankings/profitEntries")
+  const topSnap = await db.ref("rankings/profitEntriesPublic")
     .orderByChild("value")
     .limitToLast(PROFIT_RANKING_TOP_N)
     .get();
@@ -67,7 +75,7 @@ const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256
   topRaw.sort((a, b) => b.value - a.value);
 
   // 4) 내 순위 계산 (나보다 값이 큰 사람 수 + 1)
-  const higherSnap = await db.ref("rankings/profitEntries")
+  const higherSnap = await db.ref("rankings/profitEntriesPublic")
     .orderByChild("value")
     .startAt(totalPL + 1)
     .get();

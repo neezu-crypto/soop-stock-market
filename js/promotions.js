@@ -953,11 +953,10 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         }).join('');
     }
 
-    // 서버(profitRanking.js)의 anonIdFor와 동일한 규칙(uid 뒤 6자리) — 미리보기
-    // 단계에서도 top10 중 "나"를 하이라이트할 수 있도록 클라이언트에서 재현.
+    // 공개 랭킹은 UID와 분리된 서버 발급 식별자를 사용한다. 무료 미리보기에서는
+    // UID에서 식별자를 재현하지 않고, 공식 게시 응답에서만 내 별칭을 받는다.
     function myAnonIdPreview() {
-        const uid = auth.currentUser?.uid || '';
-        return `트레이더-${uid.slice(-6).toUpperCase()}`;
+        return '';
     }
 
     window.previewMyProfitRank = async function() {
@@ -968,12 +967,12 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             const myData = getMyData();
             const myProfit = Math.round(myData?.realizedPL || 0);
 
-            const topSnap = await dbGet(dbQuery(dbRef(db, 'rankings/profitEntries'), orderByChild('value'), limitToLast(10)));
+            const topSnap = await dbGet(dbQuery(dbRef(db, 'rankings/profitEntriesPublic'), orderByChild('value'), limitToLast(10)));
             const topRaw = [];
             topSnap.forEach(child => topRaw.push(child.val()));
             topRaw.sort((a, b) => b.value - a.value);
 
-            const higherSnap = await dbGet(dbQuery(dbRef(db, 'rankings/profitEntries'), orderByChild('value'), startAt(myProfit + 1)));
+            const higherSnap = await dbGet(dbQuery(dbRef(db, 'rankings/profitEntriesPublic'), orderByChild('value'), startAt(myProfit + 1)));
             const myRank = higherSnap.size + 1;
 
             renderProfitRankingResult({ myRank, myProfit, myAnonId: myAnonIdPreview(), top: topRaw, isPreview: true });

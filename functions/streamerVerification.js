@@ -9,6 +9,7 @@ const {
   assertNotBanned
 } = require("./common");
 const { logAdminAction } = require("./adminAuditLog");
+const { syncPublicVerification, removePublicVerification, publicIdFor } = require("./publicIdentity");
 
 // streamerVerifications는 스트리머 배팅시장과 공유하는 노드다. 그쪽 앱은 SOOP
 // 아이디를 정체성의 기준(canonical key)으로 삼는데, 이 앱은 원래 닉네임으로만
@@ -39,8 +40,24 @@ async function fillBettingMarketProfileIfEmpty(db, uid, nickname, soopId) {
   const profileRef = db.ref("bettingMarket/profiles/" + uid);
   const snap = await profileRef.get();
   const current = snap.val();
-  if (current && current.nickname) return;
-  await profileRef.update({ nickname, soopId: soopId || null, avatarUrl: avatarUrlForSoopId(soopId) });
+  const publicId = publicIdFor('bet', uid);
+  await db.ref(`privateUserIds/bet/byUid/${uid}`).set(publicId);
+  await db.ref(`privateUserIds/bet/byPublicId/${publicId}`).set(uid);
+  if (current && current.nickname) {
+    await db.ref(`bettingMarket/publicProfiles/${publicId}`).update({ nickname: current.nickname, avatarUrl: current.avatarUrl || '' });
+    return;
+  }
+  const avatarUrl = avatarUrlForSoopId(soopId);
+  await profileRef.update({ nickname, soopId: soopId || null, avatarUrl });
+  await db.ref(`bettingMarket/publicProfiles/${publicId}`).update({ nickname, avatarUrl });
+}
+
+async function setVerifiedProfile(db, uid, nickname, soopId) {
+  if (!uid) return;
+  await db.ref(`users/${uid}/streamerProfile`).set({
+    nickname: nickname || "",
+    soopId: soopId || null,
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -192,13 +209,23 @@ async function actionApproveStreamerVerification(db, { requestId }, auth) {
     // 최초 인증 — 닉네임↔uid 매핑을 등록하고 계정 보호 플래그를 켠다. SOOP 아이디도
     // 같이 저장해야 배팅시장 쪽에서 이 레코드를 SOOP 아이디 기준으로 찾을 수 있다.
     const linkRef = db.ref("streamerVerifications").push();
+    const verifiedAt = Date.now();
     await db.ref().update({
       [`streamerVerifications/${linkRef.key}`]: {
-        nickname: reqData.nickname, soopId: reqData.soopId || null, uid: reqData.uid, verifiedAt: Date.now(),
+        nickname: reqData.nickname, soopId: reqData.soopId || null, uid: reqData.uid, verifiedAt,
       },
       [`users/${reqData.uid}/streamerVerified`]: true,
+      [`users/${reqData.uid}/streamerProfile`]: {
+        nickname: reqData.nickname || "",
+        soopId: reqData.soopId || null,
+      },
       [`streamerVerificationRequests/${requestId}/status`]:     "approved",
       [`streamerVerificationRequests/${requestId}/reviewedAt`]: Date.now(),
+    });
+    await syncPublicVerification(db, linkRef.key, {
+      nickname: reqData.nickname,
+      soopId: reqData.soopId || null,
+      verifiedAt,
     });
     await grantAchievement(db, reqData.uid, "account_protected");
     await fillBettingMarketProfileIfEmpty(db, reqData.uid, reqData.nickname, reqData.soopId);
@@ -218,6 +245,7 @@ async function actionApproveStreamerVerification(db, { requestId }, auth) {
         const existingKey = Object.keys(existingSnap.val())[0];
         if (!existingSnap.val()[existingKey].soopId) {
           updates[`streamerVerifications/${existingKey}/soopId`] = reqData.soopId;
+          await syncPublicVerification(db, existingKey, Object.assign({}, existingSnap.val()[existingKey], { soopId: reqData.soopId }));
         }
       }
     }
@@ -259,11 +287,13 @@ async function actionRevokeStreamerVerification(db, { uid }, auth) {
 
   const verifiedSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(uid).limitToFirst(1).get();
   const updates = { [`users/${uid}/streamerVerified`]: false };
+  updates[`users/${uid}/streamerProfile`] = null;
   let nickname = "";
   if (verifiedSnap.exists()) {
     const key = Object.keys(verifiedSnap.val())[0];
     nickname = verifiedSnap.val()[key].nickname || "";
     updates[`streamerVerifications/${key}`] = null;
+    await removePublicVerification(db, key);
   }
   await db.ref().update(updates);
   await logAdminAction(db, auth, "스트리머 인증 해제", (nickname ? nickname + " " : "") + "(uid: " + uid.slice(0, 10) + ")");

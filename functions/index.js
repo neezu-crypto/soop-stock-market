@@ -56,6 +56,8 @@ const { requestStreamerVerification } = require("./streamerVerification");
 const { submitTreasureChestPurchaseRequest, openTreasureChest } = require("./treasureChest");
 const { logStockMarketVisit } = require("./streamerVisitLog");
 const { syncStreamerNameOnStockChange } = require("./streamerNamesSync");
+const { migratePublicIdentityData } = require("./privacyMigration");
+const { getStockMarketPresenceCount } = require("./presence");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -86,3 +88,5 @@ exports.openTreasureChest                  = openTreasureChest;
 exports.stockWhoAmI                        = stockWhoAmI;
 exports.logStockMarketVisit                = logStockMarketVisit;
 exports.syncStreamerNameOnStockChange      = syncStreamerNameOnStockChange;
+exports.migratePublicIdentityData           = migratePublicIdentityData;
+exports.getStockMarketPresenceCount         = getStockMarketPresenceCount;

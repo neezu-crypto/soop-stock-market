@@ -15,9 +15,17 @@ const syncStreamerNameOnStockChange = onValueWritten("/stocks/{stockId}", async 
   const beforeName = event.data.before.exists() ? event.data.before.child("name").val() : null;
   const afterName = event.data.after.exists() ? event.data.after.child("name").val() : null;
 
-  if (beforeName === afterName) return; // 이름 변화 없음(가격/거래량만 바뀜) — 아무것도 안 함
-
   const db = getDatabase();
+  const publicStock = event.data.after.exists() ? (event.data.after.val() || {}) : null;
+  if (publicStock) {
+    delete publicStock.cardBannerHolderUid;
+    delete publicStock.freezeTriggerUid;
+    delete publicStock.triggerUid;
+    await db.ref(`stocksPublic/${stockId}`).set(publicStock);
+  } else {
+    await db.ref(`stocksPublic/${stockId}`).remove();
+  }
+  if (beforeName === afterName) return; // 공개 미러만 동기화하고 이름 파생 노드는 건드리지 않음
   if (afterName == null) {
     // 종목 삭제(상장폐지 등) — 파생 노드에서도 같이 제거해 stale 데이터가 안 남게 한다.
     await db.ref(`streamerNames/${stockId}`).remove();

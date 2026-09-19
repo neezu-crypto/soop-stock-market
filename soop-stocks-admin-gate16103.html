@@ -601,6 +601,7 @@
     // 서버 확인(stockWhoAmI)으로 옮긴다. adminCenter/adminUids는 .read:false라
     // 클라이언트가 직접 못 읽는다.
     const stockWhoAmICallable = httpsCallable(functions, 'stockWhoAmI');
+    const presenceCountCallable = httpsCallable(functions, 'getStockMarketPresenceCount');
     async function callAdminAction(action, payload = {}) {
         const result = await adminActionCallable({ action, payload });
         return result.data;
@@ -612,7 +613,7 @@
         const statusEl = document.getElementById('stocks-load-status');
         if (statusEl) statusEl.innerText = '로딩 중...';
         try {
-            const snap = await get(ref(db, 'stocks/'));
+            const snap = await get(ref(db, 'stocksPublic/'));
             allStocksData = snap.val() || {};
             const count = Object.keys(allStocksData).length;
             if (statusEl) statusEl.innerText = `${count}개 종목 로드됨`;
@@ -739,23 +740,17 @@
     // 메인페이지는 접속 시 1회만 조회하지만(동시 접속자 다수라 비용 절감 목적),
     // 관리자 페이지는 인스턴스가 사실상 1개뿐이라 실시간 구독으로 붙여도 비용
     // 부담이 없다.
-    const PRESENCE_GRACE_MS = 60 * 60 * 1000; // 메인페이지와 동일 — 끊김 후 60분 유예
     let onlineCountWatched = false;
     function watchOnlineCount() {
         if (onlineCountWatched) return;
         onlineCountWatched = true;
-        onValue(ref(db, 'presence/stockMarket'), (snap) => {
+        const refresh = () => presenceCountCallable().then((result) => {
             const el = document.getElementById('admin-online-count');
             if (!el) return;
-            if (!snap.exists()) { el.innerText = '0'; return; }
-            const now = Date.now();
-            let count = 0;
-            snap.forEach(child => {
-                const lastSeen = child.val()?.lastSeen;
-                if (typeof lastSeen === 'number' && now - lastSeen <= PRESENCE_GRACE_MS) count++;
-            });
-            el.innerText = count.toLocaleString();
-        });
+            el.innerText = Number(result.data?.count || 0).toLocaleString();
+        }).catch(() => {});
+        refresh();
+        setInterval(refresh, 60 * 1000);
     }
 
     // ── 승인 대기 알람 (여러 섹션에 흩어진 pending 건수를 상단에서 한눈에) ──
@@ -1594,7 +1589,7 @@
         const searchName = document.getElementById('edit-search-name').value.trim();
         if (!searchName) return alert("닉네임을 입력해주세요.");
         try {
-            const snapshot = await get(ref(db, 'stocks/'));
+            const snapshot = await get(ref(db, 'stocksPublic/'));
             const data = snapshot.val();
             if (!data) return alert("데이터가 없습니다.");
             let targetId = null, targetData = null;

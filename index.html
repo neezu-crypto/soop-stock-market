@@ -1400,6 +1400,7 @@ const auth      = getAuth(app);
 const provider  = new GoogleAuthProvider();
 const functions = getFunctions(app);
 const whoAmICallable             = httpsCallable(functions, 'stockWhoAmI'); // 09번 - StreamBet-Market의 whoAmI와 이름 충돌 방지
+const getStockMarketPresenceCountCallable = httpsCallable(functions, 'getStockMarketPresenceCount');
 const tradeCallable              = httpsCallable(functions, 'trade');
 const triggerBotReactionCallable = httpsCallable(functions, 'triggerBotReaction'); // 트레이딩 봇(2026-08-27) - fire-and-forget 전용, 절대 await하지 않는다(아래 호출부 참고)
 const submitBannerRequestCallable = httpsCallable(functions, 'submitBannerRequest');
@@ -2106,20 +2107,9 @@ onAuthStateChanged(auth, async (user) => {
             await set(myPresenceRef, { lastSeen: Date.now(), connectedAt: Date.now() });
             startPresenceRefreshLoop();
 
-            // 접속 시 1회만 읽기 → 이후 갱신 없음 (데이터 절약)
-            const snap = await get(ref(db, 'presence/stockMarket'));
             const el = document.getElementById('online-count');
-            if (snap.exists()) {
-                const now = Date.now();
-                let count = 0;
-                snap.forEach(child => {
-                    const lastSeen = child.val()?.lastSeen;
-                    if (typeof lastSeen === 'number' && now - lastSeen <= PRESENCE_GRACE_MS) count++;
-                });
-                if (el) el.innerText = count.toLocaleString();
-            } else if (el) {
-                el.innerText = '1';
-            }
+            const presenceResult = await getStockMarketPresenceCountCallable();
+            if (el) el.innerText = Number(presenceResult.data?.count || 0).toLocaleString();
         } catch (e) {
             const el = document.getElementById('online-count');
             if (el) el.innerText = '?';
@@ -3007,7 +2997,7 @@ function renderStocks(filter = "") {
 // 최신화된다.
 function subscribeStock(id) {
     if (stockSubscriptions[id]) return;
-    stockSubscriptions[id] = onValue(ref(db, `stocks/${id}`), (snap) => {
+    stockSubscriptions[id] = onValue(ref(db, `stocksPublic/${id}`), (snap) => {
         if (!snap.exists()) return;
         const ns  = { ...snap.val(), id };
         recordPriceTick(id, ns.price);
@@ -3210,7 +3200,7 @@ function updateCardContent(card, s, userStock) {
 // ── 주식 목록 최초 1회 로드 (검색/정렬 기준 데이터) ──────────
 // 실시간 갱신은 뷰포트에 실제로 보이는 종목만 resyncSubscriptions()/
 // cardObserver로 개별 구독(스크롤해서 벗어나면 자동 구독 해제)
-get(ref(db, 'stocks/')).then((snap) => {
+get(ref(db, 'stocksPublic/')).then((snap) => {
     const data = snap.val() || {};
     allStocks  = Object.keys(data).map(key => ({ ...data[key], id: key }));
     allStocks.forEach(s => recordPriceTick(s.id, s.price));
