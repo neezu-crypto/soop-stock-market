@@ -813,37 +813,6 @@
       }
     },
 
-    "rocketGame": {
-      "wallets": {
-        "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": false
-        }
-      },
-      "profiles": {
-        "$uid": {
-          ".read": "auth != null && auth.uid === $uid",
-          ".write": false
-        }
-      },
-      "rooms": {
-        ".read": false,
-        "$roomId": { ".write": false }
-      },
-      "roomsPublic": {
-        ".read": true,
-        "$roomId": { ".write": false }
-      },
-      "roomsSecrets": {
-        ".read": false,
-        "$roomId": { ".write": false }
-      },
-      "auditLog": {
-        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
-        "$entryId": { ".write": false }
-      }
-    },
-
     "gallery": {
       "images": {
         ".read": false,
