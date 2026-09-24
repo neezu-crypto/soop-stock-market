@@ -1,0 +1,939 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "stocks": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      "$stockId": {
+        ".write": false
+      }
+    },
+
+    "stocksPublic": {
+      ".read": true,
+      "$stockId": { ".write": false }
+    },
+
+    "streamerNames": {
+      ".read": true,
+      "$stockId": {
+        ".write": false
+      }
+    },
+    "streamerNamesMeta": {
+      ".read": true,
+      ".write": false
+    },
+
+    "candlesticks": {
+      "$stockId": {
+        ".read": true,
+        "$ts": {
+          ".write": false
+        }
+      }
+    },
+
+    "sparklines": {
+      "$stockId": {
+        ".read": true,
+        ".write": false
+      }
+    },
+
+    "rankings": {
+      "top5": {
+        ".read": true,
+        ".write": false
+      },
+      "profitEntries": {
+        ".read": false,
+        ".write": false,
+        ".indexOn": ["value"]
+      },
+      "profitEntriesPublic": {
+        ".read": true,
+        ".write": false,
+        ".indexOn": ["value"]
+      }
+    },
+
+    "chartBanner": {
+      "$stockId": {
+        ".read": true,
+        ".write": false
+      }
+    },
+
+    "presence": {
+      "$appId": {
+        ".read": false,
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "!newData.exists() || (newData.hasChildren(['lastSeen']) && newData.child('lastSeen').isNumber())",
+          "lastSeen": {
+            ".validate": "newData.isNumber()"
+          },
+          "connectedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+
+    "users": {
+      ".read": false,
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    "bannedAccounts": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    "bannerRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "chartBannerRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "cardBannerRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "kakaoLinks": {
+      ".read": false,
+      "$kakaoId": {
+        ".write": false
+      }
+    },
+
+    "cashChargeRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "treasureChestRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "treasureChestOpens": {
+      ".read": false,
+      "$openId": {
+        ".write": false
+      }
+    },
+
+    "pinRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "pinnedStocks": {
+      ".read": true,
+      "$stockId": {
+        ".write": false
+      }
+    },
+
+    "relayRoomRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "relayRooms": {
+      ".read": true,
+      "$streamerId": {
+        ".write": false
+      }
+    },
+
+    "unfreezeDonationRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "listingRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "lastUnfreezeEvent": {
+      ".read": true,
+      ".write": false
+    },
+
+    "maintenance": {
+      ".read": true,
+      ".write": false
+    },
+
+    "announcement": {
+      ".read": true,
+      ".write": false
+    },
+
+    "jackpot": {
+      "state": {
+        ".read": true,
+        ".write": false
+      }
+    },
+
+    "jackpotContributions": {
+      ".read": false,
+      "$uid": {
+        ".write": false
+      }
+    },
+
+    "jackpotDailyMaxDelta": {
+      ".read": false,
+      ".write": false
+    },
+
+    "jackpotLastWin": {
+      ".read": true,
+      ".write": false
+    },
+
+    "stockSimSessions": {
+      ".read": false,
+      "$sessionId": {
+        ".write": false
+      }
+    },
+
+    "lottery": {
+      "pool": {
+        ".read": true,
+        ".write": false
+      }
+    },
+
+    "lotteryPurchases": {
+      ".read": false,
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "lotteryLastWin": {
+      ".read": true,
+      ".write": false
+    },
+
+    "lotteryTripleSevenLog": {
+      ".read": false,
+      "$logId": {
+        ".write": false
+      }
+    },
+
+    "playTimePurchases": {
+      ".read": false,
+      "$purchaseId": {
+        ".write": false
+      }
+    },
+
+    "streamerVerificationRequests": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      ".indexOn": ["status"],
+      "$requestId": {
+        ".write": false
+      }
+    },
+
+    "streamerVerifications": {
+      ".read": false,
+      ".indexOn": ["uid", "soopId", "nickname"],
+      "$id": {
+        ".write": false
+      }
+    },
+
+    "streamerVerificationsPublic": {
+      ".read": true,
+      ".write": false,
+      ".indexOn": ["soopId", "nickname"]
+    },
+
+    "privateUserIds": {
+      ".read": false,
+      ".write": false
+    },
+
+    "verifiedStreamerVisits": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+      "$entryId": {
+        ".write": false
+      }
+    },
+
+    "verifiedStreamerVisitDedup": {
+      ".read": false,
+      "$market": {
+        "$uid": {
+          "$dateKey": {
+            ".write": false
+          }
+        }
+      }
+    },
+
+    "onyuVn": {
+      ".read": false,
+      ".write": false
+    },
+
+    "delistedStocksLog": {
+      ".read": false,
+      "$stockId": {
+        ".write": false
+      }
+    },
+
+    "bettingMarket": {
+      "markets": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        ".indexOn": ["status"],
+        "$marketId": { ".write": false }
+      },
+
+      "marketsPublic": {
+        ".read": true,
+        ".indexOn": ["status"],
+        "$marketId": { ".write": false }
+      },
+
+      "bets": {
+        "$marketId": {
+          "$betId": {
+            ".read": "auth != null && data.child('uid').val() === auth.uid",
+            ".write": false
+          }
+        }
+      },
+
+      "wallets": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+
+      "walletLedger": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$entryId": { ".write": false }
+        }
+      },
+
+      "exchanges": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$exchangeId": { ".write": false }
+        }
+      },
+
+      "userBets": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+
+      "reserveFund": {
+        ".read": false,
+        ".write": false
+      },
+
+      "jackpot": {
+        ".read": true,
+        ".write": false
+      },
+
+      "jackpotWins": {
+        ".read": false,
+        ".indexOn": ["at"],
+        "$winId": { ".write": false }
+      },
+
+      "jackpotWinsPublic": {
+        ".read": true,
+        ".indexOn": ["at"],
+        "$winId": { ".write": false }
+      },
+
+      "likes": {
+        "$marketId": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        }
+      },
+
+      "chestPurchaseRequests": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        ".indexOn": ["status"],
+        "$requestId": { ".write": false }
+      },
+
+      "ownedChests": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+
+      "chestOpenLog": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$logId": { ".write": false }
+      },
+
+      "streamerRequests": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$requestId": { ".write": false }
+      },
+
+      "promotedStreamers": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$entryId": { ".write": false }
+      },
+
+      "bannedAccounts": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$uid": { ".write": false }
+      },
+
+      "verifyRequests": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$pushId": { ".write": false }
+      },
+
+      "verifiedStreamerUids": {
+        ".read": false,
+        "$uid": { ".write": false }
+      },
+
+      "marketReports": {
+        ".read": "auth != null && (root.child('adminCenter/adminUids').child(auth.uid).exists() || root.child('bettingMarket/verifiedStreamerUids').child(auth.uid).exists())",
+        "$reportId": { ".write": false }
+      },
+
+      "marketReportMarks": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$marketId": { ".write": false }
+        }
+      },
+
+      "nicknameReports": {
+        ".read": "auth != null && (root.child('adminCenter/adminUids').child(auth.uid).exists() || root.child('bettingMarket/verifiedStreamerUids').child(auth.uid).exists())",
+        "$reportId": { ".write": false }
+      },
+
+      "blockedNicknames": {
+        ".read": false,
+        "$targetId": { ".write": false }
+      },
+
+      "blockedNicknamesPublic": {
+        ".read": "auth != null",
+        ".write": false
+      },
+
+      "profiles": {
+        ".read": false,
+        ".indexOn": ["nickname"],
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+
+      "publicProfiles": {
+        ".read": "auth != null",
+        ".write": false,
+        ".indexOn": ["nickname"]
+      },
+
+      "auditLog": {
+        ".read": "auth != null && (root.child('adminCenter/adminUids').child(auth.uid).exists() || root.child('bettingMarket/verifiedStreamerUids').child(auth.uid).exists())",
+        "$entryId": { ".write": false }
+      },
+
+      "adminChat": {
+        ".read": "auth != null && (root.child('adminCenter/adminUids').child(auth.uid).exists() || root.child('bettingMarket/verifiedStreamerUids').child(auth.uid).exists())",
+        "$messageId": { ".write": false }
+      },
+
+      "rankings": {
+        ".read": false,
+        ".write": false
+      },
+
+      "rankingsPublic": {
+        ".read": true,
+        ".write": false
+      },
+
+      "ownedSkins": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$skinId": { ".write": false }
+        }
+      },
+
+      "equippedSkin": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+
+      "skinPurchases": {
+        ".read": "auth != null && (root.child('adminCenter/adminUids').child(auth.uid).exists() || root.child('bettingMarket/verifiedStreamerUids').child(auth.uid).exists())",
+        "$entryId": { ".write": false }
+      }
+    },
+
+    "presetGallery": {
+      ".read": false,
+      ".indexOn": ["ownerUid"],
+      "$presetId": {
+        ".write": false
+      }
+    },
+
+    "presetGalleryPublic": {
+      ".read": true,
+      "$presetId": { ".write": false }
+    },
+
+    "presetMergeTickets": {
+      ".read": false,
+      "$ticketId": {
+        ".write": false
+      }
+    },
+
+    "presetMergeFailures": {
+      ".read": "auth != null && (root.child('adminCenter/adminUids').child(auth.uid).exists() || (root.child('adminCenter/streamerPermissions/reviewQueue').val() === true && root.child('bettingMarket/verifiedStreamerUids').child(auth.uid).exists()))",
+      "$failureId": {
+        ".write": false
+      }
+    },
+
+    "adminCenter": {
+      "streamerPermissions": {
+        ".read": false,
+        ".write": false
+      },
+      "adminUids": {
+        ".read": false,
+        ".write": false
+      },
+      "killswitchLastRun": {
+        ".read": false,
+        ".write": false
+      },
+      "promotedContent": {
+        ".read": false,
+        ".write": false
+      }
+    },
+
+    "adminAuditLog": {
+      ".read": false,
+      ".write": false
+    },
+
+    "seriesConfig": {
+      ".read": false,
+      ".write": false
+    },
+
+    "devbarLinks": {
+      ".read": true,
+      "$gameId": {
+        ".write": false
+      }
+    },
+
+    "streamerMessenger": {
+      "publicRooms": {
+        ".read": "auth != null",
+        ".write": false,
+        ".indexOn": ["streamerNickname", "visibility"]
+      },
+      "rooms": {
+        "$roomId": {
+          "meta": {
+            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active' || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+            ".write": false
+          },
+          "members": {
+            "$uid": {
+              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".write": false
+            }
+          },
+          "applications": {
+            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+            "$uid": {
+              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".write": false
+            }
+          },
+          "blocked": {
+            "$uid": {
+              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".write": false
+            }
+          }
+        }
+      },
+      "chat": {
+        "$roomId": {
+          "streamerTimeline": {
+            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+            ".write": false,
+            ".indexOn": ["createdAt"],
+            "$messageId": { ".write": false }
+          },
+          "broadcast": {
+            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active')",
+            ".write": false,
+            ".indexOn": ["createdAt"],
+            "$messageId": { ".write": false }
+          },
+          "private": {
+            "$uid": {
+              ".read": "auth != null && (auth.uid === $uid && root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active' || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".write": false,
+              ".indexOn": ["createdAt"],
+              "$messageId": { ".write": false }
+            }
+          }
+        }
+      },
+      "reports": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).val() === true",
+        ".write": false,
+        ".indexOn": ["createdAt", "roomId"],
+        "$reportId": { ".write": false }
+      },
+      "reportEvidence": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).val() === true",
+        ".write": false,
+        "$reportId": { ".write": false }
+      },
+      "auditLog": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).val() === true",
+        ".write": false,
+        ".indexOn": ["at"],
+        "$entryId": { ".write": false }
+      },
+      "rateLimits": {
+        ".read": false,
+        ".write": false
+      }
+    },
+
+    "analytics": {
+      "presenceHourly": {
+        ".read": false,
+        ".write": false
+      }
+    },
+
+    "lifeGame": {
+      "playthroughs": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+      "collection": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+      "gallery": {
+        ".read": false,
+        "$entryId": { ".write": false }
+      },
+      "galleryPublic": {
+        ".read": true,
+        "$entryId": { ".write": false }
+      },
+      "galleryChoiceLogs": {
+        ".read": true,
+        "$entryId": { ".write": false }
+      },
+      "galleryDetails": {
+        ".read": true,
+        "$entryId": { ".write": false }
+      },
+      "galleryReports": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$reportId": { ".write": false }
+      },
+      "reviews": {
+        ".read": false,
+        "$uid": { ".write": false }
+      },
+      "reviewsPublic": {
+        ".read": true,
+        ".write": false
+      },
+      "reviewReports": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$reportId": { ".write": false }
+      },
+      "sponsorRequests": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        ".indexOn": ["status"],
+        "$requestId": { ".write": false }
+      },
+      "currentSponsor": {
+        ".read": true,
+        ".write": false
+      },
+      "multiplayerSessions": {
+        ".read": false,
+        "$hostUid": {
+          ".write": "auth != null && auth.uid === $hostUid && !newData.exists()"
+        }
+      },
+      "multiplayerSessionsPublic": {
+        ".read": true,
+        ".write": false
+      },
+      "multiplayerVotes": {
+        ".read": false,
+        "$hostUid": {
+          "$stageId": {
+            "$participantUid": {
+              ".write": false
+            }
+          }
+        }
+      },
+      "multiplayerVotesPublic": {
+        ".read": true,
+        ".write": false
+      },
+      "multiplayerAdShown": {
+        ".read": false,
+        "$hostUid": { ".write": false }
+      },
+      "worldState": {
+        ".read": true,
+        "$key": { ".write": false }
+      },
+      "presence": {
+        ".read": false,
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['lastSeenAt']) && newData.child('lastSeenAt').isNumber()",
+          "lastSeenAt": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      },
+      "worldStateHistory": {
+        ".read": true,
+        "$key": {
+          "$date": { ".write": false }
+        }
+      },
+      "occupationGauge": {
+        ".read": true,
+        "$group": { ".write": false }
+      },
+      "vehicleOwners": {
+        ".read": false,
+        "$uid": { ".write": false }
+      },
+      "botConfig": {
+        ".read": false,
+        ".write": false
+      },
+      "bots": {
+        ".read": false,
+        "$uid": { ".write": false }
+      }
+    },
+
+    "rocketGame": {
+      "wallets": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+      "profiles": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+      "rooms": {
+        ".read": false,
+        "$roomId": { ".write": false }
+      },
+      "roomsPublic": {
+        ".read": true,
+        "$roomId": { ".write": false }
+      },
+      "roomsSecrets": {
+        ".read": false,
+        "$roomId": { ".write": false }
+      },
+      "auditLog": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$entryId": { ".write": false }
+      }
+    },
+
+    "gallery": {
+      "images": {
+        ".read": false,
+        ".indexOn": ["category", "streamerId", "createdAt"],
+        "$imageId": { ".write": false }
+      },
+      "imagesPublic": {
+        ".read": true,
+        ".indexOn": ["category", "streamerId", "createdAt"],
+        "$imageId": { ".write": false }
+      },
+      "imageStats": {
+        ".read": true,
+        "$imageId": { ".write": false }
+      },
+      "likes": {
+        "$imageId": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": false
+          }
+        }
+      },
+      "userLikes": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$imageId": { ".write": false }
+        }
+      },
+      "hiddenImages": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$imageId": { ".write": false }
+        }
+      },
+      "streamerAccountLinks": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+      "profiles": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": false
+        }
+      },
+      "comments": {
+        ".read": false,
+        "$imageId": {
+          "$commentId": { ".write": false }
+        }
+      },
+      "commentsPublic": {
+        ".read": true,
+        "$imageId": {
+          "$commentId": { ".write": false }
+        }
+      },
+      "imageReports": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        ".indexOn": ["imageId"],
+        "$reportId": { ".write": false }
+      },
+      "commentReports": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        ".indexOn": ["commentId", "createdAt"],
+        "$reportId": { ".write": false }
+      },
+      "commentReportsByUser": {
+        ".read": false,
+        "$uid": { ".write": false }
+      },
+      "streamerFirstUpload": {
+        ".read": true,
+        "$streamerId": { ".write": false }
+      },
+      "streamerUnlockedUntil": {
+        ".read": true,
+        "$streamerId": { ".write": false }
+      },
+      "unlockRequests": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        ".indexOn": ["streamerId"],
+        "$requestId": { ".write": false }
+      },
+      "auditLog": {
+        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
+        "$entryId": { ".write": false }
+      }
+    }
+  }
+}
