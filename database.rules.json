@@ -505,6 +505,7 @@
 
       "auditLog": {
         ".read": "auth != null && (root.child('adminCenter/adminUids').child(auth.uid).exists() || root.child('bettingMarket/verifiedStreamerUids').child(auth.uid).exists())",
+        ".indexOn": ["at"],
         "$entryId": { ".write": false }
       },
 
