@@ -2565,6 +2565,10 @@ window.submitStreamerVerification = async function() {
         } else if (action === 'already-verified') {
             closeStreamerVerifyModal();
             alert('✅ 이미 스트리머 인증이 완료된 계정이에요.');
+        } else if (action === 'auto-approved') {
+            closeStreamerVerifyModal();
+            alert('✅ 방송 다시보기 검수 기록이 확인되어 스트리머 인증이 자동 완료됐어요.');
+            updateAccountProtectionUI();
         } else {
             showStreamerVerifyPending(returnedNickname, isSwitch);
         }
@@ -2583,6 +2587,10 @@ window.checkStreamerVerificationStatus = async function() {
         } else if (action === 'already-verified') {
             closeStreamerVerifyModal();
             alert('✅ 스트리머 인증이 완료됐어요! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
+        } else if (action === 'auto-approved') {
+            closeStreamerVerifyModal();
+            alert('✅ 방송 다시보기 검수 기록이 확인되어 스트리머 인증이 자동 완료됐어요.');
+            updateAccountProtectionUI();
         } else {
             showStreamerVerifyPending(nickname, isSwitch);
             alert('아직 관리자 확인 전이에요. 잠시 후 다시 확인해주세요.');

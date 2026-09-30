@@ -60,11 +60,40 @@ async function setVerifiedProfile(db, uid, nickname, soopId) {
   });
 }
 
+async function autoApproveReviewedStreamer(db, requestId, reqData) {
+  const verifiedAt = Date.now();
+  const linkRef = db.ref("streamerVerifications").push();
+  const verification = {
+    nickname: reqData.nickname,
+    soopId: reqData.soopId,
+    uid: reqData.uid,
+    verifiedAt,
+    autoApproved: true,
+    autoApprovalSource: "life-game-play-review",
+  };
+  const requestRecord = Object.assign({}, reqData);
+  delete requestRecord.id;
+  await db.ref().update({
+    [`streamerVerifications/${linkRef.key}`]: verification,
+    [`users/${reqData.uid}/streamerVerified`]: true,
+    [`users/${reqData.uid}/streamerProfile`]: { nickname: reqData.nickname, soopId: reqData.soopId },
+    [`streamerVerificationRequests/${requestId}`]: Object.assign({}, requestRecord, {
+      status: "approved", reviewedAt: verifiedAt, autoApproved: true,
+      autoApprovalSource: "life-game-play-review",
+    }),
+  });
+  await syncPublicVerification(db, linkRef.key, verification);
+  await grantAchievement(db, reqData.uid, "account_protected");
+  await fillBettingMarketProfileIfEmpty(db, reqData.uid, reqData.nickname, reqData.soopId);
+  return { ok: true, action: "auto-approved", nickname: reqData.nickname };
+}
+
 // ══════════════════════════════════════════════════════════
 // 스트리머 인증 — 카카오/구글 연동을 꺼리는 유저를 위한 대체 계정 보호 경로.
 //
-// 신청하면 닉네임과 신청 시각만 즉시 관리자에게 전달되고, 관리자가 별도로
-// 신원을 확인한 뒤 승인/거절한다. 이미 다른 uid로 인증된 닉네임을 또 다른
+// 일반 신청은 관리자가 별도로 신원을 확인한 뒤 승인/거절한다. 단, 인생게임
+// 운영자가 다시보기를 직접 검수해 UID+SOOP 아이디를 등록한 쌍은 신규 인증을
+// 자동 승인한다. 이미 다른 uid로 인증된 닉네임을 또 다른
 // 기기에서 신청하면(=계정 전환 요청) 카카오/구글처럼 즉시 토큰을 내주지
 // 않고, 매번 관리자 확인을 다시 거치게 한다 — 그렇지 않으면 남의 방송에
 // 나온 스트리머 닉네임을 아무나 입력해 그 계정을 그대로 탈취할 수 있기 때문.
@@ -102,6 +131,16 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   const latest = myRequests[0];
 
   if (latest?.status === "pending") {
+    const reviewed = latest.soopId && !latest.isSwitch
+      ? await db.ref(`lifeGame/playedStreamerAllowlist/${uid}/${latest.soopId}`).get()
+      : null;
+    if (reviewed?.exists() && reviewed.val().nickname === latest.nickname) {
+      const existing = await findExistingStreamerRecord(db, latest.nickname, latest.soopId);
+      const existingRecord = existing.exists() ? Object.values(existing.val())[0] : null;
+      if (!existingRecord) {
+        return autoApproveReviewedStreamer(db, latest.id, latest);
+      }
+    }
     return { ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch };
   }
 
@@ -164,7 +203,17 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   // 호출부(주식시장 자체)는 이 필드를 안 보내므로 기본값으로 하위 호환.
   const source = String(request.data?.source || "stock-market").trim() || "stock-market";
 
+  const allowlistRef = db.ref(`lifeGame/playedStreamerAllowlist/${uid}/${soopId}`);
+  const reviewedSnap = await allowlistRef.get();
+  const autoApproved = reviewedSnap.exists() && reviewedSnap.val().nickname === nickname && !isSwitch && !existingEntry;
   const ref = db.ref("streamerVerificationRequests").push();
+  if (autoApproved) {
+    return autoApproveReviewedStreamer(db, ref.key, {
+      uid, nickname, soopId, requestedAt: now, isSwitch: false,
+      existingUid: null, source,
+    });
+  }
+
   await ref.set({
     uid,
     nickname,
