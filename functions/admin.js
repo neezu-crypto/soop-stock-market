@@ -65,6 +65,7 @@ const {
   actionListStreamerVerificationRequests,
   actionListVerifiedStreamers,
   actionApproveStreamerVerification,
+  actionConfirmStreamerVerificationByNote,
   actionRejectStreamerVerification,
   actionRevokeStreamerVerification,
 } = require("./streamerVerification");
@@ -1106,6 +1107,7 @@ async function dispatchAdminAction(db, action, payload, auth) {
     case "listStreamerVerificationRequests":    return actionListStreamerVerificationRequests(db);
     case "listVerifiedStreamers":                return actionListVerifiedStreamers(db);
     case "approveStreamerVerification":         return actionApproveStreamerVerification(db, payload, auth);
+    case "confirmStreamerVerificationByNote":   return actionConfirmStreamerVerificationByNote(db, payload, auth);
     case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload, auth);
     case "revokeStreamerVerification":           return actionRevokeStreamerVerification(db, payload, auth);
     case "previewRankings":        return actionPreviewRankings(db);

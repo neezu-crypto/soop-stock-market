@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const crypto = require("node:crypto");
 const {
   STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH,
   STREAMER_VERIFICATION_COOLDOWN_MS,
@@ -10,6 +11,31 @@ const {
 } = require("./common");
 const { logAdminAction } = require("./adminAuditLog");
 const { syncPublicVerification, removePublicVerification, publicIdFor } = require("./publicIdentity");
+
+const VERIFY_NOTE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const VERIFY_NOTE_CODE_TTL_MS = 15 * 60 * 1000;
+
+function createVerificationNoteCode() {
+  const bytes = crypto.randomBytes(6);
+  let code = "";
+  for (const byte of bytes) code += VERIFY_NOTE_CODE_ALPHABET[byte % VERIFY_NOTE_CODE_ALPHABET.length];
+  return code;
+}
+
+function verificationNoteCodeHash(requestId, code) {
+  return crypto.createHash("sha256").update(requestId + ":" + code).digest("hex");
+}
+
+async function issueVerificationNoteCode(db, requestId) {
+  const code = createVerificationNoteCode();
+  const issuedAt = Date.now();
+  await db.ref(`streamerVerificationRequests/${requestId}`).update({
+    noteVerificationCodeHash: verificationNoteCodeHash(requestId, code),
+    noteVerificationCodeIssuedAt: issuedAt,
+    noteVerificationCodeExpiresAt: issuedAt + VERIFY_NOTE_CODE_TTL_MS,
+  });
+  return { code, expiresAt: issuedAt + VERIFY_NOTE_CODE_TTL_MS };
+}
 
 // streamerVerifications는 스트리머 배팅시장과 공유하는 노드다. 그쪽 앱은 SOOP
 // 아이디를 정체성의 기준(canonical key)으로 삼는데, 이 앱은 원래 닉네임으로만
@@ -141,7 +167,14 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
         return autoApproveReviewedStreamer(db, latest.id, latest);
       }
     }
-    return { ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch };
+    const challenge = latest.source === "life-game" && !latest.isSwitch
+      ? await issueVerificationNoteCode(db, latest.id)
+      : null;
+    return {
+      ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch,
+      verificationCode: challenge ? challenge.code : "",
+      verificationCodeExpiresAt: challenge ? challenge.expiresAt : 0,
+    };
   }
 
   if (latest?.status === "approved" && latest.isSwitch && latest.existingUid) {
@@ -214,7 +247,8 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     });
   }
 
-  await ref.set({
+  const noteChallenge = source === "life-game" && !isSwitch ? createVerificationNoteCode() : "";
+  const record = {
     uid,
     nickname,
     soopId,
@@ -223,10 +257,92 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     isSwitch,
     existingUid,
     source,
-  });
+  };
+  if (noteChallenge) {
+    const issuedAt = Date.now();
+    record.noteVerificationCodeHash = verificationNoteCodeHash(ref.key, noteChallenge);
+    record.noteVerificationCodeIssuedAt = issuedAt;
+    record.noteVerificationCodeExpiresAt = issuedAt + VERIFY_NOTE_CODE_TTL_MS;
+  }
+  await ref.set(record);
 
-  return { ok: true, action: "pending", nickname, isSwitch };
+  return {
+    ok: true, action: "pending", nickname, isSwitch,
+    verificationCode: noteChallenge,
+    verificationCodeExpiresAt: noteChallenge ? record.noteVerificationCodeExpiresAt : 0,
+  };
 });
+
+async function actionConfirmStreamerVerificationByNote(db, { senderId, code, noteNo }, auth) {
+  const normalizedSenderId = String(senderId || "").trim().toLowerCase();
+  const normalizedCode = String(code || "").trim().toUpperCase();
+  const normalizedNoteNo = String(noteNo || "").trim();
+  if (!/^[a-z0-9]{2,20}$/.test(normalizedSenderId) || !/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(normalizedCode) || !/^\d{1,20}$/.test(normalizedNoteNo)) {
+    throw new HttpsError("invalid-argument", "SOOP 쪽지 확인 정보가 올바르지 않습니다.");
+  }
+
+  const claimRef = db.ref(`streamerVerificationNoteClaims/${normalizedNoteNo}`);
+  const claimed = await claimRef.transaction((current) => current ? undefined : {
+    status: "processing", claimedAt: Date.now(), senderId: normalizedSenderId,
+  }, undefined, false);
+  if (!claimed.committed) {
+    return { ok: false, reason: "note-already-processed" };
+  }
+
+  let claimedRequestId = "";
+  try {
+    const requestsSnap = await db.ref("streamerVerificationRequests").get();
+    const requests = requestsSnap.val() || {};
+    const now = Date.now();
+    const match = Object.entries(requests).find(([requestId, entry]) => {
+      if (!entry || entry.status !== "pending" || entry.source !== "life-game" || entry.isSwitch ||
+          String(entry.soopId || "").toLowerCase() !== normalizedSenderId ||
+          !entry.noteVerificationCodeHash || Number(entry.noteVerificationCodeExpiresAt) <= now) return false;
+      return entry.noteVerificationCodeHash === verificationNoteCodeHash(requestId, normalizedCode);
+    });
+    if (!match) {
+      await claimRef.remove();
+      return { ok: false, reason: "no-matching-pending-request" };
+    }
+    const [requestId, requestData] = match;
+    claimedRequestId = requestId;
+    const requestRef = db.ref(`streamerVerificationRequests/${requestId}`);
+    const locked = await requestRef.transaction((current) => {
+      if (!current || current.status !== "pending" || current.source !== "life-game" || current.isSwitch ||
+          String(current.soopId || "").toLowerCase() !== normalizedSenderId ||
+          Number(current.noteVerificationCodeExpiresAt) <= Date.now() ||
+          current.noteVerificationCodeHash !== verificationNoteCodeHash(requestId, normalizedCode)) return;
+      const claimAge = Date.now() - Number(current.noteVerificationClaimedAt || 0);
+      if (current.noteVerificationClaimedAt && claimAge < 2 * 60 * 1000) return;
+      current.noteVerificationClaimedAt = Date.now();
+      current.noteVerificationClaimNoteNo = normalizedNoteNo;
+      return current;
+    }, undefined, false);
+    if (!locked.committed) {
+      await claimRef.remove();
+      return { ok: false, reason: "request-no-longer-pending" };
+    }
+    await actionApproveStreamerVerification(db, { requestId }, auth);
+    await requestRef.update({
+      noteVerificationCodeHash: null,
+      noteVerificationCodeIssuedAt: null,
+      noteVerificationCodeExpiresAt: null,
+      noteVerificationClaimedAt: null,
+      noteVerificationClaimNoteNo: null,
+      noteVerifiedAt: now,
+      noteVerifiedBySoopId: normalizedSenderId,
+      noteNo: normalizedNoteNo,
+    });
+    await claimRef.update({ status: "approved", requestId, approvedAt: now });
+    return { ok: true, nickname: requestData.nickname || "", soopId: normalizedSenderId };
+  } catch (error) {
+    if (claimedRequestId) await db.ref(`streamerVerificationRequests/${claimedRequestId}`).update({
+      noteVerificationClaimedAt: null, noteVerificationClaimNoteNo: null,
+    }).catch(() => {});
+    await claimRef.remove().catch(() => {});
+    throw error;
+  }
+}
 
 async function actionListStreamerVerificationRequests(db) {
   const snap = await db.ref("streamerVerificationRequests").get();
@@ -354,6 +470,7 @@ module.exports = {
   actionListStreamerVerificationRequests,
   actionListVerifiedStreamers,
   actionApproveStreamerVerification,
+  actionConfirmStreamerVerificationByNote,
   actionRejectStreamerVerification,
   actionRevokeStreamerVerification,
 };
