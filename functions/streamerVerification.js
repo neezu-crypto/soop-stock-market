@@ -167,6 +167,18 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
         return autoApproveReviewedStreamer(db, latest.id, latest);
       }
     }
+    // The life-game "승인됐는지 확인하기" button only checks the existing
+    // request. Do not rotate its note code: doing so invalidates a note the
+    // streamer may already have sent. A normal request call remains the
+    // explicit way to issue a fresh code.
+    if (request.data?.checkOnly === true) {
+      const canUseNoteCode = latest.source === "life-game" && !latest.isSwitch;
+      return {
+        ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch,
+        verificationCode: "",
+        verificationCodeExpiresAt: canUseNoteCode ? Number(latest.noteVerificationCodeExpiresAt) || 0 : 0,
+      };
+    }
     const challenge = latest.source === "life-game" && !latest.isSwitch
       ? await issueVerificationNoteCode(db, latest.id)
       : null;
