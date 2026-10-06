@@ -207,8 +207,8 @@ Three.js 기반 OBS 방송 배경 화면 모음. 번들러 없는 정적 HTML, �
   드라이버 민감 버그는 재현 안 될 수 있음 — 의심되면 사용자에게 실제 브라우저 화면
   녹화 요청.
 - **Firebase**: 프로젝트 `soop-stock-market`, codebase `presetgallery`.
-  `database.rules.json`은 `presetGallery`/`presetMergeTickets`/`presetMergeFailures`
-  노드만 소유 — 나머지는 다른 서비스 소유이니 건드리지 않음.
+  `database.rules.json`은 `presetGallery`/`presetGalleryPublic`/`presetMergeTickets`/
+  `presetMergeFailures` 노드만 소유 — 나머지는 다른 서비스 소유이니 건드리지 않음.
 
 ### 2.3 soop-stock-market (스트리머 주식시장)
 - Firebase Functions 배포 시 codebase가 `default`라 `StreamBet-Market`(스트리머
