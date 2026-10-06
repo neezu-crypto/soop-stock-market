@@ -76,6 +76,11 @@
 3. RTDB 규칙 변경은 `--dry-run`으로 먼저 확인
 4. 새로 읽거나 다루는 RTDB 노드의 필드명은 그 노드를 실제로 쓰는 코드를 찾아 대조
 
+### 1.2.1 스트리머 인증 승인 실시간 반영
+- 스트리머 인증 상태의 공유 기준값은 `users/{uid}/streamerVerified`다. 아래 7개 클라이언트는 현재 로그인 UID의 `users/{uid}` 하위 데이터 또는 인증 관련 필드를 RTDB `onValue`로 구독한다: `StreamBet-Market`, `soop-stock-market`, `streamer-life-game`, `streamer-gallery`, `streamer-fanpage`, `streamer-messenger`, `onyu-vn`. 주식시장은 계정 데이터 구독에서 인증 플래그·전환 신호를 함께 읽고, 나머지는 해당 필드/신호를 구독한다. 페이지가 열려 있고 연결이 살아 있으면 승인·해제 결과가 새로고침 없이 UI에 반영되며, 페이지가 닫힌 상태의 푸시 알림은 제공하지 않는다.
+- 계정 전환 승인은 `users/{신청 UID}/streamerVerificationSwitchApproval`에 `{ requestId, approvedAt }` 신호를 기록한다. 클라이언트는 본인 경로의 신호를 읽고 공유 `requestStreamerVerification` callable에 `switchRequestId`를 전달하며, 서버가 신청 UID·기존 인증 UID·승인 상태를 재검증한 뒤에만 전환용 Firebase custom token을 발급한다. 처리가 끝나면 신호를 삭제하며 토큰은 RTDB에 저장하지 않는다.
+- 이 경로를 수정할 때는 실제 승인·해제 writer(`soop-stock-market/functions/streamerVerification.js`, `StreamBet-Market/functions/src/verification.js` 등)와 일곱 클라이언트의 구독을 함께 대조한다. 경로·읽기 권한을 바꿔야 한다면 `database.rules.json` 6개 사본 동기화 절차를 따른다. 열린 탭·오프라인 복귀·계정 전환 모두를 검증하고, 페이지가 닫힌 동안 동작하는 푸시 기능이 있다고 표현하지 않는다.
+
 ### 1.3 Firebase Cloud Functions 배포 — 함수명 유일성 주의
 - 이 프로젝트(`soop-stock-market`)는 여러 자매 앱의 Cloud Functions가 함께 배포돼
   있다. `firebase deploy --only functions`처럼 함수명을 지정하지 않고 전체 배포하면,
