@@ -302,6 +302,13 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
   }
 
   let claimedRequestId = "";
+  let requestClaimRef = null;
+  async function releaseRequestClaim() {
+    if (!requestClaimRef) return;
+    await requestClaimRef.transaction((current) =>
+      !current || current.noteNo === normalizedNoteNo ? null : undefined,
+    undefined, false);
+  }
   try {
     const requestsSnap = await db.ref("streamerVerificationRequests").get();
     const requests = requestsSnap.val() || {};
@@ -319,26 +326,33 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
     const [requestId, requestData] = match;
     claimedRequestId = requestId;
     const requestRef = db.ref(`streamerVerificationRequests/${requestId}`);
-    const locked = await requestRef.transaction((current) => {
-      if (!current || current.status !== "pending" || current.source !== "life-game" || current.isSwitch ||
-          String(current.soopId || "").toLowerCase() !== normalizedSenderId ||
-          Number(current.noteVerificationCodeExpiresAt) <= Date.now() ||
-          current.noteVerificationCodeHash !== verificationNoteCodeHash(requestId, normalizedCode)) return;
-      const claimAge = Date.now() - Number(current.noteVerificationClaimedAt || 0);
-      if (current.noteVerificationClaimedAt && claimAge < 2 * 60 * 1000) return;
-      current.noteVerificationClaimedAt = Date.now();
-      current.noteVerificationClaimNoteNo = normalizedNoteNo;
-      return current;
+    // A transaction on the whole request can start with a local null value
+    // before RTDB has fetched the record. Aborting on that null rejects a
+    // valid pending request. Lock only the nullable claim child instead.
+    requestClaimRef = requestRef.child("noteVerificationClaim");
+    const locked = await requestClaimRef.transaction((current) => {
+      if (current && Date.now() - Number(current.claimedAt || 0) < 2 * 60 * 1000) return;
+      return { noteNo: normalizedNoteNo, claimedAt: Date.now() };
     }, undefined, false);
     if (!locked.committed) {
       await claimRef.remove();
-      return { ok: false, reason: "request-no-longer-pending" };
+      return { ok: false, reason: "verification-in-progress" };
+    }
+    const current = (await requestRef.get()).val();
+    if (!current || current.status !== "pending" || current.source !== "life-game" || current.isSwitch ||
+        String(current.soopId || "").toLowerCase() !== normalizedSenderId ||
+        Number(current.noteVerificationCodeExpiresAt) <= Date.now() ||
+        current.noteVerificationCodeHash !== verificationNoteCodeHash(requestId, normalizedCode)) {
+      await releaseRequestClaim();
+      await claimRef.remove();
+      return { ok: false, reason: "request-changed-during-verification" };
     }
     await actionApproveStreamerVerification(db, { requestId }, auth);
     await requestRef.update({
       noteVerificationCodeHash: null,
       noteVerificationCodeIssuedAt: null,
       noteVerificationCodeExpiresAt: null,
+      noteVerificationClaim: null,
       noteVerificationClaimedAt: null,
       noteVerificationClaimNoteNo: null,
       noteVerifiedAt: now,
@@ -348,9 +362,7 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
     await claimRef.update({ status: "approved", requestId, approvedAt: now });
     return { ok: true, nickname: requestData.nickname || "", soopId: normalizedSenderId };
   } catch (error) {
-    if (claimedRequestId) await db.ref(`streamerVerificationRequests/${claimedRequestId}`).update({
-      noteVerificationClaimedAt: null, noteVerificationClaimNoteNo: null,
-    }).catch(() => {});
+    if (claimedRequestId) await releaseRequestClaim().catch(() => {});
     await claimRef.remove().catch(() => {});
     throw error;
   }
