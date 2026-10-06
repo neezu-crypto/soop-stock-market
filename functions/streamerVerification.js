@@ -167,19 +167,21 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
         return autoApproveReviewedStreamer(db, latest.id, latest);
       }
     }
-    // The life-game "승인됐는지 확인하기" button only checks the existing
+    // Every site's "승인됐는지 확인하기" button only checks the existing
     // request. Do not rotate its note code: doing so invalidates a note the
     // streamer may already have sent. A normal request call remains the
     // explicit way to issue a fresh code.
     if (request.data?.checkOnly === true) {
-      const canUseNoteCode = latest.source === "life-game" && !latest.isSwitch;
+      const canUseNoteCode = !!latest.noteVerificationCodeHash && !latest.isSwitch;
       return {
         ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch,
         verificationCode: "",
         verificationCodeExpiresAt: canUseNoteCode ? Number(latest.noteVerificationCodeExpiresAt) || 0 : 0,
       };
     }
-    const challenge = latest.source === "life-game" && !latest.isSwitch
+    const existingForPending = latest.soopId
+      ? await findExistingStreamerRecord(db, latest.nickname, latest.soopId) : null;
+    const challenge = !latest.isSwitch && !existingForPending?.exists()
       ? await issueVerificationNoteCode(db, latest.id)
       : null;
     return {
@@ -259,7 +261,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     });
   }
 
-  const noteChallenge = source === "life-game" && !isSwitch ? createVerificationNoteCode() : "";
+  const noteChallenge = !isSwitch && !existingEntry ? createVerificationNoteCode() : "";
   const record = {
     uid,
     nickname,
@@ -314,7 +316,7 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
     const requests = requestsSnap.val() || {};
     const now = Date.now();
     const match = Object.entries(requests).find(([requestId, entry]) => {
-      if (!entry || entry.status !== "pending" || entry.source !== "life-game" || entry.isSwitch ||
+      if (!entry || entry.status !== "pending" || entry.isSwitch ||
           String(entry.soopId || "").toLowerCase() !== normalizedSenderId ||
           !entry.noteVerificationCodeHash || Number(entry.noteVerificationCodeExpiresAt) <= now) return false;
       return entry.noteVerificationCodeHash === verificationNoteCodeHash(requestId, normalizedCode);
@@ -339,7 +341,7 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
       return { ok: false, reason: "verification-in-progress" };
     }
     const current = (await requestRef.get()).val();
-    if (!current || current.status !== "pending" || current.source !== "life-game" || current.isSwitch ||
+    if (!current || current.status !== "pending" || current.isSwitch ||
         String(current.soopId || "").toLowerCase() !== normalizedSenderId ||
         Number(current.noteVerificationCodeExpiresAt) <= Date.now() ||
         current.noteVerificationCodeHash !== verificationNoteCodeHash(requestId, normalizedCode)) {
@@ -347,7 +349,7 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
       await claimRef.remove();
       return { ok: false, reason: "request-changed-during-verification" };
     }
-    await actionApproveStreamerVerification(db, { requestId }, auth);
+    await actionApproveStreamerVerification(db, { requestId }, auth, true);
     await requestRef.update({
       noteVerificationCodeHash: null,
       noteVerificationCodeIssuedAt: null,
@@ -387,12 +389,21 @@ async function actionListVerifiedStreamers(db) {
   return { ok: true, streamers };
 }
 
-async function actionApproveStreamerVerification(db, { requestId }, auth) {
+async function actionApproveStreamerVerification(db, { requestId }, auth, noteOnly = false) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`streamerVerificationRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
+  if (noteOnly) {
+    if (reqData.status !== "pending" || reqData.isSwitch) {
+      throw new HttpsError("failed-precondition", "자동 승인 대상이 변경됐습니다. 수동 검수가 필요합니다.");
+    }
+    const existing = await findExistingStreamerRecord(db, reqData.nickname, reqData.soopId);
+    if (existing.exists()) {
+      throw new HttpsError("failed-precondition", "기존 인증 정보와 충돌합니다. 수동 검수가 필요합니다.");
+    }
+  }
 
   if (!reqData.isSwitch) {
     // 최초 인증 — 닉네임↔uid 매핑을 등록하고 계정 보호 플래그를 켠다. SOOP 아이디도

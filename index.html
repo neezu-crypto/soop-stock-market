@@ -1075,6 +1075,13 @@
 
         <div id="streamer-verify-pending" style="display:none;">
             <p id="streamer-verify-pending-text" style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:16px;"></p>
+            <div id="streamer-verify-note" style="display:none;padding:12px;border:1px solid #334155;border-radius:10px;margin-bottom:12px;font-size:12px;line-height:1.6;">
+                <b>SOOP 쪽지로 본인 확인</b><p>아래 6자리 코드를 복사해 관리자에게 쪽지로 보내주세요. 상태 확인은 코드를 바꾸지 않습니다.</p>
+                <button id="streamer-verify-note-code" type="button" style="width:100%;padding:10px;font-size:20px;font-weight:800;letter-spacing:4px;"></button>
+                <a href="https://note.sooplive.com/app/index.php?page=write&amp;id_list=skftodwocks2" target="_blank" rel="noopener noreferrer" style="display:block;margin:10px 0;">SOOP 쪽지 보내기 ↗</a>
+                <p id="streamer-verify-note-status" role="status"></p>
+                <button onclick="renewStreamerVerificationCode()" type="button">새 코드 발급 (이전 코드 무효화)</button>
+            </div>
             <button onclick="checkStreamerVerificationStatus()"
                 style="width:100%;background:#38bdf8;color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;margin-bottom:10px;">
                 🔄 승인됐는지 확인하기
@@ -2535,13 +2542,25 @@ window.closeStreamerVerifyModal = function() {
     document.getElementById('streamer-verify-modal')?.classList.remove('active');
 };
 
-function showStreamerVerifyPending(nickname, isSwitch) {
+function showStreamerVerifyPending(nickname, isSwitch, verificationCode, expiresAt) {
     document.getElementById('streamer-verify-form').style.display = 'none';
     const pending = document.getElementById('streamer-verify-pending');
     pending.style.display = 'block';
+    const note = document.getElementById('streamer-verify-note');
+    const codeButton = document.getElementById('streamer-verify-note-code');
+    const status = document.getElementById('streamer-verify-note-status');
+    note.style.display = isSwitch ? 'none' : 'block';
+    const code = Number(expiresAt) > Date.now() ? verificationCode || '' : '';
+    codeButton.textContent = code || '코드 없음';
+    codeButton.disabled = !code;
+    codeButton.onclick = async () => {
+        try { await navigator.clipboard.writeText(code); status.textContent = '복사했어요. 쪽지 본문에 붙여넣어 보내주세요.'; }
+        catch (_) { status.textContent = '코드를 선택해 직접 복사해주세요.'; }
+    };
+    status.textContent = !isSwitch && !code ? '코드가 없거나 만료됐어요. 새 코드를 발급해주세요.' : '';
     document.getElementById('streamer-verify-pending-text').innerText = isSwitch
         ? `"${nickname}" 계정 전환 신청이 관리자에게 전달됐어요. 확인 후 이 기기에서도 기존 계정을 이어서 쓸 수 있어요.`
-        : `"${nickname}" 인증 신청이 관리자에게 전달됐어요. 확인 후 승인해드려요.`;
+        : `"${nickname}" 인증 신청이 접수됐어요. SOOP 쪽지의 발신자 아이디와 코드를 대조해 자동 승인합니다.`;
 }
 
 async function completeStreamerVerificationSwitch(customToken) {
@@ -2570,7 +2589,7 @@ window.submitStreamerVerification = async function() {
             alert('✅ 방송 다시보기 검수 기록이 확인되어 스트리머 인증이 자동 완료됐어요.');
             updateAccountProtectionUI();
         } else {
-            showStreamerVerifyPending(returnedNickname, isSwitch);
+            showStreamerVerifyPending(returnedNickname, isSwitch, result.data.verificationCode, result.data.verificationCodeExpiresAt);
         }
     } catch (e) {
         alert('스트리머 인증 신청 중 오류가 발생했습니다: ' + (e?.message || e));
@@ -2579,7 +2598,9 @@ window.submitStreamerVerification = async function() {
 
 window.checkStreamerVerificationStatus = async function() {
     try {
-        const result = await requestStreamerVerificationCallable({});
+        const previousText = document.getElementById('streamer-verify-note-code').textContent.trim();
+        const previousCode = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(previousText) ? previousText : '';
+        const result = await requestStreamerVerificationCallable({ checkOnly: true });
         const { action, nickname, isSwitch, customToken } = result.data;
         if (action === 'switch') {
             closeStreamerVerifyModal();
@@ -2592,12 +2613,20 @@ window.checkStreamerVerificationStatus = async function() {
             alert('✅ 방송 다시보기 검수 기록이 확인되어 스트리머 인증이 자동 완료됐어요.');
             updateAccountProtectionUI();
         } else {
-            showStreamerVerifyPending(nickname, isSwitch);
+            showStreamerVerifyPending(nickname, isSwitch, previousCode, result.data.verificationCodeExpiresAt);
             alert('아직 관리자 확인 전이에요. 잠시 후 다시 확인해주세요.');
         }
     } catch (e) {
         alert('상태 확인 중 오류가 발생했습니다: ' + (e?.message || e));
     }
+};
+
+window.renewStreamerVerificationCode = async function() {
+    try {
+        const result = await requestStreamerVerificationCallable({});
+        if (result.data.action !== 'pending') return checkStreamerVerificationStatus();
+        showStreamerVerifyPending(result.data.nickname, result.data.isSwitch, result.data.verificationCode, result.data.verificationCodeExpiresAt);
+    } catch (e) { alert('새 코드 발급에 실패했습니다: ' + (e?.message || e)); }
 };
 
 function updateAccountProtectionUI() {
