@@ -102,6 +102,7 @@ async function autoApproveReviewedStreamer(db, requestId, reqData) {
   await db.ref().update({
     [`streamerVerifications/${linkRef.key}`]: verification,
     [`users/${reqData.uid}/streamerVerified`]: true,
+    [`bettingMarket/verifiedStreamerUids/${reqData.uid}`]: true,
     [`users/${reqData.uid}/streamerProfile`]: { nickname: reqData.nickname, soopId: reqData.soopId },
     [`streamerVerificationRequests/${requestId}`]: Object.assign({}, requestRecord, {
       status: "approved", reviewedAt: verifiedAt, autoApproved: true,
@@ -415,6 +416,7 @@ async function actionApproveStreamerVerification(db, { requestId }, auth, noteOn
         nickname: reqData.nickname, soopId: reqData.soopId || null, uid: reqData.uid, verifiedAt,
       },
       [`users/${reqData.uid}/streamerVerified`]: true,
+      [`bettingMarket/verifiedStreamerUids/${reqData.uid}`]: true,
       [`users/${reqData.uid}/streamerProfile`]: {
         nickname: reqData.nickname || "",
         soopId: reqData.soopId || null,
@@ -440,6 +442,7 @@ async function actionApproveStreamerVerification(db, { requestId }, auth, noteOn
       [`streamerVerificationRequests/${requestId}/reviewedAt`]: Date.now(),
     };
     if (reqData.soopId && reqData.existingUid) {
+      updates[`bettingMarket/verifiedStreamerUids/${reqData.existingUid}`] = true;
       const existingSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(reqData.existingUid).limitToFirst(1).get();
       if (existingSnap.exists()) {
         const existingKey = Object.keys(existingSnap.val())[0];
@@ -487,6 +490,7 @@ async function actionRevokeStreamerVerification(db, { uid }, auth) {
 
   const verifiedSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(uid).limitToFirst(1).get();
   const updates = { [`users/${uid}/streamerVerified`]: false };
+  updates[`bettingMarket/verifiedStreamerUids/${uid}`] = null;
   updates[`users/${uid}/streamerProfile`] = null;
   let nickname = "";
   if (verifiedSnap.exists()) {
