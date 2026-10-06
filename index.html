@@ -1582,6 +1582,10 @@ let userUID          = null;
 let allStocks        = [];
 let isTrading        = false;
 let stockVisitLogged = false; // 인증 스트리머 접속 알림 - 페이지 로드당 한 번만 서버에 알린다(중복 발송 방지는 서버가 하루 단위로 처리)
+let stockObservedVerificationState = null;
+let stockObservedAuthUid = '';
+let streamerSwitchHandoffInProgress = false;
+let userDataUnsubscribe = null;
 let isBannerRendered = false;
 let sigOpeningStarted = false;
 let stockElements    = {};
@@ -2090,8 +2094,40 @@ setTimeout(() => {
 }, 5000);
 
 // ── 인증 & 내 데이터 동기화 ─────────────────────────────────
+async function handleStockStreamerSwitchApproval(uid, requestId) {
+    if (!requestId || streamerSwitchHandoffInProgress || userUID !== uid) return;
+    const lockKey = 'soop.streamerVerificationSwitch.' + requestId;
+    try {
+        const lastAttemptAt = Number(localStorage.getItem(lockKey) || 0);
+        if (lastAttemptAt && Date.now() - lastAttemptAt < 20000) return;
+        localStorage.setItem(lockKey, String(Date.now()));
+    } catch (_) { /* Private browsing may disable localStorage. */ }
+    streamerSwitchHandoffInProgress = true;
+    try {
+        const response = await requestStreamerVerificationCallable({ checkOnly: true, switchRequestId: requestId });
+        if (response.data?.action !== 'switch' || userUID !== uid) {
+            try { localStorage.removeItem(lockKey); } catch (_) {}
+            streamerSwitchHandoffInProgress = false;
+            return;
+        }
+        await completeStreamerVerificationSwitch(response.data.customToken);
+    } catch (error) {
+        try { localStorage.removeItem(lockKey); } catch (_) {}
+        streamerSwitchHandoffInProgress = false;
+        console.error('승인된 스트리머 계정 자동 전환 실패:', error);
+    }
+}
+
 onAuthStateChanged(auth, async (user) => {
+    if (userDataUnsubscribe) { userDataUnsubscribe(); userDataUnsubscribe = null; }
+    if ((user?.uid || '') !== stockObservedAuthUid) {
+        stockObservedAuthUid = user?.uid || '';
+        stockObservedVerificationState = null;
+        stockVisitLogged = false;
+        streamerSwitchHandoffInProgress = false;
+    }
     await refreshAdminStatus(user); // 이 핸들러 안의 관리자 분기(seedSparklinesForCurrentUser 등)가 최신값을 보도록 먼저 확정
+    if (auth.currentUser?.uid !== user?.uid) return;
     if (user) {
         userUID = user.uid;
         const userRef  = ref(db, `users/${userUID}`);
@@ -2122,9 +2158,11 @@ onAuthStateChanged(auth, async (user) => {
             if (el) el.innerText = '?';
         }
 
-        onValue(userRef, (snapshot) => {
+        userDataUnsubscribe = onValue(userRef, (snapshot) => {
+            if (auth.currentUser?.uid !== user.uid) return;
+            let serverData = {};
             if (snapshot.exists()) {
-                const serverData = snapshot.val();
+                serverData = snapshot.val();
                 myData = { cash: serverData.cash ?? INITIAL_CASH, stocks: serverData.stocks || {}, ...serverData };
             } else {
                 if (!myData || myData.cash === undefined) myData = { cash: INITIAL_CASH, stocks: {} };
@@ -2134,6 +2172,25 @@ onAuthStateChanged(auth, async (user) => {
             updateAchievementsUI();
             updateUI(true);
             seedSparklinesForCurrentUser(myData.stocks);
+
+            const streamerVerified = myData.streamerVerified === true;
+            if (stockObservedVerificationState === false && streamerVerified) {
+                const modal = document.getElementById('streamer-verify-modal');
+                if (modal?.classList.contains('active')) {
+                    document.getElementById('streamer-verify-form').style.display = 'none';
+                    document.getElementById('streamer-verify-pending').style.display = 'block';
+                    document.getElementById('streamer-verify-note').style.display = 'none';
+                    document.getElementById('streamer-verify-pending-text').textContent = '✅ 관리자가 승인했어요. 스트리머 인증 권한이 새로고침 없이 적용됐습니다.';
+                    const checkButton = modal.querySelector('button[onclick="checkStreamerVerificationStatus()"]');
+                    if (checkButton) { checkButton.textContent = '인증 완료'; checkButton.disabled = true; }
+                }
+            }
+            stockObservedVerificationState = streamerVerified;
+
+            const switchApproval = serverData.streamerVerificationSwitchApproval;
+            if (switchApproval?.requestId) {
+                handleStockStreamerSwitchApproval(userUID, String(switchApproval.requestId));
+            }
 
             // 인증 스트리머 접속 알림 - onValue는 잔고 변동 등으로 여러 번 다시
             // 불릴 수 있어서, 플래그로 페이지 로드당 한 번만 서버를 호출한다.

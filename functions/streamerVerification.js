@@ -157,6 +157,27 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     .sort((a, b) => (b.requestedAt || 0) - (a.requestedAt || 0));
   const latest = myRequests[0];
 
+  // 관리자 승인 직후 각 자매 페이지는 본인 전용 users/{uid} 아래의 신호를
+  // 구독해 이 경로를 호출한다. 요청 ID와 신청 UID·승인 상태를 서버에서 다시
+  // 검증한 뒤에만 기존 인증 UID용 토큰을 발급한다.
+  const switchRequestId = String(request.data?.switchRequestId || "").trim();
+  if (switchRequestId) {
+    const switchRequest = myRequests.find((entry) => entry.id === switchRequestId);
+    if (!switchRequest || !switchRequest.isSwitch || !switchRequest.existingUid) {
+      throw new HttpsError("permission-denied", "이 계정 전환 승인 신호를 확인할 수 없습니다.");
+    }
+    if (!["approved", "switched"].includes(switchRequest.status)) {
+      return { ok: true, action: "pending", nickname: switchRequest.nickname, isSwitch: true };
+    }
+    const customToken = await admin.auth().createCustomToken(switchRequest.existingUid);
+    if (switchRequest.status !== "switched") {
+      await db.ref(`streamerVerificationRequests/${switchRequest.id}/status`).set("switched");
+    }
+    // 신호를 소비해 이후 과거 임시 계정으로 로그인했을 때 자동 전환이 반복되지 않게 한다.
+    await db.ref(`users/${uid}/streamerVerificationSwitchApproval`).remove();
+    return { ok: true, action: "switch", customToken, requestId: switchRequest.id };
+  }
+
   if (latest?.status === "pending") {
     const reviewed = latest.soopId && !latest.isSwitch
       ? await db.ref(`lifeGame/playedStreamerAllowlist/${uid}/${latest.soopId}`).get()
@@ -192,10 +213,13 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     };
   }
 
-  if (latest?.status === "approved" && latest.isSwitch && latest.existingUid) {
+  if (["approved", "switched"].includes(latest?.status) && latest.isSwitch && latest.existingUid) {
     const customToken = await admin.auth().createCustomToken(latest.existingUid);
-    await db.ref(`streamerVerificationRequests/${latest.id}/status`).set("switched");
-    return { ok: true, action: "switch", customToken };
+    if (latest.status !== "switched") {
+      await db.ref(`streamerVerificationRequests/${latest.id}/status`).set("switched");
+    }
+    await db.ref(`users/${uid}/streamerVerificationSwitchApproval`).remove();
+    return { ok: true, action: "switch", customToken, requestId: latest.id };
   }
 
   // 신규 신청 (또는 이전 신청이 거절/이미 전환 완료된 상태) — 새로 접수한다.
@@ -433,14 +457,19 @@ async function actionApproveStreamerVerification(db, { requestId }, auth, noteOn
     await fillBettingMarketProfileIfEmpty(db, reqData.uid, reqData.nickname, reqData.soopId);
   } else {
     // 계정 전환 — 기존 uid는 이미 인증돼 있으므로 신청 상태만 승인 처리한다.
-    // 실제 커스텀 토큰 발급은 신청자가 requestStreamerVerification을 다시
-    // 호출할 때 이뤄진다(위 함수의 approved+isSwitch 분기).
+    // 신청 당시 UID만 읽을 수 있는 users/{uid} 아래에 신호를 같이 기록한다.
+    // 신청자가 열어둔 어느 자매 페이지에서든 이 신호를 구독해 안전한 callable로
+    // 토큰을 받아 자동 전환할 수 있다.
     // 기존 레코드가 SOOP 아이디 없이(레거시 또는 배팅시장에서) 만들어졌었다면
     // 이번 승인으로 같이 보완한다.
+    const approvedAt = Date.now();
     const updates = {
       [`streamerVerificationRequests/${requestId}/status`]:     "approved",
-      [`streamerVerificationRequests/${requestId}/reviewedAt`]: Date.now(),
+      [`streamerVerificationRequests/${requestId}/reviewedAt`]: approvedAt,
     };
+    if (reqData.uid && reqData.existingUid) {
+      updates[`users/${reqData.uid}/streamerVerificationSwitchApproval`] = { requestId, approvedAt };
+    }
     if (reqData.soopId && reqData.existingUid) {
       updates[`bettingMarket/verifiedStreamerUids/${reqData.existingUid}`] = true;
       const existingSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(reqData.existingUid).limitToFirst(1).get();
