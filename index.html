@@ -3309,6 +3309,16 @@ get(ref(db, 'stocksPublic/')).then((snap) => {
     // 그때는 allStocks가 비어 있어 아무것도 못 채웠을 수 있음) 여기서 한 번 더 시도한다.
     // seededSparklineIds가 중복 조회를 막아주므로 이미 채워진 건 다시 안 부른다.
     if (isAdminUser) seedSparklinesForCurrentUser(myData?.stocks);
+
+    // 팬페이지에서 전달한 종목 ID가 있으면 해당 차트를 바로 연다.
+    const requestedStockId = new URLSearchParams(window.location.search).get('stockId');
+    const requestedStock = requestedStockId && allStocks.find((stock) => stock.id === requestedStockId);
+    if (requestedStock) {
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) searchInput.value = requestedStock.name || '';
+        updateUI(true);
+        window.setTimeout(() => window.openChartModal(requestedStock.id), 0);
+    }
 });
 
 // ── 중계방 최초 1회 로드 (배너와 동일하게 페이지 로드 시 1회만 조회) ──
