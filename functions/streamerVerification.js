@@ -50,6 +50,30 @@ async function findExistingStreamerRecord(db, nickname, soopId) {
   return db.ref("streamerVerifications").orderByChild("nickname").equalTo(nickname).limitToFirst(1).get();
 }
 
+async function findUniqueVerifiedStreamerByUid(db, uid) {
+  if (!uid) return null;
+  const snap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(uid).limitToFirst(2).get();
+  if (!snap.exists()) return null;
+  const entries = Object.entries(snap.val() || {});
+  if (entries.length !== 1) return null;
+  const [key, record] = entries[0];
+  const soopId = String(record && record.soopId || "").trim().toLowerCase();
+  if (!STREAMER_ID_RE.test(soopId)) return null;
+  return { key, record, soopId };
+}
+
+async function canIssueVerificationNoteCode(db, requestData) {
+  if (!requestData || !requestData.isSwitch) {
+    const existing = requestData && requestData.soopId
+      ? await findExistingStreamerRecord(db, requestData.nickname, requestData.soopId)
+      : null;
+    return !existing || !existing.exists();
+  }
+  // 계정전환은 기존 인증 레코드가 하나로 특정되고 SOOP ID도 등록된 경우에만
+  // 쪽지 코드를 발급한다. 코드 자체는 기존 계정 ID와 발신자 ID가 일치해야 승인된다.
+  return !!(requestData.existingUid && await findUniqueVerifiedStreamerByUid(db, requestData.existingUid));
+}
+
 // 로그인 세션은 공유되지만, 배팅시장의 프로필(bettingMarket/profiles/{uid})은
 // 그쪽 앱의 approveVerification이 승인할 때만 채워진다 — 그래서 이 앱에서
 // 인증됐을 뿐인 uid가 배팅시장에 처음 들어가면 프로필이 비어서 초기 상태(랜덤
@@ -118,12 +142,9 @@ async function autoApproveReviewedStreamer(db, requestId, reqData) {
 // ══════════════════════════════════════════════════════════
 // 스트리머 인증 — 카카오/구글 연동을 꺼리는 유저를 위한 대체 계정 보호 경로.
 //
-// 일반 신청은 관리자가 별도로 신원을 확인한 뒤 승인/거절한다. 단, 인생게임
-// 운영자가 다시보기를 직접 검수해 UID+SOOP 아이디를 등록한 쌍은 신규 인증을
-// 자동 승인한다. 이미 다른 uid로 인증된 닉네임을 또 다른
-// 기기에서 신청하면(=계정 전환 요청) 카카오/구글처럼 즉시 토큰을 내주지
-// 않고, 매번 관리자 확인을 다시 거치게 한다 — 그렇지 않으면 남의 방송에
-// 나온 스트리머 닉네임을 아무나 입력해 그 계정을 그대로 탈취할 수 있기 때문.
+// 신규 신청은 SOOP 쪽지 발신 ID와 신청 ID가 일치하면 자동 승인한다. 계정 전환은
+// 6자리 코드를 추가로 요구하고, 발신 ID가 기존 인증 레코드의 SOOP ID와 정확히
+// 일치할 때만 승인 신호를 보낸다. ID가 없거나 레코드가 모호하면 수동 검수한다.
 // ══════════════════════════════════════════════════════════
 
 /**
@@ -132,7 +153,7 @@ async function autoApproveReviewedStreamer(db, requestId, reqData) {
  *   - 이미 이 uid 자체가 스트리머 인증됨            → already-verified
  *   - 대기 중인 신청이 있음                          → 기존 코드를 그대로 반환(pending)
  *   - 승인된 "계정 전환" 신청이 있음                 → 커스텀 토큰 발급(switch)
- *   - 그 외(신규 신청)                                → 새 신청 생성, 코드 발급(pending)
+ *   - 그 외(신규/계정전환 신청)                       → 새 신청 생성, 조건 충족 시 코드 발급(pending)
  */
 const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -162,8 +183,20 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   // 검증한 뒤에만 기존 인증 UID용 토큰을 발급한다.
   const switchRequestId = String(request.data?.switchRequestId || "").trim();
   if (switchRequestId) {
-    const switchRequest = myRequests.find((entry) => entry.id === switchRequestId);
-    if (!switchRequest || !switchRequest.isSwitch || !switchRequest.existingUid) {
+    let switchRequest = myRequests.find((entry) => entry.id === switchRequestId);
+    let switchRequestPath = `streamerVerificationRequests/${switchRequestId}`;
+    // StreamBet-Market에는 자체 신청 큐가 있으나 계정 전환 신호와 custom token
+    // 소비는 같은 규격으로 처리한다. 신청 UID를 다시 대조해 다른 사용자의 ID를
+    // 알아도 전환 토큰을 받을 수 없게 한다.
+    if (!switchRequest) {
+      const bettingSwitchSnap = await db.ref(`bettingMarket/verifyRequests/${switchRequestId}`).get();
+      const bettingSwitch = bettingSwitchSnap.val();
+      if (bettingSwitch && bettingSwitch.requesterUid === uid) {
+        switchRequest = Object.assign({ id: switchRequestId }, bettingSwitch);
+        switchRequestPath = `bettingMarket/verifyRequests/${switchRequestId}`;
+      }
+    }
+    if (!switchRequest || !switchRequest.isSwitch || !switchRequest.existingUid || switchRequest.requesterUid && switchRequest.requesterUid !== uid) {
       throw new HttpsError("permission-denied", "이 계정 전환 승인 신호를 확인할 수 없습니다.");
     }
     if (!["approved", "switched"].includes(switchRequest.status)) {
@@ -171,7 +204,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     }
     const customToken = await admin.auth().createCustomToken(switchRequest.existingUid);
     if (switchRequest.status !== "switched") {
-      await db.ref(`streamerVerificationRequests/${switchRequest.id}/status`).set("switched");
+      await db.ref(`${switchRequestPath}/status`).set("switched");
     }
     // 신호를 소비해 이후 과거 임시 계정으로 로그인했을 때 자동 전환이 반복되지 않게 한다.
     await db.ref(`users/${uid}/streamerVerificationSwitchApproval`).remove();
@@ -194,20 +227,20 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     // streamer may already have sent. A normal request call remains the
     // explicit way to issue a fresh code.
     if (request.data?.checkOnly === true) {
-      const canUseNoteCode = !!latest.noteVerificationCodeHash && !latest.isSwitch;
+      const noteEligible = await canIssueVerificationNoteCode(db, latest);
+      const canUseNoteCode = noteEligible && !!latest.noteVerificationCodeHash && Number(latest.noteVerificationCodeExpiresAt) > Date.now();
       return {
         ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch,
+        noteEligible,
         verificationCode: "",
         verificationCodeExpiresAt: canUseNoteCode ? Number(latest.noteVerificationCodeExpiresAt) || 0 : 0,
       };
     }
-    const existingForPending = latest.soopId
-      ? await findExistingStreamerRecord(db, latest.nickname, latest.soopId) : null;
-    const challenge = !latest.isSwitch && !existingForPending?.exists()
-      ? await issueVerificationNoteCode(db, latest.id)
-      : null;
+    const noteEligible = await canIssueVerificationNoteCode(db, latest);
+    const challenge = noteEligible ? await issueVerificationNoteCode(db, latest.id) : null;
     return {
       ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch,
+      noteEligible,
       verificationCode: challenge ? challenge.code : "",
       verificationCodeExpiresAt: challenge ? challenge.expiresAt : 0,
     };
@@ -269,6 +302,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   const existingEntry = existingSnap.exists() ? Object.values(existingSnap.val())[0] : null;
   const isSwitch    = !!(existingEntry && existingEntry.uid !== uid);
   const existingUid = isSwitch ? existingEntry.uid : null;
+  const existingVerifiedStreamer = isSwitch ? await findUniqueVerifiedStreamerByUid(db, existingUid) : null;
 
   // source(2026-08-22, streamer-life-game 16장 도입) — 이 신청이 어느 앱에서
   // 왔는지 admin-center 디스코드 알림이 구분할 수 있게 저장한다. 기존
@@ -286,7 +320,8 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     });
   }
 
-  const noteChallenge = !isSwitch && !existingEntry ? createVerificationNoteCode() : "";
+  const noteEligible = !existingEntry || !!existingVerifiedStreamer;
+  const noteChallenge = noteEligible ? createVerificationNoteCode() : "";
   const record = {
     uid,
     nickname,
@@ -306,7 +341,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   await ref.set(record);
 
   return {
-    ok: true, action: "pending", nickname, isSwitch,
+    ok: true, action: "pending", nickname, isSwitch, noteEligible,
     verificationCode: noteChallenge,
     verificationCodeExpiresAt: noteChallenge ? record.noteVerificationCodeExpiresAt : 0,
   };
@@ -341,9 +376,8 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
     const requests = requestsSnap.val() || {};
     const now = Date.now();
     const match = Object.entries(requests).find(([requestId, entry]) => {
-      if (!entry || entry.status !== "pending" || entry.isSwitch ||
-          String(entry.soopId || "").toLowerCase() !== normalizedSenderId ||
-          !entry.noteVerificationCodeHash || Number(entry.noteVerificationCodeExpiresAt) <= now) return false;
+      if (!entry || entry.status !== "pending" || !entry.noteVerificationCodeHash || Number(entry.noteVerificationCodeExpiresAt) <= now) return false;
+      if (!entry.isSwitch && String(entry.soopId || "").toLowerCase() !== normalizedSenderId) return false;
       return entry.noteVerificationCodeHash === verificationNoteCodeHash(requestId, normalizedCode);
     });
     if (!match) {
@@ -366,15 +400,23 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
       return { ok: false, reason: "verification-in-progress" };
     }
     const current = (await requestRef.get()).val();
-    if (!current || current.status !== "pending" || current.isSwitch ||
-        String(current.soopId || "").toLowerCase() !== normalizedSenderId ||
+    if (!current || current.status !== "pending" ||
+        (!current.isSwitch && String(current.soopId || "").toLowerCase() !== normalizedSenderId) ||
         Number(current.noteVerificationCodeExpiresAt) <= Date.now() ||
         current.noteVerificationCodeHash !== verificationNoteCodeHash(requestId, normalizedCode)) {
       await releaseRequestClaim();
       await claimRef.remove();
       return { ok: false, reason: "request-changed-during-verification" };
     }
-    await actionApproveStreamerVerification(db, { requestId }, auth, true);
+    if (current.isSwitch) {
+      const existing = await findUniqueVerifiedStreamerByUid(db, current.existingUid);
+      if (!existing || existing.soopId !== normalizedSenderId) {
+        await releaseRequestClaim();
+        await claimRef.remove();
+        return { ok: false, reason: "switch-sender-does-not-match-existing-account" };
+      }
+    }
+    await actionApproveStreamerVerification(db, { requestId }, auth, true, normalizedSenderId);
     await requestRef.update({
       noteVerificationCodeHash: null,
       noteVerificationCodeIssuedAt: null,
@@ -387,7 +429,7 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
       noteNo: normalizedNoteNo,
     });
     await claimRef.update({ status: "approved", requestId, approvedAt: now });
-    return { ok: true, nickname: requestData.nickname || "", soopId: normalizedSenderId };
+    return { ok: true, nickname: requestData.nickname || "", soopId: normalizedSenderId, isSwitch: !!requestData.isSwitch };
   } catch (error) {
     if (claimedRequestId) await releaseRequestClaim().catch(() => {});
     await claimRef.remove().catch(() => {});
@@ -414,22 +456,30 @@ async function actionListVerifiedStreamers(db) {
   return { ok: true, streamers };
 }
 
-async function actionApproveStreamerVerification(db, { requestId }, auth, noteOnly = false) {
+async function actionApproveStreamerVerification(db, { requestId }, auth, noteOnly = false, noteSenderId = "") {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`streamerVerificationRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
   if (noteOnly) {
-    if (reqData.status !== "pending" || reqData.isSwitch) {
+    if (reqData.status !== "pending") {
       throw new HttpsError("failed-precondition", "자동 승인 대상이 변경됐습니다. 수동 검수가 필요합니다.");
     }
-    const existing = await findExistingStreamerRecord(db, reqData.nickname, reqData.soopId);
-    if (existing.exists()) {
-      throw new HttpsError("failed-precondition", "기존 인증 정보와 충돌합니다. 수동 검수가 필요합니다.");
+    if (reqData.isSwitch) {
+      const existing = await findUniqueVerifiedStreamerByUid(db, reqData.existingUid);
+      if (!existing || existing.soopId !== String(noteSenderId || "").trim().toLowerCase()) {
+        throw new HttpsError("failed-precondition", "쪽지 발신자 ID가 기존 인증 계정과 일치하지 않습니다.");
+      }
+    } else {
+      const existing = await findExistingStreamerRecord(db, reqData.nickname, reqData.soopId);
+      if (existing.exists()) {
+        throw new HttpsError("failed-precondition", "기존 인증 정보와 충돌합니다. 수동 검수가 필요합니다.");
+      }
     }
   }
 
+  let existingAccountSoopId = "";
   if (!reqData.isSwitch) {
     // 최초 인증 — 닉네임↔uid 매핑을 등록하고 계정 보호 플래그를 켠다. SOOP 아이디도
     // 같이 저장해야 배팅시장 쪽에서 이 레코드를 SOOP 아이디 기준으로 찾을 수 있다.
@@ -460,8 +510,6 @@ async function actionApproveStreamerVerification(db, { requestId }, auth, noteOn
     // 신청 당시 UID만 읽을 수 있는 users/{uid} 아래에 신호를 같이 기록한다.
     // 신청자가 열어둔 어느 자매 페이지에서든 이 신호를 구독해 안전한 callable로
     // 토큰을 받아 자동 전환할 수 있다.
-    // 기존 레코드가 SOOP 아이디 없이(레거시 또는 배팅시장에서) 만들어졌었다면
-    // 이번 승인으로 같이 보완한다.
     const approvedAt = Date.now();
     const updates = {
       [`streamerVerificationRequests/${requestId}/status`]:     "approved",
@@ -470,27 +518,31 @@ async function actionApproveStreamerVerification(db, { requestId }, auth, noteOn
     if (reqData.uid && reqData.existingUid) {
       updates[`users/${reqData.uid}/streamerVerificationSwitchApproval`] = { requestId, approvedAt };
     }
-    if (reqData.soopId && reqData.existingUid) {
+    if (reqData.existingUid) {
       updates[`bettingMarket/verifiedStreamerUids/${reqData.existingUid}`] = true;
       const existingSnap = await db.ref("streamerVerifications").orderByChild("uid").equalTo(reqData.existingUid).limitToFirst(1).get();
       if (existingSnap.exists()) {
         const existingKey = Object.keys(existingSnap.val())[0];
-        if (!existingSnap.val()[existingKey].soopId) {
+        existingAccountSoopId = String(existingSnap.val()[existingKey].soopId || "").trim().toLowerCase();
+        if (!existingAccountSoopId && reqData.soopId) {
           updates[`streamerVerifications/${existingKey}/soopId`] = reqData.soopId;
           await syncPublicVerification(db, existingKey, Object.assign({}, existingSnap.val()[existingKey], { soopId: reqData.soopId }));
+          existingAccountSoopId = String(reqData.soopId).trim().toLowerCase();
         }
       }
     }
     await db.ref().update(updates);
     // 전환 승인 후 실제로 로그인하게 되는 건 existingUid라, 배팅시장 프로필도
     // 그 uid 기준으로 채워야 한다(reqData.uid는 신청 당시의 임시 세션일 뿐).
-    await fillBettingMarketProfileIfEmpty(db, reqData.existingUid, reqData.nickname, reqData.soopId);
+    await fillBettingMarketProfileIfEmpty(db, reqData.existingUid, reqData.nickname, existingAccountSoopId || reqData.soopId);
   }
 
   await logAdminAction(
     db, auth,
-    reqData.isSwitch ? "스트리머 인증 재신청 승인 (계정 전환)" : "스트리머 인증 승인",
-    reqData.nickname + " (" + (reqData.soopId || "SOOP 아이디 미기재") + ")"
+    reqData.isSwitch
+      ? (noteOnly ? "SOOP 쪽지 확인으로 계정 전환 자동 승인" : "스트리머 인증 재신청 승인 (계정 전환)")
+      : "스트리머 인증 승인",
+    reqData.nickname + " (" + (existingAccountSoopId || reqData.soopId || "SOOP 아이디 미기재") + ")"
   );
   return { ok: true };
 }
