@@ -46,9 +46,6 @@ async function assertMessengerRoomTradeAccess(db, auth, roomId, stockId, showNic
   if (!roomSnap.exists() || (!isOwner && member.status !== "active")) {
     throw new HttpsError("permission-denied", "현재 채팅방 참여자만 거래할 수 있습니다.");
   }
-  if (room.roomType === "admin") {
-    throw new HttpsError("failed-precondition", "스트리머 채팅방에서만 거래할 수 있습니다.");
-  }
   const ban = banSnap.val() || {};
   if (ban.all || (ban.games && ban.games.streamerMessenger)) {
     throw new HttpsError("permission-denied", "이 계정은 메신저 이용이 제한되어 있습니다.");
