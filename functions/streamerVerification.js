@@ -428,7 +428,19 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
       noteVerifiedBySoopId: normalizedSenderId,
       noteNo: normalizedNoteNo,
     });
-    await claimRef.update({ status: "approved", requestId, approvedAt: now });
+    await claimRef.update({
+      status: "approved",
+      requestId,
+      approvedAt: now,
+      discordNotification: {
+        type: "streamer-verification-auto-approved",
+        service: "stock-market",
+        source: String(current.source || "stock-market"),
+        nickname: String(current.nickname || ""),
+        soopId: normalizedSenderId,
+        isSwitch: current.isSwitch === true,
+      },
+    });
     return { ok: true, nickname: requestData.nickname || "", soopId: normalizedSenderId, isSwitch: !!requestData.isSwitch };
   } catch (error) {
     if (claimedRequestId) await releaseRequestClaim().catch(() => {});
