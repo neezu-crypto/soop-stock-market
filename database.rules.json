@@ -327,7 +327,9 @@
 
     "onyuVn": {
       ".read": false,
-      ".write": false
+      ".write": false,
+      "publicReviews": { ".indexOn": ["updatedAt"] },
+      "reviewIndex": { ".indexOn": ["updatedAt"] }
     },
 
     "delistedStocksLog": {
@@ -638,6 +640,14 @@
               ".write": false
             }
           }
+        }
+      },
+      "roomMarkets": {
+        ".read": false,
+        ".write": false,
+        "$roomId": {
+          ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active' || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+          ".write": false
         }
       },
       "chat": {

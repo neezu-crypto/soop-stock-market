@@ -23,6 +23,71 @@ const SELL_FEE            = 0.003;  // 매도 수수료
 const MAX_QTY_PER_ORDER   = 10;     // 1회 주문 최대 수량 (클라이언트 매수/매도 버튼이 1주/10주 단위뿐이라 서버도 동일하게 제한 — API 직접 호출로 대량 주문을 넣는 것을 막는다)
 const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
 const SPARKLINE_MAX       = 20;     // 카드 스파크라인 보관 개수(클라이언트 priceHistoryBuffer와 동일)
+const ROOM_TRADE_FEED_LIMIT = 100;
+
+async function assertMessengerRoomTradeAccess(db, auth, roomId, stockId, showNickname) {
+  if (!/^[a-z0-9]{2,30}$/.test(roomId)) {
+    throw new HttpsError("invalid-argument", "채팅방 정보가 올바르지 않습니다.");
+  }
+  const provider = auth.token?.firebase?.sign_in_provider;
+  const [roomSnap, memberSnap, adminSnap, verifiedSnap, banSnap, boardStockSnap] = await Promise.all([
+    db.ref(`streamerMessenger/rooms/${roomId}/meta`).get(),
+    db.ref(`streamerMessenger/rooms/${roomId}/members/${auth.uid}`).get(),
+    db.ref(`adminCenter/adminUids/${auth.uid}`).get(),
+    db.ref("streamerVerifications").orderByChild("uid").equalTo(auth.uid).limitToFirst(1).get(),
+    db.ref(`bannedAccounts/${auth.uid}`).get(),
+    db.ref(`streamerMessenger/roomMarkets/${roomId}/stocks/${stockId}`).get(),
+  ]);
+  const room = roomSnap.val() || {};
+  const member = memberSnap.val() || {};
+  const isOwner = room.ownerUid === auth.uid;
+  const trusted = provider !== "anonymous" || adminSnap.val() === true || verifiedSnap.exists();
+  if (!trusted) throw new HttpsError("permission-denied", "메신저에 로그인한 뒤 거래해 주세요.");
+  if (!roomSnap.exists() || (!isOwner && member.status !== "active")) {
+    throw new HttpsError("permission-denied", "현재 채팅방 참여자만 거래할 수 있습니다.");
+  }
+  if (room.roomType === "admin") {
+    throw new HttpsError("failed-precondition", "스트리머 채팅방에서만 거래할 수 있습니다.");
+  }
+  const ban = banSnap.val() || {};
+  if (ban.all || (ban.games && ban.games.streamerMessenger)) {
+    throw new HttpsError("permission-denied", "이 계정은 메신저 이용이 제한되어 있습니다.");
+  }
+  if (!boardStockSnap.exists()) {
+    throw new HttpsError("failed-precondition", "채팅방 종목판에 등록된 종목만 거래할 수 있습니다.");
+  }
+  const nickname = showNickname === true
+    ? String(isOwner ? room.streamerNickname || "" : member.profile?.nickname || "").slice(0, 30)
+    : "";
+  return { roomId, nickname };
+}
+
+async function recordMessengerRoomTrade(db, roomTrade, stockId, stockName, type, qty, price) {
+  try {
+    const feedRef = db.ref(`streamerMessenger/roomMarkets/${roomTrade.roomId}/trades`);
+    await feedRef.push().set({
+      stockId,
+      stockName: String(stockName || stockId).slice(0, 80),
+      type,
+      qty,
+      price,
+      at: Date.now(),
+      nickname: roomTrade.nickname || null,
+    });
+    const entries = await feedRef.get();
+    const keys = [];
+    entries.forEach((child) => keys.push(child.key));
+    const excess = keys.length - ROOM_TRADE_FEED_LIMIT;
+    if (excess > 0) {
+      const updates = {};
+      keys.slice(0, excess).forEach((key) => { updates[key] = null; });
+      await feedRef.update(updates);
+    }
+  } catch (error) {
+    // 거래 체결이 끝난 뒤 피드 저장에 실패해도 성공 거래를 실패로 응답하지 않는다.
+    console.error("메신저 채팅방 거래 피드 기록 실패:", error);
+  }
+}
 
 function currentMinuteTs() {
   return Math.floor(Date.now() / 60000) * 60;
@@ -110,6 +175,13 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   }
 
   const db = admin.database();
+  const roomId = String(request.data?.messengerRoomId || "").trim();
+  const roomTrade = roomId
+    ? await assertMessengerRoomTradeAccess(db, auth, roomId, stockId, request.data?.showNickname)
+    : null;
+  if (!roomId && request.data?.showNickname === true) {
+    throw new HttpsError("invalid-argument", "공개 닉네임은 메신저 거래에서만 설정할 수 있습니다.");
+  }
   await requireNotInMaintenance(db, auth);
   await assertNotBanned(db, auth);
   await checkPlayQuota(db, uid, auth);
@@ -379,6 +451,10 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     await contributeToJackpot(db, uid, stockId, qty, isProtected);
   } catch (e) {
     // 잭팟 반영 실패는 무시 (다음 거래 때 재시도됨)
+  }
+
+  if (roomTrade) {
+    await recordMessengerRoomTrade(db, roomTrade, stockId, stockTx.snapshot.val()?.name, type, qty, finalTradePrice);
   }
 
   // 8) 트레이딩 봇 반응은 여기서 실행하지 않는다(2026-08-27 재설계 — 아래
