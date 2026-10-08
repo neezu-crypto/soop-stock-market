@@ -618,25 +618,25 @@
       "rooms": {
         "$roomId": {
           "meta": {
-            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active' || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active')",
             ".write": false
           },
           "members": {
             "$uid": {
-              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid)",
               ".write": false
             }
           },
           "applications": {
-            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+            ".read": "auth != null && root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid",
             "$uid": {
-              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid)",
               ".write": false
             }
           },
           "blocked": {
             "$uid": {
-              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".read": "auth != null && (auth.uid === $uid || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid)",
               ".write": false
             }
           }
@@ -646,14 +646,14 @@
         ".read": false,
         ".write": false,
         "$roomId": {
-          ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active' || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+          ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active')",
           ".write": false
         }
       },
       "chat": {
         "$roomId": {
           "streamerTimeline": {
-            ".read": "auth != null && (root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+            ".read": "auth != null && root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid",
             ".write": false,
             ".indexOn": ["createdAt"],
             "$messageId": { ".write": false }
@@ -666,7 +666,7 @@
           },
           "private": {
             "$uid": {
-              ".read": "auth != null && (auth.uid === $uid && root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active' || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid || root.child('adminCenter/adminUids').child(auth.uid).val() === true)",
+              ".read": "auth != null && (auth.uid === $uid && root.child('streamerMessenger').child('rooms').child($roomId).child('members').child(auth.uid).child('status').val() === 'active' || root.child('streamerMessenger').child('rooms').child($roomId).child('meta').child('ownerUid').val() === auth.uid)",
               ".write": false,
               ".indexOn": ["createdAt"],
               "$messageId": { ".write": false }
@@ -675,23 +675,27 @@
         }
       },
       "reports": {
-        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).val() === true",
+        ".read": false,
         ".write": false,
-        ".indexOn": ["createdAt", "roomId"],
+        ".indexOn": ["createdAt", "roomId", "status"],
         "$reportId": { ".write": false }
       },
       "reportEvidence": {
-        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).val() === true",
+        ".read": false,
         ".write": false,
         "$reportId": { ".write": false }
       },
       "auditLog": {
-        ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).val() === true",
+        ".read": false,
         ".write": false,
         ".indexOn": ["at"],
         "$entryId": { ".write": false }
       },
       "rateLimits": {
+        ".read": false,
+        ".write": false
+      },
+      "admin": {
         ".read": false,
         ".write": false
       }
