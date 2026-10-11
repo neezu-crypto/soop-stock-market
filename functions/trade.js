@@ -25,6 +25,16 @@ const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
 const SPARKLINE_MAX       = 20;     // 카드 스파크라인 보관 개수(클라이언트 priceHistoryBuffer와 동일)
 const ROOM_TRADE_FEED_LIMIT = 100;
 
+function isMessengerRoomStreamerStockName(stockName, streamerName) {
+  const normalize = (value) => String(value || "").normalize("NFC").trim().toLocaleLowerCase("ko-KR");
+  const stock = normalize(stockName);
+  const streamer = normalize(streamerName);
+  if (!stock || !streamer) return false;
+  if (stock === streamer) return true;
+  const crewPrefixedName = stock.match(/^\[crew\]\s*(.+)$/);
+  return !!crewPrefixedName && normalize(crewPrefixedName[1]) === streamer;
+}
+
 async function assertMessengerRoomTradeAccess(db, auth, roomId, stockId, showNickname) {
   if (!/^[a-z0-9]{2,30}$/.test(roomId)) {
     throw new HttpsError("invalid-argument", "채팅방 정보가 올바르지 않습니다.");
@@ -56,7 +66,7 @@ async function assertMessengerRoomTradeAccess(db, auth, roomId, stockId, showNic
   const nickname = showNickname === true
     ? String(isOwner ? room.streamerNickname || "" : member.profile?.nickname || "").slice(0, 30)
     : "";
-  return { roomId, nickname };
+  return { roomId, nickname, streamerNickname: String(room.streamerNickname || "") };
 }
 
 async function recordMessengerRoomTrade(db, roomTrade, stockId, stockName, type, qty, price) {
@@ -211,6 +221,12 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
 
   // 0.5) 동결 상태 확인 — 동결된 종목은 매수/매도 모두 차단
   const trueStock = (await stockRef.get()).val();
+  if (roomTrade && !isMessengerRoomStreamerStockName(trueStock?.name, roomTrade.streamerNickname)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "채팅방에서는 해당 스트리머의 종목만 거래할 수 있습니다."
+    );
+  }
   if (trueStock?.frozenAt) {
     throw new HttpsError(
       "failed-precondition",
