@@ -11,6 +11,7 @@ const {
 } = require("./common");
 const { logAdminAction } = require("./adminAuditLog");
 const { syncPublicVerification, removePublicVerification, publicIdFor } = require("./publicIdentity");
+const { classifyStreamerVerificationNoteNoMatch } = require("./verificationNoteDiagnostics");
 
 const VERIFY_NOTE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const VERIFY_NOTE_CODE_TTL_MS = 15 * 60 * 1000;
@@ -382,7 +383,11 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
     });
     if (!match) {
       await claimRef.remove();
-      return { ok: false, reason: "no-matching-pending-request" };
+      return {
+        ok: false,
+        reason: "no-matching-pending-request",
+        diagnosticReason: classifyStreamerVerificationNoteNoMatch(requests, normalizedSenderId, now),
+      };
     }
     const [requestId, requestData] = match;
     claimedRequestId = requestId;
