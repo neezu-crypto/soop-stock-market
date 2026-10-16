@@ -708,6 +708,32 @@
       }
     },
 
+    "dontPressButton": {
+      ".read": false,
+      ".write": false,
+      "state": {
+        ".read": "auth != null",
+        ".write": false
+      },
+      "publicParticipants": {
+        ".read": "auth != null",
+        ".write": false
+      },
+      "participants": {
+        ".read": false,
+        ".write": false,
+        ".indexOn": ["lastSeenAt"]
+      },
+      "nicknameIndex": {
+        ".read": false,
+        ".write": false
+      },
+      "internal": {
+        ".read": false,
+        ".write": false
+      }
+    },
+
     "lifeGame": {
       "playthroughs": {
         "$uid": {
