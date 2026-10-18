@@ -12,6 +12,7 @@ const {
 const { logAdminAction } = require("./adminAuditLog");
 const { syncPublicVerification, removePublicVerification, publicIdFor } = require("./publicIdentity");
 const { classifyStreamerVerificationNoteNoMatch } = require("./verificationNoteDiagnostics");
+const { isStreamerStockListed } = require("./streamerStockListing");
 
 const VERIFY_NOTE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const VERIFY_NOTE_CODE_TTL_MS = 15 * 60 * 1000;
@@ -420,6 +421,12 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
         await claimRef.remove();
         return { ok: false, reason: "switch-sender-does-not-match-existing-account" };
       }
+    }
+    const stocksSnapshot = await db.ref("stocks").get();
+    if (!isStreamerStockListed(stocksSnapshot.val(), current.nickname)) {
+      await releaseRequestClaim();
+      await claimRef.remove();
+      return { ok: false, reason: "streamer-not-stock-listed" };
     }
     await actionApproveStreamerVerification(db, { requestId }, auth, true, normalizedSenderId);
     await requestRef.update({
