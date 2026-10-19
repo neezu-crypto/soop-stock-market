@@ -221,7 +221,10 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
       const existing = await findExistingStreamerRecord(db, latest.nickname, latest.soopId);
       const existingRecord = existing.exists() ? Object.values(existing.val())[0] : null;
       if (!existingRecord) {
-        return autoApproveReviewedStreamer(db, latest.id, latest);
+        const stocksSnapshot = await db.ref("stocks").get();
+        if (isStreamerStockListed(stocksSnapshot.val(), latest.nickname)) {
+          return autoApproveReviewedStreamer(db, latest.id, latest);
+        }
       }
     }
     // Every site's "승인됐는지 확인하기" button only checks the existing
@@ -313,7 +316,14 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
 
   const allowlistRef = db.ref(`lifeGame/playedStreamerAllowlist/${uid}/${soopId}`);
   const reviewedSnap = await allowlistRef.get();
-  const autoApproved = reviewedSnap.exists() && reviewedSnap.val().nickname === nickname && !isSwitch && !existingEntry;
+  // 자매 페이지(예: 인생게임)도 이 공용 callable로 신청하므로 source와 무관하게
+  // 모든 자동승인 경로에 주식시장 상장 조건을 적용한다. 미상장 신청은 아래에서
+  // 일반 대기 신청으로 접수되어 관리자 수동 검수가 가능하다.
+  let autoApproved = false;
+  if (reviewedSnap.exists() && reviewedSnap.val().nickname === nickname && !isSwitch && !existingEntry) {
+    const stocksSnapshot = await db.ref("stocks").get();
+    autoApproved = isStreamerStockListed(stocksSnapshot.val(), nickname);
+  }
   const ref = db.ref("streamerVerificationRequests").push();
   if (autoApproved) {
     return autoApproveReviewedStreamer(db, ref.key, {
