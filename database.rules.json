@@ -3,6 +3,12 @@
     ".read": false,
     ".write": false,
 
+    "gameSeriesShop": {
+      "emoteEvents": {
+        ".read": true
+      }
+    },
+
     "stocks": {
       ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
       "$stockId": {
