@@ -573,7 +573,7 @@
     },
 
     "presetMergeFailures": {
-      ".read": "auth != null && (root.child('adminCenter/adminUids').child(auth.uid).exists() || (root.child('adminCenter/streamerPermissions/reviewQueue').val() === true && root.child('bettingMarket/verifiedStreamerUids').child(auth.uid).exists()))",
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).val() === true",
       "$failureId": {
         ".write": false
       }
