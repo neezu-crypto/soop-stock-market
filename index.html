@@ -1409,7 +1409,6 @@ const functions = getFunctions(app);
 const whoAmICallable             = httpsCallable(functions, 'stockWhoAmI'); // 09번 - StreamBet-Market의 whoAmI와 이름 충돌 방지
 const getStockMarketPresenceCountCallable = httpsCallable(functions, 'getStockMarketPresenceCount');
 const tradeCallable              = httpsCallable(functions, 'trade');
-const triggerBotReactionCallable = httpsCallable(functions, 'triggerBotReaction'); // 트레이딩 봇(2026-08-27) - fire-and-forget 전용, 절대 await하지 않는다(아래 호출부 참고)
 const submitBannerRequestCallable = httpsCallable(functions, 'submitBannerRequest');
 const submitChartBannerRequestCallable = httpsCallable(functions, 'submitChartBannerRequest');
 const submitCardBannerRequestCallable = httpsCallable(functions, 'submitCardBannerRequest');
@@ -2142,12 +2141,8 @@ onAuthStateChanged(auth, async (user) => {
             // 유저별 전용 노드에 접속 표시 — 접속이 끊겨도 즉시 지우지 않고
             // lastSeen만 남겨서, 접속자 수 집계 시 PRESENCE_GRACE_MS(60분)
             // 이내면 계속 접속자로 카운트한다(끊김 즉시 감소 방지).
-            // connectedAt(2026-08-27, 트레이딩 봇 기능) - 이 세션이 "언제부터"
-            // 접속해 있었는지 서버가 판단할 수 있게 최초 접속 시각을 별도로
-            // 남긴다(봇 발동 조건 "접속 30초 이후"의 기준값). refreshMyPresence의
-            // 주기 갱신은 update()라 이 필드를 덮어쓰지 않는다.
             const myPresenceRef = ref(db, `presence/stockMarket/${userUID}`);
-            await set(myPresenceRef, { lastSeen: Date.now(), connectedAt: Date.now() });
+            await set(myPresenceRef, { lastSeen: Date.now() });
             startPresenceRefreshLoop();
 
             const el = document.getElementById('online-count');
@@ -2350,7 +2345,7 @@ function startHeartbeatLoop() {
 // 유예 안에서 "아직 접속 중"으로 인식하도록 유지한다.
 function refreshMyPresence() {
     if (!userUID) return;
-    // update() 사용 — set()이면 최초 접속 때 심어둔 connectedAt이 매번 지워진다.
+    // 접속 표시에는 lastSeen만 갱신한다.
     update(ref(db, `presence/stockMarket/${userUID}`), { lastSeen: Date.now() }).catch(() => {});
 }
 function startPresenceRefreshLoop() {
@@ -2491,13 +2486,6 @@ window.trade = async function (id, type, qty = 1) {
         sound.play().catch(() => {});
 
         lastTradeTime = Date.now();
-
-        // 트레이딩 봇 반응(2026-08-27) - 절대 await하지 않는다. 봇이 실제
-        // 유저와 같은 "1초에 한 거래" 속도 제한을 지키며 5~20건짜리 패턴을
-        // 다 돌면 최악의 경우 20초 가까이 걸릴 수 있는데, 여기서 기다리면
-        // 내 거래 버튼 반응이 그만큼 늦어져 버린다. 완전히 별개의 호출로
-        // 흘려보내 화면은 즉시 갱신되고, 봇은 자기 속도대로 뒤에서 처리된다.
-        triggerBotReactionCallable({ stockId: id, type }).catch(() => {});
 
     } catch (error) {
         const message = error?.message || "거래 중 오류가 발생했습니다.";

@@ -470,14 +470,7 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     await recordMessengerRoomTrade(db, roomTrade, stockId, stockTx.snapshot.val()?.name, type, qty, finalTradePrice);
   }
 
-  // 8) 트레이딩 봇 반응은 여기서 실행하지 않는다(2026-08-27 재설계 — 아래
-  //    triggerBotReaction 참고). 봇도 "1초에 한 거래" 속도 제한을 지키게
-  //    되면서, 5~20건짜리 패턴을 이 응답 안에서 끝까지 기다리면 실제 유저가
-  //    자기 거래 버튼 하나 누른 결과를 최대 20초 가까이 기다려야 하는
-  //    문제가 생긴다. 그래서 클라이언트가 이 trade() 응답을 받은 "직후,
-  //    기다리지 않고" triggerBotReaction을 별도로 호출하도록 분리했다 —
-  //    실제 유저 화면은 즉시 갱신되고, 봇은 완전히 독립된 함수 호출 안에서
-  //    자기 속도대로 체결을 이어간다.
+  // 8) 트레이딩 봇은 2026-10-22부터 비활성화했다. 실제 거래 결과만 반영한다.
 
   return {
     ok:       true,

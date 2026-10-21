@@ -595,7 +595,7 @@
             <tr><td><code>users/{uid}</code></td><td>유저 보유 현금(cash, 최초 지급 100만원 — 익명·로그인 동일), 보유 종목(stocks: qty/avg), 최근 거래 시각·누적 매매 횟수(lastTradeTime/tradeCount), 계정 보호 여부(kakaoLinked/googleLinked/streamerVerified), 스트리머 인증 재신청 쿨다운 기준시각(lastStreamerVerificationRequestAt), 순수 매매 실현손익 누적(realizedPL), 초기자산 소급 보정 지급 시각(anonTopUpAppliedAt), 출석 보상 상태(lastAttendanceDate/attendanceStreak), 도전과제 달성 기록(achievements/{id}: 달성 시각), 최근 자산 변동 스냅샷(assetHistory/{YYYY-MM-DD}: totalAssets/cash/stockValue/at, lastAssetSnapshotDate로 하루 1회만 기록되도록 제어), 플레이타임 사용량(playQuotaDate/playSecondsUsedToday/bonusSecondsToday/purchasedHoursToday/lastHeartbeatAt)</td></tr>
             <tr><td><code>candlesticks/{stockId}/{분단위 timestamp}</code></td><td>OHLCV 분봉 데이터 (최대 360분 보관)</td></tr>
             <tr><td><code>rankings/top5</code></td><td>거래량 기준 상위 5개 종목 (서버가 매매 체결 시 디바운스 반영, 클라이언트는 읽기 전용)</td></tr>
-            <tr><td><code>presence/stockMarket/{uid}</code></td><td>접속자 등록 (lastSeen 타임스탬프를 접속 시 및 5분 주기로 갱신) — 접속자 수는 lastSeen이 60분 이내인 노드 개수로 집계(끊김 즉시 감소 대신 60분 유예), 메인페이지는 접속 시 1회 조회·관리자 페이지는 실시간 구독. <code>connectedAt</code>(2026-08-27, 트레이딩 봇 기능)은 최초 접속 시각 — 주기 갱신(update)이 이 값을 덮어쓰지 않아, "언제부터 접속해 있었는지"를 서버가 판단할 수 있다</td></tr>
+            <tr><td><code>presence/stockMarket/{uid}</code></td><td>접속자 등록 (lastSeen 타임스탬프를 접속 시 및 5분 주기로 갱신) — 접속자 수는 lastSeen이 60분 이내인 노드 개수로 집계(끊김 즉시 감소 대신 60분 유예), 메인페이지는 접속 시 1회 조회·관리자 페이지는 실시간 구독</td></tr>
             <tr><td><code>chartBanner/{stockId}</code></td><td>종목별 차트 모달 하단 광고 배너 이미지/링크/종료일 (종목마다 개별 설정, 전체 공동 노출 아님)</td></tr>
             <tr><td><code>bannerRequests/{id}</code></td><td>우측 랭킹 배너 셀프 신청 내역 (닉네임/아이디/기간/차감액/상태 pending·approved·rejected)</td></tr>
             <tr><td><code>chartBannerRequests/{id}</code></td><td>차트 하단 배너 셀프 신청 내역 (대상 stockId·신청 시점 종목명 스냅샷/닉네임(신청자 확인용)/아이디/배너 이미지 링크/홍보 페이지 링크/기간/차감액/상태)</td></tr>
@@ -612,9 +612,9 @@
             <tr><td><code>maintenance</code></td><td>소프트 점검모드 상태 <code>{active, startAt}</code> — 공개 읽기, 클라이언트 직접 쓰기 차단(<code>adminAction</code> 경유)</td></tr>
             <tr><td><code>rankings/profitEntries/{uid}</code></td><td>손익 랭킹 항목 <code>{anonId, value, updatedAt}</code> — <code>value</code>에 <code>.indexOn</code> 인덱스를 걸어 <code>orderByChild('value')</code> 쿼리만으로 상위 N명 조회. 유저가 확인할 때마다 서버가 본인 항목만 갱신</td></tr>
             <tr><td><code>adminCashAdjustments/{id}</code></td><td>관리자가 유저 상세 조회에서 수동으로 자산을 지급/차감한 감사 기록 <code>{uid, amount, reason, adjustedAt}</code></td></tr>
-            <tr><td><code>botUsers/{botUid}</code></td><td>(2026-08-27, 트레이딩 봇 기능) 봇의 가상 포트폴리오 — <code>users/{uid}</code>와 완전히 같은 스키마(cash/stocks/lastTradeTime/tradeCount)에 <code>isBot: true</code>만 추가. 클라이언트는 읽기·쓰기 모두 불가(Admin SDK 전용), 화면에 직접 노출되지 않고 오직 시세/거래량에만 흔적을 남긴다</td></tr>
-            <tr><td><code>botAssignments/{realUid}</code></td><td>실제 유저 1명과 짝지어진 봇의 매핑 <code>{botUid, createdAt}</code> — 한 번 생성되면 그 유저가 접속해 있는 동안 계속 유지(1:1 비율), 클라이언트 접근 불가</td></tr>
-            <tr><td><code>botLocks/{realUid}</code></td><td>(2026-08-27) 그 유저의 봇이 지금 패턴을 실행 중인지 나타내는 뮤텍스 <code>{lockedAt}</code> — 진행 중인 패턴이 있으면 뒤이은 트리거를 건너뛰어 중복 거래를 막는다. 60초 지나면 자동 만료(자기 치유), 클라이언트 접근 불가</td></tr>
+            <tr><td><code>botUsers/{botUid}</code></td><td>[비활성·이력 보존] 과거 트레이딩 봇의 가상 포트폴리오. 2026-10-22 봇 기능 종료 후 새로 쓰지 않으며, 기존 기록은 감사/복구를 위해 보존</td></tr>
+            <tr><td><code>botAssignments/{realUid}</code></td><td>[비활성·정리됨] 과거 실제 유저와 봇의 매핑. 2026-10-22 활성 매핑을 삭제했고, 봇 기능은 더 이상 이 경로를 생성하지 않음</td></tr>
+            <tr><td><code>botLocks/{realUid}</code></td><td>[비활성·정리됨] 과거 봇 실행 락. 봇 거래 callable 종료와 함께 사용 중단</td></tr>
         </table>
     </section>
 
@@ -650,8 +650,11 @@
     </section>
 
     <section id="sec11">
-        <h2><span class="num">11</span>트레이딩 봇 — 실제 유저와 짝지어지는 가상 참여자 (2026-08-27,
-        사용자 지시 — 구현 완료)</h2>
+        <h2><span class="num">11</span>트레이딩 봇 — 과거 기능 기록 (2026-08-27 구현, 2026-10-22 비활성화)</h2>
+        <p class="note"><b>현재 상태: 완전히 비활성화.</b> 실제 거래 후 봇을 실행하던 클라이언트 호출과
+        <code>triggerBotReaction</code> callable을 제거했습니다. 활성 봇 배정과 접속자 집계에 섞이던
+        봇 presence를 정리했으며, 실제 유저의 매수·매도는 기존대로 동작합니다. <code>botUsers</code>의
+        과거 가상 포트폴리오 데이터는 복구/감사 목적의 이력으로만 보존합니다. 아래는 당시 구현 기록입니다.</p>
         <p><b>배경.</b> "실제 유저처럼 사고팔고 포트폴리오까지 갖춰진 봇"을 만들어달라는 요청. 요청
         중 "봇도 접속자 수를 올린다"는 부분이 실제 사람 수를 나타내는 지표를 봇으로 채우는 것이라,
         구현 전 기존 <code>stockSimulator.js</code>(관리자 전용 차트 활성화 도구)가 이미 "봇 거래는
@@ -778,7 +781,7 @@
         거래 순 정렬이 전부 정확한 것 확인. <code>adminAction</code> 재배포로 반영.</p>
     </section>
 
-    <footer>SOOP STOCK 거래소 · 기획서 v3.0 · index.html 코드 기준 작성 (배너/고정노출/중계방 즉시적용 전환 · 종목 상장 신청 · 서킷브레이커(동결) · 소프트 점검모드 + 서버측 강제 · 플레이타임 우회 수정 · 손익 랭킹 · 관리자 손익 랭킹 조회 반영 · 트레이딩 봇)</footer>
+    <footer>SOOP STOCK 거래소 · 기획서 v3.0 · index.html 코드 기준 작성 (배너/고정노출/중계방 즉시적용 전환 · 종목 상장 신청 · 서킷브레이커(동결) · 소프트 점검모드 + 서버측 강제 · 플레이타임 우회 수정 · 손익 랭킹 · 관리자 손익 랭킹 조회 반영 · 트레이딩 봇 과거 기록)</footer>
 </div>
 </body>
 </html>
