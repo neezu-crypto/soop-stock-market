@@ -229,6 +229,19 @@ Three.js 기반 OBS 방송 배경 화면 모음. 번들러 없는 정적 HTML, �
   --project soop-stock-market`로 "found in your project but do not exist in your
   local source code" 경고를 먼저 확인한다.
 
+#### 주식시장 봇 운영 정책 (2026-10-22)
+- 실제 유저 거래 후 실행되던 자동 트레이딩 봇은 비활성화됐다. `triggerBotReaction` callable과
+  클라이언트 호출을 소스 및 운영 환경에서 제거했고, `botAssignments`와
+  `presence/stockMarket/bot_*` 활성 데이터도 정리했다. `botLocks`는 비어 있으며,
+  `botUsers`는 과거 가상 포트폴리오 이력으로만 보존한다. 사용자가 명시적으로 정책을 바꾸라고
+  요청하지 않는 한 봇 매매나 봇 presence를 복구·추가하지 않는다.
+- `stockSimulator.js`는 관리자가 수동 시작하는 별도 차트 시뮬레이터로, 이번 봇 비활성화 범위에
+  포함되지 않았다. 이를 자동 봇과 혼동하거나 임의로 끄지 않는다.
+- `heartbeat`와 `adminAction`은 자매 앱과 전역 함수명이 겹친다. 봇 잔여 코드를 반영하려고 이
+  함수들을 이 레포에서 단독 배포하지 않는다. 현재 비어 있는 배정 데이터로 기존 런타임이 봇을
+  갱신할 수는 없지만, 향후 두 함수를 배포하려면 StreamBet-Market의 실제 writer 및 배포 상태를
+  먼저 대조하고 관련 앱을 함께 검증한다.
+
 ### 2.4 StreamBet-Market (스트리머 배팅시장)
 - Firebase Functions 배포 시 codebase가 `default`라 `soop-stock-market`(스트리머
   주식시장)과 겹친다. 이 레포 소스엔 없지만 실제 배포돼 있는 주식시장 소유 함수들
