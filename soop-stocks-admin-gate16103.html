@@ -129,7 +129,7 @@
             .stock-row-price { width: 84px; }
             .data-status-bar, .chart-banner-info-row { flex-wrap: wrap; gap: 6px; }
             .ranking-preview { overflow-x: auto; }
-            #overview-stats-grid { grid-template-columns: 1fr !important; }
+            #overview-stats-grid, #usage-cost-grid { grid-template-columns: 1fr !important; }
         }
 
         /* 📊 전체 통계 요약 카드 */
@@ -172,6 +172,18 @@
         </div>
         <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadOverviewStats()">🔄 새로고침</button>
         <div id="overview-stats-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+    </div>
+
+    <!-- 📉 사용량 및 예상 비용 -->
+    <div id="section-usage-cost" class="container" style="display:block; border-color:#22c55e;">
+        <h1>📉 사용량 · 예상 비용</h1>
+        <div class="info-box">
+            최근 30일 Cloud Monitoring 지표로 계산한 참고 추정치입니다. RTDB 사용량은 자매 서비스가 함께 쓰는 Firebase 프로젝트 전체 기준이라 주식시장만의 비용으로 볼 수 없습니다. 함수 비용은 주식시장 배포 함수 기준이며 무료 사용량 차감 전입니다. Cloud Scheduler는 주식시장 스케줄 작업 2개의 요금 범위를 표시합니다. Cloud Run 무료 구간과 Cloud Scheduler 계정 공용 무료 작업 수는 실제 청구서와 차이를 만들 수 있습니다.
+        </div>
+        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;background:#22c55e;color:#052e16;" onclick="loadUsageCost()">🔄 사용량 새로고침</button>
+        <div id="usage-cost-status" class="info-box" style="margin:0 0 10px;">사용량을 불러오는 중...</div>
+        <div id="usage-cost-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+        <div id="usage-cost-days" style="margin-top:12px;"></div>
     </div>
 
     <!-- 🛠️ 점검모드 관리 -->
@@ -609,6 +621,7 @@
     // 클라이언트가 직접 못 읽는다.
     const stockWhoAmICallable = httpsCallable(functions, 'stockWhoAmI');
     const presenceCountCallable = httpsCallable(functions, 'getStockMarketPresenceCount');
+    const usageCallable = httpsCallable(functions, 'getStockMarketUsage');
     async function callAdminAction(action, payload = {}) {
         const result = await adminActionCallable({ action, payload });
         return result.data;
@@ -655,6 +668,7 @@
     // ── 🧭 세션 빠른 이동 패널 (페이지 우측 고정, 클릭 시 해당 섹션으로 스크롤) ──
     const QUICKNAV_ITEMS = [
         { id: 'section-overview',           label: '📊 전체 통계' },
+        { id: 'section-usage-cost',         label: '📉 사용량·비용' },
         { id: 'section-maintenance',        label: '🛠️ 점검모드' },
         { id: 'section-announcement',       label: '📢 공지 배너' },
         { id: 'section-jackpot',            label: '🎰 잭팟 종목' },
@@ -734,6 +748,7 @@
             watchJackpotStatus();
             watchPendingSummary();
             await loadOverviewStats();
+            await loadUsageCost();
             await loadStockSimSessions();
         } else {
             if (user) alert("관리자 권한이 없습니다.");
@@ -935,6 +950,75 @@
                 </div>`).join('');
         } catch (e) {
             gridEl.innerHTML = `<div class="info-box" style="margin:0;grid-column:1/-1;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
+        }
+    };
+
+    function formatUsageBytes(bytes) {
+        const value = Number(bytes || 0);
+        if (value < 1024) return `${value.toLocaleString()} B`;
+        const units = ['KB', 'MB', 'GB', 'TB'];
+        let amount = value / 1024;
+        let unit = units[0];
+        for (let i = 1; amount >= 1024 && i < units.length; i++) {
+            amount /= 1024;
+            unit = units[i];
+        }
+        return `${amount.toFixed(2)} ${unit}`;
+    }
+
+    function formatUsageUsd(usd) {
+        return `$${Number(usd || 0).toFixed(4)} USD`;
+    }
+
+    window.loadUsageCost = async function() {
+        const statusEl = document.getElementById('usage-cost-status');
+        const gridEl = document.getElementById('usage-cost-grid');
+        const daysEl = document.getElementById('usage-cost-days');
+        statusEl.textContent = 'Cloud Monitoring 지표를 불러오는 중...';
+        statusEl.style.color = '';
+        gridEl.innerHTML = '';
+        daysEl.innerHTML = '';
+        try {
+            const result = await usageCallable();
+            const usage = result.data || {};
+            const sampledAt = usage.sampledAt ? new Date(usage.sampledAt).toLocaleString('ko-KR') : '-';
+            statusEl.textContent = `측정 시각 ${sampledAt} · 최근 30일 · 1시간 캐시`;
+            const cards = [
+                { label: '🌐 공용 RTDB 다운로드', value: formatUsageBytes(usage.sharedRtdbDownloadBytes30d), sub: '최근 30일 · Firebase 프로젝트 전체' },
+                { label: '🗄️ 공용 RTDB 저장량', value: formatUsageBytes(usage.sharedRtdbStoredBytes), sub: '현재 저장량 · Firebase 프로젝트 전체' },
+                { label: '🌐 공용 RTDB 다운로드 예상', value: formatUsageUsd(usage.sharedRtdbEstimatedDownloadUsd), sub: '월간 10GB 무료 구간 적용 후' },
+                { label: '🗄️ 공용 RTDB 저장 예상', value: `${formatUsageUsd(usage.sharedRtdbEstimatedStorageUsdMonthly)} /월`, sub: '1GB 무료 구간 적용 후' },
+                { label: '⚙️ 주식시장 함수 호출', value: `${Number(usage.stockFunctionExecutions30d || 0).toLocaleString()}회`, sub: `${Number(usage.stockFunctionCount || 0)}개 배포 함수 · 최근 30일` },
+                { label: '⏱️ 주식시장 함수 실행시간', value: `${Number(usage.stockFunctionRuntimeSeconds30d || 0).toLocaleString()}초`, sub: `과금 인스턴스 ${Number(usage.stockFunctionBillableSeconds30d || 0).toLocaleString()}초` },
+                { label: '💵 주식시장 함수 예상 비용', value: `${formatUsageUsd(usage.stockFunctionEstimatedUsdNoFreeTier)} /월`, sub: '무료 사용량 차감 전 · 1 vCPU / 256MiB 가정' },
+                { label: '🗓️ 주식시장 스케줄러 예상', value: `${formatUsageUsd(usage.stockSchedulerEstimatedUsdMonthlyMin)}–${formatUsageUsd(usage.stockSchedulerEstimatedUsdMonthlyMax)} /월`, sub: `${Number(usage.stockSchedulerJobCount || 0)}개 작업 · 결제 계정 공용 무료 할당량에 따라 변동` },
+            ];
+            gridEl.innerHTML = cards.map((card) => `
+                <div class="stat-card">
+                    <div class="stat-label">${card.label}</div>
+                    <div class="stat-value" style="font-size:16px;">${card.value}</div>
+                    <div class="stat-sub">${card.sub}</div>
+                </div>`).join('');
+
+            const rows = (usage.daily || []).slice(-14).reverse();
+            daysEl.innerHTML = rows.length ? `
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">최근 일별 집계 (UTC)</div>
+                <div style="overflow-x:auto;border:1px solid #334155;border-radius:8px;">
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:500px;">
+                        <thead><tr style="background:#0f172a;color:#94a3b8;text-align:left;">
+                            <th style="padding:8px;">날짜</th><th style="padding:8px;">공용 RTDB 다운로드</th><th style="padding:8px;">주식시장 함수 호출</th><th style="padding:8px;">함수 추정액</th>
+                        </tr></thead>
+                        <tbody>${rows.map((day) => `<tr style="border-top:1px solid #334155;">
+                            <td style="padding:8px;">${day.day}</td>
+                            <td style="padding:8px;">${formatUsageBytes(day.sharedRtdbDownloadedBytes)}</td>
+                            <td style="padding:8px;">${Number(day.stockFunctionExecutions || 0).toLocaleString()}</td>
+                            <td style="padding:8px;">${formatUsageUsd(day.stockFunctionEstimatedUsdNoFreeTier)}</td>
+                        </tr>`).join('')}</tbody>
+                    </table>
+                </div>` : '<div class="info-box" style="margin:0;">아직 일별 집계 데이터가 없습니다. 첫 조회 후 Cloud Monitoring 데이터가 제공되는 시점부터 쌓입니다.</div>';
+        } catch (e) {
+            statusEl.textContent = `불러오기 실패: ${e.message}`;
+            statusEl.style.color = '#fca5a5';
         }
     };
 

@@ -57,6 +57,7 @@ const { logStockMarketVisit } = require("./streamerVisitLog");
 const { syncStreamerNameOnStockChange } = require("./streamerNamesSync");
 const { migratePublicIdentityData } = require("./privacyMigration");
 const { getStockMarketPresenceCount } = require("./presence");
+const { getStockMarketUsage } = require("./usageMetrics");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -88,3 +89,4 @@ exports.logStockMarketVisit                = logStockMarketVisit;
 exports.syncStreamerNameOnStockChange      = syncStreamerNameOnStockChange;
 exports.migratePublicIdentityData           = migratePublicIdentityData;
 exports.getStockMarketPresenceCount         = getStockMarketPresenceCount;
+exports.getStockMarketUsage                  = getStockMarketUsage;
