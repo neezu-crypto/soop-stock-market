@@ -360,6 +360,7 @@
 
       "bets": {
         "$marketId": {
+          ".indexOn": ["placedAt"],
           "$betId": {
             ".read": "auth != null && data.child('uid').val() === auth.uid",
             ".write": false
@@ -368,6 +369,7 @@
       },
 
       "wallets": {
+        ".indexOn": ["accountCreatedAt", "balance"],
         "$uid": {
           ".read": "auth != null && auth.uid === $uid",
           ".write": false
@@ -386,6 +388,12 @@
           ".read": "auth != null && auth.uid === $uid",
           "$exchangeId": { ".write": false }
         }
+      },
+
+      "exchangeLog": {
+        ".read": false,
+        ".write": false,
+        ".indexOn": ["requestedAt"]
       },
 
       "userBets": {
