@@ -288,24 +288,6 @@
         <div id="stock-sim-session-list" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
 
-    <!-- 🤖 봇 관리 -->
-    <div id="section-bot-sessions" class="container" style="display:block; border-color: #22c55e;">
-        <h1>🤖 봇 관리</h1>
-        <div class="info-box">
-            실제 유저와 1:1로 짝지어져 자산·보유량 안에서 매매를 흉내내는 트레이딩 봇 세션 목록입니다.
-            <b style="color:#4ade80;">활성</b>은 접속자 수 집계와 같은 기준(60분 lastSeen 유예)이고,
-            <b style="color:#fbbf24;">거래중</b>은 지금 패턴 하나를 실행하고 있어 다음 트리거가
-            건너뛰어지는 상태를 뜻합니다.
-        </div>
-        <div style="display:flex; gap:14px; margin-bottom:12px; font-size:12px; color:#94a3b8;">
-            <span>전체 <b id="bot-session-total-count" style="color:#e2e8f0;">-</b>개</span>
-            <span>활성 <b id="bot-session-online-count" style="color:#4ade80;">-</b>개</span>
-            <span>거래중 <b id="bot-session-trading-count" style="color:#fbbf24;">-</b>개</span>
-        </div>
-        <button class="btn-primary" style="margin-top:0;margin-bottom:12px;" onclick="loadBotSessions()">🔄 새로고침</button>
-        <div id="bot-session-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-    </div>
-
     <!-- 💰 손익 랭킹 조회 -->
     <div id="section-profit-ranking" class="container" style="display:block; border-color: #38bdf8;">
         <h1>💰 손익 랭킹 조회</h1>
@@ -417,22 +399,6 @@
         <div style="display:flex; gap:10px;">
             <button class="btn-success" style="flex:1;" onclick="previewInactiveUsers()">🔍 미거래 유저 집계</button>
             <button class="btn-primary" style="flex:2; margin-top:0; background:#f97316; color:white;" onclick="cleanupInactiveUsers()">🗑 미거래 유저 삭제</button>
-        </div>
-    </div>
-
-    <!-- 🎁 익명 유저 초기자산 소급 보정 -->
-    <div id="section-anon-topup" class="container" style="display:block; border-color: #f97316;">
-        <h1>🎁 익명 유저 초기자산 소급 보정</h1>
-        <div class="info-box" style="color: #fed7aa;">
-            2026-07-12 정책 변경(익명 50만원+연동 보너스 50만원 → 익명·로그인 동일 100만원, 연동 보너스 폐지) 이전에
-            생성된 익명 유저는 아직 50만원만 받은 상태입니다. 그중 <span style="color:#38bdf8;">실제로 거래해본(=진짜
-            이용한) 카카오·구글 미연동 유저</span>에게만 차액 50만원을 1회 지급합니다. 이미 지급한 유저는 자동으로
-            다시 잡히지 않으니 안전하게 여러 번 눌러도 됩니다(그 사이 새로 거래를 시작한 유저만 추가로 잡힘).
-        </div>
-        <div id="anon-topup-status" style="font-size:13px; color:#94a3b8; margin-bottom:12px;"></div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn-success" style="flex:1;" onclick="previewAnonTopUp()">🔍 대상 인원 미리보기</button>
-            <button class="btn-primary" style="flex:2; margin-top:0; background:#f97316; color:white;" onclick="applyAnonTopUp()">🎁 50만원 지급</button>
         </div>
     </div>
 
@@ -675,7 +641,6 @@
         { id: 'section-purchase-history',   label: '🧾 구매 현황' },
         { id: 'section-lottery-audit',      label: '🎰 777 감사 로그' },
         { id: 'section-stock-simulator',    label: '🤖 매매 시뮬레이터' },
-        { id: 'section-bot-sessions',       label: '🤖 봇 관리' },
         { id: 'section-profit-ranking',     label: '💰 손익 랭킹' },
         { id: 'section-ranking-top5',       label: '🏆 랭킹 TOP5' },
         { id: 'section-stock-search',       label: '🔍 개별 종목' },
@@ -684,7 +649,6 @@
         { id: 'section-price-reset',        label: '♻️ 주가 초기화' },
         { id: 'section-data-cleanup',       label: '🧹 중복 정리' },
         { id: 'section-inactive-cleanup',   label: '🗑 미거래 정리' },
-        { id: 'section-anon-topup',         label: '🎁 소급 보정' },
         { id: 'section-listing-upload',     label: '🚀 상장/삭제' },
         { id: 'section-crew-prefix-apply',  label: '🏴 크루 적용' },
         { id: 'section-crew-prefix-remove', label: '🏳 크루 해제' },
@@ -1238,54 +1202,6 @@
         }
     };
 
-    // ── 🤖 봇 관리 (읽기 전용 — actionGetBotSessions, tradingBot.js 참고) ──
-    window.loadBotSessions = async function() {
-        const listEl = document.getElementById('bot-session-list');
-        listEl.innerHTML = '<div class="info-box" style="margin:0;">불러오는 중...</div>';
-        try {
-            const { sessions, totalCount, onlineCount, tradingCount } = await callAdminAction('getBotSessions');
-            document.getElementById('bot-session-total-count').innerText = totalCount ?? 0;
-            document.getElementById('bot-session-online-count').innerText = onlineCount ?? 0;
-            document.getElementById('bot-session-trading-count').innerText = tradingCount ?? 0;
-
-            if (!sessions || sessions.length === 0) {
-                listEl.innerHTML = '<div class="info-box" style="margin:0;">아직 생성된 봇이 없습니다.</div>';
-                return;
-            }
-            listEl.innerHTML = '';
-            sessions.forEach(s => {
-                const row = document.createElement('div');
-                row.style.cssText = `background:#0f172a;border:1px solid ${s.isOnline ? '#22c55e' : '#334155'};border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;`;
-                const onlineBadge = s.isOnline
-                    ? '<span class="status-chip active">🟢 활성</span>'
-                    : '<span class="status-chip none">⚪ 비활성</span>';
-                const tradingBadge = s.isTrading
-                    ? '<span class="status-chip" style="background:#78350f;color:#fbbf24;">🔄 거래중</span>'
-                    : '';
-                const lastTradeText = s.lastTradeTime
-                    ? `${new Date(s.lastTradeTime).toLocaleString('ko-KR')}${s.lastStockName ? ` · ${escapeAttr(s.lastStockName)} ${s.lastTradeType === 'buy' ? '매수' : '매도'}` : ''}`
-                    : '거래 기록 없음';
-                const holdingsText = (s.holdings && s.holdings.length > 0)
-                    ? s.holdings.map(h => `${escapeAttr(h.stockName || h.stockId)} ${h.qty}주`).join(', ')
-                    : '보유 종목 없음';
-                row.innerHTML = `
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
-                        <div>
-                            <div style="font-weight:800;font-size:14px;">🤖 ${escapeAttr(s.botUid)} ${onlineBadge} ${tradingBadge}</div>
-                            <div style="font-size:11px;color:#64748b;margin-top:2px;">실제 유저 ${escapeAttr(s.realUid)} · 생성 ${s.createdAt ? new Date(s.createdAt).toLocaleString('ko-KR') : '-'}</div>
-                        </div>
-                        <div style="text-align:right;font-size:13px;color:#38bdf8;font-weight:700;">${(s.cash ?? 0).toLocaleString()}원</div>
-                    </div>
-                    <div style="font-size:12px;color:#cbd5e1;">거래 ${s.tradeCount || 0}회 · 최근 거래: ${lastTradeText}</div>
-                    <div style="font-size:12px;color:#94a3b8;">보유: ${holdingsText}</div>
-                `;
-                listEl.appendChild(row);
-            });
-        } catch (e) {
-            listEl.innerHTML = `<div class="info-box" style="margin:0;color:#fca5a5;">불러오기 실패: ${e.message}</div>`;
-        }
-    };
-
     // ── 손익 랭킹 조회 (읽기 전용 — 갱신은 유저가 확인할 때마다 서버가 처리) ──
     window.loadProfitRankings = async function() {
         const listEl = document.getElementById('profit-ranking-admin-list');
@@ -1393,32 +1309,6 @@
                 : `✅ ${count.toLocaleString()}명 삭제 완료`;
         } catch(e) {
             statusEl.innerText = '삭제 실패: ' + e.message;
-        }
-    };
-
-    // ── 익명 유저 초기자산 소급 보정 (users/ 조회·지급은 서버(adminAction)에서 처리) ──
-    window.previewAnonTopUp = async function() {
-        const statusEl = document.getElementById('anon-topup-status');
-        statusEl.innerText = '집계 중...';
-        try {
-            const { count, totalCost } = await callAdminAction('previewAnonTopUp');
-            statusEl.innerText = `대상 ${count.toLocaleString()}명 · 총 ${totalCost.toLocaleString()}원 지급 예정`;
-        } catch(e) {
-            statusEl.innerText = '집계 실패: ' + e.message;
-        }
-    };
-
-    window.applyAnonTopUp = async function() {
-        const statusEl = document.getElementById('anon-topup-status');
-        if (!confirm('대상 유저에게 50만원씩 지급하시겠습니까?\n이미 받은 유저는 자동으로 제외됩니다.')) return;
-        statusEl.innerText = '지급 처리 중... (유저 수에 따라 시간이 걸릴 수 있습니다)';
-        try {
-            const { count, totalCost } = await callAdminAction('applyAnonTopUp');
-            statusEl.innerText = count === 0
-                ? '지급할 대상이 없습니다.'
-                : `✅ ${count.toLocaleString()}명에게 총 ${totalCost.toLocaleString()}원 지급 완료`;
-        } catch(e) {
-            statusEl.innerText = '지급 실패: ' + e.message;
         }
     };
 
