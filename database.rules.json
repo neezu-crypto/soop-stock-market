@@ -587,6 +587,11 @@
       }
     },
 
+    "streamerFanPageAdminSubscriptionSignals": {
+      ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).val() === true",
+      ".write": false
+    },
+
     "adminCenter": {
       "streamerPermissions": {
         ".read": false,
