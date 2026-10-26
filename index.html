@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20260917-sig1">
+    <link rel="stylesheet" href="styles.css?v=20261027-subscription-benefits">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -1052,6 +1052,54 @@
 </div>
 
 <!-- ══════════════════════════════════════════
+     통합 구독 인증 — 고점체크·갤러리와 같은 구독 원장을 사용
+══════════════════════════════════════════ -->
+<div id="stock-subscription-modal" class="promo-modal-overlay" style="z-index:5200;">
+    <div class="promo-modal-content stock-subscription-modal-content" style="max-width:430px;max-height:calc(100dvh - 32px);overflow-y:auto;">
+        <div class="promo-modal-header"><h2>✨ 통합 구독 인증</h2></div>
+        <p class="stock-subscription-intro">개발자의 SOOP 방송국을 구독한 본인 계정을 인증하면, 스트리머 시리즈의 구독자 전용 혜택을 이용할 수 있어요.</p>
+        <div class="stock-subscription-benefits" role="note">
+            <strong>현재 기준 구독자 전용 서비스</strong>
+            <ul>
+                <li><b>스트리머 주식시장</b> — 매일 출석 보상 2배</li>
+                <li><b>고점체크</b> — 기간별 최고 시청 순간 분석, 같은 날 스트리머 2명 비교, 키워드로 여러 스트리머 고점 비교</li>
+                <li><b>스트리머 갤러리</b> — 모든 스트리머의 잠긴 이미지 상세 원본 열람 및 다운로드</li>
+            </ul>
+        </div>
+        <div id="stock-subscription-login-note" class="stock-subscription-login-note" hidden>
+            <strong>계정 보호 후 신청할 수 있어요.</strong>
+            <p>카카오·구글 연동 또는 스트리머 인증으로 현재 계정을 보호한 뒤 구독 인증을 신청해 주세요.</p>
+            <button type="button" onclick="closeStockSubscriptionModal();openAccountProtectModal()">계정 보호하기</button>
+        </div>
+        <div id="stock-subscription-request-section">
+            <p class="stock-subscription-intro">인증은 현재 로그인한 개인 계정에 연결되며, 승인 후 모든 구독자 전용 콘텐츠에 적용됩니다.</p>
+            <ol class="stock-subscription-steps">
+                <li><strong>1단계</strong> 구독 중인 본인 SOOP 아이디를 입력합니다.</li>
+                <li><strong>2단계</strong> 발급된 일회용 코드를 구독자 전용 인증 게시글 댓글에 남깁니다.</li>
+                <li><strong>3단계</strong> 관리자가 구독 상태와 댓글을 확인해 승인합니다.</li>
+            </ol>
+            <label for="stock-subscription-soop-id">구독 중인 본인 SOOP 아이디</label>
+            <input id="stock-subscription-soop-id" type="text" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false" pattern="[A-Za-z0-9]{2,20}" placeholder="예: skftodwocks2">
+        </div>
+        <div id="stock-subscription-code-section" class="stock-subscription-code-section" hidden>
+            <p id="stock-subscription-code-help">아래 코드를 구독자 전용 인증 게시글 댓글에 남겨 주세요. 코드는 30분 후 만료됩니다.</p>
+            <div class="stock-subscription-code-row">
+                <code id="stock-subscription-code">신청 후 발급</code>
+                <button id="stock-subscription-copy-code-btn" type="button">코드 복사</button>
+                <button id="stock-subscription-renew-code-btn" type="button">새 코드 발급</button>
+            </div>
+            <a class="stock-subscription-post-link" href="https://www.sooplive.com/station/skftodwocks2/post/210842951" target="_blank" rel="noopener noreferrer">인증 게시글 새 탭으로 열기 ↗</a>
+        </div>
+        <p id="stock-subscription-status" class="stock-subscription-status" role="status" aria-live="polite"></p>
+        <div class="stock-subscription-actions">
+            <button id="stock-subscription-cancel-btn" type="button" hidden>대기 신청 취소</button>
+            <button type="button" onclick="closeStockSubscriptionModal()">닫기</button>
+            <button id="stock-subscription-submit-btn" type="button">인증 코드 발급</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
      🎙️ 스트리머 인증 (카카오/구글 대체 계정 보호)
 ══════════════════════════════════════════ -->
 <div id="streamer-verify-modal" class="promo-modal-overlay" style="z-index:5150;">
@@ -1212,6 +1260,10 @@
                     style="display:none;font-size:11px;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.4);padding:2px 8px;border-radius:100px;cursor:pointer;white-space:nowrap;">
                     🧪 테스트 중
                 </span>
+                <button id="stock-subscription-open-btn" onclick="openStockSubscriptionModal()"
+                    style="display:none;align-items:center;gap:6px;background:#d9b354;color:#1a1304;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">
+                    ✨ 통합 구독 혜택
+                </button>
                 <button id="account-protect-btn" onclick="openAccountProtectModal()"
                     style="display:none;align-items:center;gap:6px;background:#38bdf8;color:#0f172a;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
                     🔒 계정 보호하고 자산 지키기
@@ -1300,6 +1352,8 @@ import { getAuth, signInAnonymously, signInWithPopup, signInWithCustomToken, sig
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken }
+                             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app-check.js";
 import { initChartModal } from "./js/chartModal.js";
 import { initPromotions } from "./js/promotions.js";
 import { initAssetHistory } from "./js/assetHistory.js";
@@ -1362,6 +1416,16 @@ const firebaseConfig = {
 };
 const app       = initializeApp(firebaseConfig);
 const db        = getDatabase(app);
+// 통합 구독 callable은 고점체크용 App Check를 강제한다. 주식시장의 기존
+// Auth 세션은 유지하고, 구독 요청에만 같은 프로젝트의 고점체크 App Check 토큰을 쓴다.
+const subscriptionApp = initializeApp({
+    ...firebaseConfig,
+    appId: '1:997788925900:web:b58db2970489bf18a3a769',
+}, 'stock-subscription-appcheck');
+const subscriptionAppCheck = initializeAppCheck(subscriptionApp, {
+    provider: new ReCaptchaEnterpriseProvider('6Ld0AfAtAAAAABcCio4_5AoiCdrjfM7_4riWiYXR'),
+    isTokenAutoRefreshEnabled: true,
+});
 
 // 08번 — topnav(devbar와 같은 역할) 게임 링크를 RTDB(devbarLinks, admin-center에서
 // 관리)에서 가져와 하드코딩된 링크를 대체한다. 노드가 비어있거나 조회 실패 시
@@ -1406,6 +1470,7 @@ const db        = getDatabase(app);
 const auth      = getAuth(app);
 const provider  = new GoogleAuthProvider();
 const functions = getFunctions(app);
+const VIEWER_SUBSCRIPTION_URL = 'https://us-central1-soop-stock-market.cloudfunctions.net/streamerFanPageViewerSubscription';
 const whoAmICallable             = httpsCallable(functions, 'stockWhoAmI'); // 09번 - StreamBet-Market의 whoAmI와 이름 충돌 방지
 const getStockMarketPresenceCountCallable = httpsCallable(functions, 'getStockMarketPresenceCount');
 const tradeCallable              = httpsCallable(functions, 'trade');
@@ -1430,6 +1495,35 @@ const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttenda
 const buyLotteryTicketCallable = httpsCallable(functions, 'buyLotteryTicket');
 const requestStreamerVerificationCallable = httpsCallable(functions, 'requestStreamerVerification');
 const logStockMarketVisitCallable = httpsCallable(functions, 'logStockMarketVisit');
+
+async function callUnifiedViewerSubscription(data) {
+    const user = auth.currentUser;
+    if (!user) throw Object.assign(new Error('로그인이 필요합니다.'), { code: 'functions/unauthenticated' });
+    const [idToken, appCheckResult] = await Promise.all([
+        user.getIdToken(),
+        getAppCheckToken(subscriptionAppCheck, false),
+    ]);
+    const response = await fetch(VIEWER_SUBSCRIPTION_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+            'X-Firebase-AppCheck': appCheckResult.token,
+        },
+        body: JSON.stringify({ data: data || {} }),
+    });
+    let payload = {};
+    try { payload = await response.json(); } catch (_) {}
+    if (!response.ok || payload.error) {
+        const callableError = payload.error || {};
+        const status = String(callableError.status || 'internal').toLowerCase().replaceAll('_', '-');
+        throw Object.assign(new Error(callableError.message || '구독 서버 요청에 실패했습니다.'), {
+            code: `functions/${status}`,
+            details: callableError.details,
+        });
+    }
+    return payload.result || {};
+}
 
 const INITIAL_CASH = 1000000; // 서버 INITIAL_CASH와 동일하게 유지 (로딩 중 임시 표시용)
 const CARD_BANNER_MIN_HOLDING_QTY = 10; // 서버 CARD_BANNER_MIN_HOLDING_QTY와 동일하게 유지
@@ -1576,6 +1670,206 @@ let myData           = null;
 function isMyAccountProtected() {
     return !!(myData && (myData.kakaoLinked || myData.googleLinked || myData.streamerVerified));
 }
+
+// ── 통합 구독 상태/신청 ───────────────────────────────────────
+// 구독 원장은 고점체크·갤러리와 공유한다. 출석 2배 여부는 아래 상태가 아닌
+// attendance.js에서 같은 원장을 다시 읽어 최종 판정한다.
+let stockSubscriptionState = {
+    loaded: false,
+    accountProtected: false,
+    isAdmin: false,
+    subscribed: false,
+    expiresAt: 0,
+    pending: false,
+    pendingRequestId: '',
+    pendingRequestStatus: '',
+    pendingCanRenewCode: false,
+    pendingSoopId: '',
+    pendingCodeExpiresAt: 0,
+};
+let stockSubscriptionVerificationCode = '';
+let stockSubscriptionRefreshTimer = null;
+let stockSubscriptionRequestToken = 0;
+
+function formatStockSubscriptionDate(value) {
+    const time = Number(value) || 0;
+    if (!time) return '';
+    return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(time));
+}
+
+function scheduleStockSubscriptionRefresh(uid) {
+    if (stockSubscriptionRefreshTimer) clearTimeout(stockSubscriptionRefreshTimer);
+    stockSubscriptionRefreshTimer = null;
+    const refreshAt = stockSubscriptionState.pending
+        ? Date.now() + 10 * 1000
+        : stockSubscriptionState.expiresAt > Date.now()
+            ? stockSubscriptionState.expiresAt + 1000
+            : 0;
+    if (!refreshAt) return;
+    stockSubscriptionRefreshTimer = setTimeout(() => {
+        if (auth.currentUser?.uid === uid) refreshStockSubscriptionStatus();
+    }, Math.min(Math.max(1000, refreshAt - Date.now()), 2147483647));
+}
+
+function updateStockSubscriptionButton() {
+    const button = document.getElementById('stock-subscription-open-btn');
+    if (!button) return;
+    button.style.display = auth.currentUser ? 'inline-flex' : 'none';
+    button.textContent = stockSubscriptionState.subscribed || stockSubscriptionState.isAdmin
+        ? '✨ 구독자 · 출석 2배'
+        : '✨ 통합 구독 혜택';
+}
+
+function renderStockSubscriptionModal(message = '') {
+    const state = stockSubscriptionState;
+    const loginNote = document.getElementById('stock-subscription-login-note');
+    const requestSection = document.getElementById('stock-subscription-request-section');
+    const codeSection = document.getElementById('stock-subscription-code-section');
+    const status = document.getElementById('stock-subscription-status');
+    const submit = document.getElementById('stock-subscription-submit-btn');
+    const cancel = document.getElementById('stock-subscription-cancel-btn');
+    const renew = document.getElementById('stock-subscription-renew-code-btn');
+    const copy = document.getElementById('stock-subscription-copy-code-btn');
+    if (!loginNote || !requestSection || !codeSection || !status || !submit || !cancel || !renew || !copy) return;
+
+    const hasPending = state.pending && state.pendingRequestId;
+    const protectedAccount = state.accountProtected || state.isAdmin;
+    loginNote.hidden = !!protectedAccount || state.subscribed || state.isAdmin;
+    requestSection.hidden = !protectedAccount || !!hasPending || state.subscribed || state.isAdmin;
+    codeSection.hidden = !hasPending || state.subscribed || state.isAdmin;
+    submit.hidden = !protectedAccount || !!hasPending || state.subscribed || state.isAdmin;
+    cancel.hidden = !hasPending || state.pendingRequestStatus === 'processing';
+    renew.hidden = !hasPending || !state.pendingCanRenewCode;
+    copy.hidden = !stockSubscriptionVerificationCode || !hasPending;
+    document.getElementById('stock-subscription-code').textContent = stockSubscriptionVerificationCode || '코드 재발급 필요';
+
+    if (message) {
+        status.textContent = message;
+    } else if (state.isAdmin) {
+        status.textContent = '관리자 권한으로 모든 구독자 전용 혜택을 이용할 수 있어요.';
+    } else if (state.subscribed) {
+        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 주식시장 출석 보상은 자동으로 2배 지급됩니다.`;
+    } else if (!protectedAccount) {
+        status.textContent = '익명 계정은 구독 인증을 신청할 수 없어요. 먼저 계정을 보호해 주세요.';
+    } else if (hasPending) {
+        const expires = state.pendingCodeExpiresAt ? ` (코드 만료: ${formatStockSubscriptionDate(state.pendingCodeExpiresAt)})` : '';
+        status.textContent = state.pendingRequestStatus === 'processing'
+            ? '관리자가 구독 인증 신청을 확인 중이에요. 잠시 후 상태가 자동으로 갱신됩니다.'
+            : `${state.pendingSoopId} 방송국의 인증 신청이 대기 중이에요. 발급된 코드를 구독자 전용 인증 게시글 댓글에 남겨 주세요${expires}.`;
+    } else {
+        status.textContent = '본인 SOOP 아이디로 인증 코드를 발급받아 구독자 전용 인증 게시글 댓글에 남겨 주세요.';
+    }
+}
+
+async function refreshStockSubscriptionStatus() {
+    const user = auth.currentUser;
+    if (!user) return false;
+    const token = ++stockSubscriptionRequestToken;
+    try {
+        const data = await callUnifiedViewerSubscription({ action: 'status' });
+        if (token !== stockSubscriptionRequestToken || auth.currentUser?.uid !== user.uid) return false;
+        stockSubscriptionState = {
+            loaded: true,
+            accountProtected: data.accountProtected === true,
+            isAdmin: data.isAdmin === true,
+            subscribed: data.subscribed === true,
+            expiresAt: Math.max(0, Number(data.expiresAt) || 0),
+            pending: data.pending === true,
+            pendingRequestId: String(data.pendingRequestId || ''),
+            pendingRequestStatus: String(data.pendingRequestStatus || ''),
+            pendingCanRenewCode: data.pendingCanRenewCode === true,
+            pendingSoopId: String(data.pendingSoopId || ''),
+            pendingCodeExpiresAt: Math.max(0, Number(data.pendingCodeExpiresAt) || 0),
+        };
+        updateStockSubscriptionButton();
+        updateAttendanceUI();
+        scheduleStockSubscriptionRefresh(user.uid);
+        if (document.getElementById('stock-subscription-modal')?.classList.contains('active')) renderStockSubscriptionModal();
+        return true;
+    } catch (error) {
+        if (token === stockSubscriptionRequestToken) {
+            console.error('통합 구독 상태 확인 실패:', error);
+            if (document.getElementById('stock-subscription-modal')?.classList.contains('active')) {
+                renderStockSubscriptionModal(error?.message || '구독 상태를 확인하지 못했습니다.');
+            }
+        }
+        return false;
+    }
+}
+
+window.openStockSubscriptionModal = async function() {
+    const modal = document.getElementById('stock-subscription-modal');
+    if (!modal) return;
+    modal.classList.add('active');
+    renderStockSubscriptionModal('구독 상태를 확인하고 있어요.');
+    await refreshStockSubscriptionStatus();
+};
+window.closeStockSubscriptionModal = function() {
+    document.getElementById('stock-subscription-modal')?.classList.remove('active');
+};
+
+document.getElementById('stock-subscription-modal')?.addEventListener('click', (event) => {
+    if (event.target.id === 'stock-subscription-modal') window.closeStockSubscriptionModal();
+});
+document.getElementById('stock-subscription-submit-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('stock-subscription-soop-id');
+    const submit = document.getElementById('stock-subscription-submit-btn');
+    const soopId = input?.value.trim().toLowerCase() || '';
+    if (!/^[a-z0-9]{2,20}$/.test(soopId)) {
+        renderStockSubscriptionModal('SOOP 방송국 아이디를 영문·숫자 2~20자로 입력해 주세요.');
+        return;
+    }
+    submit.disabled = true;
+    renderStockSubscriptionModal('인증 코드를 발급하고 있어요.');
+    try {
+        const result = await callUnifiedViewerSubscription({ action: 'request', soopId });
+        if (result.action === 'already-pending') {
+            stockSubscriptionVerificationCode = '';
+        } else {
+            stockSubscriptionVerificationCode = String(result.code || '');
+        }
+        await refreshStockSubscriptionStatus();
+    } catch (error) {
+        renderStockSubscriptionModal(error?.message || '구독 인증 신청에 실패했습니다.');
+    } finally {
+        submit.disabled = false;
+    }
+});
+document.getElementById('stock-subscription-renew-code-btn')?.addEventListener('click', async () => {
+    const renew = document.getElementById('stock-subscription-renew-code-btn');
+    renew.disabled = true;
+    try {
+        const result = await callUnifiedViewerSubscription({ action: 'renewCode', requestId: stockSubscriptionState.pendingRequestId });
+        stockSubscriptionVerificationCode = String(result.code || '');
+        await refreshStockSubscriptionStatus();
+    } catch (error) {
+        renderStockSubscriptionModal(error?.message || '인증 코드를 다시 발급하지 못했습니다.');
+    } finally {
+        renew.disabled = false;
+    }
+});
+document.getElementById('stock-subscription-copy-code-btn')?.addEventListener('click', async () => {
+    if (!stockSubscriptionVerificationCode) return;
+    try {
+        await navigator.clipboard.writeText(stockSubscriptionVerificationCode);
+        renderStockSubscriptionModal('인증 코드를 복사했어요. 구독자 전용 인증 게시글 댓글에 남겨 주세요.');
+    } catch (_) {
+        renderStockSubscriptionModal(`인증 코드: ${stockSubscriptionVerificationCode}`);
+    }
+});
+document.getElementById('stock-subscription-cancel-btn')?.addEventListener('click', async () => {
+    const cancel = document.getElementById('stock-subscription-cancel-btn');
+    cancel.disabled = true;
+    try {
+        await callUnifiedViewerSubscription({ action: 'cancel', requestId: stockSubscriptionState.pendingRequestId });
+        stockSubscriptionVerificationCode = '';
+        await refreshStockSubscriptionStatus();
+    } catch (error) {
+        renderStockSubscriptionModal(error?.message || '대기 신청을 취소하지 못했습니다.');
+    } finally {
+        cancel.disabled = false;
+    }
+});
 
 let userUID          = null;
 let allStocks        = [];
@@ -2124,11 +2418,21 @@ onAuthStateChanged(auth, async (user) => {
         stockObservedVerificationState = null;
         stockVisitLogged = false;
         streamerSwitchHandoffInProgress = false;
+        stockSubscriptionVerificationCode = '';
+        stockSubscriptionState = {
+            loaded: false, accountProtected: false, isAdmin: false, subscribed: false,
+            expiresAt: 0, pending: false, pendingRequestId: '', pendingRequestStatus: '',
+            pendingCanRenewCode: false, pendingSoopId: '', pendingCodeExpiresAt: 0,
+        };
+        if (stockSubscriptionRefreshTimer) { clearTimeout(stockSubscriptionRefreshTimer); stockSubscriptionRefreshTimer = null; }
     }
     await refreshAdminStatus(user); // 이 핸들러 안의 관리자 분기(seedSparklinesForCurrentUser 등)가 최신값을 보도록 먼저 확정
     if (auth.currentUser?.uid !== user?.uid) return;
     if (user) {
         userUID = user.uid;
+        // 상태 조회가 일시적으로 늦어도 사용자가 구독 창을 열어 다시 확인할 수 있게 한다.
+        updateStockSubscriptionButton();
+        refreshStockSubscriptionStatus();
         const userRef  = ref(db, `users/${userUID}`);
         if (!myData) myData = { cash: INITIAL_CASH, stocks: {} };
 
@@ -2752,7 +3056,11 @@ function updateAttendanceUI() {
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
         btn.style.boxShadow = '0 0 0 2px rgba(56,189,248,0.4)';
-        btn.innerText = `🎁 출석 보상 받기 (${nextStreak}일차)`;
+        const isSubscriber = stockSubscriptionState.subscribed === true;
+        const baseReward = DAILY_ATTENDANCE_REWARDS[nextStreak - 1];
+        btn.innerText = isSubscriber
+            ? `✨ 구독자 출석 2배 (${(baseReward * 2).toLocaleString()}원)`
+            : `🎁 출석 보상 받기 (${nextStreak}일차)`;
     }
 }
 
@@ -2767,7 +3075,8 @@ window.claimDailyAttendance = async function() {
     try {
         const result = await claimDailyAttendanceCallable({ watchedAd: false });
         const { streak, reward } = result.data;
-        alert(`🎁 ${streak}일차 출석 보상 ${reward.toLocaleString()}원을 받았어요!\n내일 또 오시면 ${streak >= 7 ? '1일차부터 다시' : (streak + 1) + '일차'} 보상이 기다려요.`);
+        const doubled = result.data?.doubled === true;
+        alert(`${doubled ? '✨ 구독자 2배 출석' : '🎁 출석 보상'} ${streak}일차 ${reward.toLocaleString()}원을 받았어요!\n내일 또 오시면 ${streak >= 7 ? '1일차부터 다시' : (streak + 1) + '일차'} 보상이 기다려요.`);
         // 실제 UI 갱신은 users/{uid} 실시간 구독이 처리한다.
     } catch (e) {
         alert(e?.message || '출석 보상을 받는 중 오류가 발생했습니다.');

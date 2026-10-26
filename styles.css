@@ -748,3 +748,27 @@
             transition: filter 0.15s, transform 0.15s;
         }
         .maintenance-link-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+        /* ── 통합 구독 인증 ── */
+        .stock-subscription-intro { margin: 0 0 13px; color: var(--text-sub); font-size: 13px; line-height: 1.65; }
+        .stock-subscription-benefits { margin: 0 0 15px; padding: 13px; border: 1px solid rgba(217,179,84,0.65); border-radius: 10px; background: rgba(217,179,84,0.1); color: #e7edf6; font-size: 12px; line-height: 1.65; }
+        .stock-subscription-benefits strong { display: block; margin-bottom: 6px; color: #f4d37a; font-size: 13px; }
+        .stock-subscription-benefits ul { margin: 0; padding-left: 18px; }
+        .stock-subscription-benefits li + li { margin-top: 5px; }
+        .stock-subscription-login-note { margin: 0 0 14px; padding: 13px; border: 1px solid #475569; border-radius: 10px; background: rgba(15,23,42,0.55); color: var(--text-sub); font-size: 12px; line-height: 1.65; }
+        .stock-subscription-login-note strong { display: block; color: #f8fafc; font-size: 13px; }
+        .stock-subscription-login-note p { margin: 5px 0 10px; }
+        .stock-subscription-login-note button, .stock-subscription-actions button, .stock-subscription-code-row button { border: 0; border-radius: 8px; padding: 9px 11px; background: #334155; color: #f8fafc; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .stock-subscription-login-note button { background: #38bdf8; color: #0f172a; }
+        #stock-subscription-request-section label { display: block; margin: 0 0 7px; color: #e2e8f0; font-size: 12px; font-weight: 700; }
+        #stock-subscription-soop-id { width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 11px; border: 1px solid #475569; border-radius: 9px; background: #0f172a; color: #f8fafc; font-size: 14px; }
+        .stock-subscription-steps { margin: 0 0 13px; padding-left: 19px; color: #cbd5e1; font-size: 12px; line-height: 1.7; }
+        .stock-subscription-code-section { margin: 0 0 14px; padding: 12px; border: 1px solid #475569; border-radius: 10px; background: rgba(15,23,42,0.55); color: var(--text-sub); font-size: 12px; line-height: 1.65; }
+        .stock-subscription-code-section p { margin: 0 0 10px; }
+        .stock-subscription-code-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-bottom: 10px; }
+        .stock-subscription-code-row code { flex: 1 1 130px; padding: 9px; border-radius: 8px; background: #020617; color: #f4d37a; font-size: 15px; font-weight: 800; letter-spacing: 1px; text-align: center; }
+        .stock-subscription-post-link { display: block; border-radius: 8px; padding: 10px; background: #d9b354; color: #1a1304; font-size: 12px; font-weight: 800; text-align: center; text-decoration: none; }
+        .stock-subscription-status { min-height: 20px; margin: 0 0 12px; color: #cbd5e1; font-size: 12px; line-height: 1.55; }
+        .stock-subscription-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .stock-subscription-actions #stock-subscription-submit-btn { background: #d9b354; color: #1a1304; }
+        @media (max-width: 430px) { .stock-subscription-actions button { flex: 1; } }

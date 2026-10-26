@@ -67,15 +67,25 @@ const claimDailyAttendance = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   // 광고 시청 2배 지급 — 우선 관리자 시범 운영 단계라, 일반 유저가 watchedAd를
   // true로 보내도 서버가 무시하고 기본 보상만 지급한다(클라이언트 UI가 관리자
   // 전용으로 숨겨져 있어도, 이 검증이 최종 방어선이다).
-  const isAdmin   = await checkIsAdmin(db, uid, auth.token?.email);
+  const [isAdmin, subscriptionSnapshot] = await Promise.all([
+    checkIsAdmin(db, uid, auth.token?.email),
+    db.ref(`streamerFanPageViewerSubscriptions/${uid}`).get(),
+  ]);
+  // 통합 구독은 고점체크·갤러리와 같은 원장으로 판정한다. 브라우저가 보내는
+  // 구독 여부는 신뢰하지 않고, 만료 시각을 서버에서 직접 확인한다.
+  const subscriptionExpiresAt = Number(subscriptionSnapshot.val()?.expiresAt) || 0;
+  const hasActiveSubscription = subscriptionExpiresAt > Date.now();
   const watchedAd = !!request.data?.watchedAd;
-  const reward    = (watchedAd && isAdmin) ? claimed.reward * 2 : claimed.reward;
+  // 일반 구독자는 광고 시청 없이 하루 한 번의 출석 보상을 2배로 받는다.
+  // 기존 관리자 시범 광고 보상은 운영 테스트를 위해 그대로 유지한다.
+  const doubled   = hasActiveSubscription || (watchedAd && isAdmin);
+  const reward    = doubled ? claimed.reward * 2 : claimed.reward;
 
   await creditUserCash(db, uid, reward);
   if (claimed.streak === DAILY_ATTENDANCE_REWARDS.length) {
     await grantAchievement(db, uid, "attendance_streak");
   }
-  return { ok: true, streak: claimed.streak, reward };
+  return { ok: true, streak: claimed.streak, reward, doubled, subscriptionExpiresAt };
 });
 
 module.exports = { claimDailyAttendance };
