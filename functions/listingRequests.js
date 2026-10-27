@@ -12,6 +12,38 @@ const { requireLinkedUser, requireNotInMaintenance, findStockIdByName, grantAchi
 const MAX_STOCK_NAME_LENGTH        = 12;
 const LISTING_REQUEST_COOLDOWN_MS  = 60 * 1000; // 매크로/도배 방지용 최소 재신청 간격
 
+// 종목 표기에는 "[크루명] 스트리머"처럼 방송 그룹 접두어가 붙는 경우가 많다.
+// 상장 신청에서 맨 이름만 입력하면 별도 종목으로 통과하던 문제를 막기 위해,
+// 대괄호 접두어를 제거한 대표 이름도 중복 검사에 쓴다. 실제 종목 표기는 바꾸지
+// 않으며, 이 값은 오직 상장 신청 중복 판정에만 사용한다.
+function normalizeListingName(name) {
+  return String(name || '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+    .replace(/^(?:\[[^\]\r\n]{1,30}\]\s*)+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase('ko-KR');
+}
+
+async function findExistingListingStock(db, stockName) {
+  const exactId = await findStockIdByName(db, stockName);
+  if (exactId) return exactId;
+
+  const normalizedName = normalizeListingName(stockName);
+  // 빈 문자열은 비교 대상이 될 수 없고, 한 글자 이름은 의도치 않은 충돌 위험이 커
+  // 기존의 완전 일치 검사만 적용한다.
+  if (normalizedName.length < 2) return null;
+
+  const snap = await db.ref('stocks').get();
+  const stocks = snap.val() || {};
+  for (const [stockId, stock] of Object.entries(stocks)) {
+    if (normalizeListingName(stock && stock.name) === normalizedName) return stockId;
+  }
+  return null;
+}
+
 const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -42,18 +74,22 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     throw new HttpsError("invalid-argument", `종목명은 ${MAX_STOCK_NAME_LENGTH}자 이하로 입력해주세요.`);
   }
 
-  const existingId = await findStockIdByName(db, stockName);
+  const existingId = await findExistingListingStock(db, stockName);
   if (existingId) {
-    throw new HttpsError("already-exists", "이미 상장된 종목명입니다.");
+    throw new HttpsError("already-exists", "이미 상장된 종목이거나 같은 스트리머의 다른 표기입니다.");
   }
 
   const snap = await db.ref("listingRequests").get();
   const data = snap.val() || {};
+  const normalizedName = normalizeListingName(stockName);
   const alreadyRequested = Object.values(data).some(
-    (r) => r.status === "pending" && r.stockName === stockName
+    (r) => r.status === "pending" && (
+      r.stockName === stockName ||
+      (normalizedName.length >= 2 && normalizeListingName(r.stockName) === normalizedName)
+    )
   );
   if (alreadyRequested) {
-    throw new HttpsError("already-exists", "이미 동일한 이름으로 대기 중인 상장 신청이 있습니다.");
+    throw new HttpsError("already-exists", "이미 같은 종목의 상장 신청이 대기 중입니다.");
   }
 
   const ref = db.ref("listingRequests").push();
@@ -93,9 +129,9 @@ async function actionApproveListingRequest(db, { requestId, stockName }) {
   if (!finalStockName) throw new HttpsError("invalid-argument", "종목명을 입력해주세요.");
 
   // 신청 이후 같은 이름이 이미 상장됐을 수 있으므로 승인 시점에 다시 확인한다.
-  const existingId = await findStockIdByName(db, finalStockName);
+  const existingId = await findExistingListingStock(db, finalStockName);
   if (existingId) {
-    throw new HttpsError("already-exists", "이미 상장된 종목명입니다. 이름을 확인하거나 신청을 거절해주세요.");
+    throw new HttpsError("already-exists", "이미 상장된 종목이거나 같은 스트리머의 다른 표기입니다. 이름을 확인하거나 신청을 거절해주세요.");
   }
 
   const newStockId = `id_${Date.now()}_0`;
@@ -129,4 +165,5 @@ module.exports = {
   actionListListingRequests,
   actionApproveListingRequest,
   actionRejectListingRequest,
+  normalizeListingName,
 };
