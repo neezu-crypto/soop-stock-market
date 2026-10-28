@@ -21,6 +21,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         submitCardBannerRequestCallable,
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
+        getStockSubscriptionBenefitsCallable,
+        claimMonthlyFreeTreasureChestCallable,
         submitCashChargeRequestCallable,
         submitTreasureChestPurchaseRequestCallable,
         openTreasureChestCallable,
@@ -42,13 +44,155 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         populatePromoStockDatalist();
         checkPromoStockListed();
         document.getElementById('promo-modal').classList.add('active');
+        refreshAllBenefitSummaries();
+        refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
     };
     window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
 
-    // ── 신청 폼 공통 유틸 (아이디/URL 검증, 이미지 미리보기, 기간→비용 계산, 제출) ──
+    // ── 신청 폼 공통 유틸 (아이디/URL 검증, 이미지 미리보기, 월 이용권 확인, 제출) ──
     const SOOP_ID_RE = /^[a-z0-9]{2,20}$/;
     const isValidSoopId = (v) => SOOP_ID_RE.test(v);
     const isValidUrl    = (v) => /^https?:\/\/.+/i.test(v);
+    let monthlyBenefitStatus = null;
+    const inMemoryRequestIds = new Map();
+
+    function makePayloadHash(value) {
+        let hash = 2166136261;
+        for (let i = 0; i < value.length; i++) {
+            hash ^= value.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(36);
+    }
+
+    function getIdempotentRequest(scope, payload) {
+        const key = `stock-benefit-request:${scope}:${makePayloadHash(JSON.stringify(payload))}`;
+        let id = '';
+        try { id = sessionStorage.getItem(key) || ''; } catch (_) { /* private browsing may block storage */ }
+        if (!id) id = inMemoryRequestIds.get(key) || '';
+        if (!id) {
+            id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+            inMemoryRequestIds.set(key, id);
+            try { sessionStorage.setItem(key, id); } catch (_) { /* in-memory retry remains available */ }
+        }
+        return { key, id };
+    }
+
+    function clearIdempotentRequest(key) {
+        inMemoryRequestIds.delete(key);
+        try { sessionStorage.removeItem(key); } catch (_) { /* storage is optional */ }
+    }
+
+    async function refreshMonthlyBenefitStatus() {
+        const response = await getStockSubscriptionBenefitsCallable();
+        monthlyBenefitStatus = response.data || null;
+        refreshAllBenefitSummaries();
+        return monthlyBenefitStatus;
+    }
+
+    function formatKstMonthReset(timestamp) {
+        if (!timestamp) return '다음 달';
+        return new Intl.DateTimeFormat('ko-KR', {
+            month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul',
+        }).format(new Date(timestamp)) + ' KST';
+    }
+
+    function remainingBenefit(product) {
+        return Number(monthlyBenefitStatus?.benefits?.[product]?.remaining) || 0;
+    }
+
+    function hasEnoughBenefit(product, units) {
+        if (!monthlyBenefitStatus) return false;
+        return monthlyBenefitStatus.eligible === true && remainingBenefit(product) >= units;
+    }
+
+    function setupBenefitSummary({ product, summaryId, unitInputId, submitBtnId, canSubmit = () => true }) {
+        const update = () => {
+            const summary = document.getElementById(summaryId);
+            const button = document.getElementById(submitBtnId);
+            const input = document.getElementById(unitInputId);
+            if (!summary || !input) return;
+            const benefit = monthlyBenefitStatus?.benefits?.[product];
+            const units = Math.max(1, parseInt(input.value, 10) || 1);
+            if (!monthlyBenefitStatus) {
+                summary.textContent = '이번 달 이용권을 확인하고 있어요.';
+                if (button) button.disabled = true;
+                return;
+            }
+            if (!monthlyBenefitStatus.eligible) {
+                summary.textContent = '활성 통합 구독 계정에서 이용할 수 있어요. 구독 인증을 확인해주세요.';
+            } else if (!benefit || benefit.remaining < units) {
+                summary.textContent = `이번 달 잔여 이용권이 부족합니다. 신청 ${units}${benefit?.unit || ''} · 잔여 ${benefit?.remaining || 0}${benefit?.unit || ''} · ${formatKstMonthReset(monthlyBenefitStatus.resetsAt)} 초기화`;
+            } else {
+                summary.textContent = `이번 달 ${benefit.label} ${benefit.limit}${benefit.unit} 중 ${benefit.remaining}${benefit.unit} 남음 · 신청 후 ${benefit.remaining - units}${benefit.unit} · ${formatKstMonthReset(monthlyBenefitStatus.resetsAt)} 초기화`;
+            }
+            if (button) button.disabled = !hasEnoughBenefit(product, units) || !canSubmit();
+        };
+        document.getElementById(unitInputId)?.addEventListener('input', update);
+        update();
+        return update;
+    }
+
+    function refreshAllBenefitSummaries() {
+        [updatePromoEntitlement, updateCardBannerEntitlement, updateChartAdEntitlement, updatePinEntitlement, updateRelayEntitlement]
+            .forEach((update) => { if (typeof update === 'function') update(); });
+        renderMonthlyChestClaimStatus();
+    }
+
+    function renderMonthlyChestClaimStatus() {
+        const status = document.getElementById('monthly-free-chest-status');
+        const claimBtn = document.getElementById('claim-monthly-free-chest-btn');
+        const subscriptionBtn = document.getElementById('monthly-free-chest-subscription-btn');
+        if (!status || !claimBtn || !subscriptionBtn) return;
+        claimBtn.hidden = true;
+        subscriptionBtn.hidden = true;
+        if (!monthlyBenefitStatus) {
+            status.textContent = '이번 달 무료 보물상자 상태를 확인하고 있어요.';
+            return;
+        }
+        if (!monthlyBenefitStatus.eligible) {
+            status.textContent = '통합 구독이 활성화된 보호 계정은 매월 보물상자 1개를 받을 수 있어요.';
+            subscriptionBtn.hidden = false;
+            return;
+        }
+        if (monthlyBenefitStatus.treasureChest?.claimed) {
+            status.textContent = '이번 달 무료 보물상자를 받았습니다. 보유 상자에서 언제든 열 수 있어요.';
+            return;
+        }
+        if (monthlyBenefitStatus.treasureChest?.pending) {
+            status.textContent = '이번 달 무료 보물상자 지급이 진행 중이거나 확인이 필요합니다. 아래 버튼으로 상태를 확인할 수 있어요.';
+            claimBtn.textContent = '🎁 무료 보물상자 지급 확인';
+            claimBtn.hidden = false;
+            return;
+        }
+        status.textContent = `이번 달 무료 보물상자 1개를 받을 수 있어요. ${formatKstMonthReset(monthlyBenefitStatus.resetsAt)} 초기화되며 이월되지 않습니다.`;
+        claimBtn.textContent = '🎁 이번 달 무료 보물상자 1개 받기';
+        claimBtn.hidden = false;
+    }
+
+    document.getElementById('claim-monthly-free-chest-btn')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        button.textContent = '지급 중...';
+        try {
+            const response = await claimMonthlyFreeTreasureChestCallable();
+            await refreshMonthlyBenefitStatus();
+            window.alert(response.data?.alreadyClaimed
+                ? '이번 달 무료 보물상자는 이미 받았어요.'
+                : '이번 달 무료 보물상자 1개를 지급했어요.');
+        } catch (error) {
+            window.alert(error?.message || '무료 보물상자를 받지 못했습니다. 다시 시도해주세요.');
+            try { await refreshMonthlyBenefitStatus(); } catch (_) { /* keep the last known state */ }
+        } finally {
+            button.disabled = false;
+            button.textContent = '🎁 이번 달 무료 보물상자 1개 받기';
+            renderMonthlyChestClaimStatus();
+        }
+    });
+
+    document.getElementById('monthly-free-chest-subscription-btn')?.addEventListener('click', () => {
+        window.openStockSubscriptionModal?.();
+    });
 
     // 자산충전/홍보/중계방/고정노출 등 로그인(계정 보호) 유저 전용 기능의
     // 공통 게이트 — 실제 차단은 서버(requireLinkedUser)가 하지만, 폼을 다
@@ -59,21 +203,6 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         if (isLinked) return true;
         window.openAccountProtectModal();
         return false;
-    }
-
-    // 기간(일/시간) 입력에 맞춰 "단위 × 단가" 필요 별풍선 개수를 실시간으로 표시
-    function setupCostCalculator({ unitInputId, costElId, pricePerDay, unitSuffix = '개' }) {
-        function update() {
-            const unitInput = document.getElementById(unitInputId);
-            const costEl    = document.getElementById(costElId);
-            if (!unitInput || !costEl) return;
-            const units = parseInt(unitInput.value, 10);
-            const cost = Number.isInteger(units) && units > 0 ? units * pricePerDay : 0;
-            costEl.innerText = `${cost.toLocaleString()}${unitSuffix}`;
-        }
-        document.getElementById(unitInputId)?.addEventListener('input', update);
-        update();
-        return update;
     }
 
     // 입력값(아이디 또는 이미지 URL)에 맞춰 미리보기 이미지를 로드/표시
@@ -104,7 +233,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
 
     // 검증 → 버튼 비활성화 → 서버 호출 → 안내 → 필드 초기화 → 모달 닫기의 공통 뼈대.
     // validateAndBuild()는 유효하면 payload 객체를, 무효하면(이미 alert를 띄운 뒤) null을 반환한다.
-    async function submitRequestForm({ submitBtnId, submitLabel, validateAndBuild, callable, onSuccess, resetFn, closeFn }) {
+    async function submitRequestForm({ submitBtnId, submitLabel, validateAndBuild, callable, onSuccess, resetFn, closeFn, requestScope }) {
         // 점검모드 중엔 여기 모이는 8종 셀프 신청(배너/차트배너/고정노출/중계방/
         // 상장신청/자산충전/동결해제 등) 전부를 한 곳에서 막는다 — index.html이
         // window.blockIfMaintenance를 노출해둔다.
@@ -113,18 +242,26 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         const submitBtn = document.getElementById(submitBtnId);
         const payload = validateAndBuild();
         if (!payload) return;
+        const requestIdentity = requestScope ? getIdempotentRequest(requestScope, payload) : null;
+        if (requestIdentity) payload.requestId = requestIdentity.id;
 
         submitBtn.disabled = true;
         submitBtn.innerText = '신청 중...';
         try {
             const result = await callable(payload);
-            onSuccess(result);
+            if (requestIdentity) clearIdempotentRequest(requestIdentity.key);
+            await onSuccess(result);
             if (resetFn) resetFn();
             if (closeFn) closeFn();
         } catch (e) {
+            if (requestIdentity && e?.code === 'functions/already-exists') clearIdempotentRequest(requestIdentity.key);
             alert(e?.message || '신청 중 오류가 발생했습니다.');
+            if (requestScope) {
+                try { await refreshMonthlyBenefitStatus(); } catch (_) { /* retain the last known status */ }
+            }
         } finally {
-            submitBtn.disabled = false;
+            if (requestScope) refreshAllBenefitSummaries();
+            else submitBtn.disabled = false;
             submitBtn.innerText = submitLabel;
         }
     }
@@ -134,10 +271,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     // 맞는지" 검수해야 했다. 이제는 최상단 고정 노출 신청과 동일하게 이미
     // 상장된 종목명만 받고(datalist 자동완성 + 실시간 검증), 상장되지 않은
     // 이름이면 제출을 막고 종목 상장 신청부터 하도록 안내한다 — 관리자는
-    // 노출 기간/비용만 보면 되므로 검수 부담이 크게 줄어든다.
-    const BANNER_BALLOON_PRICE_PER_DAY = 10; // 1일당 필요한 별풍선 개수 (서버 값과 동일하게 유지)
-
-    const updatePromoCost = setupCostCalculator({ unitInputId: 'promo-days', costElId: 'promo-cost', pricePerDay: BANNER_BALLOON_PRICE_PER_DAY });
+    // 홍보 내용과 신청 자격을 중심으로 검수할 수 있다.
+    const updatePromoEntitlement = setupBenefitSummary({ product: 'banner', summaryId: 'promo-entitlement-summary', unitInputId: 'promo-days', submitBtnId: 'promo-submit-btn', canSubmit: () => { const name = document.getElementById('promo-stock-name')?.value.trim() || ''; return !name || getAllStocks().some((stock) => stock.name === name); } });
 
     const updatePromoPreview = setupImagePreview({
         inputId: 'promo-streamer-id',
@@ -169,7 +304,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         const submitBtn  = document.getElementById('promo-submit-btn');
         const isListed   = name && getAllStocks().some(s => s.name === name);
         if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
-        if (submitBtn) submitBtn.disabled    = name ? !isListed : false; // 빈 입력은 제출 시점에 별도 안내
+        if (submitBtn) submitBtn.disabled = (name ? !isListed : false) || !hasEnoughBenefit('banner', parseInt(document.getElementById('promo-days')?.value, 10) || 1);
     }
     document.getElementById('promo-stock-name')?.addEventListener('input', checkPromoStockListed);
 
@@ -177,6 +312,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         await submitRequestForm({
             submitBtnId: 'promo-submit-btn',
             submitLabel: '신청하기',
+            requestScope: 'banner',
             validateAndBuild() {
                 const nickname   = document.getElementById('promo-stock-name').value.trim();
                 const streamerId = document.getElementById('promo-streamer-id').value.trim().toLowerCase();
@@ -191,16 +327,16 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 return { nickname, streamerId, days };
             },
             callable: submitBannerRequestCallable,
-            onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 배너를 등록합니다.`);
-                window.open(TREASURE_CHEST_DONATION_URL, '_blank');
+            async onSuccess(result) {
+                alert(`✅ 신청이 접수됐습니다. 이번 달 우측 배너 이용권 ${result.data.remaining}일이 남았습니다.\n관리자 승인 후 노출됩니다.`);
+                await refreshMonthlyBenefitStatus();
             },
             resetFn() {
                 document.getElementById('promo-stock-name').value = '';
                 document.getElementById('promo-streamer-id').value = '';
                 document.getElementById('promo-days').value = '7';
                 updatePromoPreview();
-                updatePromoCost();
+                updatePromoEntitlement();
                 checkPromoStockListed();
             },
             closeFn: window.closePromoModal,
@@ -211,8 +347,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     // 재사용하되, "해당 종목을 10주 이상 보유했는지"를 클라이언트에서도
     // 미리 확인해 보여준다 — 실제 차단은 서버(submitCardBannerRequest)가
     // 최종 판정하므로 이건 어디까지나 UX 편의용 사전 안내다.
-    const CARD_BANNER_BALLOON_PRICE_PER_DAY = 10; // 서버 값과 동일하게 유지(표시용)
     const CARD_BANNER_MIN_HOLDING_QTY = 10;
+    const updateCardBannerEntitlement = setupBenefitSummary({ product: 'cardBanner', summaryId: 'card-banner-entitlement-summary', unitInputId: 'card-banner-days', submitBtnId: 'card-banner-submit-btn', canSubmit: () => { const name = document.getElementById('card-banner-stock-name')?.value.trim() || ''; if (!name) return true; const stock = getAllStocks().find((item) => item.name === name); return !!stock && ((getMyData()?.stocks || {})[stock.id]?.qty || 0) >= CARD_BANNER_MIN_HOLDING_QTY; } });
 
     window.openCardBannerModal = (prefillStockName) => {
         if (!requireLoginOrPrompt()) return;
@@ -221,10 +357,10 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         if (prefillStockName && nameInput) nameInput.value = prefillStockName;
         checkCardBannerEligibility();
         document.getElementById('card-banner-modal').classList.add('active');
+        refreshAllBenefitSummaries();
+        refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
     };
     window.closeCardBannerModal = () => document.getElementById('card-banner-modal').classList.remove('active');
-
-    const updateCardBannerCost = setupCostCalculator({ unitInputId: 'card-banner-days', costElId: 'card-banner-cost', pricePerDay: CARD_BANNER_BALLOON_PRICE_PER_DAY });
 
     const updateCardBannerPreview = setupImagePreview({
         inputId: 'card-banner-streamer-id',
@@ -260,7 +396,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         if (!name) {
             warning.style.display = 'none';
             eligBox.style.display = 'none';
-            submitBtn.disabled = false;
+            submitBtn.disabled = !hasEnoughBenefit('cardBanner', parseInt(document.getElementById('card-banner-days')?.value, 10) || 1);
             return;
         }
 
@@ -287,7 +423,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             eligBox.style.color = '#fca5a5';
             eligBox.innerText = `🔒 현재 보유: ${myQty}주 — ${CARD_BANNER_MIN_HOLDING_QTY}주 이상 필요`;
         }
-        submitBtn.disabled = !isEligible;
+        submitBtn.disabled = !isEligible || !hasEnoughBenefit('cardBanner', parseInt(document.getElementById('card-banner-days')?.value, 10) || 1);
     }
     document.getElementById('card-banner-stock-name')?.addEventListener('input', checkCardBannerEligibility);
 
@@ -295,6 +431,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         await submitRequestForm({
             submitBtnId: 'card-banner-submit-btn',
             submitLabel: '신청하기',
+            requestScope: 'cardBanner',
             validateAndBuild() {
                 const nickname   = document.getElementById('card-banner-stock-name').value.trim();
                 const streamerId = document.getElementById('card-banner-streamer-id').value.trim().toLowerCase();
@@ -315,21 +452,23 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 return { nickname, streamerId, days };
             },
             callable: submitCardBannerRequestCallable,
-            onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 종목 카드에 홍보를 등록합니다.\n\n⚠️ 등록 후 보유 수량이 10주 미만으로 떨어지면 자동으로 삭제됩니다.`);
-                window.open(TREASURE_CHEST_DONATION_URL, '_blank');
+            async onSuccess(result) {
+                alert(`✅ 신청이 접수됐습니다. 이번 달 카드 배너 이용권 ${result.data.remaining}일이 남았습니다.\n관리자 승인 후 노출됩니다. 보유 수량이 10주 미만으로 떨어지면 자동 종료되고 이용권은 반환되지 않습니다.`);
+                await refreshMonthlyBenefitStatus();
             },
             resetFn() {
                 document.getElementById('card-banner-stock-name').value = '';
                 document.getElementById('card-banner-streamer-id').value = '';
                 document.getElementById('card-banner-days').value = '7';
                 updateCardBannerPreview();
-                updateCardBannerCost();
+                updateCardBannerEntitlement();
                 checkCardBannerEligibility();
             },
             closeFn: window.closeCardBannerModal,
         });
     };
+
+    const updateChartAdEntitlement = setupBenefitSummary({ product: 'chartBanner', summaryId: 'chart-ad-entitlement-summary', unitInputId: 'chart-ad-days', submitBtnId: 'chart-ad-submit-btn', canSubmit: () => { const name = document.getElementById('chart-ad-nickname')?.value.trim() || ''; return !name || getAllStocks().some((stock) => stock.name === name); } });
 
     window.openChartAdModal  = () => {
         if (!requireLoginOrPrompt()) return;
@@ -342,6 +481,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         populateChartAdStockDatalist();
         checkChartAdStockListed();
         document.getElementById('chart-ad-modal').classList.add('active');
+        refreshAllBenefitSummaries();
+        refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
     };
     window.closeChartAdModal = () => document.getElementById('chart-ad-modal').classList.remove('active');
 
@@ -365,7 +506,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         const submitBtn  = document.getElementById('chart-ad-submit-btn');
         const isListed   = name && getAllStocks().some(s => s.name === name);
         if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
-        if (submitBtn) submitBtn.disabled    = name ? !isListed : false;
+        if (submitBtn) submitBtn.disabled    = (name ? !isListed : false) || !hasEnoughBenefit('chartBanner', parseInt(document.getElementById('chart-ad-days')?.value, 10) || 1);
     }
     document.getElementById('chart-ad-nickname')?.addEventListener('input', checkChartAdStockListed);
 
@@ -373,17 +514,18 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     // 우측 홍보 배너와 동일하게 자유 닉네임 대신 이미 상장된 종목명만 받는다
     // (datalist 자동완성 + 실시간 검증) — 상장 여부가 유일한 검수 포인트였으므로
     // 신청 시점에 걸러지면 관리자 승인 없이 바로 등록할 수 있다.
-    const RELAY_ROOM_BALLOON_PRICE_PER_HOUR = 1; // 1시간당 필요한 별풍선 개수 (서버 값과 동일하게 유지)
+    const updateRelayEntitlement = setupBenefitSummary({ product: 'relayRoom', summaryId: 'relay-entitlement-summary', unitInputId: 'relay-hours', submitBtnId: 'relay-submit-btn', canSubmit: () => { const name = document.getElementById('relay-stock-name')?.value.trim() || ''; return !name || getAllStocks().some((stock) => stock.name === name); } });
 
     window.openRelayRoomModal  = () => {
         if (!requireLoginOrPrompt()) return;
         populateRelayStockDatalist();
         checkRelayStockListed();
         document.getElementById('relay-room-modal').classList.add('active');
+        refreshAllBenefitSummaries();
+        refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
     };
     window.closeRelayRoomModal = () => document.getElementById('relay-room-modal').classList.remove('active');
 
-    const updateRelayCost = setupCostCalculator({ unitInputId: 'relay-hours', costElId: 'relay-cost', pricePerDay: RELAY_ROOM_BALLOON_PRICE_PER_HOUR });
 
     const updateRelayPreview = setupImagePreview({
         inputId: 'relay-streamer-id',
@@ -413,7 +555,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         const submitBtn  = document.getElementById('relay-submit-btn');
         const isListed   = name && getAllStocks().some(s => s.name === name);
         if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
-        if (submitBtn) submitBtn.disabled    = name ? !isListed : false;
+        if (submitBtn) submitBtn.disabled    = (name ? !isListed : false) || !hasEnoughBenefit('relayRoom', parseInt(document.getElementById('relay-hours')?.value, 10) || 1);
     }
     document.getElementById('relay-stock-name')?.addEventListener('input', checkRelayStockListed);
 
@@ -421,6 +563,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         await submitRequestForm({
             submitBtnId: 'relay-submit-btn',
             submitLabel: '신청하기',
+            requestScope: 'relayRoom',
             validateAndBuild() {
                 const stockName  = document.getElementById('relay-stock-name').value.trim();
                 const streamerId = document.getElementById('relay-streamer-id').value.trim().toLowerCase();
@@ -435,16 +578,16 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 return { stockName, streamerId, hours };
             },
             callable: submitRelayRoomRequestCallable,
-            onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 중계방에 등록합니다.`);
-                window.open(TREASURE_CHEST_DONATION_URL, '_blank');
+            async onSuccess(result) {
+                alert(`✅ 신청이 접수됐습니다. 이번 달 중계방 홍보 이용권 ${result.data.remaining}시간이 남았습니다.\n관리자 승인 후 등록됩니다.`);
+                await refreshMonthlyBenefitStatus();
             },
             resetFn() {
                 document.getElementById('relay-stock-name').value = '';
                 document.getElementById('relay-streamer-id').value = '';
                 document.getElementById('relay-hours').value = '1';
                 updateRelayPreview();
-                updateRelayCost();
+                updateRelayEntitlement();
                 checkRelayStockListed();
             },
             closeFn: window.closeRelayRoomModal,
@@ -465,11 +608,15 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             .join('');
     }
 
+    const updatePinEntitlement = setupBenefitSummary({ product: 'pin', summaryId: 'pin-entitlement-summary', unitInputId: 'pin-hours', submitBtnId: 'pin-submit-btn', canSubmit: () => { const name = document.getElementById('pin-stock-name')?.value.trim() || ''; return !name || getAllStocks().some((stock) => stock.name === name); } });
+
     window.openPinModal = () => {
         if (!requireLoginOrPrompt()) return;
         populatePinStockDatalist();
         checkPinStockListed();
         document.getElementById('pin-modal').classList.add('active');
+        refreshAllBenefitSummaries();
+        refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
     };
     window.closePinModal = () => document.getElementById('pin-modal').classList.remove('active');
 
@@ -479,17 +626,16 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         const submitBtn  = document.getElementById('pin-submit-btn');
         const isListed   = name && getAllStocks().some(s => s.name === name);
         if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
-        if (submitBtn) submitBtn.disabled    = name ? !isListed : false;
+        if (submitBtn) submitBtn.disabled    = (name ? !isListed : false) || !hasEnoughBenefit('pin', parseInt(document.getElementById('pin-hours')?.value, 10) || 1);
     }
     document.getElementById('pin-stock-name')?.addEventListener('input', checkPinStockListed);
 
-    const PIN_BALLOON_PRICE_PER_HOUR = 1; // 1시간당 필요한 별풍선 개수 (서버 값과 동일하게 유지)
-    const updatePinCost = setupCostCalculator({ unitInputId: 'pin-hours', costElId: 'pin-cost', pricePerDay: PIN_BALLOON_PRICE_PER_HOUR });
 
     window.submitPinRequest = async function() {
         await submitRequestForm({
             submitBtnId: 'pin-submit-btn',
             submitLabel: '신청하기',
+            requestScope: 'pin',
             validateAndBuild() {
                 const stockName = document.getElementById('pin-stock-name').value.trim();
                 const hours     = parseInt(document.getElementById('pin-hours').value, 10);
@@ -502,14 +648,14 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 return { stockName, hours };
             },
             callable: submitPinRequestCallable,
-            onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 최상단에 고정 노출합니다.`);
-                window.open(TREASURE_CHEST_DONATION_URL, '_blank');
+            async onSuccess(result) {
+                alert(`✅ 신청이 접수됐습니다. 이번 달 최상단 고정 이용권 ${result.data.remaining}시간이 남았습니다.\n관리자 승인 후 고정 노출됩니다.`);
+                await refreshMonthlyBenefitStatus();
             },
             resetFn() {
                 document.getElementById('pin-stock-name').value = '';
                 document.getElementById('pin-hours').value = '1';
-                updatePinCost();
+                updatePinEntitlement();
                 checkPinStockListed();
             },
             closeFn: window.closePinModal,
@@ -605,14 +751,13 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     const TREASURE_CHEST_MAX_BUY_COUNT        = 200;
     const TREASURE_CHEST_BULK_BONUS_THRESHOLD = 10;
     const TREASURE_CHEST_BULK_BONUS_RATE      = 0.10;
-    // 2026-09-09부터 배너/카드배너/차트배너/고정노출/중계방 신청도 이 링크를
-    // 재사용한다 — 전부 관리자(skftodwocks2) 방송으로 실제 별풍선 후원이
-    // 필요한 방식으로 되돌아갔기 때문.
+    // 기존 별풍선 구매형 보물상자 신청에서만 사용하는 후원 링크.
     const TREASURE_CHEST_DONATION_URL = 'https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station';
 
     window.openAssetChargeModal = () => {
         if (!requireLoginOrPrompt()) return;
         document.getElementById('asset-charge-modal').classList.add('active');
+        refreshMonthlyBenefitStatus().catch((error) => console.warn('월 무료 보물상자 조회 실패:', error));
     };
     window.closeAssetChargeModal = () => document.getElementById('asset-charge-modal').classList.remove('active');
 
@@ -768,9 +913,6 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     };
 
     // ── 차트 하단 배너 신청 (이미지/링크 직접 입력 → 실시간 미리보기 → 신청) ──
-    const CHART_BANNER_BALLOON_PRICE_PER_DAY = 10; // 1일당 필요한 별풍선 개수 (서버 값과 동일하게 유지)
-
-    const updateChartAdCost = setupCostCalculator({ unitInputId: 'chart-ad-days', costElId: 'chart-ad-cost', pricePerDay: CHART_BANNER_BALLOON_PRICE_PER_DAY });
 
     const updateChartAdPreview = setupImagePreview({
         inputId: 'chart-ad-img-url',
@@ -786,6 +928,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         await submitRequestForm({
             submitBtnId: 'chart-ad-submit-btn',
             submitLabel: '신청하기',
+            requestScope: 'chartBanner',
             validateAndBuild() {
                 if (!pendingChartAdStockId) { alert('종목의 차트를 먼저 열어주세요.'); return null; }
                 const nickname   = document.getElementById('chart-ad-nickname').value.trim();
@@ -804,9 +947,9 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 return { stockId: pendingChartAdStockId, nickname, streamerId, bannerImg, days };
             },
             callable: submitChartBannerRequestCallable,
-            onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 후원과 배너 이미지를 확인한 뒤 노출합니다.`);
-                window.open(TREASURE_CHEST_DONATION_URL, '_blank');
+            async onSuccess(result) {
+                alert(`✅ 신청이 접수됐습니다. 이번 달 차트 배너 이용권 ${result.data.remaining}일이 남았습니다.\n관리자 승인 후 노출됩니다.`);
+                await refreshMonthlyBenefitStatus();
             },
             resetFn() {
                 document.getElementById('chart-ad-nickname').value = '';
@@ -814,7 +957,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 document.getElementById('chart-ad-img-url').value = '';
                 document.getElementById('chart-ad-days').value = '7';
                 updateChartAdPreview();
-                updateChartAdCost();
+                updateChartAdEntitlement();
                 checkChartAdStockListed();
                 pendingChartAdStockId = null;
             },

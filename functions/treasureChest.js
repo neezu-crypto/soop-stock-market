@@ -14,6 +14,7 @@ const {
   creditUserCash,
   assertNotBanned
 } = require("./common");
+const { claimMonthlyFreeTreasureChest: claimMonthlyFreeTreasureChestForUser } = require("./subscriptionBenefits");
 
 // ══════════════════════════════════════════════════════════
 // 보물상자 구매 신청 — cashCharge.js와 동일한 패턴(후원창에서 실제 후원 →
@@ -69,6 +70,16 @@ const submitTreasureChestPurchaseRequest = onCall({ cors: true, timeoutSeconds: 
   });
 
   return { ok: true, id: ref.key, ...purchase };
+});
+
+const claimMonthlyFreeTreasureChest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  const auth = request.auth;
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  const db = admin.database();
+  await requireLinkedUser(db, auth.uid, auth);
+  await requireNotInMaintenance(db, auth);
+  await assertNotBanned(db, auth);
+  return claimMonthlyFreeTreasureChestForUser(db, auth.uid, Date.now(), auth);
 });
 
 /**
@@ -162,6 +173,7 @@ async function actionRejectTreasureChestRequest(db, { requestId }) {
 
 module.exports = {
   submitTreasureChestPurchaseRequest,
+  claimMonthlyFreeTreasureChest,
   openTreasureChest,
   actionListTreasureChestRequests,
   actionApproveTreasureChestRequest,

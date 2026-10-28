@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261029-mobile-devbar-v6">
+    <link rel="stylesheet" href="styles.css?v=20261029-mobile-devbar-v7">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -208,7 +208,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 거래소 우측 상단 배너</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
-            <li>💰 <b>비용:</b> 1일 당 별풍선 10개 (후원창에서 후원 → 관리자 확인 후 적용)</li>
+            <li>🎁 <b>이용권:</b> 통합 구독자에게 매월 7일 제공</li>
             <li>✅ <b>대상:</b> 이미 상장된 종목만 신청 가능 (검색해서 선택)</li>
         </ul>
 
@@ -236,11 +236,11 @@
                     style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
                 <span style="font-size:13px;color:#94a3b8;">일 (최대 7일)</span>
             </div>
-            <div style="text-align:right;font-size:13px;color:#94a3b8;">필요 별풍선: <b id="promo-cost" style="color:#38bdf8;">70개</b></div>
+            <div id="promo-entitlement-summary" class="subscription-benefit-summary" role="status" aria-live="polite">이번 달 이용권을 확인하고 있어요.</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청 접수 후 <b style="color:#38bdf8;">후원창에서 위 별풍선 개수만큼 후원</b>해주세요. 관리자가 후원을 확인하고 승인하면 배너가 등록됩니다.<br>
+            신청할 기간만큼 이번 달 이용권이 차감됩니다. 관리자가 검수해 승인한 시점부터 노출되며, 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
             직접 제작한 이미지를 쓰고 싶다면 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> 으로 문의해주세요. (클릭 시 이메일 주소 복사)
         </div>
 
@@ -258,7 +258,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 종목 카드 안 원형 자리(PC는 종목명 옆, 모바일은 미니 차트 위에 겹쳐서) — 스크롤할 때마다 보이는 가장 눈에 띄는 자리예요. 빈 카드에서 📢 아이콘을 눌러도 바로 신청할 수 있어요</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
-            <li>💰 <b>비용:</b> 1일 당 별풍선 10개 (후원창에서 후원 → 관리자 확인 후 적용)</li>
+            <li>🎁 <b>이용권:</b> 통합 구독자에게 매월 7일 제공</li>
             <li>🔒 <b>신청 자격:</b> 해당 종목을 <b style="color:#38bdf8;">10주 이상 보유</b>한 유저만 신청 가능 — 실제 이 종목의 "소유주"만 홍보할 수 있게 하기 위함</li>
         </ul>
 
@@ -291,11 +291,11 @@
                     style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
                 <span style="font-size:13px;color:#94a3b8;">일 (최대 7일)</span>
             </div>
-            <div style="text-align:right;font-size:13px;color:#94a3b8;">필요 별풍선: <b id="card-banner-cost" style="color:#38bdf8;">70개</b></div>
+            <div id="card-banner-entitlement-summary" class="subscription-benefit-summary" role="status" aria-live="polite">이번 달 이용권을 확인하고 있어요.</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청 접수 후 <b style="color:#38bdf8;">후원창에서 위 별풍선 개수만큼 후원</b>해주세요. 관리자가 후원을 확인하고 승인하면 카드 배너가 등록됩니다.
+            신청할 기간만큼 이번 달 이용권이 차감됩니다. 관리자가 검수해 승인한 시점부터 노출됩니다. 보유량이 10주 미만으로 떨어져 자동 종료되면 남은 이용권은 반환되지 않습니다.
         </div>
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
@@ -476,12 +476,11 @@
                     style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
                 <span style="font-size:13px;color:#94a3b8;">일 (최대 7일)</span>
             </div>
-            <div style="text-align:right;font-size:13px;color:#94a3b8;">필요 별풍선: <b id="chart-ad-cost" style="color:#38bdf8;">70개</b></div>
+            <div id="chart-ad-entitlement-summary" class="subscription-benefit-summary" role="status" aria-live="polite">이번 달 이용권을 확인하고 있어요.</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            📊 해당 종목 차트창을 여는 유저에게 단독 노출되는 배너입니다 (우측 배너와 별도 운영, 1일당 별풍선 10개).<br>
-            신청 접수 후 <b style="color:#38bdf8;">후원창에서 위 별풍선 개수만큼 후원</b>해주세요. 관리자가 후원과 배너 이미지를 확인하고 승인하면 노출됩니다.<br>
+            📊 해당 종목 차트창을 여는 유저에게 단독 노출되는 배너입니다. 신청할 기간만큼 이번 달 이용권이 차감되고, 관리자가 이미지와 내용을 검수해 승인한 시점부터 노출됩니다. 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 
@@ -504,8 +503,13 @@
 <div id="asset-charge-modal" class="promo-modal-overlay" style="z-index:4000;">
     <div class="promo-modal-content" style="max-width:380px;text-align:center;">
         <div class="promo-modal-header"><h2>💰 자산 충전</h2></div>
+        <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-bottom:14px;text-align:left;">
+            <div id="monthly-free-chest-status" role="status" aria-live="polite" style="font-size:13px;color:#cbd5e1;line-height:1.6;">이번 달 무료 보물상자 상태를 확인하고 있어요.</div>
+            <button id="claim-monthly-free-chest-btn" type="button" hidden style="width:100%;margin-top:9px;background:#38bdf8;color:#0f172a;border:0;padding:11px;border-radius:9px;font-weight:800;cursor:pointer;">🎁 이번 달 무료 보물상자 1개 받기</button>
+            <button id="monthly-free-chest-subscription-btn" type="button" hidden style="width:100%;margin-top:9px;background:#334155;color:#f8fafc;border:0;padding:10px;border-radius:9px;font-weight:700;cursor:pointer;">통합 구독 인증하기</button>
+        </div>
         <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
-            <li>🎁 <b>보물상자 구매:</b> 후원창(별풍선 33개/개)으로 구매 → 관리자 확인 후 지급</li>
+            <li>🎁 <b>추가 보물상자:</b> 후원창(별풍선 33개/개)으로 신청 → 관리자 확인 후 지급</li>
             <li>📦 <b>보물상자 열기:</b> 보유한 상자를 열어 95% 50만원 / 5% 500만원 획득</li>
         </ul>
         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -639,6 +643,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 종목 리스트 최상단 (가격순 정렬과 무관하게 항상 맨 위)</li>
             <li>🔢 <b>슬롯:</b> 동시 최대 3개 종목만 고정 가능</li>
+            <li>🎁 <b>이용권:</b> 통합 구독자에게 매월 12시간 제공</li>
             <li>⏱ <b>기간:</b> 시간 단위 신청, 최대 12시간</li>
         </ul>
 
@@ -656,11 +661,11 @@
                     style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
                 <span style="font-size:13px;color:#94a3b8;">시간 (최대 12시간)</span>
             </div>
-            <div style="text-align:right;font-size:13px;color:#94a3b8;">필요 별풍선: <b id="pin-cost" style="color:#38bdf8;">1개</b></div>
+            <div id="pin-entitlement-summary" class="subscription-benefit-summary" role="status" aria-live="polite">이번 달 이용권을 확인하고 있어요.</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청 접수 후 <b style="color:#38bdf8;">후원창에서 위 별풍선 개수만큼 후원</b>해주세요. 관리자가 후원을 확인하고 승인하면 최상단에 고정 노출됩니다. 슬롯(3개)이 가득 찬 경우 승인이 지연될 수 있습니다.<br>
+            신청할 시간만큼 이번 달 이용권이 차감됩니다. 관리자가 승인한 시점부터 고정되며, 슬롯 3개가 가득 차면 승인이 늦어질 수 있어요. 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 
@@ -1003,7 +1008,7 @@
             <li>📍 <b>위치:</b> 종목 리스트 위 "중계방" 영역</li>
             <li>🔢 <b>인원:</b> 동시 최대 3명까지만 등록 가능</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
-            <li>💰 <b>비용:</b> 1시간 당 별풍선 1개 (후원창에서 후원 → 관리자 확인 후 적용)</li>
+            <li>🎁 <b>이용권:</b> 통합 구독자에게 매월 8시간 제공</li>
             <li>⏱ <b>기간:</b> 최소 1시간 ~ 최대 8시간</li>
             <li>🚫 <b>중복:</b> 이미 진행 중인 아이디는 종료 후에만 재신청 가능</li>
             <li>✅ <b>대상:</b> 이미 상장된 종목만 신청 가능 (검색해서 선택)</li>
@@ -1033,11 +1038,11 @@
                     style="width:60px;background:transparent;border:none;color:#38bdf8;font-size:15px;font-weight:bold;outline:none;">
                 <span style="font-size:13px;color:#94a3b8;">시간 (최대 8시간)</span>
             </div>
-            <div style="text-align:right;font-size:13px;color:#94a3b8;">필요 별풍선: <b id="relay-cost" style="color:#38bdf8;">1개</b></div>
+            <div id="relay-entitlement-summary" class="subscription-benefit-summary" role="status" aria-live="polite">이번 달 이용권을 확인하고 있어요.</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청 접수 후 <b style="color:#38bdf8;">후원창에서 위 별풍선 개수만큼 후원</b>해주세요. 관리자가 후원을 확인하고 승인하면 중계방에 등록됩니다.<br>
+            신청할 시간만큼 이번 달 이용권이 차감됩니다. 관리자가 승인한 시점부터 중계방에 노출됩니다. 중계방이 이미 진행 중이거나 3개 슬롯이 가득 차면 승인이 지연될 수 있어요. 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 
@@ -1088,7 +1093,9 @@
         <div class="stock-subscription-benefits" role="note">
             <strong>인증 후 이용할 수 있는 서비스</strong>
             <ul>
-                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장</span></li>
+                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장 · 매월 홍보 이용권 5종과 무료 보물상자 1개</span></li>
+                <li><b>홍보 이용권</b><span>우측 배너 7일 · 차트 배너 7일 · 카드 배너 7일 · 최상단 고정 12시간 · 중계방 8시간</span></li>
+                <li><b>초기화와 검수</b><span>KST 매월 1일 초기화 · 미사용분 이월 없음 · 신청 후 관리자 승인 시 노출 시작</span></li>
                 <li><b>고점체크</b><span>기간별 최고 시청 순간 분석 · 같은 날 2명 비교 · 키워드로 여러 스트리머 비교</span></li>
                 <li><b>스트리머 갤러리</b><span>모든 스트리머의 잠긴 이미지 원본 열람 및 다운로드</span></li>
             </ul>
@@ -1386,7 +1393,7 @@ import { getFunctions, httpsCallable }
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app-check.js";
 import { initChartModal } from "./js/chartModal.js";
-import { initPromotions } from "./js/promotions.js";
+import { initPromotions } from "./js/promotions.js?v=20261029-subscription-benefits1";
 import { initAssetHistory } from "./js/assetHistory.js";
 
 (function () {
@@ -1522,6 +1529,8 @@ const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
 const heartbeatCallable = httpsCallable(functions, 'heartbeat');
 const buyPlayTimeCallable = httpsCallable(functions, 'buyPlayTime');
 const submitRelayRoomRequestCallable = httpsCallable(functions, 'submitRelayRoomRequest');
+const getStockSubscriptionBenefitsCallable = httpsCallable(functions, 'getStockSubscriptionBenefits');
+const claimMonthlyFreeTreasureChestCallable = httpsCallable(functions, 'claimMonthlyFreeTreasureChest');
 const unfreezeWithCashCallable = httpsCallable(functions, 'unfreezeWithCash');
 const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUnfreezeDonationRequest');
 const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequest');
@@ -1751,7 +1760,7 @@ function updateStockSubscriptionButton() {
     if (!button) return;
     button.style.display = auth.currentUser ? 'inline-flex' : 'none';
     button.textContent = stockSubscriptionState.subscribed || stockSubscriptionState.isAdmin
-        ? '✨ 구독자 · 출석 2배 · 무료 복권'
+        ? '✨ 구독자 혜택 · 출석·복권·홍보 이용권'
         : '✨ 통합 구독 혜택';
 }
 
@@ -1781,9 +1790,9 @@ function renderStockSubscriptionModal(message = '') {
     if (message) {
         status.textContent = message;
     } else if (state.isAdmin) {
-        status.textContent = '관리자 권한으로 모든 구독자 전용 혜택을 이용할 수 있어요.';
+        status.textContent = '관리자 권한으로 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권·무료 보물상자를 이용할 수 있어요.';
     } else if (state.subscribed) {
-        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 주식시장 출석 보상 2배와 하루 무료 복권 1장을 이용할 수 있어요.`;
+        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권 5종·무료 보물상자 1개를 이용할 수 있어요. 이용권은 KST 매월 1일 초기화되고 미사용분은 이월되지 않습니다.`;
     } else if (!protectedAccount) {
         status.textContent = '익명 계정은 구독 인증을 신청할 수 없어요. 먼저 계정을 보호해 주세요.';
     } else if (hasPending) {
@@ -2905,6 +2914,8 @@ initPromotions({
         submitCardBannerRequestCallable,
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
+        getStockSubscriptionBenefitsCallable,
+        claimMonthlyFreeTreasureChestCallable,
         submitCashChargeRequestCallable,
         submitTreasureChestPurchaseRequestCallable,
         openTreasureChestCallable,
@@ -3166,7 +3177,7 @@ const ACHIEVEMENT_DEFS = [
     { id: "unfreeze_hero",     icon: "🧊", label: "동결 해제 성공", desc: "동결(서킷브레이커)된 종목을 해제했어요" },
     { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
     { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
-    { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너(우측/차트/배너 홍보)·고정노출·중계방 홍보 상품을 처음 구매했어요" },
+    { id: "first_support",     icon: "📢", label: "첫 홍보",        desc: "구독 홍보 이용권으로 첫 홍보를 신청했어요" },
     { id: "lottery_winner",    icon: "🎟️", label: "복권 당첨",      desc: "복권함에서 777을 맞춰 누적 모금액의 90%를 받았어요" },
 ];
 

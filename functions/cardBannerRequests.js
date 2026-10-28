@@ -3,7 +3,6 @@ const admin = require("firebase-admin");
 const {
   STREAMER_ID_RE,
   MAX_BANNER_REQUEST_DAYS,
-  CARD_BANNER_BALLOON_PRICE_PER_DAY,
   CARD_BANNER_MIN_HOLDING_QTY,
   findStockIdByName,
   requireLinkedUser,
@@ -11,6 +10,15 @@ const {
   grantAchievement,
   assertNotBanned
 } = require("./common");
+const {
+  isSubscriptionEntitlementRequest,
+  reserveMonthlyBenefit,
+  rejectSubscriptionRequest,
+  rejectExpiredSubscriptionRequest,
+  isSubscriptionApprovalRetryable,
+  isRequestActionable,
+  commitSubscriptionApproval,
+} = require("./subscriptionBenefits");
 
 // ══════════════════════════════════════════════════════════
 // 종목 카드 프로필 배너 — 우측 랭킹 배너와 신청 방식(닉네임+아이디+기간)은
@@ -21,11 +29,9 @@ const {
 // 떨어지면 trade.js가 자동으로 배너를 삭제한다(신청 모달에 이 규칙을 미리
 // 고지).
 //
-// 실제 후원은 후원창(별풍선 결제)으로 별도로 이뤄지고, 이 함수는 신청만 접수한다.
-// 적용은 관리자가 후원 내역을 직접 확인한 뒤 actionApproveCardBannerRequest
-// 에서 처리한다(2026-09-09, 게임자산 즉시차감 방식에서 원래의 방송 후원 확인
-// 방식으로 되돌림 — 다른 4종 배너/고정노출/중계방과 동일 원칙. 이 파일만
-// 원래 관리자 승인 단계 자체가 없었어서 이번에 처음 만든다).
+// 월 구독 이용권을 예약해 신청만 접수한다. 적용은 관리자가 검수한 뒤
+// actionApproveCardBannerRequest에서 처리한다. 이 신청은 기존에 관리자 승인
+// 단계가 없어 승인 흐름을 추가했으며, 과거 별풍선 방식 기록도 구분해 처리한다.
 // ══════════════════════════════════════════════════════════
 
 function buildCardBannerPreview(streamerId) {
@@ -90,23 +96,22 @@ const submitCardBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
   }
 
   const { previewImg, stationLink } = buildCardBannerPreview(streamerId);
-  const starBalloons = days * CARD_BANNER_BALLOON_PRICE_PER_DAY;
-  const ref = db.ref("cardBannerRequests").push();
-
-  await ref.set({
+  const requestData = {
     nickname,
     stockId:      targetId,
     streamerId,
     previewImg,
     stationLink,
     days,
-    starBalloons,
-    status:       "pending",
-    requestedAt:  Date.now(),
-    requesterUid: auth.uid,
+  };
+  return reserveMonthlyBenefit(db, {
+    uid: auth.uid,
+    product: "cardBanner",
+    units: days,
+    requestId: request.data?.requestId,
+    requestData,
+    auth,
   });
-
-  return { ok: true, id: ref.key, starBalloons };
 });
 
 async function actionListCardBannerRequests(db) {
@@ -114,21 +119,28 @@ async function actionListCardBannerRequests(db) {
   const data = snap.val() || {};
   const requests = Object.entries(data)
     .map(([id, r]) => ({ id, ...r }))
-    .filter((r) => r.status === "pending")
+    .filter((r) => isRequestActionable(r))
     .sort((a, b) => (a.requestedAt || 0) - (b.requestedAt || 0));
   return { ok: true, requests };
 }
 
 async function actionApproveCardBannerRequest(db, { requestId, days, nickname }) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
-  const daysNum = parseInt(days, 10);
-  if (!Number.isFinite(daysNum) || daysNum < 1) {
-    throw new HttpsError("invalid-argument", "노출 기간(일)을 올바르게 입력해주세요.");
-  }
 
   const reqSnap = await db.ref(`cardBannerRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
+  if (isSubscriptionEntitlementRequest(reqData)) {
+    if (reqData.status === "approved") return { ok: true, alreadyProcessed: true, endDate: reqData.approvedEndDate || "" };
+    if (!isSubscriptionApprovalRetryable(reqData)) throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");
+    if (await rejectExpiredSubscriptionRequest(db, "cardBannerRequests", requestId, reqData)) {
+      throw new HttpsError("failed-precondition", "통합 구독이 만료되어 신청을 거절했습니다. 이용권 반환 상태를 확인해주세요.");
+    }
+  }
+  const daysNum = isSubscriptionEntitlementRequest(reqData) ? Number(reqData.days) : parseInt(days, 10);
+  if (!Number.isFinite(daysNum) || daysNum < 1 || daysNum > MAX_BANNER_REQUEST_DAYS) {
+    throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이여야 합니다.`);
+  }
 
   const finalNickname = String(nickname || "").trim() || reqData.nickname;
   const targetId = (nickname && nickname.trim() && nickname.trim() !== reqData.nickname)
@@ -162,7 +174,7 @@ async function actionApproveCardBannerRequest(db, { requestId, days, nickname })
 
   const endDateStr = computeCardBannerEndDate(existingStock, daysNum);
 
-  await db.ref().update({
+  const updates = {
     [`stocks/${targetId}/cardBannerImg`]:       reqData.previewImg,
     [`stocks/${targetId}/cardBannerEndDate`]:   endDateStr,
     [`stocks/${targetId}/cardBannerLink`]:      reqData.stationLink,
@@ -170,7 +182,10 @@ async function actionApproveCardBannerRequest(db, { requestId, days, nickname })
     [`cardBannerRequests/${requestId}/nickname`]:   finalNickname,
     [`cardBannerRequests/${requestId}/status`]:     "approved",
     [`cardBannerRequests/${requestId}/reviewedAt`]: Date.now(),
-  });
+    [`cardBannerRequests/${requestId}/approvedEndDate`]: endDateStr,
+  };
+  const approval = await commitSubscriptionApproval(db, "cardBannerRequests", requestId, reqData, updates);
+  if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, endDate: approval.request?.approvedEndDate || endDateStr };
   if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
   return { ok: true, endDate: endDateStr };
@@ -181,12 +196,11 @@ async function actionRejectCardBannerRequest(db, { requestId }) {
 
   const reqSnap = await db.ref(`cardBannerRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
-
-  await db.ref(`cardBannerRequests/${requestId}`).update({
-    status:     "rejected",
-    reviewedAt: Date.now(),
-  });
-  return { ok: true };
+  const reqData = reqSnap.val();
+  if (isSubscriptionEntitlementRequest(reqData) && reqData.status === "rejected") {
+    return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundUnits: reqData.refundUnits || 0 };
+  }
+  return rejectSubscriptionRequest(db, "cardBannerRequests", requestId, reqData);
 }
 
 module.exports = {

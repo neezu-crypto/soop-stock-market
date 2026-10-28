@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INITIAL_CASH, LEGACY_INITIAL_CASH_500K, ANON_INITIAL_CASH_TOPUP, DAILY_ATTENDANCE_REWARDS, LOTTERY_POOL_FLOOR, todayKeyKST, creditUserCash, chargeUserCash, isUserProtected } = require("./common");
 const { logAdminAction } = require("./adminAuditLog");
+const { isRequestActionable } = require("./subscriptionBenefits");
 const {
   actionListBannerRequests,
   actionApproveBannerRequest,
@@ -506,7 +507,7 @@ async function actionGetPendingSummary(db) {
   const countByPath = {};
   allPaths.forEach((p, i) => {
     const data = snaps[i].val() || {};
-    countByPath[p] = Object.values(data).filter((r) => r.status === "pending").length;
+    countByPath[p] = Object.values(data).filter((r) => isRequestActionable(r)).length;
   });
 
   const items = sections.map((s) => ({
@@ -523,10 +524,10 @@ const PURCHASE_HISTORY_LIMIT = 300; // 오래된 이력까지 매번 전부 내�
 
 /**
  * 유저 구매 현황 — 우측/차트/카드 배너·최상단 고정·중계방(방송 후원 확인 후
- * 관리자 승인)·플레이타임 충전·복권함(게임자산 즉시차감)까지 7가지 셀프
- * 상품의 구매 이력을 한 화면에서 통합 조회한다. amount는 배너 5종은
- * 별풍선 개수(starBalloons), 플레이타임/복권은 게임자산(원)이라 단위가
- * 섞여 있으니 typeLabel로 구분해서 봐야 한다. 각 기능별 패널은
+ * 관리자 승인)·플레이타임 충전·복권함(게임자산 즉시차감)까지 셀프
+ * 상품의 구매 이력을 한 화면에서 통합 조회한다. 신규 배너 5종은 구독
+ * 이용권으로, 과거 요청은 별풍선 신청으로 구분해 반환 내역과 함께 제공한다.
+ * 각 기능별 패널은
  * "신규/진행중/만료"만 보여주도록 설계돼 있어, 시간이 지나 만료·삭제된
  * 과거 구매까지 한눈에 보긴 어려웠던 빈틈을 메운다. (자산 충전은 반대로
  * "지급"이라 구매가 아니므로, 종목 상장 신청은 무료라 제외 — 각각 별도
@@ -549,6 +550,9 @@ async function actionListPurchaseHistory(db) {
     id, type: "banner", typeLabel: "📢 우측 배너",
     label: `${r.nickname || "-"} (${r.days || 0}일)`,
     amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
+    benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "일",
+    refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
     at: r.requestedAt || 0,
   }));
 
@@ -556,6 +560,9 @@ async function actionListPurchaseHistory(db) {
     id, type: "cardBanner", typeLabel: "🎴 종목 카드 배너",
     label: `${r.nickname || "-"} (${r.days || 0}일)`,
     amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
+    benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "일",
+    refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
     at: r.requestedAt || 0,
   }));
 
@@ -563,6 +570,9 @@ async function actionListPurchaseHistory(db) {
     id, type: "chartBanner", typeLabel: "🖼 차트 하단 배너",
     label: `${r.stockName || r.nickname || "-"} (${r.days || 0}일)`,
     amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
+    benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "일",
+    refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
     at: r.requestedAt || 0,
   }));
 
@@ -570,6 +580,9 @@ async function actionListPurchaseHistory(db) {
     id, type: "pin", typeLabel: "📌 최상단 고정",
     label: `${r.stockName || "-"} (${r.hours || 0}시간)`,
     amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
+    benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "시간",
+    refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
     at: r.requestedAt || 0,
   }));
 
@@ -577,6 +590,9 @@ async function actionListPurchaseHistory(db) {
     id, type: "relayRoom", typeLabel: "🎥 중계방",
     label: `${r.nickname || "-"} (${r.hours || 0}시간)`,
     amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
+    benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "시간",
+    refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
     at: r.requestedAt || 0,
   }));
 
@@ -831,20 +847,14 @@ async function actionGetOverviewStats(db) {
   const today = todayKeyKST();
   const toKSTDateKey = (ms) => new Date((ms || 0) + 9 * 3600 * 1000).toISOString().split("T")[0];
 
-  // 실제로 매출로 잡을 수 있는 건: 승인 완료(approved)된 배너/차트배너/카드배너/고정/중계방
-  // 신청(별풍선, 방송 후원 확인 후 관리자 승인) + 즉시 적용되는 플레이타임
-  // 충전(게임자산, 별도 status 없이 전부 유효). 단위가 서로 달라(별풍선 개수 vs
-  // 게임자산 원) 2026-09-09부터 하나의 totalRevenue로 합산하지 않고 분리한다
-  // — 배너 5종을 게임자산 즉시차감에서 방송 후원 확인 방식으로 되돌리며 발견:
-  // 예전엔 전부 게임자산 단위라 그냥 더해도 됐지만 이제 섞어 더하면 의미 없는
-  // 숫자가 된다. 자산 충전(지급)·종목 상장(무료)은 성격이 달라 구매 현황과
-  // 동일하게 제외한다.
+  // 매출·후원 집계는 실제로 결제가 있었던 과거 별풍선 신청과 플레이타임만
+  // 반영한다. 신규 통합 구독 이용권 신청은 결제가 아니므로 집계에서 제외한다.
   const donationEntries = [
-    ...Object.values(bannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
-    ...Object.values(chartBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
-    ...Object.values(cardBannerSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
-    ...Object.values(pinSnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
-    ...Object.values(relaySnap.val() || {}).filter((r) => r.status === "approved").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(bannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(chartBannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(cardBannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(pinSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(relaySnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
   ];
   const cashEntries = [
     ...Object.values(playTimeSnap.val() || {}).map((r) => ({ amount: r.chargedAmount || 0, at: r.purchasedAt || 0 })),
@@ -867,7 +877,7 @@ async function actionGetOverviewStats(db) {
     todayCount:     donationStats.todayCount + cashStats.todayCount,
     totalRevenue:   cashStats.total,       // 게임자산(원) — 플레이타임 충전
     todayRevenue:   cashStats.today,
-    totalBalloons:  donationStats.total,   // 별풍선 개수 — 배너 5종(방송 후원 확인)
+    totalBalloons:  donationStats.total,   // 과거 별풍선 방식 홍보 신청 기록
     todayBalloons:  donationStats.today,
   };
 
