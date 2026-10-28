@@ -15,22 +15,24 @@
         }
         .topnav-brand { display: flex; align-items: baseline; gap: 7px; min-width: 0; overflow: hidden; }
         .topnav-title { font-size: 12.5px; font-weight: 700; color: var(--text-main); white-space: nowrap; }
+        .topnav-current { display: none; }
         .topnav-creator { font-size: 10.5px; font-weight: 500; color: var(--text-sub); white-space: nowrap; }
         .topnav-viewport { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; justify-content: flex-end; }
         .topnav-right { display: flex; align-items: center; gap: 8px; width: max-content; }
-        .topnav-right.auto-scroll { animation: topnav-scroll var(--topnav-duration, 20s) linear infinite; }
-        .topnav-right.auto-scroll:hover { animation-play-state: paused; }
-        @keyframes topnav-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        @media (prefers-reduced-motion: reduce) {
-            .topnav-right.auto-scroll { animation: none; }
-            .topnav-viewport { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        }
         .topnav-btn {
             background: #334155; color: var(--text-main); border: none; padding: 7px 12px;
             border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
             text-decoration: none; display: flex; align-items: center; gap: 4px; white-space: nowrap;
         }
         .topnav-btn:hover { background: #3f4f68; }
+        .topnav-menu-toggle {
+            display: none; align-items: center; justify-content: center; gap: 7px; flex: 0 0 auto;
+            min-height: 44px; padding: 0 11px; border: 1px solid #475569; border-radius: 9px;
+            background: #334155; color: var(--text-main); font: inherit; font-size: 12px; font-weight: 800;
+            cursor: pointer; white-space: nowrap;
+        }
+        .topnav-menu-toggle:hover, .topnav-menu-toggle[aria-expanded="true"] { background: #3f4f68; }
+        .topnav-menu-toggle:focus-visible, .topnav-viewport a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
         .topnav-station-btn {
             background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.4);
             text-decoration: none; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700;
@@ -38,11 +40,37 @@
         }
         .topnav-station-btn:hover { background: rgba(239,68,68,0.22); }
         .topnav-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+        .topnav.is-compact { padding: 0 12px; }
+        .topnav.is-compact .topnav-brand { flex: 0 1 auto; }
+        .topnav.is-compact .topnav-title { display: none; }
+        .topnav.is-compact .topnav-current {
+            display: inline-flex; align-items: center; min-width: 0; overflow: hidden;
+            color: var(--text-main); font-size: 13px; font-weight: 800; white-space: nowrap;
+        }
+        .topnav.is-compact .topnav-menu-toggle { display: inline-flex; }
+        .topnav.is-compact .topnav-viewport {
+            display: none; position: absolute; top: calc(100% + 1px); left: 8px; right: 8px;
+            z-index: 201; width: auto; min-width: 0; max-height: calc(100vh - 62px);
+            max-height: min(70vh, calc(100dvh - 62px)); overflow-x: hidden; overflow-y: auto;
+            padding: 8px; box-sizing: border-box; border: 1px solid #475569; border-radius: 12px;
+            background: #1e293b; box-shadow: 0 12px 30px rgba(0,0,0,0.45); overscroll-behavior: contain;
+        }
+        .topnav.is-compact .topnav-viewport.is-open { display: block; }
+        .topnav.is-compact .topnav-right {
+            display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%;
+        }
+        .topnav.is-compact .topnav-btn, .topnav.is-compact .topnav-station-btn {
+            box-sizing: border-box; width: 100%; min-height: 44px; padding: 9px 12px;
+            justify-content: flex-start; gap: 10px; font-size: 13px; white-space: normal;
+        }
+        .topnav.is-compact .topnav-btn span.topnav-label,
+        .topnav.is-compact .topnav-station-btn span.topnav-label { display: inline; }
+        .topnav.is-compact .topnav-station-btn { border-width: 1px; }
         @media (max-width: 640px) {
             .topnav-creator { display: none; }
         }
         @media (max-width: 480px) {
-            .topnav-btn span.topnav-label, .topnav-station-btn span.topnav-label { display: none; }
+            .topnav.is-compact { padding: 0 12px; }
         }
         .wallet-bar {
             position: sticky; top: 46px; background: #1e293b; padding: 15px 20px; border-radius: 12px;

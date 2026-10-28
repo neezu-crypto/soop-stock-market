@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261029-mobile-stock-cards-v5">
+    <link rel="stylesheet" href="styles.css?v=20261029-mobile-devbar-v6">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -21,8 +21,12 @@
 <nav class="topnav">
     <div class="topnav-brand">
         <span class="topnav-title">📈 SOOP STOCK</span>
+        <span class="topnav-current" aria-current="page">📈 주식시장</span>
         <span class="topnav-creator">제작: 오목지면시그</span>
     </div>
+    <button class="topnav-menu-toggle" id="topnavMenuToggle" type="button" aria-expanded="false" aria-controls="topnavViewport" aria-label="시리즈 메뉴 열기">
+      <span aria-hidden="true">☰</span><span>시리즈</span><span class="topnav-menu-chevron" aria-hidden="true">▾</span>
+    </button>
     <div class="topnav-viewport" id="topnavViewport">
       <div class="topnav-right" id="topnavTrack">
         <a class="topnav-btn" data-game-id="dontClickAds" href="https://neezu-crypto.github.io/dont-click-ads/" target="_blank" rel="noopener">👆 <span class="topnav-label">절대 광고를 클릭하지 마</span></a>
@@ -30,47 +34,76 @@
         <a class="topnav-btn" data-game-id="bettingMarket" href="https://neezu-crypto.github.io/StreamBet-Market/" target="_blank" rel="noopener">💰 <span class="topnav-label">스트리머 배팅시장</span></a>
         <a class="topnav-btn" data-game-id="backgroundMarket" href="https://neezu-crypto.github.io/interior-3d-viewer/" target="_blank" rel="noopener">🏠 <span class="topnav-label">스트리머 배경시장</span></a>
         <a class="topnav-station-btn" href="https://www.sooplive.com/station/skftodwocks2" target="_blank" rel="noopener">
-            <span class="topnav-live-dot"></span> <span class="topnav-label">개발자 방송국 바로가기</span>
+            <span class="topnav-live-dot" aria-hidden="true"></span> <span class="topnav-label">개발자 방송국</span>
         </a>
       </div>
     </div>
 </nav>
 <script>
-  // devbar/배경시장과 동일한 마퀴 패턴 - 넘칠 때만 트랙을 복제해 이어붙이고
-  // translateX(-50%) 애니메이션으로 이음매 없이 무한 반복한다. topnav는 마퀴
-  // 자체가 이 시리즈에서 유일하게 없던 저장소라 이번에 처음 추가한다.
-  (function setupTopnavMarquee() {
+  // 링크가 화면에 모두 들어가지 않으면 이름이 보이는 메뉴로 접는다.
+  (function setupTopnavLayout() {
+    var nav = document.querySelector('.topnav');
     var viewport = document.getElementById('topnavViewport');
     var track = document.getElementById('topnavTrack');
-    if (!viewport || !track) return;
+    var menuToggle = document.getElementById('topnavMenuToggle');
+    if (!nav || !viewport || !track) return;
+
+    function isCompactNav() {
+      return window.matchMedia('(max-width: 480px)').matches;
+    }
 
     function rebuild() {
       track.querySelectorAll('[data-clone]').forEach(function (el) { el.remove(); });
-      track.classList.remove('auto-scroll');
-      track.style.removeProperty('--topnav-duration');
+      nav.classList.remove('is-compact');
+      var needsMenu = isCompactNav() || track.scrollWidth > viewport.clientWidth;
+      nav.classList.toggle('is-compact', needsMenu);
+      if (needsMenu) return;
+      if (menuToggle && menuToggle.getAttribute('aria-expanded') === 'true') setMenuOpen(false, false);
+    }
 
-      if (track.scrollWidth <= viewport.clientWidth) return;
+    function setMenuOpen(open, restoreFocus) {
+      viewport.classList.toggle('is-open', open);
+      if (!menuToggle) return;
+      menuToggle.setAttribute('aria-expanded', String(open));
+      menuToggle.setAttribute('aria-label', open ? '시리즈 메뉴 닫기' : '시리즈 메뉴 열기');
+      var chevron = menuToggle.querySelector('.topnav-menu-chevron');
+      if (chevron) chevron.textContent = open ? '▴' : '▾';
+      if (open) {
+        var firstLink = track.querySelector('a:not([data-clone])');
+        if (firstLink) firstLink.focus();
+      } else if (restoreFocus) {
+        menuToggle.focus();
+      }
+    }
 
-      var originalWidth = track.scrollWidth;
-      Array.prototype.slice.call(track.children).forEach(function (child) {
-        var clone = child.cloneNode(true);
-        clone.setAttribute('data-clone', 'true');
-        clone.setAttribute('aria-hidden', 'true');
-        clone.setAttribute('tabindex', '-1');
-        track.appendChild(clone);
+    if (menuToggle) {
+      menuToggle.addEventListener('click', function () {
+        var shouldOpen = menuToggle.getAttribute('aria-expanded') !== 'true';
+        setMenuOpen(shouldOpen, !shouldOpen);
       });
-
-      var PX_PER_SECOND = 40;
-      var duration = Math.max(8, originalWidth / PX_PER_SECOND);
-      track.style.setProperty('--topnav-duration', duration + 's');
-      track.classList.add('auto-scroll');
+      viewport.addEventListener('click', function (event) {
+        if (event.target.closest('a')) setMenuOpen(false, true);
+      });
+      document.addEventListener('click', function (event) {
+        if (viewport.classList.contains('is-open') && !event.target.closest('.topnav')) setMenuOpen(false, false);
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && viewport.classList.contains('is-open')) setMenuOpen(false, true);
+      });
     }
 
     rebuild();
+    var linkObserver = new MutationObserver(function () {
+      window.requestAnimationFrame(rebuild);
+    });
+    linkObserver.observe(track, { childList: true });
     var resizeTimer = null;
     window.addEventListener('resize', function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(rebuild, 200);
+      resizeTimer = setTimeout(function () {
+        rebuild();
+        if (!isCompactNav() && menuToggle && menuToggle.getAttribute('aria-expanded') === 'true') setMenuOpen(false, false);
+      }, 200);
     });
   })();
 </script>
@@ -1432,7 +1465,11 @@ const subscriptionAppCheck = initializeAppCheck(subscriptionApp, {
 // 맞춰 로컬 매핑을 쓴다(RTDB엔 순수 텍스트 label만 저장돼 다른 페이지와 공유됨).
 (async function () {
     const SELF_GAME_ID = 'stockMarket';
-    const ICON_MAP = { dontClickAds: '👆', midnightMartRun: '🌙🛒', bettingMarket: '💰', backgroundMarket: '🏠' };
+    const ICON_MAP = {
+        dontClickAds: '👆', midnightMartRun: '🌙🛒', bettingMarket: '💰', backgroundMarket: '🏠',
+        lifeGame: '🎮', gallery: '🖼️', EarlyBird: '🐦', 'viewer-stats': '📊',
+        streamerFanPage: '👤', streamerMessenger: '💬', stockMarket: '📈'
+    };
     try {
         const snap = await get(ref(db, 'devbarLinks'));
         const data = snap.val();
@@ -1453,7 +1490,8 @@ const subscriptionAppCheck = initializeAppCheck(subscriptionApp, {
             a.href = link.url;
             a.target = '_blank';
             a.rel = 'noopener';
-            const icon = ICON_MAP[link.id] || '🔗';
+            a.setAttribute('aria-label', link.label || '시리즈 서비스');
+            const icon = ICON_MAP[link.id] || '🌐';
             a.innerHTML = icon + ' <span class="topnav-label"></span>';
             a.querySelector('.topnav-label').textContent = link.label;
             container.insertBefore(a, stationBtn || null);
