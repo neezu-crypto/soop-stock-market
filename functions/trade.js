@@ -1,6 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { getDatabase } = require("firebase-admin/database");
+const { getDatabase, getDatabaseWithUrl } = require("firebase-admin/database");
 const {
   INITIAL_CASH,
   TRADE_COOLDOWN_MS,
@@ -26,7 +26,7 @@ const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
 const SPARKLINE_MAX       = 20;     // 카드 스파크라인 보관 개수(클라이언트 priceHistoryBuffer와 동일)
 const ROOM_TRADE_FEED_LIMIT = 100;
 const MESSENGER_DATABASE_URL = "https://streamer-messenger-rtdb.firebaseio.com";
-const messengerDatabase = () => getDatabase(admin.app(), MESSENGER_DATABASE_URL);
+const messengerDatabase = () => getDatabaseWithUrl(MESSENGER_DATABASE_URL, admin.app());
 
 function isMessengerRoomStreamerStockName(stockName, streamerName) {
   const normalize = (value) => String(value || "").normalize("NFC").trim().toLocaleLowerCase("ko-KR");
