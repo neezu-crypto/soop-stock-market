@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261029-wallet-compact">
+    <link rel="stylesheet" href="styles.css?v=20261029-mobile-quick-menu">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -141,6 +141,17 @@
 
 <!-- ── 내 보유 주식 패널 (좁은 화면에서는 좌측 슬라이드 서랍으로 전환) ── -->
 <button class="my-stocks-toggle-btn" onclick="openMyStocksPanel()">📊 내 보유 주식</button>
+<div id="mobile-quick-menu" class="mobile-quick-menu" aria-label="모바일 빠른 메뉴">
+    <div id="mobile-quick-menu-items" class="mobile-quick-menu-items" hidden>
+        <button type="button" data-quick-action="my-stocks">📊 <span>내 보유 주식</span></button>
+        <button type="button" data-quick-action="promo">📣 <span>방송국 홍보</span></button>
+        <button type="button" data-quick-action="emote" disabled aria-disabled="true">✨ <span>감정표현</span></button>
+    </div>
+    <button id="mobile-quick-menu-toggle" class="mobile-quick-menu-toggle" type="button"
+        aria-label="빠른 메뉴 열기" aria-expanded="false" aria-controls="mobile-quick-menu-items">
+        <span aria-hidden="true">☰</span>
+    </button>
+</div>
 <div class="my-stocks-backdrop" onclick="closeMyStocksPanel()"></div>
 <div class="my-stocks-container">
     <div class="my-stocks-title">
@@ -2312,6 +2323,7 @@ document.getElementById('my-stocks-list').addEventListener('click', (e) => {
 
 // ── 내 보유 주식 서랍 열기/닫기 (좁은 화면 전용, 넓은 화면에서는 항상 보이는 고정 패널이라 영향 없음) ──
 window.openMyStocksPanel = function() {
+    window.closeMobileQuickMenu?.({ restoreFocus: false });
     document.querySelector('.my-stocks-container')?.classList.add('open');
     document.querySelector('.my-stocks-backdrop')?.classList.add('open');
 };
@@ -3717,6 +3729,105 @@ function initWalletScrollCollapse() {
 }
 
 initWalletScrollCollapse();
+
+// ── 모바일 고정 기능 빠른 메뉴 ───────────────────────────────
+function initMobileQuickMenu() {
+    const menu = document.getElementById('mobile-quick-menu');
+    const toggle = document.getElementById('mobile-quick-menu-toggle');
+    const items = document.getElementById('mobile-quick-menu-items');
+    if (!menu || !toggle || !items) return;
+
+    const mobileQuery = window.matchMedia('(max-width: 600px)');
+    const emoteAction = items.querySelector('[data-quick-action="emote"]');
+
+    function setOpen(open, restoreFocus = false) {
+        items.hidden = !open;
+        toggle.setAttribute('aria-expanded', String(open));
+        const label = open ? '빠른 메뉴 닫기' : '빠른 메뉴 열기';
+        toggle.setAttribute('aria-label', label);
+        toggle.title = label;
+        const icon = toggle.querySelector('[aria-hidden="true"]');
+        if (icon) icon.textContent = open ? '×' : '☰';
+        if (!open && restoreFocus) toggle.focus();
+    }
+
+    window.closeMobileQuickMenu = (options = {}) => {
+        setOpen(false, options.restoreFocus === true);
+    };
+
+    toggle.addEventListener('click', () => {
+        setOpen(items.hidden);
+    });
+
+    items.addEventListener('click', (event) => {
+        const action = event.target.closest('[data-quick-action]')?.dataset.quickAction;
+        if (!action) return;
+        setOpen(false);
+        if (action === 'my-stocks') {
+            window.openMyStocksPanel();
+        } else if (action === 'promo') {
+            window.openPromoModal?.();
+        } else if (action === 'emote') {
+            document.getElementById('game-series-emote-button')?.click();
+        }
+    });
+
+    document.addEventListener('pointerdown', (event) => {
+        if (!items.hidden && !menu.contains(event.target)) setOpen(false);
+    }, true);
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !items.hidden) setOpen(false, true);
+    });
+    window.addEventListener('pageshow', () => setOpen(false));
+    const resetAtBreakpoint = () => setOpen(false);
+    if (typeof mobileQuery.addEventListener === 'function') {
+        mobileQuery.addEventListener('change', resetAtBreakpoint);
+    } else {
+        mobileQuery.addListener(resetAtBreakpoint);
+    }
+
+    const syncCoveredState = () => {
+        const blockingModal = Array.from(document.querySelectorAll('[id$="-modal"], #chart-modal-overlay'))
+            .some((element) => element.classList.contains('active'));
+        const stockDrawerOpen = Boolean(document.querySelector('.my-stocks-container.open'));
+        const emoteDialogOpen = ['game-series-emote-picker', 'game-series-emote-login']
+            .some((id) => {
+                const element = document.getElementById(id);
+                return element && !element.hidden;
+            });
+        menu.classList.toggle('is-covered', blockingModal || stockDrawerOpen || emoteDialogOpen);
+    };
+    const overlayObserver = new MutationObserver(syncCoveredState);
+    document.querySelectorAll('[id$="-modal"], #chart-modal-overlay, .my-stocks-container')
+        .forEach((element) => overlayObserver.observe(element, { attributes: true, attributeFilter: ['class', 'hidden'] }));
+    syncCoveredState();
+    const watchEmoteOverlays = new MutationObserver(() => {
+        const picker = document.getElementById('game-series-emote-picker');
+        const login = document.getElementById('game-series-emote-login');
+        if (picker) overlayObserver.observe(picker, { attributes: true, attributeFilter: ['hidden'] });
+        if (login) overlayObserver.observe(login, { attributes: true, attributeFilter: ['hidden'] });
+        syncCoveredState();
+        if (picker && login) watchEmoteOverlays.disconnect();
+    });
+    if (!document.getElementById('game-series-emote-picker') || !document.getElementById('game-series-emote-login')) {
+        watchEmoteOverlays.observe(document.body, { childList: true, subtree: true });
+    }
+
+    let emoteObserver;
+    const syncEmoteAvailability = () => {
+        const ready = Boolean(document.getElementById('game-series-emote-button'));
+        emoteAction.disabled = !ready;
+        emoteAction.setAttribute('aria-disabled', String(!ready));
+        if (ready) emoteObserver?.disconnect();
+    };
+    syncEmoteAvailability();
+    if (emoteAction.disabled) {
+        emoteObserver = new MutationObserver(syncEmoteAvailability);
+        emoteObserver.observe(document.body, { childList: true, subtree: true });
+    }
+}
+
+initMobileQuickMenu();
 
 // ── ESC 키로 모달 닫기 ───────────────────────────────────────
 document.addEventListener('keydown', (e) => {

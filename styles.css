@@ -97,7 +97,9 @@
         .btn { border: none; border-radius: 6px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
         .btn-buy  { background: #ef4444; color: white; padding: 8px 12px; }
         .btn-sell { background: #3b82f6; color: white; padding: 8px 12px; }
+        .mobile-quick-menu { display: none; }
         @media (max-width: 600px) {
+            body { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
             .stock-card { grid-template-columns: 1fr 1fr; }
             .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
             .wallet-bar { transition: padding 180ms ease, margin-bottom 180ms ease; }
@@ -120,9 +122,46 @@
             .wallet-bar.is-compact .wallet-summary-row > span { font-size: clamp(15px, 4.5vw, 18px); white-space: nowrap; }
             .wallet-bar.is-compact .wallet-details { max-height: 0; opacity: 0; visibility: hidden; pointer-events: none; }
             .wallet-bar.is-compact #wallet-status { display: none !important; }
+
+            /* 화면을 가리던 세 고정 기능을 하나의 모바일 빠른 메뉴로 모은다. */
+            .my-stocks-toggle-btn { display: none !important; }
+            #banner-list > .banner-item:first-child { display: none !important; }
+            #game-series-emote-launcher { display: none !important; }
+            .mobile-quick-menu {
+                display: flex; position: fixed; right: max(12px, env(safe-area-inset-right, 0px));
+                bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+                flex-direction: column; align-items: flex-end; gap: 10px; z-index: 1200;
+            }
+            .mobile-quick-menu.is-covered { opacity: 0; visibility: hidden; pointer-events: none; }
+            .mobile-quick-menu-items {
+                display: flex; flex-direction: column; gap: 7px; width: min(196px, calc(100vw - 24px));
+                padding: 8px; border: 1px solid rgba(56,189,248,.65); border-radius: 15px;
+                background: rgba(30,41,59,.98); box-shadow: 0 12px 32px rgba(0,0,0,.42);
+                opacity: 0; transform: translateY(7px) scale(.98); transform-origin: bottom right;
+                transition: opacity 150ms ease, transform 150ms ease;
+            }
+            .mobile-quick-menu-items[hidden] { display: none !important; }
+            .mobile-quick-menu-items:not([hidden]) { opacity: 1; transform: translateY(0) scale(1); }
+            .mobile-quick-menu-items button {
+                display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px;
+                padding: 0 12px; border: 1px solid rgba(148,163,184,.18); border-radius: 10px;
+                background: #26364b; color: var(--text-main); text-align: left;
+                font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; touch-action: manipulation;
+            }
+            .mobile-quick-menu-items button:active { background: #334a64; }
+            .mobile-quick-menu-items button:focus-visible,
+            .mobile-quick-menu-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+            .mobile-quick-menu-items button:disabled { opacity: .5; cursor: wait; }
+            .mobile-quick-menu-toggle {
+                display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px;
+                padding: 0; border: 1px solid rgba(255,255,255,.22); border-radius: 50%;
+                background: var(--primary); color: #0f172a; box-shadow: 0 5px 18px rgba(0,0,0,.4);
+                font-size: 25px; font-weight: 800; line-height: 1; cursor: pointer; touch-action: manipulation;
+            }
+            .mobile-quick-menu { display: flex; }
         }
         @media (prefers-reduced-motion: reduce) {
-            .wallet-bar, .wallet-details { transition: none !important; }
+            .wallet-bar, .wallet-details, .mobile-quick-menu-items { transition: none !important; }
         }
         .btn:disabled, .btn.disabled { background: #444 !important; opacity: 0.5; cursor: not-allowed; transform: none !important; }
         .my-qty { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
