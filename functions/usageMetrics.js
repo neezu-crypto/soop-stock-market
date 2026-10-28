@@ -5,9 +5,9 @@ const { requireAdmin } = require("./common");
 
 const CACHE_MS = 60 * 60 * 1000;
 const RETENTION_DAYS = 30;
-// stock market's two deployed onSchedule functions: autoTickJackpotProgress and
-// checkFrozenStockDelistings. Scheduler job free quota is shared at billing-account scope.
-const STOCK_SCHEDULER_JOB_COUNT = 2;
+// stock market's remaining scheduled function, checkFrozenStockDelistings.
+// Scheduler job free quota is shared at billing-account scope.
+const STOCK_SCHEDULER_JOB_COUNT = 1;
 const SCHEDULER_USD_PER_JOB_MONTH = 0.10;
 
 // 현재 배포 목록에서 이 두 함수는 lifegame codebase가 소유하고 있어 제외한다.

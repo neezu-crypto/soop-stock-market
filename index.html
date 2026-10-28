@@ -1030,7 +1030,7 @@
         <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:20px;">
             지금 쓰는 계정은 익명이라, 브라우저 데이터가 지워지면 자산을 잃을 수 있어요.<br>
             카카오 또는 구글 중 편한 방법으로 연결하면 자산이 안전하게 보호되고,
-            <b style="color:#38bdf8;">잭팟·복권·출석 보상</b> 같은 로그인 전용 콘텐츠도 이용할 수 있어요.
+            <b style="color:#38bdf8;">복권·출석 보상</b> 같은 로그인 전용 콘텐츠도 이용할 수 있어요.
         </p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
             <button onclick="closeAccountProtectModal(); loginWithKakao();"
@@ -1302,14 +1302,6 @@
             </div>
         </div>
         <div id="top-rankers" class="ranking-list">불러오는 중...</div>
-    </div>
-    <div class="jackpot-bar" id="jackpot-bar" style="display:none;" onclick="jumpToJackpotStock()">
-        <div class="jackpot-bar-title">
-            <span>🎰 오늘의 잭팟 종목: <b id="jackpot-stock-name">-</b></span>
-            <span id="jackpot-prize">200만원</span>
-        </div>
-        <div class="jackpot-progress-track"><div class="jackpot-progress-fill" id="jackpot-progress-fill"></div></div>
-        <div id="jackpot-progress-label" style="font-size:11px;color:var(--text-sub);margin-top:4px;">0 / 0</div>
     </div>
     <div class="lottery-bar" onclick="openLotteryModal()">
         <div class="lottery-bar-title">
@@ -2125,41 +2117,6 @@ onValue(ref(db, 'lastUnfreezeEvent'), (snap) => {
     alert(`🥶 "${event.stockName}" 종목의 거래 동결이 ${methodText}(으)로 해제됐습니다!\n선착순 유저에게 ${event.rewardAmount.toLocaleString()}원이 지급됐습니다.`);
 });
 
-// ── 🎰 잭팟 종목 구독 ──────────────────────────────────────────
-// jackpot/state(진행 중인 사이클 — 종목/목표치/진행도)와 jackpotLastWin
-// (직전 당첨 공지 — 당첨자 개인정보는 담지 않음)을 각각 구독한다.
-let latestJackpotState = null;
-
-function renderJackpotBar() {
-    const bar = document.getElementById('jackpot-bar');
-    if (!bar) return;
-    const state = latestJackpotState;
-    if (!state || !state.stockId) { bar.style.display = 'none'; return; }
-    bar.style.display = 'block';
-    document.getElementById('jackpot-stock-name').innerText = state.stockName || state.stockId;
-    const target = state.target || 1;
-    const progress = Math.min(state.progress || 0, target);
-    const pct = Math.min(100, Math.round((progress / target) * 100));
-    document.getElementById('jackpot-progress-fill').style.width = pct + '%';
-    document.getElementById('jackpot-progress-label').innerText = `${progress.toLocaleString()} / ${target.toLocaleString()}`;
-}
-
-window.jumpToJackpotStock = function() {
-    if (latestJackpotState?.stockName) selectStockForSearch(latestJackpotState.stockName);
-};
-
-onValue(ref(db, 'jackpot/state'), (snap) => {
-    latestJackpotState = snap.val();
-    renderJackpotBar();
-});
-
-onValue(ref(db, 'jackpotLastWin'), (snap) => {
-    if (!snap.exists()) return;
-    const win = snap.val();
-    if (!win.at || win.at <= pageLoadTime) return;
-    alert(`🎰 잭팟 당첨!\n"${win.stockName}" 종목의 목표 매매량을 채운 유저에게 ${win.prizeAmount.toLocaleString()}원이 지급됐습니다!\n\n새 잭팟 종목이 선정됐어요.`);
-});
-
 // ── 🎟️ 복권함 구독 + 구매/긁기 ───────────────────────────────
 let latestLotteryPool = null;
 let currentLotteryTicket = null; // { digits, won, prizeAmount } — 구매 직후 서버가 이미 확정한 결과
@@ -2959,7 +2916,7 @@ window.checkStreamerVerificationStatus = async function() {
             await completeStreamerVerificationSwitch(customToken);
         } else if (action === 'already-verified') {
             closeStreamerVerifyModal();
-            alert('✅ 스트리머 인증이 완료됐어요! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
+            alert('✅ 스트리머 인증이 완료됐어요! 이제 이 계정의 자산은 안전하게 보호되고, 복권·출석 보상도 이용할 수 있어요.');
         } else if (action === 'auto-approved') {
             closeStreamerVerifyModal();
             alert('✅ 방송 다시보기 검수 기록이 확인되어 스트리머 인증이 자동 완료됐어요.');
@@ -3098,7 +3055,6 @@ const ACHIEVEMENT_DEFS = [
     { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
     { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
     { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너(우측/차트/배너 홍보)·고정노출·중계방 홍보 상품을 처음 구매했어요" },
-    { id: "jackpot_winner",    icon: "🎰", label: "잭팟 당첨",      desc: "오늘의 잭팟 종목 목표 매매량을 채운 그 매매의 주인공이 됐어요" },
     { id: "lottery_winner",    icon: "🎟️", label: "복권 당첨",      desc: "복권함에서 777을 맞춰 누적 모금액의 90%를 받았어요" },
 ];
 
@@ -3106,13 +3062,13 @@ function updateAchievementsUI() {
     const btn = document.getElementById('achievements-btn');
     if (!btn) return;
     const earned = myData?.achievements || {};
-    const count  = Object.keys(earned).length;
+    const count  = ACHIEVEMENT_DEFS.filter(({ id }) => earned[id]).length;
     btn.innerText = `🏅 도전과제 ${count}/${ACHIEVEMENT_DEFS.length}`;
 }
 
 window.openAchievementsModal = function() {
     const earned = myData?.achievements || {};
-    const count  = Object.keys(earned).length;
+    const count  = ACHIEVEMENT_DEFS.filter(({ id }) => earned[id]).length;
     document.getElementById('achievements-progress').innerText = `${count} / ${ACHIEVEMENT_DEFS.length}개 달성`;
     document.getElementById('achievements-list').innerHTML = ACHIEVEMENT_DEFS.map(a => {
         const done = !!earned[a.id];
@@ -3146,7 +3102,7 @@ function checkAccountProtectionMilestone(totalAssets) {
     if (localStorage.getItem(flagKey)) return; // 계정당 1회만
     localStorage.setItem(flagKey, '1');
 
-    if (confirm('🎉 보유 자산이 200만원을 넘었어요!\n\n🔒 계정을 보호하면 지금까지 쌓은 자산을 안전하게 지킬 수 있고, 잭팟·복권·출석 보상도 이용할 수 있어요.\n지금 보호하시겠어요?')) {
+    if (confirm('🎉 보유 자산이 200만원을 넘었어요!\n\n🔒 계정을 보호하면 지금까지 쌓은 자산을 안전하게 지킬 수 있고, 복권·출석 보상도 이용할 수 있어요.\n지금 보호하시겠어요?')) {
         window.openAccountProtectModal();
     }
 }
@@ -3172,7 +3128,7 @@ window.loginWithKakao = function() {
                     // 새로고침으로 전체 상태를 새 계정 기준으로 다시 초기화한다.
                     window.location.reload();
                 } else if (result.data.action === 'linked') {
-                    alert('✅ 카카오 연동 완료! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
+                    alert('✅ 카카오 연동 완료! 이제 이 계정의 자산은 안전하게 보호되고, 복권·출석 보상도 이용할 수 있어요.');
                 } else {
                     alert('✅ 이미 연동된 계정입니다.');
                 }
@@ -3202,7 +3158,7 @@ window.loginWithGoogle = async function() {
     try {
         await linkWithPopup(auth.currentUser, provider);
         await linkGoogleAccountCallable();
-        alert('✅ 구글 연동 완료! 이제 이 계정의 자산은 안전하게 보호되고, 잭팟·복권·출석 보상도 이용할 수 있어요.');
+        alert('✅ 구글 연동 완료! 이제 이 계정의 자산은 안전하게 보호되고, 복권·출석 보상도 이용할 수 있어요.');
     } catch (e) {
         console.error('[google-login] linkWithPopup 실패', e?.code, e?.message, e);
         if (e?.code === 'auth/credential-already-in-use') {

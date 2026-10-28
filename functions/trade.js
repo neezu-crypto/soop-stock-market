@@ -10,12 +10,10 @@ const {
   CARD_BANNER_MIN_HOLDING_QTY,
   requireNotInMaintenance,
   grantAchievement,
-  isUserProtected,
   assertNotBanned,
   updateVolumeRanking
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
-const { updateStockDailySnapshot, contributeToJackpot } = require("./jackpot");
 
 // ── 매매 파라미터 (기존 클라이언트 로직과 동일) ──────────────
 const IMPACT_PER_QTY      = 0.001;  // 수량당 시장 충격
@@ -461,17 +459,6 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     } catch (e) {
       // 삭제 실패는 무시 (다음 매도 때 재시도됨)
     }
-  }
-
-  // 7) 잭팟 종목 진행도 반영 (best-effort — 실패해도 매매 결과에는 영향 없음)
-  //    익명 유저는 카운트에서 제외 — jackpot.js의 contributeToJackpot 주석 참고.
-  try {
-    const updatedStock = stockTx.snapshot.val();
-    const isProtected = isUserProtected(finalUser);
-    await updateStockDailySnapshot(db, stockId, updatedStock?.volume || 0);
-    await contributeToJackpot(db, uid, stockId, qty, isProtected);
-  } catch (e) {
-    // 잭팟 반영 실패는 무시 (다음 거래 때 재시도됨)
   }
 
   if (roomTrade) {

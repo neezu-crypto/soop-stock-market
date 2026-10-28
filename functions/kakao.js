@@ -42,7 +42,7 @@ const linkKakaoAccount = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   if (!existingUid) {
     // 처음 연동 — 지금 uid에 매핑하고, 기존 자산은 그대로 유지한다. 익명/로그인
     // 초기 자산이 동일해진 뒤로는 연동 자체에 현금 보너스가 없다(진행상황 보존 +
-    // 잭팟/복권/출석 같은 로그인 전용 콘텐츠 이용권이 연동의 가치).
+    // 복권/출석 같은 로그인 전용 콘텐츠 이용권이 연동의 가치).
     await linkRef.set(auth.uid);
     await db.ref(`users/${auth.uid}/kakaoLinked`).set(true);
     await grantAchievement(db, auth.uid, "account_protected");

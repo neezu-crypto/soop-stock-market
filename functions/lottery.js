@@ -75,7 +75,7 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
     await db.ref("lotteryLastWin").set({
       prizeAmount,
       at: Date.now(),
-    }); // 당첨자 개인정보는 담지 않는다 — 동결 해제·잭팟 공지와 동일한 원칙
+    }); // 당첨자 개인정보는 담지 않는다 — 동결 해제 공지와 동일한 원칙
   }
 
   await db.ref("lotteryPurchases").push({

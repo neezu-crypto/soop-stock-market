@@ -9,9 +9,8 @@ const ADMIN_EMAIL              = "skftodwocks2@gmail.com"; // 관리자 페이�
 // 보너스 방식)를 없애고 접속 즉시 누구나 100만원을 받는다 — 익명 계정을
 // 여러 개 파도 계정끼리 자산을 옮기거나 합칠 방법이 없어(송금/양도 기능
 // 없음), 초기 지급액을 동일하게 맞추는 것 자체는 악용 경로가 되지 않는다.
-// 반면 잭팟·복권·출석 보상처럼 "여러 계정의 기여를 한 계정이 몰아서
-// 수령"할 수 있는 지급형 이벤트는 계속 로그인(계정 보호) 유저 전용으로
-// 남긴다 — 그 기능들만 실제 악용 경로가 있기 때문.
+// 반면 복권·출석 보상처럼 계정 보호가 필요한 지급형 이벤트는 계속
+// 로그인(계정 보호) 유저 전용으로 남긴다.
 const INITIAL_CASH             = 1000000;  // 접속 즉시 지급되는 시작 자금(익명/로그인 동일)
 // trade.js(실제 유저)와 tradingBot.js(봇) 둘 다 "1초에 한 거래"를 같은 값으로
 // 지켜야 해서(2026-08-27, 사용자 지시 - "봇의 매매속도도 실제 유저처럼 1초당
@@ -63,20 +62,6 @@ const PROFIT_RANKING_TOP_N      = 10;      // 랭킹판에 노출되는 상위 �
 // 반드시 이 랜덤 코드 확인을 거치게 해 타 계정 탈취를 막는다.
 const STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH = 20;
 const STREAMER_VERIFICATION_COOLDOWN_MS         = 60 * 1000; // 매크로/도배성 재신청 방지
-
-// ── 잭팟 종목 ────────────────────────────────────────────────
-// 매일(또는 당첨될 때까지) 랜덤 종목 1개를 "잭팟 종목"으로 선정해, 전체
-// 유저가 그 종목을 매매한 수량(매수+매도 합산)이 목표치에 도달하는 순간
-// 그 매매를 실행한 유저가 상금을 받는다. 혼자 반복 매매해서 셀프로 채우는
-// 것을 막기 위해 계정당 기여량에 상한을 둔다 — 목표치를 상한으로 나눈
-// 값(예: 1000/100=10명)만큼 서로 다른 계정이 실제로 참여해야만 도달 가능.
-const JACKPOT_PRIZE_AMOUNT       = 2000000; // 당첨금
-const JACKPOT_PER_ACCOUNT_CAP    = 100;     // 계정당 목표치에 반영되는 최대 기여량(그 이상 매매해도 더 반영 안 됨)
-const JACKPOT_TARGET_MIN         = 1000;    // 목표치 하한선(트래픽이 적어도 이 아래로는 안 내려감)
-const JACKPOT_TARGET_RATIO       = 0.2;     // 목표치 = 전일 최고 매매량 델타 × 이 비율
-const JACKPOT_TARGET_VARIANCE    = 0.2;     // 목표치에 적용하는 랜덤 변동폭(±20%)
-const JACKPOT_AUTO_TICK_RATIO    = 0.01;    // 1시간마다 목표치의 이 비율만큼 진행률을 자동으로 채움(1%)
-const JACKPOT_AUTO_TICK_CAP_RATIO = 0.95;   // 자동 증가만으로는 이 비율(95%)까지만 채워짐 — 나머지는 실제 매매로 채워야 당첨
 
 // ── 복권함 ───────────────────────────────────────────────────
 // 계정 보호 유저만 20만원에 복권 1장을 살 수 있고, 구매 즉시 서버가 세
@@ -172,7 +157,6 @@ const ACHIEVEMENTS = [
   { id: "attendance_streak", icon: "🎁", label: "개근",           desc: "출석 보상 7일차를 달성했어요" },
   { id: "listing_approved",  icon: "🚀", label: "상장 성공",      desc: "내가 신청한 종목이 상장 승인됐어요" },
   { id: "first_support",     icon: "📢", label: "첫 후원",        desc: "배너(우측/차트/배너 홍보)·고정노출·중계방 홍보 상품을 처음 구매했어요" },
-  { id: "jackpot_winner",    icon: "🎰", label: "잭팟 당첨",      desc: "오늘의 잭팟 종목 목표 매매량을 채운 그 매매의 주인공이 됐어요" },
   { id: "lottery_winner",    icon: "🎟️", label: "복권 당첨",      desc: "복권함에서 777을 맞춰 누적 모금액의 90%를 받았어요" },
 ];
 
@@ -446,13 +430,6 @@ module.exports = {
   PROFIT_RANKING_TOP_N,
   STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH,
   STREAMER_VERIFICATION_COOLDOWN_MS,
-  JACKPOT_PRIZE_AMOUNT,
-  JACKPOT_PER_ACCOUNT_CAP,
-  JACKPOT_TARGET_MIN,
-  JACKPOT_TARGET_RATIO,
-  JACKPOT_TARGET_VARIANCE,
-  JACKPOT_AUTO_TICK_RATIO,
-  JACKPOT_AUTO_TICK_CAP_RATIO,
   LOTTERY_TICKET_PRICE,
   LOTTERY_POOL_FLOOR,
   LOTTERY_PAYOUT_RATIO,
