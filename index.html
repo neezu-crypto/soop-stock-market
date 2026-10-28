@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261029-wallet-scroll-stability">
+    <link rel="stylesheet" href="styles.css?v=20261029-mobile-stock-cards-v5">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -3584,9 +3584,8 @@ function updateCardContent(card, s, userStock) {
     // 방송국으로 이동, 비어있으면 같은 자리·크기의 빈 슬롯을 눌러 바로
     // 그 종목으로 신청 모달을 열 수 있다(신청 버튼도 실제 노출 위치와 동일하게).
     // 카드 전체 클릭(차트 열기)으로 이벤트가 번지지 않게 막는다.
-    // PC는 이름 옆 인라인 배치, 모바일은 예전처럼 스파크라인 위에 겹쳐 띄운다
-    // (2열 그리드에서 이름 칸이 너무 좁아지는 걸 피하려고 자리를 다르게 유지) —
-    // 두 자리 모두 마크업에 렌더링해두고 미디어쿼리로 하나만 보여준다.
+    // PC는 배너 배지를 이름 옆에, 모바일은 차트 옆에 겹치지 않게 표시한다.
+    // 두 위치 모두 마크업에 렌더링하고 미디어쿼리로 한 자리만 보여준다.
     let isCardBannerActive = !!s.cardBannerImg;
     if (isCardBannerActive && s.cardBannerEndDate) {
         const cardBannerEnd = new Date(s.cardBannerEndDate);
@@ -3600,21 +3599,23 @@ function updateCardContent(card, s, userStock) {
         return `<div class="stock-card-avatar-badge stock-card-avatar-badge-empty ${positionClass}" title="배너 홍보 신청" onclick="event.stopPropagation(); window.openCardBannerModal('${s.name.replace(/'/g, "\\'")}');">📢</div>`;
     }
     card.innerHTML = `
-        <div class="info-group">
-            <div class="stock-name" style="display:flex;align-items:center;gap:6px;min-width:0;">
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${badge}${s.name}</span>${cardBannerBadge('stock-card-badge-inline')}
+        <div class="stock-card-details">
+            <div class="info-group">
+                <div class="stock-name" style="display:flex;align-items:center;gap:6px;min-width:0;">
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${badge}${s.name}</span>${cardBannerBadge('stock-card-badge-inline')}
+                </div>
+                <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
             </div>
-            <div class="my-qty">보유: ${userStock.qty}주 <span class="${profitClass}">(${userStock.qty > 0 ? myProfit + '%' : '-'})</span></div>
+            <div class="price-group">
+                <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
+                <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${change}%</div>
+            </div>
         </div>
-        <div style="position:relative;">${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}${cardBannerBadge('stock-card-badge-overlay')}</div>
-        <div class="price-group">
-            <div class="current-price ${isUp ? 'up' : 'down'}">${(s.price || 0).toLocaleString()}원</div>
-            <div class="price-change ${isUp ? 'up' : 'down'}">${isUp ? '+' : ''}${change}%</div>
-        </div>
+        <div class="stock-card-chart">${createSparkline(priceHistoryBuffer[s.id] || [s.price, s.price], isUp)}${cardBannerBadge('stock-card-badge-overlay')}</div>
         <div class="trade-btns">
             <button class="btn btn-buy-multi"  onclick="trade('${s.id}','buy',10)"  ${tradeDisabled?'disabled':''}>+10</button>
             <button class="btn btn-buy"         onclick="trade('${s.id}','buy',1)"   ${tradeDisabled?'disabled':''}>매수</button>
-            <div style="width:1px;height:20px;background:#334155;margin:0 4px;"></div>
+            <div class="trade-divider" aria-hidden="true"></div>
             <button class="btn btn-sell"        onclick="trade('${s.id}','sell',1)"  ${tradeDisabled?'disabled':''}>매도</button>
             <button class="btn btn-sell-multi"  onclick="trade('${s.id}','sell',10)" ${tradeDisabled?'disabled':''}>-10</button>
         </div>

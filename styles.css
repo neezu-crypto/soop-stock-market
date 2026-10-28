@@ -86,14 +86,20 @@
         #stock-list { display: grid; gap: 12px; }
         .stock-card {
             background: var(--card-bg); padding: 20px; border-radius: 16px;
-            display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.2fr; 
+            display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
+            grid-template-areas: "info chart price trade";
             align-items: center; gap: 10px; border: 1px solid #334155;
             cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
         }
         .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background: #2a3a50; }
+        .stock-card-details { display: contents; }
+        .info-group { grid-area: info; min-width: 0; }
+        .price-group { grid-area: price; min-width: 0; }
+        .stock-card-chart { grid-area: chart; position: relative; min-width: 0; }
         .chart-container { width: 80px; height: 35px; }
         .sparkline { stroke-width: 2.5; fill: none; }
-        .trade-btns { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+        .trade-btns { grid-area: trade; display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+        .trade-divider { width: 1px; height: 20px; flex: 0 0 1px; background: #334155; margin: 0 4px; }
         .btn-buy-multi  { background: #991b1b; color: white; padding: 6px 8px; font-size: 11px; }
         .btn-sell-multi { background: #1e3a8a; color: white; padding: 6px 8px; font-size: 11px; }
         .btn { border: none; border-radius: 6px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
@@ -104,8 +110,35 @@
             /* 지갑 높이가 바뀔 때 스크롤 보정이 접힘 기준을 다시 넘지 않게 한다. */
             html { overflow-anchor: none; }
             body { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
-            .stock-card { grid-template-columns: 1fr 1fr; }
-            .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
+            .stock-card {
+                grid-template-columns: minmax(0, 1fr) minmax(116px, .55fr);
+                grid-template-areas: "details chart" "trade trade";
+                align-items: center; gap: 8px 10px; padding: 12px 14px;
+            }
+            .stock-card-details {
+                grid-area: details; display: flex; flex-direction: column; align-items: flex-start;
+                justify-content: center; gap: 5px; min-width: 0;
+            }
+            .info-group, .price-group { grid-area: auto; width: 100%; }
+            .stock-name { min-width: 0; font-size: 14px; line-height: 1.25; }
+            .stock-name > span:first-child { min-width: 0; }
+            .my-qty { margin-top: 2px; line-height: 1.2; }
+            .price-group { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 5px; row-gap: 0; font-variant-numeric: tabular-nums; }
+            .current-price { font-size: clamp(14px, 4vw, 16px); line-height: 1.2; font-weight: 800; white-space: nowrap; }
+            .price-change { margin-top: 0; font-size: 11px; line-height: 1.2; white-space: nowrap; }
+            .stock-card-chart {
+                display: flex; align-items: center; justify-content: flex-end;
+                justify-self: end; width: 100%; min-height: 40px; gap: 6px;
+            }
+            .stock-card-chart .chart-container { flex: 0 0 80px; width: 80px; height: 35px; }
+            .trade-btns {
+                grid-area: trade; display: grid;
+                grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) 1px minmax(0, 1fr) minmax(0, .8fr);
+                gap: 6px; width: 100%; justify-content: stretch; margin: 0;
+            }
+            .trade-btns .btn { min-width: 0; min-height: 44px; padding: 0 4px; font-size: 13px; }
+            .trade-btns .btn-buy-multi, .trade-btns .btn-sell-multi { font-size: clamp(10px, 3vw, 12px); }
+            .trade-divider { height: 24px; margin: 0; }
             .wallet-bar { transition: padding 180ms ease, margin-bottom 180ms ease; }
             .wallet-bar-top { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
             .wallet-info { display: contents; }
@@ -231,12 +264,14 @@
             box-shadow: none;
         }
         .stock-card-avatar-badge-empty:hover { opacity: 1; border-color: var(--primary); }
-        /* PC는 이름 옆 인라인 자리, 모바일은 스파크라인 위에 겹치는 자리 —
-           둘 다 마크업에 있고 화면 폭에 따라 하나만 보여준다(크기는 동일 34px) */
+        /* PC와 모바일에 각각 맞춘 배너 배지 위치. 모바일은 미니 차트 옆에 겹치지 않게 둔다. */
         .stock-card-badge-overlay { display: none; position: absolute; top: -8px; right: -6px; }
         @media (max-width: 600px) {
             .stock-card-badge-inline { display: none; }
-            .stock-card-badge-overlay { display: flex; }
+            .stock-card-badge-overlay {
+                position: static; display: flex; flex: 0 0 30px; width: 30px; height: 30px;
+                margin-left: 0; border-width: 1px; box-sizing: border-box;
+            }
         }
         .up   { color: var(--up-color);   stroke: var(--up-color);   }
         .down { color: var(--down-color); stroke: var(--down-color); }
