@@ -860,7 +860,7 @@
                 { label: '⭐ 누적 후원 접수(승인)', value: `${purchase.totalBalloons.toLocaleString()}개`, sub: `${purchase.totalCount.toLocaleString()}건 (플레이타임 포함)` },
                 { label: '👥 전체 유저', value: `${users.totalUsers.toLocaleString()}명`, sub: `보호 ${users.protectedUsers.toLocaleString()} · 익명 ${users.anonUsers.toLocaleString()}` },
                 { label: '💰 손익 랭킹 게시', value: `${profitRankingEntryCount.toLocaleString()}건`, sub: '유저가 직접 게시한 건수' },
-                { label: '🎟️ 복권함 현재 모금액', value: `${lottery.currentPool.toLocaleString()}원`, sub: `유료 ${lottery.paidTickets.toLocaleString()}장 · 무료 ${lottery.freeTickets.toLocaleString()}장` },
+                { label: '🎟️ 복권함 현재 모금액', value: `${lottery.currentPool.toLocaleString()}원`, sub: `누적 판매 ${lottery.totalSold.toLocaleString()}장` },
                 { label: '🎟️ 복권함 순이익', value: `${lottery.netRevenue.toLocaleString()}원`, sub: `판매 ${lottery.totalRevenue.toLocaleString()} - 당첨지급 ${lottery.totalPayout.toLocaleString()} (${lottery.totalWins}회 당첨)` },
             ];
             gridEl.innerHTML = cards.map(c => `
