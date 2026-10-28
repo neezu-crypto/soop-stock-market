@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261029-mobile-quick-menu">
+    <link rel="stylesheet" href="styles.css?v=20261029-wallet-mobile-layout">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -1235,27 +1235,30 @@
                     </button>
                 </div>
                 <div id="wallet-details" class="wallet-details">
-                    <button onclick="openAssetChargeModal()"
-                        style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
-                        💰 자산 충전
-                    </button>
-                    <button id="sound-settings-btn" onclick="openSoundSettingsModal()"
-                        style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
-                        🔊 사운드
-                    </button>
-                    <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 이용시간 무제한</div>
-                    <div id="playtime-bar" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">
-                        ⏱ 오늘 <span id="playtime-display">--:-- / --:--</span>
-                        <button id="playtime-wallet-buy-btn" onclick="openPlayTimeModal()"
-                            style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;vertical-align:middle;">
-                            충전
+                    <div class="wallet-control-buttons">
+                        <button onclick="openAssetChargeModal()"
+                            style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
+                            💰 자산 충전
                         </button>
+                        <button id="sound-settings-btn" onclick="openSoundSettingsModal()"
+                            style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
+                            🔊 사운드
+                        </button>
+                    </div>
+                    <div class="wallet-time-status">
+                        <div id="playtime-admin-note" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">⏱ 이용시간 무제한</div>
+                        <div id="playtime-bar" style="display:none;margin-top:4px;font-size:11px;color:var(--text-sub);">
+                            ⏱ 오늘 <span id="playtime-display">--:-- / --:--</span>
+                            <button id="playtime-wallet-buy-btn" onclick="openPlayTimeModal()"
+                                style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;vertical-align:middle;">
+                                충전
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div id="wallet-status" class="wallet-status" style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-                <div style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
-                <div style="font-size:12px;color:var(--text-sub);">
+            <div id="wallet-status" class="wallet-status">
+                <div class="wallet-presence-row" style="font-size:12px;color:var(--text-sub);">
                     🟢 현재 접속자 <span id="online-count" style="color:var(--primary);font-weight:800;">-</span>명
                 </div>
                 <span id="test-period-chip" onclick="openTestPeriodModal()"
@@ -1276,6 +1279,7 @@
                     style="display:none;align-items:center;gap:6px;background:#38bdf8;color:#0f172a;border:none;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 0 0 2px rgba(56,189,248,0.4);">
                     🎁 출석 보상 받기
                 </button>
+                <div class="wallet-initial-note" style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
             </div>
         </div>
         <!-- ── 점검모드 안내 배너 (관리자가 실시간으로 켜고 끔 — maintenance/ 구독) — 지갑 카드는
