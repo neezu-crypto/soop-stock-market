@@ -101,6 +101,8 @@
         .btn-sell { background: #3b82f6; color: white; padding: 8px 12px; }
         .mobile-quick-menu { display: none; }
         @media (max-width: 600px) {
+            /* 지갑 높이가 바뀔 때 스크롤 보정이 접힘 기준을 다시 넘지 않게 한다. */
+            html { overflow-anchor: none; }
             body { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
             .stock-card { grid-template-columns: 1fr 1fr; }
             .trade-btns { grid-column: span 2; justify-content: center; margin-top: 10px; }
