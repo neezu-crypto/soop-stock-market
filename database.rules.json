@@ -76,7 +76,7 @@
       "$appId": {
         ".read": false,
         "$uid": {
-          ".write": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && $appId !== 'streamerMessenger'",
           ".validate": "!newData.exists() || (newData.hasChildren(['lastSeen']) && newData.child('lastSeen').isNumber())",
           "lastSeen": {
             ".validate": "newData.isNumber()"

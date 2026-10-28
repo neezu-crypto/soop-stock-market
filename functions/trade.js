@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const { getDatabase } = require("firebase-admin/database");
 const {
   INITIAL_CASH,
   TRADE_COOLDOWN_MS,
@@ -24,6 +25,8 @@ const MAX_QTY_PER_ORDER   = 10;     // 1회 주문 최대 수량 (클라이언�
 const MAX_CANDLE_MINUTES  = 360;    // 분봉 보관 기간(분)
 const SPARKLINE_MAX       = 20;     // 카드 스파크라인 보관 개수(클라이언트 priceHistoryBuffer와 동일)
 const ROOM_TRADE_FEED_LIMIT = 100;
+const MESSENGER_DATABASE_URL = "https://streamer-messenger-rtdb.firebaseio.com";
+const messengerDatabase = () => getDatabase(admin.app(), MESSENGER_DATABASE_URL);
 
 function isMessengerRoomStreamerStockName(stockName, streamerName) {
   const normalize = (value) => String(value || "").normalize("NFC").trim().toLocaleLowerCase("ko-KR");
@@ -35,18 +38,22 @@ function isMessengerRoomStreamerStockName(stockName, streamerName) {
   return !!crewPrefixedName && normalize(crewPrefixedName[1]) === streamer;
 }
 
-async function assertMessengerRoomTradeAccess(db, auth, roomId, stockId, showNickname) {
+async function assertMessengerRoomTradeAccess(db, messengerDb, auth, roomId, stockId, showNickname) {
   if (!/^[a-z0-9]{2,30}$/.test(roomId)) {
     throw new HttpsError("invalid-argument", "채팅방 정보가 올바르지 않습니다.");
   }
   const provider = auth.token?.firebase?.sign_in_provider;
+  const migrationState = (await db.ref("messengerDatabaseMigration/state").get()).val() || {};
+  if (migrationState.phase && migrationState.phase !== "ready") {
+    throw new HttpsError("unavailable", "메신저 데이터베이스 전환 중입니다. 잠시 후 다시 시도해 주세요.");
+  }
   const [roomSnap, memberSnap, adminSnap, verifiedSnap, banSnap, boardStockSnap] = await Promise.all([
-    db.ref(`streamerMessenger/rooms/${roomId}/meta`).get(),
-    db.ref(`streamerMessenger/rooms/${roomId}/members/${auth.uid}`).get(),
+    messengerDb.ref(`streamerMessenger/rooms/${roomId}/meta`).get(),
+    messengerDb.ref(`streamerMessenger/rooms/${roomId}/members/${auth.uid}`).get(),
     db.ref(`adminCenter/adminUids/${auth.uid}`).get(),
     db.ref("streamerVerifications").orderByChild("uid").equalTo(auth.uid).limitToFirst(1).get(),
     db.ref(`bannedAccounts/${auth.uid}`).get(),
-    db.ref(`streamerMessenger/roomMarkets/${roomId}/stocks/${stockId}`).get(),
+    messengerDb.ref(`streamerMessenger/roomMarkets/${roomId}/stocks/${stockId}`).get(),
   ]);
   const room = roomSnap.val() || {};
   const member = memberSnap.val() || {};
@@ -182,9 +189,10 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   }
 
   const db = admin.database();
+  const messengerDb = messengerDatabase();
   const roomId = String(request.data?.messengerRoomId || "").trim();
   const roomTrade = roomId
-    ? await assertMessengerRoomTradeAccess(db, auth, roomId, stockId, request.data?.showNickname)
+    ? await assertMessengerRoomTradeAccess(db, messengerDb, auth, roomId, stockId, request.data?.showNickname)
     : null;
   if (!roomId && request.data?.showNickname === true) {
     throw new HttpsError("invalid-argument", "공개 닉네임은 메신저 거래에서만 설정할 수 있습니다.");
@@ -467,7 +475,7 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
   }
 
   if (roomTrade) {
-    await recordMessengerRoomTrade(db, roomTrade, stockId, stockTx.snapshot.val()?.name, type, qty, finalTradePrice);
+    await recordMessengerRoomTrade(messengerDb, roomTrade, stockId, stockTx.snapshot.val()?.name, type, qty, finalTradePrice);
   }
 
   // 8) 트레이딩 봇은 2026-10-22부터 비활성화했다. 실제 거래 결과만 반영한다.
