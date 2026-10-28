@@ -589,7 +589,7 @@ async function actionListPurchaseHistory(db) {
 
   Object.entries(lotterySnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "lottery", typeLabel: "🎟️ 복권함",
-    label: `${r.digits || "???"} · ${r.won ? `🎉 당첨! +${(r.prizeAmount || 0).toLocaleString()}원` : "미당첨"}`,
+    label: `${r.source === "subscription-free" ? "🎁 무료 · " : ""}${r.digits || "???"} · ${r.won ? `🎉 당첨! +${(r.prizeAmount || 0).toLocaleString()}원` : "미당첨"}`,
     amount: r.chargedAmount || 0, uid: r.uid, status: "approved",
     at: r.purchasedAt || 0,
   }));
@@ -887,10 +887,11 @@ async function actionGetOverviewStats(db) {
   const lotteryEntries = Object.values(lotterySnap.val() || {});
   const lottery = lotteryEntries.reduce((acc, r) => {
     acc.totalSold++;
-    acc.totalRevenue += r.chargedAmount || 0;
+    if (r.source === "subscription-free") acc.freeTickets++;
+    else { acc.paidTickets++; acc.totalRevenue += r.chargedAmount || 0; }
     if (r.won) { acc.totalWins++; acc.totalPayout += r.prizeAmount || 0; }
     return acc;
-  }, { totalSold: 0, totalRevenue: 0, totalWins: 0, totalPayout: 0 });
+  }, { totalSold: 0, paidTickets: 0, freeTickets: 0, totalRevenue: 0, totalWins: 0, totalPayout: 0 });
   lottery.netRevenue = lottery.totalRevenue - lottery.totalPayout;
   lottery.currentPool = lotteryPoolSnap.val() || LOTTERY_POOL_FLOOR;
 

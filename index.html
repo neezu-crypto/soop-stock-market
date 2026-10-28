@@ -261,25 +261,6 @@
     </div>
 </div>
 
-<!-- ── 🎁 출석 체크 — "오늘 그대로 받기" / "광고보고 2배 받기" 선택 (관리자 시범 기능) ── -->
-<div id="checkin-modal" class="promo-modal-overlay" style="z-index:4000;">
-    <div class="promo-modal-content" style="max-width:380px;text-align:center;">
-        <div class="promo-modal-header"><h2>🎁 출석 보상</h2></div>
-        <p style="font-size:12px;color:var(--text-sub);margin:-8px 0 16px;">오늘의 출석 보상을 선택해서 받으세요. (관리자 시범 기능)</p>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-            <button id="checkin-claim-plain-btn" type="button" class="btn-confirm-contact">🗓️ <span id="checkin-plain-label">오늘 받기</span></button>
-            <button id="checkin-claim-ad-btn" type="button" style="width:100%;background:#a855f7;color:white;border:none;padding:14px;border-radius:12px;cursor:pointer;font-weight:800;font-size:15px;">📺 <span id="checkin-ad-label">광고보고 받기</span></button>
-        </div>
-        <div id="checkin-ad-stage" style="display:none;margin-top:14px;">
-            <div id="checkin-ad-container" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;">
-                <video id="checkin-ad-video" style="width:100%;height:100%;" playsinline></video>
-            </div>
-        </div>
-        <div id="checkin-modal-status" style="font-size:12px;color:var(--text-sub);min-height:18px;margin-top:12px;"></div>
-        <button onclick="closeCheckinModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;margin-top:14px;">닫기</button>
-    </div>
-</div>
-
 <!-- ── 🎟️ 복권함 — 20만원에 복권 1장, 서버가 즉시 확정한 세 자리(1~7)를 긁어서 확인 ── -->
 <div id="lottery-modal" class="promo-modal-overlay">
     <div class="promo-modal-content" style="max-width:380px;text-align:center;">
@@ -289,9 +270,11 @@
             <div id="lottery-modal-pool" style="font-size:26px;font-weight:900;color:#c084fc;">-</div>
         </div>
         <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
-            <li>🎫 <b>가격:</b> 1장당 20만원 (구매 개수 제한 없음)</li>
+            <li>🎫 <b>유료 가격:</b> 1장당 20만원 (구매 개수 제한 없음)</li>
             <li>🍀 <b>당첨:</b> 세 자리(1~7) 모두 7이 나오면(777) 그 순간 모금액의 90% 지급, 모금액은 100만원으로 초기화</li>
-            <li>🔒 <b>대상:</b> 카카오 또는 구글로 계정을 보호한 유저만 구매 가능</li>
+            <li>🎁 <b>통합 구독 혜택:</b> 구독이 활성화된 보호 계정은 KST 매일 무료 복권 1장을 먼저 사용해요. 사용하지 않은 무료분은 자정에 사라져요.</li>
+            <li>💰 <b>무료 복권:</b> 게임머니를 차감하지 않고 모금액에도 보태지 않아요. 무료분을 사용한 뒤에는 1장당 20만원으로 추가 구매할 수 있어요.</li>
+            <li>🔒 <b>대상:</b> 복권은 계정 보호(카카오·구글·스트리머 인증)가 필요해요.</li>
         </ul>
 
         <div id="lottery-scratch-area" style="display:none;margin-bottom:16px;">
@@ -303,7 +286,7 @@
             <div id="lottery-result-text" style="font-size:13px;color:var(--text-sub);min-height:20px;">각 칸을 눌러 긁어보세요!</div>
         </div>
 
-        <button id="lottery-buy-submit-btn" onclick="buyLotteryTicket()" style="width:100%;margin-bottom:10px;background:#a855f7;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">🎫 20만원으로 복권 구매</button>
+        <button id="lottery-buy-submit-btn" onclick="buyLotteryTicket()" disabled style="width:100%;margin-bottom:10px;background:#a855f7;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">복권 상태 확인 중…</button>
         <button onclick="closeLotteryModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
     </div>
 </div>
@@ -1061,7 +1044,7 @@
         <div class="stock-subscription-benefits" role="note">
             <strong>인증 후 이용할 수 있는 서비스</strong>
             <ul>
-                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배</span></li>
+                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장</span></li>
                 <li><b>고점체크</b><span>기간별 최고 시청 순간 분석 · 같은 날 2명 비교 · 키워드로 여러 스트리머 비교</span></li>
                 <li><b>스트리머 갤러리</b><span>모든 스트리머의 잠긴 이미지 원본 열람 및 다운로드</span></li>
             </ul>
@@ -1349,7 +1332,6 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppChec
 import { initChartModal } from "./js/chartModal.js";
 import { initPromotions } from "./js/promotions.js";
 import { initAssetHistory } from "./js/assetHistory.js";
-import { initCheckinModal } from "./js/checkinModal.js";
 
 (function () {
 
@@ -1708,7 +1690,7 @@ function updateStockSubscriptionButton() {
     if (!button) return;
     button.style.display = auth.currentUser ? 'inline-flex' : 'none';
     button.textContent = stockSubscriptionState.subscribed || stockSubscriptionState.isAdmin
-        ? '✨ 구독자 · 출석 2배'
+        ? '✨ 구독자 · 출석 2배 · 무료 복권'
         : '✨ 통합 구독 혜택';
 }
 
@@ -1740,7 +1722,7 @@ function renderStockSubscriptionModal(message = '') {
     } else if (state.isAdmin) {
         status.textContent = '관리자 권한으로 모든 구독자 전용 혜택을 이용할 수 있어요.';
     } else if (state.subscribed) {
-        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 주식시장 출석 보상은 자동으로 2배 지급됩니다.`;
+        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 주식시장 출석 보상 2배와 하루 무료 복권 1장을 이용할 수 있어요.`;
     } else if (!protectedAccount) {
         status.textContent = '익명 계정은 구독 인증을 신청할 수 없어요. 먼저 계정을 보호해 주세요.';
     } else if (hasPending) {
@@ -2120,6 +2102,72 @@ onValue(ref(db, 'lastUnfreezeEvent'), (snap) => {
 // ── 🎟️ 복권함 구독 + 구매/긁기 ───────────────────────────────
 let latestLotteryPool = null;
 let currentLotteryTicket = null; // { digits, won, prizeAmount } — 구매 직후 서버가 이미 확정한 결과
+let lotteryAvailability = { loaded: false, freeAvailable: false, eligible: false, uid: '', requestStatus: '', requestSource: '' };
+const lotteryPendingRequestKey = () => `soopStockMarket.lotteryPendingRequestId.${auth.currentUser?.uid || 'guest'}`;
+function lotteryPendingRequestId() {
+    try { return localStorage.getItem(lotteryPendingRequestKey()) || ''; } catch (_) { return ''; }
+}
+function updateLotteryPurchaseButton() {
+    const btn = document.getElementById('lottery-buy-submit-btn');
+    if (!btn || !lotteryAvailability.loaded) return;
+    btn.disabled = false;
+    btn.innerText = lotteryPendingRequestId()
+        ? lotteryAvailability.requestStatus === 'complete'
+            ? '이전 복권 결과 다시 확인'
+            : lotteryAvailability.requestSource === 'paid'
+                ? '이전 유료 복권 처리 이어가기'
+                : lotteryAvailability.requestSource === 'subscription-free'
+                    ? '이전 무료 복권 처리 이어가기'
+                    : '이전 복권 처리 이어가기'
+        : lotteryAvailability.freeAvailable
+            ? '🎁 오늘 무료 복권 받기'
+            : lotteryAvailability.eligible
+                ? '🎫 20만원으로 복권 추가 구매'
+                : '🎫 20만원으로 복권 구매';
+}
+
+async function refreshLotteryAvailability() {
+    const btn = document.getElementById('lottery-buy-submit-btn');
+    const uid = auth.currentUser?.uid || '';
+    if (!uid) throw new Error('로그인 상태를 확인해 주세요.');
+    lotteryAvailability.loaded = false;
+    if (btn) { btn.disabled = true; btn.innerText = '복권 상태 확인 중…'; }
+    try {
+        const response = await buyLotteryTicketCallable({ action: 'status', requestId: lotteryPendingRequestId() });
+        if (auth.currentUser?.uid !== uid) return lotteryAvailability;
+        const status = response.data || {};
+        lotteryAvailability = {
+            loaded: true,
+            freeAvailable: status.freeAvailable === true,
+            eligible: status.eligible === true,
+            uid,
+            requestStatus: status.requestStatus || '',
+            requestSource: status.requestSource || '',
+        };
+        if (status.freeRequestId && !lotteryPendingRequestId()) {
+            try { localStorage.setItem(lotteryPendingRequestKey(), status.freeRequestId); } catch (_) {}
+        }
+    } catch (error) {
+        lotteryAvailability = { loaded: false, freeAvailable: false, eligible: false, uid, requestStatus: '', requestSource: '' };
+        if (btn) btn.innerText = error?.message || '복권 상태를 확인하지 못했어요. 다시 열어 주세요.';
+        throw error;
+    }
+    updateLotteryPurchaseButton();
+    return lotteryAvailability;
+}
+
+function showPurchasedLottery(result) {
+    currentLotteryTicket = result;
+    if (result.free) lotteryAvailability.freeAvailable = false;
+    try { localStorage.removeItem(lotteryPendingRequestKey()); } catch (_) {}
+    const btn = document.getElementById('lottery-buy-submit-btn');
+    btn.style.display = 'none';
+    document.getElementById('lottery-scratch-area').style.display = 'block';
+    document.getElementById('lottery-result-text').innerText = result.free
+        ? '오늘의 무료 복권이에요. 각 칸을 눌러 결과를 확인하세요!'
+        : '각 칸을 눌러 긁어보세요!';
+    if (result.free) refreshLotteryAvailability().catch(() => {});
+}
 
 onValue(ref(db, 'lottery/pool'), (snap) => {
     latestLotteryPool = snap.val();
@@ -2136,7 +2184,7 @@ onValue(ref(db, 'lotteryLastWin'), (snap) => {
     alert(`🎟️ 복권함에서 777이 나왔습니다!\n어떤 유저가 ${win.prizeAmount.toLocaleString()}원을 받았습니다!\n\n모금액이 초기화됐어요.`);
 });
 
-window.openLotteryModal = function() {
+window.openLotteryModal = async function() {
     const isLinked = isMyAccountProtected() || isAdminUser;
     if (!isLinked) {
         window.openAccountProtectModal();
@@ -2151,6 +2199,11 @@ window.openLotteryModal = function() {
         cell.innerText = '❓';
     });
     document.getElementById('lottery-modal').classList.add('active');
+    try {
+        await refreshLotteryAvailability();
+    } catch (_) {
+        // 상태 확인에 실패하면 이 세션에서 구매 버튼을 계속 잠가 실수 결제를 막는다.
+    }
 };
 window.closeLotteryModal = function() {
     document.getElementById('lottery-modal').classList.remove('active');
@@ -2159,20 +2212,25 @@ window.closeLotteryModal = function() {
 window.buyLotteryTicket = async function() {
     if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
     const btn = document.getElementById('lottery-buy-submit-btn');
+    if (!lotteryAvailability.loaded || lotteryAvailability.uid !== auth.currentUser?.uid || btn.disabled) return;
     btn.disabled = true;
-    btn.innerText = '구매 중...';
+    btn.innerText = '복권 처리 중...';
+    let requestId = lotteryPendingRequestId();
+    if (!requestId) {
+        requestId = crypto.randomUUID().replace(/-/g, '');
+        try { localStorage.setItem(lotteryPendingRequestKey(), requestId); } catch (_) {}
+    }
     try {
-        const result = await buyLotteryTicketCallable();
-        currentLotteryTicket = result.data;
+        const response = await buyLotteryTicketCallable({ requestId });
+        const result = response.data;
+        showPurchasedLottery(result);
         // 잔액 표시는 users/{uid} 실시간 구독이 곧 알아서 갱신해준다(별도 반영 불필요).
-        btn.style.display = 'none';
-        document.getElementById('lottery-scratch-area').style.display = 'block';
-        document.getElementById('lottery-result-text').innerText = '각 칸을 눌러 긁어보세요!';
     } catch (e) {
         alert(e?.message || '복권 구매 중 오류가 발생했습니다.');
+        await refreshLotteryAvailability().catch(() => {});
+        updateLotteryPurchaseButton();
     } finally {
-        btn.disabled = false;
-        btn.innerText = '🎫 20만원으로 복권 구매';
+        if (btn.style.display !== 'none') btn.disabled = !lotteryAvailability.loaded;
     }
 };
 
@@ -2216,7 +2274,7 @@ window.scratchLotteryCell = function(idx) {
         resultEl.innerText = '아쉽지만 다음 기회에! 😢';
     }
     document.getElementById('lottery-buy-submit-btn').style.display = 'block';
-    document.getElementById('lottery-buy-submit-btn').innerText = '🎫 20만원으로 한 장 더 구매';
+    updateLotteryPurchaseButton();
 };
 
 function renderRankingFromCache(items) {
@@ -2372,6 +2430,9 @@ onAuthStateChanged(auth, async (user) => {
     if (userDataUnsubscribe) { userDataUnsubscribe(); userDataUnsubscribe = null; }
     if ((user?.uid || '') !== stockObservedAuthUid) {
         stockObservedAuthUid = user?.uid || '';
+        lotteryAvailability = { loaded: false, freeAvailable: false, eligible: false, uid: user?.uid || '', requestStatus: '', requestSource: '' };
+        currentLotteryTicket = null;
+        if (document.getElementById('lottery-modal')?.classList.contains('active')) closeLotteryModal();
         stockObservedVerificationState = null;
         stockVisitLogged = false;
         streamerSwitchHandoffInProgress = false;
@@ -2797,11 +2858,6 @@ initAssetHistory({
     getAllStocks: () => allStocks,
 });
 
-initCheckinModal({
-    claimCallable: claimDailyAttendanceCallable,
-    getTodayRewardAmount: () => DAILY_ATTENDANCE_REWARDS[getNextAttendanceStreak() - 1],
-});
-
 // window.confirm() 대체 — 팝업 로그인 직후처럼 브라우저가 "이 탭이 활성
 // 상태가 아니다"로 오판하는 타이밍에 네이티브 confirm()을 부르면 크롬이
 // 다이얼로그를 아예 띄우지도 않고 조용히 억제해버리는 문제가 있다. 이
@@ -2973,8 +3029,7 @@ function updateAccountProtectionUI() {
 // ── 출석 보상 (계정 보호 유저 전용, 1~7일차 순환) ──
 const DAILY_ATTENDANCE_REWARDS = [30000, 50000, 70000, 100000, 130000, 160000, 300000]; // 서버 값과 동일하게 유지(표시용)
 
-// 다음 출석 시 받을 일차(streak)를 계산 — updateAttendanceUI와 체크인 모달
-// (js/checkinModal.js에 넘기는 getTodayRewardAmount)이 동일 로직을 공유한다.
+// 다음 출석 시 받을 일차(streak)를 계산한다.
 function getNextAttendanceStreak() {
     const yesterday = (() => {
         const d = new Date(Date.now() + 9 * 3600 * 1000 - 86400000);
@@ -2989,9 +3044,7 @@ function updateAttendanceUI() {
     const btn = document.getElementById('daily-attendance-btn');
     if (!btn) return;
 
-    // 계정 미보호 유저에게는 노출하지 않는다(어뷰징 방지 — 익명 계정은 대상이
-    // 아님). 관리자는 원래 자산 관리가 무의미해 숨겨왔지만, "광고보고 2배
-    // 받기" 시범 기능을 테스트하려면 버튼 자체는 봐야 하므로 예외로 노출한다.
+    // 계정 미보호 유저에게는 노출하지 않는다(어뷰징 방지 — 익명 계정은 대상이 아님).
     const isAdmin = isAdminUser;
     const linked  = isMyAccountProtected();
     if (!isAdmin && !linked) {
@@ -3014,26 +3067,23 @@ function updateAttendanceUI() {
         btn.style.cursor = 'pointer';
         btn.style.boxShadow = '0 0 0 2px rgba(56,189,248,0.4)';
         const isSubscriber = stockSubscriptionState.subscribed === true;
+        const hasDoubleReward = isSubscriber || isAdmin;
         const baseReward = DAILY_ATTENDANCE_REWARDS[nextStreak - 1];
-        btn.innerText = isSubscriber
-            ? `✨ 구독자 출석 2배 (${(baseReward * 2).toLocaleString()}원)`
+        btn.innerText = hasDoubleReward
+            ? `✨ 2배 출석 (${(baseReward * 2).toLocaleString()}원)`
             : `🎁 출석 보상 받기 (${nextStreak}일차)`;
     }
 }
 
 window.claimDailyAttendance = async function() {
     if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
-    // 관리자는 "오늘 그대로 받기 / 광고보고 2배 받기" 선택 모달로(우선 관리자
-    // 시범 운영), 그 외 계정은 기존처럼 바로 기본 보상을 받는다.
-    const isAdmin = isAdminUser;
-    if (isAdmin && window.openCheckinModal) { window.openCheckinModal(); return; }
     const btn = document.getElementById('daily-attendance-btn');
     if (btn) btn.disabled = true;
     try {
-        const result = await claimDailyAttendanceCallable({ watchedAd: false });
+        const result = await claimDailyAttendanceCallable({});
         const { streak, reward } = result.data;
         const doubled = result.data?.doubled === true;
-        alert(`${doubled ? '✨ 구독자 2배 출석' : '🎁 출석 보상'} ${streak}일차 ${reward.toLocaleString()}원을 받았어요!\n내일 또 오시면 ${streak >= 7 ? '1일차부터 다시' : (streak + 1) + '일차'} 보상이 기다려요.`);
+        alert(`${doubled ? '✨ 2배 출석' : '🎁 출석 보상'} ${streak}일차 ${reward.toLocaleString()}원을 받았어요!\n내일 또 오시면 ${streak >= 7 ? '1일차부터 다시' : (streak + 1) + '일차'} 보상이 기다려요.`);
         // 실제 UI 갱신은 users/{uid} 실시간 구독이 처리한다.
     } catch (e) {
         alert(e?.message || '출석 보상을 받는 중 오류가 발생했습니다.');
@@ -3591,7 +3641,6 @@ document.addEventListener('keydown', (e) => {
         if (document.getElementById('chart-modal-overlay').classList.contains('active')) closeChartModal();
         if (document.getElementById('promo-modal').classList.contains('active')) closePromoModal();
         if (document.getElementById('card-banner-modal').classList.contains('active')) closeCardBannerModal();
-        if (document.getElementById('checkin-modal').classList.contains('active')) closeCheckinModal();
         if (document.getElementById('lottery-modal').classList.contains('active')) closeLotteryModal();
         if (document.getElementById('chart-ad-modal').classList.contains('active')) closeChartAdModal();
         if (document.getElementById('cash-charge-modal').classList.contains('active')) closeCashChargeModal();
