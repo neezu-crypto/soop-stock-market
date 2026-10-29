@@ -2,7 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   parseCrewRosterCsv,
+  parseCrewSheetLinkMap,
   parseSpreadsheetUrl,
+  resolveCrewRosterIdentities,
   validateIntervalHours,
   planCrewRosterSync,
 } = require("../crewSheetSyncCore");
@@ -75,6 +77,32 @@ test("accepts only Google Sheets links and supported intervals", () => {
   assert.throws(() => validateIntervalHours(3), /1, 6, 12, 24/);
 });
 
+test("reads SOOP station links from sheet metadata and resolves a stripped display label to the real nickname", () => {
+  const encodedCell = JSON.stringify(JSON.stringify({
+    2: 2228227,
+    3: [2, "👑예니👑"],
+    6: 88,
+    24: "https://www.sooplive.com/station/yeniouoyeni",
+  })).slice(1, -1);
+  const links = parseCrewSheetLinkMap(encodedCell);
+  assert.equal(links.get("예니")[0].stationId, "yeniouoyeni");
+
+  const parsed = {
+    crews: [],
+    roster: [{ nickname: "예니", crewName: "원더독" }],
+  };
+  const resolved = resolveCrewRosterIdentities(parsed, new Map([
+    ["예니", { nickname: "예니_ouo", stationId: "yeniouoyeni" }],
+  ]));
+  assert.deepEqual(resolved.roster, [{
+    nickname: "예니_ouo",
+    crewName: "원더독",
+    sourceLabel: "예니",
+    stationId: "yeniouoyeni",
+  }]);
+  assert.equal(resolved.resolvedIdentityCount, 1);
+});
+
 test("plans exact matches and crew moves while leaving missing or duplicate stock names for review", () => {
   const plan = planCrewRosterSync({
     roster: [
@@ -117,4 +145,44 @@ test("removes a prefix only after two successful absences and preserves manual c
   const manual = planCrewRosterSync({ ...base, stocks: { a: { name: "[수동수정] 알파" } } });
   assert.equal(manual.updates.length, 0);
   assert.match(manual.reviews[0].reason, /다르게 종목명이 변경/);
+});
+
+test("keeps a previously matched member when its stripped source label is unresolved", () => {
+  const plan = planCrewRosterSync({
+    roster: [],
+    stocks: { a: { name: "[원더독] 예니_ouo" } },
+    previousSnapshot: [{ nickname: "예니_ouo", crewName: "원더독", stockId: "a", sourceLabel: "예니", stationId: "yeniouoyeni" }],
+    initialized: true,
+    identityReviews: [{ nickname: "예니", sourceLabel: "예니", crewName: "원더독", reason: "SOOP 채널 확인 실패" }],
+    unresolvedSourceLabels: ["예니"],
+  });
+  assert.equal(plan.updates.length, 0);
+  assert.equal(plan.pendingRemovals.length, 0);
+  assert.equal(plan.nextSnapshot[0].nickname, "예니_ouo");
+  assert.equal(plan.reviews[0].reason, "SOOP 채널 확인 실패");
+});
+
+test("tracks a SOOP account across a canonical nickname change without a false removal", () => {
+  const plan = planCrewRosterSync({
+    roster: [{ nickname: "새닉네임", crewName: "원더독", sourceLabel: "새닉네임", stationId: "streamerid" }],
+    stocks: { a: { name: "[원더독] 옛닉네임" } },
+    previousSnapshot: [{ nickname: "옛닉네임", crewName: "원더독", stockId: "a", sourceLabel: "옛닉네임", stationId: "streamerid" }],
+    initialized: true,
+  });
+  assert.deepEqual(plan.updates, [{
+    stockId: "a",
+    nickname: "새닉네임",
+    crewName: "원더독",
+    before: "[원더독] 옛닉네임",
+    after: "[원더독] 새닉네임",
+    type: "crew-changed",
+  }]);
+  assert.equal(plan.pendingRemovals.length, 0);
+  assert.deepEqual(plan.nextSnapshot, [{
+    nickname: "새닉네임",
+    crewName: "원더독",
+    stockId: "a",
+    sourceLabel: "새닉네임",
+    stationId: "streamerid",
+  }]);
 });

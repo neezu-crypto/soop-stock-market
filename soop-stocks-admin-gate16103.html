@@ -436,7 +436,8 @@
         <h1>🔄 크루 시트 자동 연동</h1>
         <div class="info-box">
             각 크루 목록의 첫 번째 인원은 수장으로 보고 본인 크루에서 제외해 상위 크루인 감컴퍼니 소속으로 적용합니다.
-            첫 미리보기에서 정확히 일치한 종목만 반영하며, 신규 상장은 하지 않습니다. 매칭이 없거나 중복된 닉네임은 검토 목록으로 남깁니다.
+            시트에 표시된 축약 닉네임 대신 연결된 SOOP 방송국의 실제 닉네임을 확인해 매칭합니다. 방송국 링크가 없거나 실제 닉네임을 하나로 확인할 수 없는 항목은 검토 목록으로 남깁니다.
+            첫 미리보기에서 실제 닉네임과 정확히 일치한 종목만 반영하며, 신규 상장은 하지 않습니다. 종목이 없거나 중복된 닉네임도 검토 목록으로 남깁니다.
             시트에서 두 번 연속 확인되지 않은 멤버만 프리픽스를 해제합니다. 인원 표기는 목록 전체 또는 수장을 뺀 인원 수와 맞아야 합니다.
             시트는 링크가 있는 사용자가 볼 수 있어야 합니다.
         </div>
@@ -1470,8 +1471,11 @@
         const pendingText = pendingItems.length
             ? `<details style="margin-top:6px;"><summary style="cursor:pointer;color:#fbbf24;">프리픽스 해제 대기 ${pendingItems.length}건</summary><div style="max-height:120px;overflow:auto;margin-top:5px;">${pendingItems.map(item => `<div>${escapeAttr(item.nickname)} · ${escapeAttr(item.crewName)} — 시트에서 1회 미확인</div>`).join('')}</div></details>`
             : '';
+        const memberCount = Number(status.memberCount || 0);
+        const resolvedIdentityCount = Number(status.resolvedIdentityCount || 0);
+        const identityText = status.lastSuccessAt ? `<br><b>실제 닉네임 확인:</b> ${resolvedIdentityCount}/${memberCount}명` : '';
         return `<b>상태:</b> ${initializedText} · ${data.settings.enabled ? '자동 동기화 켜짐' : '자동 동기화 꺼짐'}<br>` +
-            `<b>마지막 적용:</b> ${runText} · 반영 ${Number(status.appliedCount || 0)}건 · 검토 ${Number(status.reviewCount || 0)}건<br>` +
+            `<b>마지막 적용:</b> ${runText} · 반영 ${Number(status.appliedCount || 0)}건 · 검토 ${Number(status.reviewCount || 0)}건${identityText}<br>` +
             `<b>다음 자동 확인:</b> ${nextText}${resultText}${reviewText}${pendingText}`;
     }
 
@@ -1522,7 +1526,7 @@
             : '';
         previewEl.innerHTML = `<div class="info-box" style="margin:0 0 10px;">
             ${firstRun ? '<b style="color:#fbbf24;">첫 동기화:</b> 초기 기준을 만들고 정확히 매칭된 종목에 크루명을 적용합니다.<br>' : ''}
-            크루 ${crews.length}개 · 멤버 ${summary.memberCount}명 · 적용 ${summary.assignedCount + summary.movedCount + summary.removedCount}건
+            크루 ${crews.length}개 · 멤버 ${summary.memberCount}명 · 실제 닉네임 확인 ${summary.resolvedIdentityCount}/${summary.memberCount}명 · 적용 ${summary.assignedCount + summary.movedCount + summary.removedCount}건
             (신규 크루 ${summary.assignedCount}, 이동 ${summary.movedCount}, 해제 ${summary.removedCount}) · 이미 일치 ${summary.alreadyMatchedCount}명 · 검토 ${summary.reviewCount}명
             ${summary.pendingRemovalCount ? ` · 해제 대기 ${summary.pendingRemovalCount}명` : ''}
             <div style="margin-top:6px;color:#94a3b8;">인원 수가 맞지 않거나 닉네임이 중복된 시트는 적용 전에 차단됩니다.</div>

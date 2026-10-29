@@ -1,5 +1,7 @@
 const ALLOWED_INTERVAL_HOURS = Object.freeze([1, 6, 12, 24]);
 const CREW_HEADER = /^\s*(.+?)\s*[（(]\s*(\d+)\s*[）)]\s*$/u;
+const SOOP_ID_PATTERN = /^[a-z0-9]{2,20}$/i;
+const SHEET_LINK_PATTERN = /\{\\"2\\":\d+,\\"3\\":\[2,\\"((?:\\\\.|[^\\"\\\\])*)\\"\][^{}]*?\\"24\\":\\"((?:\\\\.|[^\\"\\\\])*)\\"/gu;
 
 function parseCsv(text) {
   const source = String(text || "").replace(/^\uFEFF/, "");
@@ -43,6 +45,91 @@ function parseCsv(text) {
 
 function normalizeNickname(value) {
   return String(value || "").replace(/^[\s👑]+|[\s👑]+$/gu, "").trim();
+}
+
+function soopStationIdFromUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || ""));
+  } catch (_error) {
+    return "";
+  }
+  const host = url.hostname.toLowerCase();
+  if (url.protocol !== "https:" || !["www.sooplive.com", "sooplive.com", "www.sooplive.co.kr", "sooplive.co.kr", "ch.sooplive.co.kr"].includes(host)) {
+    return "";
+  }
+  const segments = url.pathname.split("/").filter(Boolean);
+  let stationId = "";
+  if (segments[0]?.toLowerCase() === "station" && segments.length >= 2) {
+    stationId = segments[1];
+  } else if (host === "ch.sooplive.co.kr" && segments.length === 1) {
+    stationId = segments[0];
+  }
+  return SOOP_ID_PATTERN.test(stationId) ? stationId.toLowerCase() : "";
+}
+
+function parseCrewSheetLinkMap(html) {
+  const linksByNickname = new Map();
+  for (const match of String(html || "").matchAll(SHEET_LINK_PATTERN)) {
+    let displayNickname;
+    let href;
+    try {
+      displayNickname = normalizeNickname(JSON.parse(`"${match[1]}"`));
+      href = JSON.parse(`"${match[2]}"`);
+    } catch (_error) {
+      continue;
+    }
+    const stationId = soopStationIdFromUrl(href);
+    if (!displayNickname || !stationId) continue;
+    const links = linksByNickname.get(displayNickname) || [];
+    links.push({ stationId, href });
+    linksByNickname.set(displayNickname, links);
+  }
+  return linksByNickname;
+}
+
+function resolveCrewRosterIdentities(parsedRoster, resolvedByDisplayNickname) {
+  const roster = [];
+  const reviews = [];
+  const unresolvedSourceLabels = new Set();
+  const assignedNames = new Map();
+  const assignedStationIds = new Map();
+  for (const entry of parsedRoster.roster) {
+    const resolution = resolvedByDisplayNickname.get(entry.nickname);
+    if (!resolution?.nickname || !resolution?.stationId) {
+      reviews.push({ nickname: entry.nickname, sourceLabel: entry.nickname, crewName: entry.crewName, reason: resolution?.reason || "시트에서 실제 SOOP 닉네임을 확인하지 못함" });
+      unresolvedSourceLabels.add(entry.nickname);
+      continue;
+    }
+
+    const nickname = normalizeNickname(resolution.nickname);
+    const stationId = String(resolution.stationId).toLowerCase();
+    const existingName = assignedNames.get(nickname);
+    if (existingName) {
+      throw new Error(`실제 닉네임 '${nickname}'이 '${existingName.sourceLabel}'과 '${entry.nickname}'에서 중복 확인되었습니다.`);
+    }
+    const existingId = assignedStationIds.get(stationId);
+    if (existingId) {
+      throw new Error(`SOOP 계정 '${stationId}'이 '${existingId.sourceLabel}'과 '${entry.nickname}'에서 중복 확인되었습니다.`);
+    }
+    const resolved = {
+      nickname,
+      crewName: entry.crewName,
+      sourceLabel: entry.nickname,
+      stationId,
+    };
+    assignedNames.set(nickname, resolved);
+    assignedStationIds.set(stationId, resolved);
+    roster.push(resolved);
+  }
+  return {
+    crews: parsedRoster.crews,
+    roster,
+    identityReviews: reviews,
+    unresolvedSourceLabels: [...unresolvedSourceLabels],
+    sourceMemberCount: parsedRoster.roster.length,
+    resolvedIdentityCount: roster.length,
+  };
 }
 
 function parseCrewRosterCsv(csvText) {
@@ -156,6 +243,7 @@ function parseSpreadsheetUrl(value) {
     spreadsheetId: match[1],
     gid,
     exportUrl: `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&gid=${gid}`,
+    metadataUrl: `https://docs.google.com/spreadsheets/d/${match[1]}/edit?gid=${gid}&output=html`,
   };
 }
 
@@ -184,11 +272,17 @@ function listValue(value) {
 function stableSnapshot(entries) {
   return [...listValue(entries)]
     .filter((entry) => entry && entry.nickname && entry.crewName && entry.stockId)
-    .map((entry) => ({ nickname: String(entry.nickname), crewName: String(entry.crewName), stockId: String(entry.stockId) }))
+    .map((entry) => ({
+      nickname: String(entry.nickname),
+      crewName: String(entry.crewName),
+      stockId: String(entry.stockId),
+      ...(entry.sourceLabel ? { sourceLabel: String(entry.sourceLabel) } : {}),
+      ...(entry.stationId ? { stationId: String(entry.stationId).toLowerCase() } : {}),
+    }))
     .sort((a, b) => a.nickname.localeCompare(b.nickname, "ko"));
 }
 
-function planCrewRosterSync({ roster, stocks, previousSnapshot = [], absenceStreaks = [], initialized = false }) {
+function planCrewRosterSync({ roster, stocks, previousSnapshot = [], absenceStreaks = [], initialized = false, identityReviews = [], unresolvedSourceLabels = [] }) {
   const stockData = stocks && typeof stocks === "object" ? stocks : {};
   const byNickname = new Map();
   for (const [stockId, stock] of Object.entries(stockData)) {
@@ -200,21 +294,52 @@ function planCrewRosterSync({ roster, stocks, previousSnapshot = [], absenceStre
     byNickname.set(parsed.nickname, items);
   }
 
-  const previous = new Map(stableSnapshot(previousSnapshot).map((entry) => [entry.nickname, entry]));
+  const previousEntries = stableSnapshot(previousSnapshot);
+  const previous = new Map(previousEntries.map((entry) => [entry.nickname, entry]));
+  const previousByStationId = new Map(previousEntries
+    .filter((entry) => entry.stationId)
+    .map((entry) => [entry.stationId, entry]));
   const streaks = new Map(listValue(absenceStreaks)
     .filter((entry) => entry && entry.nickname && Number(entry.count) > 0)
     .map((entry) => [String(entry.nickname), Number(entry.count)]));
   const currentNames = new Set(roster.map((entry) => entry.nickname));
   const updates = [];
-  const reviews = [];
+  const reviews = listValue(identityReviews).map((item) => ({ ...item }));
+  const unresolvedLabels = new Set(listValue(unresolvedSourceLabels).map((label) => String(label)));
   const pendingRemovals = [];
   const nextSnapshot = new Map();
   const nextStreaks = new Map();
+  const matchedPreviousNames = new Set();
   let alreadyMatchedCount = 0;
 
   for (const member of roster) {
-    const matches = byNickname.get(member.nickname) || [];
-    const old = previous.get(member.nickname);
+    let matches = byNickname.get(member.nickname) || [];
+    const oldByName = previous.get(member.nickname);
+    const oldByStationId = member.stationId ? previousByStationId.get(String(member.stationId).toLowerCase()) : null;
+    const old = oldByName || oldByStationId;
+    if (oldByStationId && oldByStationId.nickname !== member.nickname) {
+      const oldStock = stockData[oldByStationId.stockId];
+      const oldExpectedName = `[${oldByStationId.crewName}] ${oldByStationId.nickname}`;
+      const oldNameStillTracked = oldStock && typeof oldStock.name === "string"
+        && (oldStock.name === oldExpectedName || oldStock.name === oldByStationId.nickname);
+      if (matches.length && (matches.length !== 1 || matches[0].stockId !== oldByStationId.stockId)) {
+        reviews.push({ nickname: member.nickname, crewName: member.crewName, reason: "실제 닉네임 변경 후 같은 계정의 종목을 하나로 확인하지 못함" });
+        nextSnapshot.set(oldByStationId.nickname, oldByStationId);
+        continue;
+      }
+      if (!matches.length && oldNameStillTracked) {
+        const parsedOldName = splitStockName(oldStock.name);
+        matches = [{
+          stockId: oldByStationId.stockId,
+          currentName: oldStock.name,
+          currentCrew: parsedOldName.crewName,
+        }];
+      } else if (!matches.length) {
+        reviews.push({ nickname: member.nickname, crewName: member.crewName, reason: "실제 닉네임 변경 후 이전 종목명이 달라져 관리자 확인 필요" });
+        nextSnapshot.set(oldByStationId.nickname, oldByStationId);
+        continue;
+      }
+    }
     if (matches.length === 0) {
       reviews.push({ nickname: member.nickname, crewName: member.crewName, reason: "종목을 찾지 못함" });
       if (old) nextSnapshot.set(member.nickname, old);
@@ -233,12 +358,23 @@ function planCrewRosterSync({ roster, stocks, previousSnapshot = [], absenceStre
     } else {
       alreadyMatchedCount++;
     }
-    nextSnapshot.set(member.nickname, { nickname: member.nickname, crewName: member.crewName, stockId: stock.stockId });
+    nextSnapshot.set(member.nickname, {
+      nickname: member.nickname,
+      crewName: member.crewName,
+      stockId: stock.stockId,
+      ...(member.sourceLabel ? { sourceLabel: member.sourceLabel } : {}),
+      ...(member.stationId ? { stationId: member.stationId } : {}),
+    });
+    if (old && old.nickname !== member.nickname) matchedPreviousNames.add(old.nickname);
   }
 
   if (initialized) {
     for (const [nickname, old] of previous) {
-      if (currentNames.has(nickname) || nextSnapshot.has(nickname)) continue;
+      if (currentNames.has(nickname) || nextSnapshot.has(nickname) || matchedPreviousNames.has(nickname)) continue;
+      if (old.sourceLabel && unresolvedLabels.has(old.sourceLabel)) {
+        nextSnapshot.set(nickname, old);
+        continue;
+      }
       const stock = stockData[old.stockId];
       if (!stock || typeof stock.name !== "string") continue;
       const expectedOldName = `[${old.crewName}] ${nickname}`;
@@ -281,8 +417,12 @@ module.exports = {
   ALLOWED_INTERVAL_HOURS,
   parseCsv,
   parseCrewRosterCsv,
+  parseCrewSheetLinkMap,
   parseSpreadsheetUrl,
+  resolveCrewRosterIdentities,
   validateIntervalHours,
+  normalizeNickname,
+  soopStationIdFromUrl,
   splitStockName,
   listValue,
   stableSnapshot,
