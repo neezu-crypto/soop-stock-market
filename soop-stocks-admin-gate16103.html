@@ -431,6 +431,40 @@
         <button id="crew-remove-apply-btn" class="btn-primary" style="display:none;background:#ef4444;" onclick="applyCrewPrefixRemove()">✅ 선택 항목 해제</button>
     </div>
 
+    <!-- 🔄 크루 시트 자동 연동 -->
+    <div id="section-crew-sheet-sync" class="container" style="display:block; border-color:#a855f7;">
+        <h1>🔄 크루 시트 자동 연동</h1>
+        <div class="info-box">
+            Google 시트 링크와 확인 주기를 저장하고, 첫 미리보기에서 정확히 일치한 종목만 크루명을 적용합니다.
+            신규 상장은 하지 않으며, 매칭이 없거나 중복된 닉네임은 검토 목록으로 남깁니다.
+            시트에서 두 번 연속 확인되지 않은 멤버만 프리픽스를 해제합니다. 시트 인원 표기와 닉네임 수가 다르면 전체 적용을 멈춥니다.
+            시트는 링크가 있는 사용자가 볼 수 있어야 합니다.
+        </div>
+        <label for="crew-sheet-url" style="display:block;color:#cbd5e1;font-size:13px;margin:10px 0 6px;">Google 스프레드시트 주소</label>
+        <input id="crew-sheet-url" type="url" placeholder="https://docs.google.com/spreadsheets/d/.../edit?gid=0"
+            style="width:100%;background:#0f172a;border:1px solid #475569;color:#f8fafc;padding:11px;border-radius:8px;font-size:14px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;">
+            <label for="crew-sheet-interval" style="color:#cbd5e1;font-size:13px;">자동 확인 주기</label>
+            <select id="crew-sheet-interval" style="background:#0f172a;border:1px solid #475569;color:#f8fafc;padding:9px 12px;border-radius:8px;">
+                <option value="1">1시간</option>
+                <option value="6">6시간</option>
+                <option value="12">12시간</option>
+                <option value="24">24시간</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:7px;color:#cbd5e1;font-size:13px;">
+                <input id="crew-sheet-enabled" type="checkbox" style="width:17px;height:17px;">
+                자동 동기화 켜기
+            </label>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+            <button class="btn-primary" style="flex:1;margin-top:0;" onclick="saveCrewSheetSyncSettings()">설정 저장</button>
+            <button class="btn-primary" style="flex:1;margin-top:0;background:#a855f7;color:white;" onclick="previewCrewSheetSync()">🔍 변경 미리보기</button>
+        </div>
+        <div id="crew-sheet-sync-status" class="info-box" style="margin:14px 0 0;">상태를 불러오는 중...</div>
+        <div id="crew-sheet-sync-preview" style="display:none;margin-top:14px;"></div>
+        <button id="crew-sheet-sync-apply" class="btn-primary" style="display:none;background:#f97316;color:white;" onclick="applyCrewSheetSyncPreview()">✅ 미리보기 적용</button>
+    </div>
+
     <!-- 👤 유저 상세 조회 -->
     <div id="section-user-detail" class="container" style="display:block; border-color: #38bdf8;">
         <h1>👤 유저 상세 조회</h1>
@@ -639,6 +673,7 @@
         { id: 'section-listing-upload',     label: '🚀 상장/삭제' },
         { id: 'section-crew-prefix-apply',  label: '🏴 크루 적용' },
         { id: 'section-crew-prefix-remove', label: '🏳 크루 해제' },
+        { id: 'section-crew-sheet-sync',    label: '🔄 크루 시트 연동' },
         { id: 'section-user-detail',        label: '👤 유저 조회' },
         { id: 'section-banner',             label: '📢 배너 관리' },
         { id: 'section-cashcharge',         label: '💰 충전 검수' },
@@ -694,6 +729,7 @@
             await loadListingRequests();
             await loadAllRelayRoomData();
             await loadAllFreezeData();
+            await loadCrewSheetSyncStatus();
             watchMaintenanceStatus();
             watchAnnouncementStatus();
             watchPendingSummary();
@@ -1408,6 +1444,138 @@
             document.getElementById('crew-remove-apply-btn').style.display = 'none';
         } catch (e) {
             alert('해제 실패: ' + e.message);
+        }
+    };
+
+    // ── 크루 시트 동기화 ──────────────────────────────────────
+    let crewSheetSyncPreviewId = null;
+
+    function crewSyncDate(value) {
+        return value ? new Date(value).toLocaleString('ko-KR') : '기록 없음';
+    }
+
+    function crewSyncStatusText(data) {
+        const status = data.status || {};
+        const initializedText = data.initialized ? '기준 스냅샷 설정됨' : '첫 미리보기 적용 필요';
+        const nextText = status.nextRunAt ? crewSyncDate(status.nextRunAt) : '자동 실행 예약 없음';
+        const runText = status.lastSuccessAt ? crewSyncDate(status.lastSuccessAt) : '아직 실행하지 않음';
+        const resultText = status.lastResult === 'failed'
+            ? `<div style="color:#fca5a5;margin-top:6px;">최근 실행 실패: ${escapeAttr(status.lastError || '원인을 확인할 수 없습니다.')}</div>`
+            : '';
+        const reviewItems = Array.isArray(status.reviewItems) ? status.reviewItems : [];
+        const pendingItems = Array.isArray(status.pendingRemovalItems) ? status.pendingRemovalItems : [];
+        const reviewText = reviewItems.length
+            ? `<details style="margin-top:8px;"><summary style="cursor:pointer;color:#fbbf24;">관리자 검토 항목 ${reviewItems.length}건</summary><div style="max-height:160px;overflow:auto;margin-top:5px;">${reviewItems.map(item => `<div>${escapeAttr(item.nickname)} · ${escapeAttr(item.crewName)} — ${escapeAttr(item.reason)}</div>`).join('')}</div></details>`
+            : '';
+        const pendingText = pendingItems.length
+            ? `<details style="margin-top:6px;"><summary style="cursor:pointer;color:#fbbf24;">프리픽스 해제 대기 ${pendingItems.length}건</summary><div style="max-height:120px;overflow:auto;margin-top:5px;">${pendingItems.map(item => `<div>${escapeAttr(item.nickname)} · ${escapeAttr(item.crewName)} — 시트에서 1회 미확인</div>`).join('')}</div></details>`
+            : '';
+        return `<b>상태:</b> ${initializedText} · ${data.settings.enabled ? '자동 동기화 켜짐' : '자동 동기화 꺼짐'}<br>` +
+            `<b>마지막 적용:</b> ${runText} · 반영 ${Number(status.appliedCount || 0)}건 · 검토 ${Number(status.reviewCount || 0)}건<br>` +
+            `<b>다음 자동 확인:</b> ${nextText}${resultText}${reviewText}${pendingText}`;
+    }
+
+    window.loadCrewSheetSyncStatus = async function() {
+        const statusEl = document.getElementById('crew-sheet-sync-status');
+        if (!statusEl) return;
+        statusEl.innerText = '상태를 불러오는 중...';
+        try {
+            const data = await callAdminAction('getCrewSheetSyncStatus');
+            document.getElementById('crew-sheet-url').value = data.settings.sheetUrl || '';
+            document.getElementById('crew-sheet-interval').value = String(data.settings.intervalHours || 6);
+            document.getElementById('crew-sheet-enabled').checked = !!data.settings.enabled;
+            statusEl.innerHTML = crewSyncStatusText(data);
+        } catch (e) {
+            statusEl.innerHTML = `<span style="color:#fca5a5;">상태 조회 실패: ${escapeAttr(e.message)}</span>`;
+        }
+    };
+
+    window.saveCrewSheetSyncSettings = async function() {
+        const sheetUrl = document.getElementById('crew-sheet-url').value.trim();
+        const intervalHours = Number(document.getElementById('crew-sheet-interval').value);
+        const enabled = document.getElementById('crew-sheet-enabled').checked;
+        const statusEl = document.getElementById('crew-sheet-sync-status');
+        statusEl.innerText = '설정 저장 중...';
+        crewSheetSyncPreviewId = null;
+        document.getElementById('crew-sheet-sync-apply').style.display = 'none';
+        document.getElementById('crew-sheet-sync-preview').style.display = 'none';
+        try {
+            await callAdminAction('saveCrewSheetSyncSettings', { sheetUrl, intervalHours, enabled });
+            await loadCrewSheetSyncStatus();
+        } catch (e) {
+            statusEl.innerHTML = `<span style="color:#fca5a5;">설정 저장 실패: ${escapeAttr(e.message)}</span>`;
+            if (enabled && e.message.includes('첫 미리보기')) document.getElementById('crew-sheet-enabled').checked = false;
+        }
+    };
+
+    function renderCrewSyncPreview(data) {
+        const { summary, crews, actions, reviews, pendingRemovals, firstRun } = data;
+        const previewEl = document.getElementById('crew-sheet-sync-preview');
+        const actionRows = actions.length
+            ? actions.map((item) => `<div style="padding:7px 0;border-top:1px solid #334155;">${escapeAttr(item.before)} → <b>${escapeAttr(item.after)}</b></div>`).join('')
+            : '<div style="padding:7px 0;color:#94a3b8;">변경할 종목이 없습니다.</div>';
+        const reviewRows = reviews.length
+            ? reviews.map((item) => `<div style="padding:5px 0;">${escapeAttr(item.nickname)} · ${escapeAttr(item.crewName)} — ${escapeAttr(item.reason)}</div>`).join('')
+            : '<div style="padding:5px 0;color:#94a3b8;">검토 대상이 없습니다.</div>';
+        const removalRows = pendingRemovals.length
+            ? pendingRemovals.map((item) => `<div style="padding:5px 0;">${escapeAttr(item.nickname)} · ${escapeAttr(item.crewName)} — 시트에서 1회 미확인</div>`).join('')
+            : '';
+        previewEl.innerHTML = `<div class="info-box" style="margin:0 0 10px;">
+            ${firstRun ? '<b style="color:#fbbf24;">첫 동기화:</b> 초기 기준을 만들고 정확히 매칭된 종목에 크루명을 적용합니다.<br>' : ''}
+            크루 ${crews.length}개 · 멤버 ${summary.memberCount}명 · 적용 ${summary.assignedCount + summary.movedCount + summary.removedCount}건
+            (신규 크루 ${summary.assignedCount}, 이동 ${summary.movedCount}, 해제 ${summary.removedCount}) · 이미 일치 ${summary.alreadyMatchedCount}명 · 검토 ${summary.reviewCount}명
+            ${summary.pendingRemovalCount ? ` · 해제 대기 ${summary.pendingRemovalCount}명` : ''}
+            <div style="margin-top:6px;color:#94a3b8;">인원 수가 맞지 않거나 닉네임이 중복된 시트는 적용 전에 차단됩니다.</div>
+        </div>
+        <details open style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+            <summary style="cursor:pointer;color:#cbd5e1;">변경 대상 ${actions.length}건</summary><div style="max-height:260px;overflow:auto;margin-top:7px;font-size:13px;">${actionRows}</div>
+        </details>
+        <details ${reviews.length ? 'open' : ''} style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+            <summary style="cursor:pointer;color:${reviews.length ? '#fbbf24' : '#cbd5e1'};">관리자 검토 ${reviews.length}건</summary><div style="max-height:220px;overflow:auto;margin-top:7px;font-size:13px;">${reviewRows}</div>
+        </details>
+        ${pendingRemovals.length ? `<details style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;margin-bottom:8px;"><summary style="cursor:pointer;color:#fbbf24;">해제 대기 ${pendingRemovals.length}건</summary><div style="margin-top:7px;font-size:13px;">${removalRows}</div></details>` : ''}`;
+        previewEl.style.display = 'block';
+        document.getElementById('crew-sheet-sync-apply').style.display = 'block';
+    }
+
+    window.previewCrewSheetSync = async function() {
+        const statusEl = document.getElementById('crew-sheet-sync-status');
+        const previewEl = document.getElementById('crew-sheet-sync-preview');
+        const applyBtn = document.getElementById('crew-sheet-sync-apply');
+        crewSheetSyncPreviewId = null;
+        previewEl.style.display = 'none';
+        applyBtn.style.display = 'none';
+        statusEl.innerText = '시트와 종목을 대조하는 중...';
+        try {
+            const data = await callAdminAction('previewCrewSheetSync');
+            crewSheetSyncPreviewId = data.previewId;
+            renderCrewSyncPreview(data);
+            await loadCrewSheetSyncStatus();
+        } catch (e) {
+            statusEl.innerHTML = `<span style="color:#fca5a5;">미리보기 실패: ${escapeAttr(e.message)}</span>`;
+        }
+    };
+
+    window.applyCrewSheetSyncPreview = async function() {
+        if (!crewSheetSyncPreviewId) return alert('먼저 변경 미리보기를 실행해주세요.');
+        if (!confirm('미리보기 내용을 다시 확인하고 정확히 일치한 종목에 크루 정보를 적용할까요? 신규 상장은 진행되지 않습니다.')) return;
+        const applyBtn = document.getElementById('crew-sheet-sync-apply');
+        applyBtn.disabled = true;
+        applyBtn.innerText = '적용 중...';
+        try {
+            const result = await callAdminAction('applyCrewSheetSyncPreview', { previewId: crewSheetSyncPreviewId });
+            crewSheetSyncPreviewId = null;
+            applyBtn.style.display = 'none';
+            document.getElementById('crew-sheet-sync-preview').style.display = 'none';
+            alert(`✅ 적용 ${result.appliedCount}건 · 검토 ${result.reviewCount}건 · 해제 대기 ${result.pendingRemovalCount}건\n이제 자동 동기화 설정을 저장할 수 있습니다.`);
+            await loadCrewSheetSyncStatus();
+        } catch (e) {
+            alert('적용 실패: ' + e.message + '\n다시 미리보기를 실행해주세요.');
+            crewSheetSyncPreviewId = null;
+            applyBtn.style.display = 'none';
+        } finally {
+            applyBtn.disabled = false;
+            applyBtn.innerText = '✅ 미리보기 적용';
         }
     };
 

@@ -57,6 +57,7 @@ const { syncStreamerNameOnStockChange } = require("./streamerNamesSync");
 const { migratePublicIdentityData } = require("./privacyMigration");
 const { getStockMarketPresenceCount } = require("./presence");
 const { getStockMarketUsage } = require("./usageMetrics");
+const { syncCrewRosterFromSheet } = require("./crewSheetSync");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -90,3 +91,4 @@ exports.syncStreamerNameOnStockChange      = syncStreamerNameOnStockChange;
 exports.migratePublicIdentityData           = migratePublicIdentityData;
 exports.getStockMarketPresenceCount         = getStockMarketPresenceCount;
 exports.getStockMarketUsage                  = getStockMarketUsage;
+exports.syncCrewRosterFromSheet             = syncCrewRosterFromSheet;

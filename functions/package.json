@@ -5,6 +5,9 @@
     "node": "22"
   },
   "main": "index.js",
+  "scripts": {
+    "test:crew-sheet-sync": "node --test test/crewSheetSync*.test.js"
+  },
   "dependencies": {
     "firebase-admin": "^12.5.0",
     "firebase-functions": "^4.7.0",

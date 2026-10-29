@@ -4,6 +4,12 @@ const { requireAdmin, findStockIdByName, bannerStatus, INITIAL_CASH, LEGACY_INIT
 const { logAdminAction } = require("./adminAuditLog");
 const { isRequestActionable } = require("./subscriptionBenefits");
 const {
+  actionGetCrewSheetSyncStatus,
+  actionSaveCrewSheetSyncSettings,
+  actionPreviewCrewSheetSync,
+  actionApplyCrewSheetSyncPreview,
+} = require("./crewSheetSync");
+const {
   actionListBannerRequests,
   actionApproveBannerRequest,
   actionRejectBannerRequest,
@@ -1029,6 +1035,7 @@ const AUDIT_LOGGED_ACTIONS = new Set([
   "approveCardBannerRequest", "rejectCardBannerRequest",
   "setMaintenanceMode", "applyAnonTopUp",
   "applyCrewPrefix", "applyCrewPrefixRemove",
+  "saveCrewSheetSyncSettings", "applyCrewSheetSyncPreview",
   "adjustUserCash", "resetUserProfitRanking", "deleteUser", "setAnnouncement",
   "banAccount", "unbanAccount",
   "createStockSimSession", "updateStockSimSession", "endStockSimSession",
@@ -1043,6 +1050,9 @@ function summarizeAuditPayload(payload) {
   if (payload?.stockId) parts.push("stockId:" + payload.stockId);
   if (payload?.stockName) parts.push("stockName:" + payload.stockName);
   if (payload?.name) parts.push("name:" + payload.name);
+  if (payload?.previewId) parts.push("previewId:" + payload.previewId);
+  if (payload?.intervalHours) parts.push("intervalHours:" + payload.intervalHours);
+  if (typeof payload?.enabled === "boolean") parts.push("enabled:" + payload.enabled);
   return parts.join(" · ");
 }
 
@@ -1132,6 +1142,10 @@ async function dispatchAdminAction(db, action, payload, auth) {
     case "applyCrewPrefix":         return actionApplyCrewPrefix(db, payload);
     case "previewCrewPrefixRemove": return actionPreviewCrewPrefixRemove(db, payload);
     case "applyCrewPrefixRemove":   return actionApplyCrewPrefixRemove(db, payload);
+    case "getCrewSheetSyncStatus": return actionGetCrewSheetSyncStatus(db);
+    case "saveCrewSheetSyncSettings": return actionSaveCrewSheetSyncSettings(db, payload);
+    case "previewCrewSheetSync": return actionPreviewCrewSheetSync(db, auth);
+    case "applyCrewSheetSyncPreview": return actionApplyCrewSheetSyncPreview(db, payload, auth);
     case "getUserDetail":          return actionGetUserDetail(db, payload);
     case "adjustUserCash":         return actionAdjustUserCash(db, payload);
     case "resetUserProfitRanking": return actionResetUserProfitRanking(db, payload);
