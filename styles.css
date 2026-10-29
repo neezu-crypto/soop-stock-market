@@ -380,7 +380,7 @@
         .ranking-bar {
             background: var(--card-bg); width: 100%; padding: 12px 20px; border-radius: 12px;
             margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px;
-            border: 1px dashed #334155;
+            border: 1px dashed #334155; box-sizing: border-box;
         }
         .ranking-title { font-weight: 800; color: var(--primary); font-size: 14px; }
         .ranking-list  { display: flex; flex-wrap: wrap; gap: 12px 20px; font-size: 14px; }
