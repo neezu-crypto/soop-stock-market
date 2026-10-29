@@ -140,6 +140,7 @@ test("admin flow previews and applies exact matches, then enables scheduled sync
     assert.equal(preview.firstRun, true);
     assert.equal(preview.summary.assignedCount, 2);
     assert.equal(db.value.stocks.alpha.name, "알파");
+    assert.equal(db.value.stockMarket.adminCrewSheetSync.lock, undefined);
     const result = await actionApplyCrewSheetSyncPreview(db, { previewId: preview.previewId }, auth);
     assert.equal(result.appliedCount, 2);
     assert.equal(db.value.stocks.alpha.name, "[감컴퍼니] 알파");

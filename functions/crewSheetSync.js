@@ -35,7 +35,14 @@ async function acquireLock(db) {
   });
   if (!result.committed) throw new HttpsError("aborted", "크루 동기화가 이미 실행 중입니다. 잠시 후 다시 시도해주세요.");
   return async () => {
-    await lockRef.transaction((current) => current?.token === token ? null : undefined);
+    const releaseResult = await lockRef.transaction((current) => current?.token === token ? null : undefined);
+    if (!releaseResult.committed) {
+      const latest = (await lockRef.get()).val();
+      if (latest?.token === token) {
+        console.warn("Crew sheet sync lock transaction did not commit; clearing the unchanged lock token.");
+        await lockRef.remove();
+      }
+    }
   };
 }
 
