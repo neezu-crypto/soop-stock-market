@@ -27,12 +27,12 @@ test("parses side-by-side crew blocks, quoted cells, and leader crown wrappers",
   rows[1][12] = "홍타쿠";
   const parsed = parseCrewRosterCsv(makeCsv(rows));
   assert.deepEqual(parsed.crews.map((crew) => [crew.crewName, crew.expectedCount, crew.members.length]), [
-    ["버컴퍼니", 2, 2], ["홍피스", 1, 1],
+    ["버컴퍼니", 2, 1], ["홍피스", 1, 0],
   ]);
   assert.deepEqual(parsed.roster, [
-    { nickname: "감스트", crewName: "버컴퍼니" },
+    { nickname: "감스트", crewName: "감컴퍼니" },
+    { nickname: "홍타쿠", crewName: "감컴퍼니" },
     { nickname: "유설아,별", crewName: "버컴퍼니" },
-    { nickname: "홍타쿠", crewName: "홍피스" },
   ]);
 });
 
@@ -40,14 +40,30 @@ test("rejects count mismatches and duplicate members instead of producing a part
   const mismatch = grid();
   mismatch[0][1] = "크루(2)";
   mismatch[1][2] = "한명";
-  assert.throws(() => parseCrewRosterCsv(makeCsv(mismatch)), /크루: 제목은 2명인데 닉네임은 1개/);
+  assert.throws(() => parseCrewRosterCsv(makeCsv(mismatch)), /크루: 제목은 2명인데 목록은 1개\(수장 제외 0명\)/);
 
   const duplicate = grid();
-  duplicate[0][1] = "첫크루(1)";
-  duplicate[0][11] = "둘째크루(1)";
-  duplicate[1][2] = "중복닉";
-  duplicate[1][12] = "중복닉";
+  duplicate[0][1] = "첫크루(2)";
+  duplicate[0][11] = "둘째크루(2)";
+  duplicate[1][2] = "첫수장";
+  duplicate[1][3] = "중복닉";
+  duplicate[1][12] = "둘째수장";
+  duplicate[1][13] = "중복닉";
   assert.throws(() => parseCrewRosterCsv(makeCsv(duplicate)), /둘 이상의 크루/);
+});
+
+test("treats the first listed name as a GamCompany member while allowing one leader-only count difference", () => {
+  const rows = grid();
+  rows[0][1] = "로스타시티(1)";
+  rows[1][2] = "👑수장👑";
+  rows[1][3] = "일반멤버";
+  const parsed = parseCrewRosterCsv(makeCsv(rows));
+  assert.equal(parsed.crews[0].leaderNickname, "수장");
+  assert.deepEqual(parsed.crews[0].members, ["일반멤버"]);
+  assert.deepEqual(parsed.roster, [
+    { nickname: "수장", crewName: "감컴퍼니" },
+    { nickname: "일반멤버", crewName: "로스타시티" },
+  ]);
 });
 
 test("accepts only Google Sheets links and supported intervals", () => {

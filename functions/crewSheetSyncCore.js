@@ -95,24 +95,46 @@ function parseCrewRosterCsv(csvText) {
         if (nickname) members.push(nickname);
       }
     }
-    if (members.length !== crew.expectedCount) {
+    if (members.length !== crew.expectedCount && members.length - 1 !== crew.expectedCount) {
       throw new Error(
-        `${crew.crewName}: 제목은 ${crew.expectedCount}명인데 닉네임은 ${members.length}개입니다. 시트를 확인한 뒤 다시 미리보기해주세요.`,
+        `${crew.crewName}: 제목은 ${crew.expectedCount}명인데 목록은 ${members.length}개(수장 제외 ${members.length - 1}명)입니다. 시트를 확인한 뒤 다시 미리보기해주세요.`,
       );
     }
-    crew.members = members;
+    crew.leaderNickname = members[0];
+    crew.members = members.slice(1);
   }
 
-  const seenMembers = new Set();
-  const roster = [];
+  const assignments = new Map();
+  const upperCrewName = "감컴퍼니";
+  for (const crew of crews) {
+    const leader = crew.leaderNickname;
+    const existing = assignments.get(leader);
+    if (existing && existing.crewName !== upperCrewName) {
+      throw new Error(`수장 '${leader}' 닉네임이 다른 크루 멤버와 중복되어 있습니다.`);
+    }
+    assignments.set(leader, { nickname: leader, crewName: upperCrewName });
+  }
   for (const crew of crews) {
     for (const nickname of crew.members) {
-      if (seenMembers.has(nickname)) throw new Error(`'${nickname}' 닉네임이 둘 이상의 크루에 있습니다.`);
-      seenMembers.add(nickname);
-      roster.push({ nickname, crewName: crew.crewName });
+      const existing = assignments.get(nickname);
+      // 여러 크루를 맡은 수장, 또는 시트에 별도 표시된 감컴퍼니 멤버는
+      // 상위 크루 배정을 중복으로 만들지 않는다.
+      if (existing?.crewName === upperCrewName && crew.crewName === upperCrewName) continue;
+      if (existing) throw new Error(`'${nickname}' 닉네임이 둘 이상의 크루에 있습니다.`);
+      assignments.set(nickname, { nickname, crewName: crew.crewName });
     }
   }
-  return { crews: crews.map(({ crewName, expectedCount, members }) => ({ crewName, expectedCount, members })), roster };
+  const roster = [...assignments.values()];
+  return {
+    crews: crews.map(({ crewName, expectedCount, leaderNickname, members }) => ({
+      crewName,
+      expectedCount,
+      leaderNickname,
+      members,
+      sourceListedCount: members.length + 1,
+    })),
+    roster,
+  };
 }
 
 function parseSpreadsheetUrl(value) {

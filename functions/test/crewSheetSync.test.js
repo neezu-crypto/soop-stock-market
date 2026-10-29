@@ -92,7 +92,8 @@ test("admin flow previews and applies exact matches, then enables scheduled sync
     assert.equal(db.value.stocks.alpha.name, "알파");
     const result = await actionApplyCrewSheetSyncPreview(db, { previewId: preview.previewId }, auth);
     assert.equal(result.appliedCount, 2);
-    assert.equal(db.value.stocks.alpha.name, "[테스트크루] 알파");
+    assert.equal(db.value.stocks.alpha.name, "[감컴퍼니] 알파");
+    assert.equal(db.value.stocks.beta.name, "[테스트크루] 베타");
     assert.equal(db.value.stockMarket.adminCrewSheetSync.state.initialized, true);
 
     await actionSaveCrewSheetSyncSettings(db, { ...settings, enabled: true });
@@ -119,7 +120,7 @@ test("stale preview and invalid roster never mutate stock names", async () => {
     assert.equal(db.value.stockMarket.adminCrewSheetSync.state, undefined);
 
     global.fetch = async () => ({ ok: true, status: 200, text: async () => rosterCsv(["알파"], 2) });
-    await assert.rejects(actionPreviewCrewSheetSync(db, auth), /제목은 2명인데 닉네임은 1개/);
+    await assert.rejects(actionPreviewCrewSheetSync(db, auth), /제목은 2명인데 목록은 1개/);
     assert.equal(db.value.stocks.alpha.name, "알파");
   } finally {
     restoreFetch();
@@ -150,7 +151,7 @@ test("automatic absence confirmation waits two successful applications before re
 });
 
 test("changing the source sheet resets the baseline without stripping existing crew prefixes", async () => {
-  const db = new MemoryDatabase({ stocks: { alpha: { name: "[테스트크루] 알파" } } });
+  const db = new MemoryDatabase({ stocks: { alpha: { name: "[감컴퍼니] 알파" } } });
   const restoreFetch = mockSheet(rosterCsv(["알파"]));
   try {
     await actionSaveCrewSheetSyncSettings(db, settings);
@@ -160,7 +161,7 @@ test("changing the source sheet resets the baseline without stripping existing c
     await actionSaveCrewSheetSyncSettings(db, { ...settings, sheetUrl: changedUrl });
     assert.equal(db.value.stockMarket.adminCrewSheetSync.state.initialized, false);
     assert.equal(db.value.stockMarket.adminCrewSheetSync.state.snapshot, undefined);
-    assert.equal(db.value.stocks.alpha.name, "[테스트크루] 알파");
+    assert.equal(db.value.stocks.alpha.name, "[감컴퍼니] 알파");
     await assert.rejects(
       actionSaveCrewSheetSyncSettings(db, { ...settings, sheetUrl: changedUrl, enabled: true }),
       (error) => error.code === "failed-precondition",
