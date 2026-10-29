@@ -20,6 +20,11 @@ const MAX_CSV_BYTES = 2 * 1024 * 1024;
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const SOOP_STREAMER_SEARCH_API = "https://sch.sooplive.co.kr/api.php";
 const SOOP_ID_PATTERN = /^[a-z0-9]{2,20}$/i;
+const IDENTITY_LOOKUP_ATTEMPTS = 3;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function digest(value) {
   return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -86,31 +91,50 @@ async function soopSearch(query) {
 async function lookupNicknameByStationId(stationId) {
   const id = String(stationId || "").trim().toLowerCase();
   if (!SOOP_ID_PATTERN.test(id)) return null;
-  const rows = await soopSearch(id);
-  const matches = rows.filter((row) => String(row?.user_id || "").trim().toLowerCase() === id);
-  if (matches.length !== 1) return null;
-  const row = matches[0];
-  const nickname = typeof row.user_nick === "string" && row.user_nick.trim()
-    ? row.user_nick.trim()
-    : typeof row.station_name === "string" ? row.station_name.trim() : "";
-  return nickname ? { nickname, stationId: id } : null;
+  for (let attempt = 0; attempt < IDENTITY_LOOKUP_ATTEMPTS; attempt++) {
+    try {
+      const rows = await soopSearch(id);
+      const matches = rows.filter((row) => String(row?.user_id || "").trim().toLowerCase() === id);
+      if (matches.length === 1) {
+        const row = matches[0];
+        const nickname = typeof row.user_nick === "string" && row.user_nick.trim()
+          ? row.user_nick.trim()
+          : typeof row.station_name === "string" ? row.station_name.trim() : "";
+        return nickname ? { nickname, stationId: id } : null;
+      }
+      if (matches.length > 1 || attempt === IDENTITY_LOOKUP_ATTEMPTS - 1) return null;
+    } catch (error) {
+      if (attempt === IDENTITY_LOOKUP_ATTEMPTS - 1) throw error;
+    }
+    await delay(150 * (attempt + 1));
+  }
+  return null;
 }
 
 async function lookupNicknameByDisplayLabel(displayLabel) {
-  const rows = await soopSearch(displayLabel);
   const query = String(displayLabel || "").trim().normalize("NFC").toLocaleLowerCase();
-  const candidates = new Map();
-  for (const row of rows) {
-    const id = String(row?.user_id || "").trim().toLowerCase();
-    if (!SOOP_ID_PATTERN.test(id)) continue;
-    const nickname = typeof row.user_nick === "string" && row.user_nick.trim()
-      ? row.user_nick.trim()
-      : typeof row.station_name === "string" ? row.station_name.trim() : "";
-    const exactNickname = nickname.normalize("NFC").toLocaleLowerCase() === query;
-    const exactSynonym = Array.isArray(row.synonym) && row.synonym.some((item) => String(item || "").trim().normalize("NFC").toLocaleLowerCase() === query);
-    if (nickname && (exactNickname || exactSynonym)) candidates.set(id, { nickname, stationId: id });
+  for (let attempt = 0; attempt < IDENTITY_LOOKUP_ATTEMPTS; attempt++) {
+    try {
+      const rows = await soopSearch(displayLabel);
+      const candidates = new Map();
+      for (const row of rows) {
+        const id = String(row?.user_id || "").trim().toLowerCase();
+        if (!SOOP_ID_PATTERN.test(id)) continue;
+        const nickname = typeof row.user_nick === "string" && row.user_nick.trim()
+          ? row.user_nick.trim()
+          : typeof row.station_name === "string" ? row.station_name.trim() : "";
+        const exactNickname = nickname.normalize("NFC").toLocaleLowerCase() === query;
+        const exactSynonym = Array.isArray(row.synonym) && row.synonym.some((item) => String(item || "").trim().normalize("NFC").toLocaleLowerCase() === query);
+        if (nickname && (exactNickname || exactSynonym)) candidates.set(id, { nickname, stationId: id });
+      }
+      if (candidates.size === 1) return [...candidates.values()][0];
+      if (candidates.size > 1 || attempt === IDENTITY_LOOKUP_ATTEMPTS - 1) return null;
+    } catch (error) {
+      if (attempt === IDENTITY_LOOKUP_ATTEMPTS - 1) throw error;
+    }
+    await delay(150 * (attempt + 1));
   }
-  return candidates.size === 1 ? [...candidates.values()][0] : null;
+  return null;
 }
 
 async function mapWithConcurrency(items, concurrency, mapper) {

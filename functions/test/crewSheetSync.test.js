@@ -5,6 +5,7 @@ const {
   actionSaveCrewSheetSyncSettings,
   actionPreviewCrewSheetSync,
   actionApplyCrewSheetSyncPreview,
+  fetchRoster,
 } = require("../crewSheetSync");
 
 function clone(value) {
@@ -77,6 +78,7 @@ function makeSheetFetch(csv, identities) {
       stationId: identity.stationId || `streamer${index + 1}`,
       linked: identity.linked !== false,
       synonym: identity.synonym || [displayLabel],
+      transientMisses: Number(identity.transientMisses || 0),
     };
   });
   const html = entries.filter((entry) => entry.linked).map(({ displayLabel, stationId }) => {
@@ -89,6 +91,7 @@ function makeSheetFetch(csv, identities) {
     return encodedCell;
   }).join(",");
   const profilesById = new Map(entries.map((entry) => [entry.stationId.toLowerCase(), entry.nickname]));
+  const searchAttempts = new Map();
   const profilesByDisplay = new Map(entries.map((entry) => [entry.displayLabel.trim().toLowerCase(), {
     user_id: entry.stationId.toLowerCase(),
     user_nick: entry.nickname,
@@ -102,6 +105,12 @@ function makeSheetFetch(csv, identities) {
     }
     if (url.hostname === "sch.sooplive.co.kr") {
       const id = url.searchParams.get("szKeyword").toLowerCase();
+      const attempts = (searchAttempts.get(id) || 0) + 1;
+      searchAttempts.set(id, attempts);
+      const entry = entries.find((item) => item.stationId.toLowerCase() === id);
+      if (entry && attempts <= entry.transientMisses) {
+        return { ok: true, status: 200, json: async () => ({ RESULT: 1, DATA: [] }) };
+      }
       const profile = profilesByDisplay.get(id);
       return {
         ok: true,
@@ -195,6 +204,24 @@ test("resolves a label without a sheet link only when SOOP search identifies one
     assert.equal(preview.summary.resolvedIdentityCount, 2);
     assert.equal(preview.summary.reviewCount, 0);
     assert.equal(preview.summary.alreadyMatchedCount, 2);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("retries a linked SOOP account when the first identity search returns no match", async () => {
+  const restoreFetch = mockSheet(rosterCsv(["예니"]), {
+    예니: { nickname: "예니_ouo", stationId: "yeniouoyeni", transientMisses: 1 },
+  });
+  try {
+    const sheet = await fetchRoster(settings.sheetUrl);
+    assert.equal(sheet.resolvedIdentityCount, 1);
+    assert.deepEqual(sheet.roster, [{
+      nickname: "예니_ouo",
+      crewName: "감컴퍼니",
+      sourceLabel: "예니",
+      stationId: "yeniouoyeni",
+    }]);
   } finally {
     restoreFetch();
   }
