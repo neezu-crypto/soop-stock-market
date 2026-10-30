@@ -210,6 +210,94 @@ test("retries a busy stock transaction while preserving its latest trading field
   assert.deepEqual(current, { name: "[버컴퍼니] 킴나니_", price: 12000, volume: 38 });
 });
 
+test("re-reads the live stock before treating an aborted transaction snapshot as a name conflict", async () => {
+  const current = { name: "킴나니_", price: 12000, volume: 37 };
+  let attempts = 0;
+  const stockRef = {
+    async transaction(update) {
+      attempts++;
+      if (attempts === 1) {
+        return { committed: false, snapshot: { val: () => ({ name: "[다른크루] 킴나니_" }) } };
+      }
+      const next = update({ ...current, volume: 38 });
+      Object.assign(current, next);
+      return { committed: true, snapshot: { val: () => current } };
+    },
+    async get() {
+      return { val: () => current };
+    },
+  };
+
+  const result = await retryStockNameTransaction(stockRef, {
+    nickname: "킴나니_",
+    before: "킴나니_",
+    after: "[버컴퍼니] 킴나니_",
+  }, { wait: async () => {} });
+
+  assert.equal(result.attempts, 2);
+  assert.equal(current.name, "[버컴퍼니] 킴나니_");
+  assert.equal(current.volume, 38);
+});
+
+test("updates only the stock name child while unrelated parent transactions continue", async () => {
+  const current = { name: "킴나니_", price: 12000, volume: 37 };
+  let parentTransactions = 0;
+  const nameRef = {
+    async set(value) {
+      current.name = value;
+    },
+    async get() {
+      return { val: () => current.name };
+    },
+  };
+  const stockRef = {
+    child(path) {
+      assert.equal(path, "name");
+      return nameRef;
+    },
+    async transaction() {
+      parentTransactions++;
+      throw new Error("name update should not transact the busy parent stock object");
+    },
+  };
+
+  const result = await retryStockNameTransaction(stockRef, {
+    nickname: "킴나니_",
+    before: "킴나니_",
+    after: "[버컴퍼니] 킴나니_",
+  });
+
+  assert.equal(result.attempts, 1);
+  assert.deepEqual(current, { name: "[버컴퍼니] 킴나니_", price: 12000, volume: 37 });
+  assert.equal(parentTransactions, 0);
+});
+
+test("does not overwrite a child name that changed after preview", async () => {
+  let currentName = "[다른크루] 킴나니_";
+  let writes = 0;
+  const nameRef = {
+    async get() {
+      return { val: () => currentName };
+    },
+    async set(value) {
+      writes++;
+      currentName = value;
+    },
+  };
+  const stockRef = { child: () => nameRef };
+
+  await assert.rejects(
+    retryStockNameTransaction(stockRef, {
+      nickname: "킴나니_",
+      before: "킴나니_",
+      after: "[버컴퍼니] 킴나니_",
+    }),
+    (error) => error.code === "stock-name-conflict",
+  );
+  assert.equal(writes, 0);
+  assert.equal(currentName, "[다른크루] 킴나니_");
+});
+
 test("does not overwrite a stock name changed after preview", async () => {
   const stockRef = {
     async transaction(update) {

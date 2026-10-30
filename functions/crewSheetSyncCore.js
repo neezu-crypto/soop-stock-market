@@ -286,17 +286,55 @@ async function retryStockNameTransaction(stockRef, change, {
   maxAttempts = 5,
   wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
+  const nameRef = typeof stockRef.child === "function" ? stockRef.child("name") : null;
+  if (nameRef) {
+    // Trades transact on the whole stock object while changing prices, volume,
+    // and holdings. A name-child write avoids contending on that entire object.
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const currentName = (await nameRef.get())?.val?.();
+      if (currentName === change.after) return { attempts: attempt + 1, currentStock: null };
+      if (currentName !== change.before) {
+        const error = new Error(`'${change.nickname}' 종목명이 미리보기 뒤 바뀌었습니다. 다시 미리보기해주세요.`);
+        error.code = "stock-name-conflict";
+        throw error;
+      }
+
+      await nameRef.set(change.after);
+      const savedName = (await nameRef.get())?.val?.();
+      if (savedName === change.after) return { attempts: attempt + 1, currentStock: null };
+      if (savedName !== change.before) {
+        const error = new Error(`'${change.nickname}' 종목명이 저장 중 바뀌었습니다. 다시 미리보기해주세요.`);
+        error.code = "stock-name-conflict";
+        throw error;
+      }
+      if (attempt + 1 < maxAttempts) await wait(100 * (attempt + 1));
+    }
+
+    const error = new Error(`'${change.nickname}' 종목 이름 저장을 확인하지 못했습니다. 다시 시도해주세요.`);
+    error.code = "stock-transaction-contention";
+    throw error;
+  }
+
+  const transactionRef = nameRef || stockRef;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const result = await stockRef.transaction((currentStock) => {
-      if (!currentStock || typeof currentStock !== "object") return;
-      const currentName = typeof currentStock.name === "string" ? currentStock.name : null;
-      if (currentName === change.after) return currentStock;
+    const result = await transactionRef.transaction((currentValue) => {
+      if (!currentValue || typeof currentValue !== "object") return;
+      const currentName = typeof currentValue.name === "string" ? currentValue.name : null;
+      if (currentName === change.after) return currentValue;
       if (currentName !== change.before) return;
-      return { ...currentStock, name: change.after };
+      return { ...currentValue, name: change.after };
     });
 
-    const currentStock = result?.snapshot?.val?.();
-    const currentName = typeof currentStock?.name === "string" ? currentStock.name : null;
+    let currentStock = result?.snapshot?.val?.();
+    let currentName = typeof currentStock?.name === "string" ? currentStock.name : null;
+    if (result?.committed && currentName === change.after) return { attempts: attempt + 1, currentStock };
+
+    // The transaction result can race with another write to this stock. Read
+    // the live record before deciding that the reviewed name changed or retrying.
+    const latestValue = typeof stockRef.get === "function" ? (await stockRef.get())?.val?.() : currentStock;
+    if (latestValue && typeof latestValue === "object") currentStock = latestValue;
+    currentName = typeof currentStock?.name === "string" ? currentStock.name : null;
+
     if (currentName === change.after) return { attempts: attempt + 1, currentStock };
     if (currentName !== change.before) {
       const error = new Error(`'${change.nickname}' 종목명이 미리보기 뒤 바뀌었습니다. 다시 미리보기해주세요.`);
