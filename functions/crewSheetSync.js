@@ -10,6 +10,7 @@ const {
   validateIntervalHours,
   planCrewRosterSync,
   listValue,
+  retryStockNameTransaction,
 } = require("./crewSheetSyncCore");
 
 const ROOT = "stockMarket/adminCrewSheetSync";
@@ -255,18 +256,20 @@ async function applyStockNameChanges(db, changes) {
   for (const change of changes) {
     // Trades and the simulator transact on the whole stocks/{id} object. Updating
     // only its name child can race with a parent transaction and get overwritten,
-    // so change the name inside the same object-level transaction instead.
+    // so change the name inside the same object-level transaction instead. Busy
+    // stocks can exhaust RTDB's internal retries, so retry a bounded number of
+    // times while the name still matches the reviewed value.
     const stockRef = db.ref(`stocks/${change.stockId}`);
-    const result = await stockRef.transaction((currentStock) => {
-      if (!currentStock || typeof currentStock !== "object") return;
-      const currentName = typeof currentStock.name === "string" ? currentStock.name : null;
-      if (currentName === change.after) return currentStock;
-      if (currentName !== change.before) return;
-      return { ...currentStock, name: change.after };
-    });
-    const currentName = result.snapshot.val()?.name || null;
-    if (currentName !== change.after) {
-      throw new HttpsError("failed-precondition", `적용 중 '${change.nickname}' 종목명이 바뀌었습니다. 일부 안전한 변경은 반영됐을 수 있으니 다시 미리보기해주세요.`);
+    try {
+      await retryStockNameTransaction(stockRef, change);
+    } catch (error) {
+      if (error?.code === "stock-name-conflict") {
+        throw new HttpsError("failed-precondition", error.message);
+      }
+      if (error?.code === "stock-transaction-contention") {
+        throw new HttpsError("aborted", error.message);
+      }
+      throw error;
     }
   }
 }

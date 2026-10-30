@@ -7,6 +7,7 @@ const {
   resolveCrewRosterIdentities,
   validateIntervalHours,
   planCrewRosterSync,
+  retryStockNameTransaction,
 } = require("../crewSheetSyncCore");
 
 function makeCsv(rows) {
@@ -185,4 +186,45 @@ test("tracks a SOOP account across a canonical nickname change without a false r
     sourceLabel: "새닉네임",
     stationId: "streamerid",
   }]);
+});
+
+test("retries a busy stock transaction while preserving its latest trading fields", async () => {
+  let current = { name: "킴나니_", price: 12000, volume: 37 };
+  let attempts = 0;
+  const stockRef = {
+    async transaction(update) {
+      attempts++;
+      if (attempts < 3) return { committed: false, snapshot: { val: () => current } };
+      current = update({ ...current, volume: 38 });
+      return { committed: true, snapshot: { val: () => current } };
+    },
+  };
+
+  const result = await retryStockNameTransaction(stockRef, {
+    nickname: "킴나니_",
+    before: "킴나니_",
+    after: "[버컴퍼니] 킴나니_",
+  }, { wait: async () => {} });
+
+  assert.equal(result.attempts, 3);
+  assert.deepEqual(current, { name: "[버컴퍼니] 킴나니_", price: 12000, volume: 38 });
+});
+
+test("does not overwrite a stock name changed after preview", async () => {
+  const stockRef = {
+    async transaction(update) {
+      const current = { name: "[다른크루] 킴나니_" };
+      assert.equal(update(current), undefined);
+      return { committed: false, snapshot: { val: () => current } };
+    },
+  };
+
+  await assert.rejects(
+    retryStockNameTransaction(stockRef, {
+      nickname: "킴나니_",
+      before: "킴나니_",
+      after: "[버컴퍼니] 킴나니_",
+    }, { wait: async () => {} }),
+    (error) => error.code === "stock-name-conflict",
+  );
 });

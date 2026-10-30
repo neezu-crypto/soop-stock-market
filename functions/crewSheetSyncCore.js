@@ -282,6 +282,36 @@ function stableSnapshot(entries) {
     .sort((a, b) => a.nickname.localeCompare(b.nickname, "ko"));
 }
 
+async function retryStockNameTransaction(stockRef, change, {
+  maxAttempts = 5,
+  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+} = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await stockRef.transaction((currentStock) => {
+      if (!currentStock || typeof currentStock !== "object") return;
+      const currentName = typeof currentStock.name === "string" ? currentStock.name : null;
+      if (currentName === change.after) return currentStock;
+      if (currentName !== change.before) return;
+      return { ...currentStock, name: change.after };
+    });
+
+    const currentStock = result?.snapshot?.val?.();
+    const currentName = typeof currentStock?.name === "string" ? currentStock.name : null;
+    if (currentName === change.after) return { attempts: attempt + 1, currentStock };
+    if (currentName !== change.before) {
+      const error = new Error(`'${change.nickname}' 종목명이 미리보기 뒤 바뀌었습니다. 다시 미리보기해주세요.`);
+      error.code = "stock-name-conflict";
+      throw error;
+    }
+
+    if (attempt + 1 < maxAttempts) await wait(100 * (attempt + 1));
+  }
+
+  const error = new Error(`'${change.nickname}' 종목 거래가 계속 갱신되어 적용을 잠시 미뤘습니다. 다시 시도해주세요.`);
+  error.code = "stock-transaction-contention";
+  throw error;
+}
+
 function planCrewRosterSync({ roster, stocks, previousSnapshot = [], absenceStreaks = [], initialized = false, identityReviews = [], unresolvedSourceLabels = [] }) {
   const stockData = stocks && typeof stocks === "object" ? stocks : {};
   const byNickname = new Map();
@@ -426,5 +456,6 @@ module.exports = {
   splitStockName,
   listValue,
   stableSnapshot,
+  retryStockNameTransaction,
   planCrewRosterSync,
 };
