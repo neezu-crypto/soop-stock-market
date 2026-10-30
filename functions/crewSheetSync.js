@@ -20,7 +20,7 @@ const MAX_CSV_BYTES = 2 * 1024 * 1024;
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const SOOP_STREAMER_SEARCH_API = "https://sch.sooplive.co.kr/api.php";
 const SOOP_ID_PATTERN = /^[a-z0-9]{2,20}$/i;
-const IDENTITY_LOOKUP_ATTEMPTS = 3;
+const IDENTITY_LOOKUP_ATTEMPTS = 5;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -106,7 +106,7 @@ async function lookupNicknameByStationId(stationId) {
     } catch (error) {
       if (attempt === IDENTITY_LOOKUP_ATTEMPTS - 1) throw error;
     }
-    await delay(150 * (attempt + 1));
+    await delay(250 * (attempt + 1));
   }
   return null;
 }
@@ -132,7 +132,7 @@ async function lookupNicknameByDisplayLabel(displayLabel) {
     } catch (error) {
       if (attempt === IDENTITY_LOOKUP_ATTEMPTS - 1) throw error;
     }
-    await delay(150 * (attempt + 1));
+    await delay(250 * (attempt + 1));
   }
   return null;
 }
@@ -173,7 +173,7 @@ async function fetchRoster(sheetUrl, { resolveIdentities = true } = {}) {
   });
   if (!resolveIdentities) return { ...parsedRoster, sourceHash };
 
-  const resolvedEntries = await mapWithConcurrency(displayLabels, 8, async (displayLabel) => {
+  const resolvedEntries = await mapWithConcurrency(displayLabels, 3, async (displayLabel) => {
     const links = linksByNickname.get(displayLabel) || [];
     if (links.length > 1) {
       return [displayLabel, { reason: "시트에 같은 표시명의 SOOP 링크가 여러 개" }];

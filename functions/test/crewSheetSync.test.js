@@ -216,7 +216,7 @@ test("resolves a label without a sheet link only when SOOP search identifies one
 
 test("retries a linked SOOP account when the first identity search returns no match", async () => {
   const restoreFetch = mockSheet(rosterCsv(["예니"]), {
-    예니: { nickname: "예니_ouo", stationId: "yeniouoyeni", transientMisses: 1 },
+    예니: { nickname: "예니_ouo", stationId: "yeniouoyeni", transientMisses: 2 },
   });
   try {
     const sheet = await fetchRoster(settings.sheetUrl);
