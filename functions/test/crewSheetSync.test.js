@@ -232,6 +232,38 @@ test("retries a linked SOOP account when the first identity search returns no ma
   }
 });
 
+test("retries transiently incomplete Google Sheets link metadata before reading a valid snapshot", async () => {
+  const names = Array.from({ length: 10 }, (_, index) => `멤버${index + 1}`);
+  const rows = Array.from({ length: 6 }, () => Array(21).fill(""));
+  rows[0][1] = "테스트크루A(5)";
+  rows[0][11] = "테스트크루B(5)";
+  names.slice(0, 5).forEach((name, index) => { rows[index + 1][2] = name; });
+  names.slice(5).forEach((name, index) => { rows[index + 1][12] = name; });
+  const csv = rows.map((row) => row.join(",")).join("\n");
+  const identities = Object.fromEntries(names.map((name) => [name, name]));
+  const restoreFetch = mockSheet(csv, identities);
+  const stableFetch = global.fetch;
+  let metadataReads = 0;
+  global.fetch = async (input, ...args) => {
+    const url = new URL(String(input));
+    if (url.hostname === "docs.google.com" && url.searchParams.get("output") === "html") {
+      metadataReads++;
+      if (metadataReads === 1) {
+        return { ok: true, status: 200, text: async () => "https://www.sooplive.com/station/unparsed1" };
+      }
+    }
+    return stableFetch(input, ...args);
+  };
+
+  try {
+    const sheet = await fetchRoster(settings.sheetUrl);
+    assert.equal(metadataReads, 2);
+    assert.equal(sheet.resolvedIdentityCount, names.length);
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("uses only a recently verified identity cache when SOOP search omits a linked account", async () => {
   const restoreFetch = mockSheet(rosterCsv(["예니"]), {
     예니: { nickname: "예니_ouo", stationId: "yeniouoyeni", transientMisses: 5 },

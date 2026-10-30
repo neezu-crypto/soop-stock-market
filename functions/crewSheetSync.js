@@ -66,6 +66,26 @@ async function readTextResponse(url, maxBytes, label) {
   return text;
 }
 
+async function readStableCrewSheetLinkMap(metadataUrl, displayLabels) {
+  const minimumLinks = displayLabels.length < 10
+    ? 0
+    : Math.floor(displayLabels.length * 0.5);
+  let lastLinkCount = 0;
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const html = await readTextResponse(metadataUrl, MAX_HTML_BYTES, "시트 닉네임 링크");
+    const linksByNickname = parseCrewSheetLinkMap(html);
+    lastLinkCount = linksByNickname.size;
+    const hasUnparsedStationLinks = /https?:\/\/(?:www\.)?sooplive\.(?:com|co\.kr)\/station\/|https?:\/\/ch\.sooplive\.co\.kr\//iu.test(html);
+    if (!hasUnparsedStationLinks || (linksByNickname.size > 0 && linksByNickname.size >= minimumLinks)) {
+      return linksByNickname;
+    }
+    if (attempt < 9) await delay(150 * Math.min(attempt + 1, 5));
+  }
+
+  throw new Error(`시트의 SOOP 링크 정보를 안정적으로 확인하지 못했습니다 (${lastLinkCount}/${displayLabels.length}명). 다시 미리보기해주세요.`);
+}
+
 async function soopSearch(query) {
   const params = new URLSearchParams({
     l: "DF",
@@ -177,13 +197,10 @@ async function refreshIdentityCache(db, identityCacheUpdates) {
 
 async function fetchRoster(sheetUrl, { resolveIdentities = true, identityCache = {} } = {}) {
   const { exportUrl, metadataUrl } = parseSpreadsheetUrl(sheetUrl);
-  const [csv, html] = await Promise.all([
-    readTextResponse(exportUrl, MAX_CSV_BYTES, "시트 데이터"),
-    readTextResponse(metadataUrl, MAX_HTML_BYTES, "시트 닉네임 링크"),
-  ]);
+  const csv = await readTextResponse(exportUrl, MAX_CSV_BYTES, "시트 데이터");
   const parsedRoster = parseCrewRosterCsv(csv);
-  const linksByNickname = parseCrewSheetLinkMap(html);
   const displayLabels = [...new Set(parsedRoster.roster.map((entry) => entry.nickname))];
+  const linksByNickname = await readStableCrewSheetLinkMap(metadataUrl, displayLabels);
   const sourceHash = digest({
     crews: parsedRoster.crews.map(({ crewName, expectedCount, leaderNickname, members }) => ({
       crewName,
