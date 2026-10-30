@@ -232,6 +232,24 @@ test("retries a linked SOOP account when the first identity search returns no ma
   }
 });
 
+test("uses only a recently verified identity cache when SOOP search omits a linked account", async () => {
+  const restoreFetch = mockSheet(rosterCsv(["예니"]), {
+    예니: { nickname: "예니_ouo", stationId: "yeniouoyeni", transientMisses: 5 },
+  });
+  try {
+    const sheet = await fetchRoster(settings.sheetUrl, {
+      identityCache: {
+        yeniouoyeni: { nickname: "예니_ouo", checkedAt: Date.now() },
+      },
+    });
+    assert.equal(sheet.resolvedIdentityCount, 1);
+    assert.equal(sheet.roster[0].nickname, "예니_ouo");
+    assert.equal(sheet.identityCacheUpdates.length, 0);
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("applies the reviewed SOOP identity snapshot without resolving it again", async () => {
   const csv = rosterCsv(["예니"]);
   const db = new MemoryDatabase({ stocks: { canonical: { name: "예니_ouo" } } });

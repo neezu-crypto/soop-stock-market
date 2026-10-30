@@ -15,6 +15,7 @@ const {
 const ROOT = "stockMarket/adminCrewSheetSync";
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const LOCK_TTL_MS = 3 * 60 * 1000;
+const IDENTITY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 15 * 1000;
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
@@ -149,7 +150,31 @@ async function mapWithConcurrency(items, concurrency, mapper) {
   return results;
 }
 
-async function fetchRoster(sheetUrl, { resolveIdentities = true } = {}) {
+function getFreshCachedIdentity(identityCache, stationId, now = Date.now()) {
+  const id = String(stationId || "").trim().toLowerCase();
+  const cached = identityCache?.[id];
+  const checkedAt = Number(cached?.checkedAt);
+  if (!SOOP_ID_PATTERN.test(id) || !cached?.nickname || !Number.isFinite(checkedAt)
+      || checkedAt > now + 5 * 60 * 1000 || now - checkedAt > IDENTITY_CACHE_TTL_MS) return null;
+  return { nickname: String(cached.nickname), stationId: id, fresh: false };
+}
+
+async function refreshIdentityCache(db, identityCacheUpdates) {
+  if (!Array.isArray(identityCacheUpdates) || !identityCacheUpdates.length) return;
+  const checkedAt = Date.now();
+  const ref = db.ref(`${ROOT}/identityCache`);
+  await ref.transaction((current) => {
+    const next = current && typeof current === "object" ? { ...current } : {};
+    for (const identity of identityCacheUpdates) {
+      const stationId = String(identity.stationId || "").trim().toLowerCase();
+      const nickname = String(identity.nickname || "").trim();
+      if (SOOP_ID_PATTERN.test(stationId) && nickname) next[stationId] = { nickname, checkedAt };
+    }
+    return next;
+  });
+}
+
+async function fetchRoster(sheetUrl, { resolveIdentities = true, identityCache = {} } = {}) {
   const { exportUrl, metadataUrl } = parseSpreadsheetUrl(sheetUrl);
   const [csv, html] = await Promise.all([
     readTextResponse(exportUrl, MAX_CSV_BYTES, "시트 데이터"),
@@ -179,13 +204,21 @@ async function fetchRoster(sheetUrl, { resolveIdentities = true } = {}) {
       return [displayLabel, { reason: "시트에 같은 표시명의 SOOP 링크가 여러 개" }];
     }
     if (links.length === 1) {
-      const identity = await lookupNicknameByStationId(links[0].stationId);
-      return [displayLabel, identity || { reason: "SOOP 링크의 실제 닉네임을 확인하지 못함" }];
+      const cached = getFreshCachedIdentity(identityCache, links[0].stationId);
+      try {
+        const identity = await lookupNicknameByStationId(links[0].stationId);
+        if (identity) return [displayLabel, { ...identity, fresh: true }];
+      } catch (error) {
+        if (cached) return [displayLabel, cached];
+        throw error;
+      }
+      return [displayLabel, cached || { reason: "SOOP 링크의 실제 닉네임을 확인하지 못함" }];
     }
     const identity = await lookupNicknameByDisplayLabel(displayLabel);
-    return [displayLabel, identity || { reason: "SOOP 링크가 없거나 실제 닉네임을 하나로 확인하지 못함" }];
+    return [displayLabel, identity ? { ...identity, fresh: true } : { reason: "SOOP 링크가 없거나 실제 닉네임을 하나로 확인하지 못함" }];
   });
-  return { ...resolveCrewRosterIdentities(parsedRoster, new Map(resolvedEntries)), sourceHash };
+  const identityCacheUpdates = resolvedEntries.map(([, identity]) => identity).filter((identity) => identity?.fresh);
+  return { ...resolveCrewRosterIdentities(parsedRoster, new Map(resolvedEntries)), sourceHash, identityCacheUpdates };
 }
 
 async function getInputs(db) {
@@ -314,7 +347,9 @@ async function actionPreviewCrewSheetSync(db, auth) {
     const settingsSnap = await db.ref(`${ROOT}/settings`).get();
     const settings = settingsSnap.val() || {};
     if (!settings.sheetUrl) throw new HttpsError("failed-precondition", "먼저 시트 주소와 주기를 저장해주세요.");
-    const sheet = await fetchRoster(settings.sheetUrl);
+    const identityCache = (await db.ref(`${ROOT}/identityCache`).get()).val() || {};
+    const sheet = await fetchRoster(settings.sheetUrl, { identityCache });
+    await refreshIdentityCache(db, sheet.identityCacheUpdates);
     const { stocks, state, inputHash } = await getInputs(db);
     const plan = planCrewRosterSync({
       roster: sheet.roster,
@@ -469,10 +504,11 @@ const syncCrewRosterFromSheet = onSchedule({ schedule: "every 15 minutes", timeZ
   const db = admin.database();
   const release = await acquireLock(db);
   try {
-    const [settingsSnap, stateSnap, statusSnap] = await Promise.all([
+    const [settingsSnap, stateSnap, statusSnap, identityCacheSnap] = await Promise.all([
       db.ref(`${ROOT}/settings`).get(),
       db.ref(`${ROOT}/state`).get(),
       db.ref(`${ROOT}/status`).get(),
+      db.ref(`${ROOT}/identityCache`).get(),
     ]);
     const settings = settingsSnap.val() || {};
     const state = stateSnap.val() || {};
@@ -480,7 +516,8 @@ const syncCrewRosterFromSheet = onSchedule({ schedule: "every 15 minutes", timeZ
     const now = Date.now();
     if (!settings.enabled || !state.initialized || !settings.sheetUrl || !status.nextRunAt || status.nextRunAt > now) return;
 
-    const sheet = await fetchRoster(settings.sheetUrl);
+    const sheet = await fetchRoster(settings.sheetUrl, { identityCache: identityCacheSnap.val() || {} });
+    await refreshIdentityCache(db, sheet.identityCacheUpdates);
     await applyRoster(db, {
       sheetUrl: settings.sheetUrl,
       roster: sheet.roster,
