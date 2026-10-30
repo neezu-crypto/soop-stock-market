@@ -219,20 +219,21 @@ function summarizePlan(plan, roster, sourceMemberCount = roster.length, resolved
 }
 
 async function applyStockNameChanges(db, changes) {
-  for (let offset = 0; offset < changes.length; offset += 20) {
-    const batch = changes.slice(offset, offset + 20);
-    const results = await Promise.all(batch.map(async (change) => {
-      const nameRef = db.ref(`stocks/${change.stockId}/name`);
-      const result = await nameRef.transaction((currentName) => {
-        if (currentName === change.after) return currentName;
-        if (currentName !== change.before) return;
-        return change.after;
-      });
-      return { change, committed: result.committed, currentName: result.snapshot.val() };
-    }));
-    const conflict = results.find(({ change, currentName }) => currentName !== change.after);
-    if (conflict) {
-      throw new HttpsError("failed-precondition", `적용 중 '${conflict.change.nickname}' 종목명이 바뀌었습니다. 일부 안전한 변경은 반영됐을 수 있으니 다시 미리보기해주세요.`);
+  for (const change of changes) {
+    // Trades and the simulator transact on the whole stocks/{id} object. Updating
+    // only its name child can race with a parent transaction and get overwritten,
+    // so change the name inside the same object-level transaction instead.
+    const stockRef = db.ref(`stocks/${change.stockId}`);
+    const result = await stockRef.transaction((currentStock) => {
+      if (!currentStock || typeof currentStock !== "object") return;
+      const currentName = typeof currentStock.name === "string" ? currentStock.name : null;
+      if (currentName === change.after) return currentStock;
+      if (currentName !== change.before) return;
+      return { ...currentStock, name: change.after };
+    });
+    const currentName = result.snapshot.val()?.name || null;
+    if (currentName !== change.after) {
+      throw new HttpsError("failed-precondition", `적용 중 '${change.nickname}' 종목명이 바뀌었습니다. 일부 안전한 변경은 반영됐을 수 있으니 다시 미리보기해주세요.`);
     }
   }
 }

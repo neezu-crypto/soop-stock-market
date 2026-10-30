@@ -141,7 +141,10 @@ const settings = {
 };
 
 test("admin flow previews and applies exact matches, then enables scheduled sync", async () => {
-  const db = new MemoryDatabase({ stocks: { alpha: { name: "알파" }, beta: { name: "베타" } } });
+  const db = new MemoryDatabase({ stocks: {
+    alpha: { name: "알파", price: 12345, volume: 7 },
+    beta: { name: "베타", price: 67890, volume: 11 },
+  } });
   const restoreFetch = mockSheet(rosterCsv(["알파", "베타"]), { 알파: "알파", 베타: "베타" });
   try {
     await actionSaveCrewSheetSyncSettings(db, settings);
@@ -154,6 +157,8 @@ test("admin flow previews and applies exact matches, then enables scheduled sync
     assert.equal(result.appliedCount, 2);
     assert.equal(db.value.stocks.alpha.name, "[감컴퍼니] 알파");
     assert.equal(db.value.stocks.beta.name, "[테스트크루] 베타");
+    assert.equal(db.value.stocks.alpha.price, 12345);
+    assert.equal(db.value.stocks.alpha.volume, 7);
     assert.equal(db.value.stockMarket.adminCrewSheetSync.state.initialized, true);
 
     await actionSaveCrewSheetSyncSettings(db, { ...settings, enabled: true });
