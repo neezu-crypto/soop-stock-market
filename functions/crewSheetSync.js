@@ -149,7 +149,7 @@ async function mapWithConcurrency(items, concurrency, mapper) {
   return results;
 }
 
-async function fetchRoster(sheetUrl) {
+async function fetchRoster(sheetUrl, { resolveIdentities = true } = {}) {
   const { exportUrl, metadataUrl } = parseSpreadsheetUrl(sheetUrl);
   const [csv, html] = await Promise.all([
     readTextResponse(exportUrl, MAX_CSV_BYTES, "시트 데이터"),
@@ -158,6 +158,21 @@ async function fetchRoster(sheetUrl) {
   const parsedRoster = parseCrewRosterCsv(csv);
   const linksByNickname = parseCrewSheetLinkMap(html);
   const displayLabels = [...new Set(parsedRoster.roster.map((entry) => entry.nickname))];
+  const sourceHash = digest({
+    crews: parsedRoster.crews.map(({ crewName, expectedCount, leaderNickname, members }) => ({
+      crewName,
+      expectedCount,
+      leaderNickname,
+      members,
+    })),
+    roster: parsedRoster.roster,
+    links: [...displayLabels].sort((a, b) => a.localeCompare(b, "ko")).map((label) => [
+      label,
+      (linksByNickname.get(label) || []).map(({ stationId }) => stationId).sort(),
+    ]),
+  });
+  if (!resolveIdentities) return { ...parsedRoster, sourceHash };
+
   const resolvedEntries = await mapWithConcurrency(displayLabels, 8, async (displayLabel) => {
     const links = linksByNickname.get(displayLabel) || [];
     if (links.length > 1) {
@@ -170,7 +185,7 @@ async function fetchRoster(sheetUrl) {
     const identity = await lookupNicknameByDisplayLabel(displayLabel);
     return [displayLabel, identity || { reason: "SOOP 링크가 없거나 실제 닉네임을 하나로 확인하지 못함" }];
   });
-  return resolveCrewRosterIdentities(parsedRoster, new Map(resolvedEntries));
+  return { ...resolveCrewRosterIdentities(parsedRoster, new Map(resolvedEntries)), sourceHash };
 }
 
 async function getInputs(db) {
@@ -315,8 +330,13 @@ async function actionPreviewCrewSheetSync(db, auth) {
       createdAt: Date.now(),
       createdByUid: auth?.uid || null,
       sheetUrl: settings.sheetUrl,
-      sourceHash: digest({ roster: sheet.roster, identityReviews: sheet.identityReviews, unresolvedSourceLabels: sheet.unresolvedSourceLabels }),
+      sourceHash: sheet.sourceHash,
       inputHash,
+      roster: sheet.roster,
+      identityReviews: sheet.identityReviews,
+      unresolvedSourceLabels: sheet.unresolvedSourceLabels,
+      sourceMemberCount: sheet.sourceMemberCount,
+      resolvedIdentityCount: sheet.resolvedIdentityCount,
     };
     await db.ref(`${ROOT}/preview`).set(preview);
     return {
@@ -417,18 +437,20 @@ async function actionApplyCrewSheetSyncPreview(db, payload, auth) {
     const settingsSnap = await db.ref(`${ROOT}/settings`).get();
     const settings = settingsSnap.val() || {};
     if (settings.sheetUrl !== preview.sheetUrl) throw new HttpsError("failed-precondition", "시트 설정이 바뀌었습니다. 다시 미리보기해주세요.");
-    const sheet = await fetchRoster(settings.sheetUrl);
-    const sourceHash = digest({ roster: sheet.roster, identityReviews: sheet.identityReviews, unresolvedSourceLabels: sheet.unresolvedSourceLabels });
-    if (sourceHash !== preview.sourceHash) throw new HttpsError("failed-precondition", "미리보기 뒤 시트 내용 또는 실제 닉네임이 바뀌었습니다. 다시 미리보기해주세요.");
+    const sheetSource = await fetchRoster(settings.sheetUrl, { resolveIdentities: false });
+    if (sheetSource.sourceHash !== preview.sourceHash) throw new HttpsError("failed-precondition", "미리보기 뒤 시트 내용 또는 방송국 링크가 바뀌었습니다. 다시 미리보기해주세요.");
+    if (!Array.isArray(preview.roster) || !Array.isArray(preview.identityReviews) || !Array.isArray(preview.unresolvedSourceLabels)) {
+      throw new HttpsError("failed-precondition", "저장된 미리보기 정보가 올바르지 않습니다. 다시 미리보기해주세요.");
+    }
     const inputs = await getInputs(db);
     if (inputs.inputHash !== preview.inputHash) throw new HttpsError("failed-precondition", "미리보기 뒤 종목 또는 동기화 기준이 바뀌었습니다. 다시 미리보기해주세요.");
     return await applyRoster(db, {
       sheetUrl: settings.sheetUrl,
-      roster: sheet.roster,
-      identityReviews: sheet.identityReviews,
-      unresolvedSourceLabels: sheet.unresolvedSourceLabels,
-      sourceMemberCount: sheet.sourceMemberCount,
-      resolvedIdentityCount: sheet.resolvedIdentityCount,
+      roster: preview.roster,
+      identityReviews: preview.identityReviews,
+      unresolvedSourceLabels: preview.unresolvedSourceLabels,
+      sourceMemberCount: preview.sourceMemberCount,
+      resolvedIdentityCount: preview.resolvedIdentityCount,
       trigger: "manual",
       authUid: auth.uid,
       previewId: preview.previewId,

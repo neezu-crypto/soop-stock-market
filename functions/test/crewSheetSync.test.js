@@ -227,6 +227,35 @@ test("retries a linked SOOP account when the first identity search returns no ma
   }
 });
 
+test("applies the reviewed SOOP identity snapshot without resolving it again", async () => {
+  const csv = rosterCsv(["예니"]);
+  const db = new MemoryDatabase({ stocks: { canonical: { name: "예니_ouo" } } });
+  const restoreFetch = mockSheet(csv, {
+    예니: { nickname: "예니_ouo", stationId: "yeniouoyeni" },
+  });
+  try {
+    await actionSaveCrewSheetSyncSettings(db, settings);
+    const preview = await actionPreviewCrewSheetSync(db, auth);
+    assert.equal(preview.actions[0].after, "[감컴퍼니] 예니_ouo");
+
+    const changedIdentityFetch = makeSheetFetch(csv, {
+      예니: { nickname: "예니_다른표기", stationId: "yeniouoyeni" },
+    });
+    global.fetch = async (input, ...args) => {
+      if (new URL(String(input)).hostname === "sch.sooplive.co.kr") {
+        throw new Error("SOOP identity should not be queried during apply");
+      }
+      return changedIdentityFetch(input, ...args);
+    };
+
+    const result = await actionApplyCrewSheetSyncPreview(db, { previewId: preview.previewId }, auth);
+    assert.equal(result.appliedCount, 1);
+    assert.equal(db.value.stocks.canonical.name, "[감컴퍼니] 예니_ouo");
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("stale preview and invalid roster never mutate stock names", async () => {
   const db = new MemoryDatabase({ stocks: { alpha: { name: "알파" } } });
   const restoreFetch = mockSheet(rosterCsv(["알파"]));
