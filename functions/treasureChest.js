@@ -7,6 +7,7 @@ const {
   TREASURE_CHEST_REWARD_SMALL,
   TREASURE_CHEST_REWARD_BIG,
   requireNotInMaintenance,
+  requireAdmin,
   creditUserCash,
 } = require("./common");
 
@@ -34,10 +35,7 @@ function requireUid(request) {
 
 async function requireChestAdmin(db, request) {
   const uid = requireUid(request);
-  const adminSnap = await db.ref(`adminCenter/adminUids/${uid}`).get();
-  if (adminSnap.val() !== true) {
-    throw new HttpsError("permission-denied", "보물상자 기능은 현재 관리자 전용입니다.");
-  }
+  await requireAdmin(db, request.auth);
   return uid;
 }
 

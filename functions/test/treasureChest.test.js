@@ -64,6 +64,12 @@ const common = {
   TREASURE_CHEST_REWARD_SMALL: 500000,
   TREASURE_CHEST_REWARD_BIG: 5000000,
   requireNotInMaintenance: async () => {},
+  requireAdmin: async (db, auth) => {
+    if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    const adminSnap = await db.ref(`adminCenter/adminUids/${auth.uid}`).get();
+    if (adminSnap.val() === true || auth.token?.email === "skftodwocks2@gmail.com") return;
+    throw new HttpsError("permission-denied", "관리자 권한이 없습니다.");
+  },
   creditUserCash: async (_db, uid, amount) => {
     const user = readPath(`users/${uid}`) || {};
     writePath(`users/${uid}`, { ...user, cash: (Number(user.cash) || 0) + amount });
@@ -82,6 +88,7 @@ Module._load = originalLoad;
 
 const adminUser = { auth: { uid: "chest-admin" }, data: {} };
 const regularUser = { auth: { uid: "regular-user" }, data: {} };
+const emailFallbackAdmin = { auth: { uid: "legacy-admin", token: { email: "skftodwocks2@gmail.com" } }, data: {} };
 const call = (name, user, data = {}) => chest[name]({ auth: user.auth, data });
 async function expectCode(promise, code) {
   await assert.rejects(promise, (error) => error instanceof HttpsError && error.code === code);
@@ -95,6 +102,7 @@ async function main() {
   };
 
   await expectCode(call("getAdminTreasureChestState", regularUser), "permission-denied");
+  assert.equal((await call("getAdminTreasureChestState", emailFallbackAdmin)).ok, true, "기존 관리자 이메일 대체 판별과 일치해야 함");
   await expectCode(call("purchaseTreasureChestsWithCash", regularUser, { requestId: "regular-chest-1", chestCount: 1 }), "permission-denied");
   await expectCode(call("openTreasureChest", regularUser), "permission-denied");
   await expectCode(call("submitTreasureChestPurchaseRequest", regularUser, { chestCount: 1 }), "failed-precondition");
