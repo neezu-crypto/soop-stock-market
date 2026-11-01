@@ -403,14 +403,14 @@
             <li><strong>정의는 서버·클라이언트 이중 관리:</strong> ID·아이콘·문구는 <code>functions/common.js</code>의 <code>ACHIEVEMENTS</code>와 <code>index.html</code>의 <code>ACHIEVEMENT_DEFS</code> 두 곳에 동일하게 유지해야 한다(서버는 지급 판정용, 클라이언트는 카탈로그 렌더링용 — 서버가 굳이 카탈로그를 클라이언트에 내려줄 필요가 없는 정적 데이터라 중복 관리 쪽을 택함)</li>
         </ul>
 
-        <h3>4.7 자산 충전 — 보물상자(후원창 구매 → 관리자 승인 → 직접 개봉)</h3>
-        <p>2026-07-27부로 기존 "방송 후원 후 관리자가 임의 지급액을 입력해 승인"하던 방식(<code>cashCharge.js</code>)을 대체했다. 룰렛 이벤트 결과(95% 50만원 / 5% 500만원)를 관리자가 방송에서 확인하고 수동으로 대입하던 운영 정책을, 정찰제 아이템 구매 + 서버 랜덤 판정으로 코드베이스 안에 그대로 흡수한 것이 <code>treasureChest.js</code>다. 기존 <code>cashCharge.js</code>/<code>submitCashChargeRequest</code>와 관리자 "💰 자산 충전 신청 검수" 패널은 과거 대기 신청 처리를 위해 코드는 남겨뒀지만, 메인 화면 진입점은 더 이상 연결하지 않는다.</p>
+        <h3>4.7 통합 캐시 — 관리자 전용 보물상자 구매·개봉</h3>
+        <p>2026-11-02부터 보물상자 셀프 별풍선 신청과 구독 무료 지급을 중단하고 통합 캐시 구매 구조로 전환한다. 당분간 보물상자 구매·취소·개봉 UI와 서버 함수는 관리자 계정만 사용할 수 있다. 일반 사용자 화면에서는 숨기지만 기존 보유 상자와 이미 제출된 별풍선 신청은 보존한다. 신규 별풍선 신청·구독 무료 지급은 서버에서도 차단하며 과거 pending 별풍선 신청은 기존 관리자 검수 기능으로만 처리한다.</p>
         <ul>
-            <li><strong>보물상자 구매:</strong> 1개당 별풍선 33개. -10/-1/+1/+10 버튼으로 개수를 고르면 필요 별풍선 수·보너스·최종 지급 개수가 실시간 자동 계산된다(<code>computeChestPurchase</code>, 서버·클라이언트 동일 로직 중복 구현). 10개 이상 한 번에 구매하면 상자 개수의 10%가 보너스로 추가 지급된다(<code>Math.floor(chestCount * 0.1)</code>, 최소 1개 단위로 내림)</li>
-            <li><strong>신청 흐름:</strong> ① 개수·닉네임·아이디 입력 후 "구매하기" → <code>submitTreasureChestPurchaseRequest</code>가 <code>treasureChestRequests</code>에 pending 기록만 남김(차감/지급 없음) → ② 같은 클릭으로 후원창(<code>gift_starballoon.php</code>)이 새 탭으로 열려 실제 후원 진행 → ③ 관리자가 "🎁 보물상자 구매 신청 검수" 패널에서 후원 내역 대조 후 <code>approveTreasureChestRequest</code> 승인 → <code>users/{uid}/treasureChests</code>에 총 개수(기본+보너스)가 트랜잭션으로 즉시 가산됨</li>
-            <li><strong>거절 시 환불 없음:</strong> 신청 시 아무것도 차감되지 않았으므로 거절은 단순히 상태만 변경(cashCharge와 동일한 패턴)</li>
-            <li><strong>보물상자 개봉:</strong> <code>openTreasureChest</code>가 <code>users/{uid}/treasureChests</code>를 트랜잭션으로 1개 차감(0개면 <code>failed-precondition</code>)한 뒤, <strong>95% 확률로 50만원 / 5% 확률로 500만원</strong>을 <code>creditUserCash</code>로 즉시 지급하고 결과를 <code>treasureChestOpens</code>에 로그로 남긴다. 클라이언트는 흔들림→팝 애니메이션과 파티클 이펙트(복권 긁기와 동일한 <code>lottery-particle-burst</code> 키프레임 재사용)로 결과를 보여준다</li>
-            <li><strong>트랜잭션 버그 수정 이력:</strong> 최초 배포 버전은 상자 개수 차감 시 <code>count &lt; 1</code>이면 <code>return undefined</code>로 즉시 중단시켰는데, 재시도 과정에서 실제 서버 값을 확인하기 전에 호출되는 케이스에서 잘못 실패 처리되는 문제가 있었다. 판정 결과를 클로저 변수에 남기고 최종 커밋된 값으로 성공 여부를 판단하도록 수정(2026-07-27)</li>
+            <li><strong>가격·보너스:</strong> 유료 상자 1개당 통합 캐시 33캐시. 유료 상자 10개마다 보너스 상자 1개를 지급하며, 20개 구매면 총 22개다. 서버가 수량·가격·보너스를 계산한다.</li>
+            <li><strong>잔액 차감:</strong> <code>purchaseTreasureChestsWithCash</code>가 관리자 UID를 확인하고 <code>gameSeriesWallet/accounts/{uid}</code>에서 환불 예약액을 제외한 가용 잔액을 검사한다. 계정의 요청 식별자 기록으로 중복 호출 차감을 막고 통합 캐시 거래 원장에 구매를 기록한다. 구매와 상자 지급은 단계별로 복구 가능하도록 기록한다.</li>
+            <li><strong>개봉 순서:</strong> 기존 집계 보유분(<code>users/{uid}/treasureChests</code>)은 과거 개별 구매 순서를 복원할 수 없어 가장 오래된 재고로 취급한다. 새 구매는 <code>stockMarket/treasureChestInventory/{uid}</code>의 서버 증가 순서로 보관하고, 묶음 10+1과 남은 낱개 수량을 별도로 추적한다.</li>
+            <li><strong>취소:</strong> 구매 후 7일 이내 미사용 낱개 상자는 1개씩 33캐시로 취소한다. 유료 10개+보너스 1개 묶음은 11개 전부 미사용일 때만 330캐시로 묶음 전체 취소가 가능하다. 개봉한 상자는 취소할 수 없고 보너스 상자 단독 취소도 허용하지 않는다. 취소와 캐시 반환은 동일 취소 ID로 중복 처리되지 않으며 반환 내역을 지갑 원장에 남긴다.</li>
+            <li><strong>개봉:</strong> 관리자 전용 <code>openTreasureChest</code>는 기존 잔액을 먼저 차감하고 이후 캐시 구매 재고를 구매 순서대로 차감한다. <strong>95% 확률로 50만원 / 5% 확률로 500만원</strong>을 기존과 같이 <code>creditUserCash</code>로 지급하며 개봉 로그에 재고 출처와 구매 식별자를 기록한다.</li>
         </ul>
 
         <h3>4.8 플레이타임 제한 — 하루 무료 이용 시간 &amp; 게임머니 셀프 충전</h3>
@@ -524,7 +524,7 @@
             <tr><td><code>listRelayRoomRequests</code> / <code>approveRelayRoomRequest</code> / <code>rejectRelayRoomRequest</code></td><td>중계방 홍보 신청 검수 — 승인 시 인원(최대 3명)·중복 진행 여부 재검사</td></tr>
             <tr><td><code>listActiveRelayRooms</code> / <code>deleteRelayRoom</code></td><td>현재 진행 중인 중계방 목록(N/3 인원 현황) 조회 / 조기 종료</td></tr>
             <tr><td><code>listCashChargeRequests</code> / <code>approveCashChargeRequest</code> / <code>rejectCashChargeRequest</code></td><td>[레거시] 자산 충전 신청 검수 — 승인 시 관리자가 지급액을 직접 입력. 보물상자로 대체되어 메인 화면에서는 더 이상 신규 신청이 들어오지 않지만, 과거 대기 신청 처리를 위해 패널·백엔드는 유지</td></tr>
-            <tr><td><code>listTreasureChestRequests</code> / <code>approveTreasureChestRequest</code> / <code>rejectTreasureChestRequest</code></td><td>보물상자 구매 신청 검수 — 승인 시 신청 개수(+10개 이상 구매 보너스 포함) 그대로 <code>users/{uid}/treasureChests</code>에 트랜잭션으로 가산(지급액을 관리자가 입력할 필요 없음, 정찰제)</td></tr>
+            <tr><td><code>listTreasureChestRequests</code> / <code>approveTreasureChestRequest</code> / <code>rejectTreasureChestRequest</code></td><td>[레거시] 이미 접수된 별풍선 보물상자 구매 신청만 검수하며 신규 신청은 서버에서 차단</td></tr>
             <tr><td><code>listListingRequests</code> / <code>approveListingRequest</code> / <code>rejectListingRequest</code></td><td>종목 상장 신청 검수 — 승인 시 시작가 10,000원으로 즉시 상장(오타 수정 후 승인 가능)</td></tr>
             <tr><td><code>listStreamerVerificationRequests</code> / <code>approveStreamerVerification</code> / <code>rejectStreamerVerification</code></td><td>스트리머 인증 신청 검수 — 목록에 신청자 닉네임과 신청 시각만 표시되며(2026-07-17부터 인증번호 표시 제거), <strong>관리자가 별도로 신원을 확인한 뒤에만 승인</strong>. "계정 전환"(<code>isSwitch</code>) 신청은 이미 인증된 닉네임을 다른 기기에서 재신청한 경우로, 승인해도 새 보호 플래그를 켜지 않고 신청 상태만 승인 처리 — 실제 커스텀 토큰 발급은 신청자가 클라이언트에서 재확인을 호출할 때 이뤄짐</td></tr>
             <tr><td><code>listVerifiedStreamers</code></td><td>이미 승인 완료된 스트리머 조회 전용(2026-07-22 추가) — <code>streamerVerifications</code>(닉네임↔uid 매핑)를 인증 시각 최신순으로 나열만 함. 취소·수정 기능은 없음</td></tr>
@@ -608,9 +608,11 @@
             <tr><td><code>relayRoomRequests/{id}</code></td><td>중계방 홍보 셀프 신청 내역 (닉네임/아이디/시간/차감액/상태)</td></tr>
             <tr><td><code>relayRooms/{streamerId}</code></td><td>진행 중인 중계방 (닉네임/미리보기 이미지/방송국 링크/시작·종료 시각) — 스트리머 아이디를 키로 사용해 중복 등록을 방지</td></tr>
             <tr><td><code>cashChargeRequests/{id}</code></td><td>[레거시] 자산 충전 셀프 신청 내역 (닉네임/아이디/상태, 승인 시 지급액 grantedAmount 기록) — 신청 시점엔 차감 없음. 보물상자로 대체되어 신규 유입은 없지만 과거 기록 보존 목적으로 유지</td></tr>
-            <tr><td><code>treasureChestRequests/{id}</code></td><td>보물상자 구매 셀프 신청 내역 (닉네임/아이디/chestCount/bonusChestCount/totalChestCount/starBalloons/상태) — 신청 시점엔 차감·지급 없음, 승인 시 totalChestCount만큼 상자 지급</td></tr>
+            <tr><td><code>treasureChestRequests/{id}</code></td><td>[레거시] 기존 별풍선 보물상자 신청. 신규 작성은 중단했고 과거 신청과 승인 이력은 보존</td></tr>
             <tr><td><code>users/{uid}/treasureChests</code></td><td>보유한 미개봉 보물상자 개수(숫자) — 본인만 읽기 가능, 쓰기는 서버(승인/개봉 트랜잭션)만</td></tr>
-            <tr><td><code>treasureChestOpens/{id}</code></td><td>보물상자 개봉 이력 <code>{uid, reward, isBig, openedAt}</code> — 비공개(Admin SDK 전용), 지급 감사 로그 용도</td></tr>
+            <tr><td><code>stockMarket/treasureChestInventory/{uid}</code></td><td>통합 캐시 구매 상자 주문 순서, 10+1 묶음·낱개 잔여량, 개봉·취소 상태와 캐시 반환 복구 기록 — 관리자 전용 callable 경유</td></tr>
+            <tr><td><code>gameSeriesWallet/accounts/{uid}/treasureChestPurchases</code> 및 <code>gameSeriesWallet/ledger/{uid}</code></td><td>요청별 캐시 차감·구매 상태와 구매·취소 캐시 변동 원장. 다른 충전·환불 기록과 동일한 지갑 잔액 및 환불 예약액 계산에 반영</td></tr>
+            <tr><td><code>treasureChestOpens/{id}</code></td><td>보물상자 개봉 이력 <code>{uid, reward, isBig, openedAt, source, purchaseId}</code> — 비공개(Admin SDK 전용), 지급 감사 로그 용도</td></tr>
             <tr><td><code>listingRequests/{id}</code></td><td>신규 상장 셀프 신청 내역 (종목명/신청자/상태) — 유일하게 관리자 승인이 남아있는 셀프 신청</td></tr>
             <tr><td><code>maintenance</code></td><td>소프트 점검모드 상태 <code>{active, startAt}</code> — 공개 읽기, 클라이언트 직접 쓰기 차단(<code>adminAction</code> 경유)</td></tr>
             <tr><td><code>rankings/profitEntries/{uid}</code></td><td>손익 랭킹 항목 <code>{anonId, value, updatedAt}</code> — <code>value</code>에 <code>.indexOn</code> 인덱스를 걸어 <code>orderByChild('value')</code> 쿼리만으로 상위 N명 조회. 유저가 확인할 때마다 서버가 본인 항목만 갱신</td></tr>

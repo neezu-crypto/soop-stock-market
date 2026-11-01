@@ -6,7 +6,8 @@
   },
   "main": "index.js",
   "scripts": {
-    "test:crew-sheet-sync": "node --test test/crewSheetSync*.test.js"
+    "test:crew-sheet-sync": "node --test test/crewSheetSync*.test.js",
+    "test:treasure-chest": "node test/treasureChest.test.js"
   },
   "dependencies": {
     "firebase-admin": "^12.5.0",

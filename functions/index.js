@@ -26,7 +26,7 @@ setGlobalOptions({
 //   profitRanking.js  — 순수 매매 손익 랭킹 확인/갱신
 //   attendance.js     — 출석 보상(1~7일차 순환)
 //   lottery.js        — 복권함(계정당 구매, 즉시 판정 스크래치 복권)
-//   treasureChest.js  — 보물상자(후원창 구매 신청 → 관리자 승인 → 직접 개봉해 랜덤 보상)
+//   treasureChest.js  — 관리자 전용 통합 캐시 구매·취소·개봉 + 기존 신청 이력 보존
 //   streamerVerification.js — 카카오/구글 대체 계정 보호(방송 검증 기반)
 //   common.js         — 위 모듈들이 공유하는 상수/헬퍼 (Cloud Function 없음)
 const { stockWhoAmI } = require("./whoami");
@@ -51,7 +51,14 @@ const { claimDailyAttendance } = require("./attendance");
 const { buyLotteryTicket } = require("./lottery");
 const { getStockSubscriptionBenefitsCallable } = require("./subscriptionBenefits");
 const { requestStreamerVerification } = require("./streamerVerification");
-const { submitTreasureChestPurchaseRequest, claimMonthlyFreeTreasureChest, openTreasureChest } = require("./treasureChest");
+const {
+  submitTreasureChestPurchaseRequest,
+  claimMonthlyFreeTreasureChest,
+  getAdminTreasureChestState,
+  purchaseTreasureChestsWithCash,
+  cancelTreasureChestCashPurchase,
+  openTreasureChest,
+} = require("./treasureChest");
 const { logStockMarketVisit } = require("./streamerVisitLog");
 const { syncStreamerNameOnStockChange } = require("./streamerNamesSync");
 const { migratePublicIdentityData } = require("./privacyMigration");
@@ -82,6 +89,9 @@ exports.claimDailyAttendance          = claimDailyAttendance;
 exports.buyLotteryTicket              = buyLotteryTicket;
 exports.getStockSubscriptionBenefits  = getStockSubscriptionBenefitsCallable;
 exports.claimMonthlyFreeTreasureChest = claimMonthlyFreeTreasureChest;
+exports.getAdminTreasureChestState = getAdminTreasureChestState;
+exports.purchaseTreasureChestsWithCash = purchaseTreasureChestsWithCash;
+exports.cancelTreasureChestCashPurchase = cancelTreasureChestCashPurchase;
 exports.requestStreamerVerification   = requestStreamerVerification;
 exports.submitTreasureChestPurchaseRequest = submitTreasureChestPurchaseRequest;
 exports.openTreasureChest                  = openTreasureChest;

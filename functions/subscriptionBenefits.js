@@ -8,7 +8,6 @@ const BENEFIT_PATH = "stockSubscriptionBenefits";
 const SUBSCRIPTION_PAYMENT_METHOD = "subscription-entitlement";
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const APPROVAL_LEASE_MS = 60 * 1000;
-const CHEST_CLAIM_LEASE_MS = 60 * 1000;
 
 const BENEFITS = Object.freeze({
   banner: { limit: 7, unit: "일", usageField: "bannerDaysUsed", requestPath: "bannerRequests", label: "우측 랭킹 배너" },
@@ -69,6 +68,8 @@ function getBenefitView(account = {}, subscriptionExpiresAt = 0, now = Date.now(
     benefits,
     treasureChest: {
       limit: 1,
+      suspended: true,
+      available: false,
       claimed: chestClaim?.status === "granted",
       pending: chestClaim?.status === "reserved",
     },
@@ -438,71 +439,7 @@ async function rejectExpiredSubscriptionRequest(db, requestPath, requestId, requ
 }
 
 async function claimMonthlyFreeTreasureChest(db, uid, now = Date.now(), auth = null) {
-  const adminEligible = await isAdmin(db, uid, auth?.token?.email);
-  const month = kstMonthKey(now);
-  const claimId = `free-chest-${month}`;
-  const accountRef = db.ref(`${BENEFIT_PATH}/${uid}/${month}`);
-  let alreadyClaimed = false;
-  const accountTx = await accountRef.transaction((current) => {
-    const account = current || {};
-    const claim = account.treasureChestClaim;
-    if (claim?.status === "granted") {
-      alreadyClaimed = true;
-      return;
-    }
-    if (claim?.status === "reserved" && Number(claim.leaseUntil) > now) return;
-    return {
-      ...account,
-      treasureChestClaim: { status: "reserved", claimId, requestedAt: now, leaseUntil: now + CHEST_CLAIM_LEASE_MS },
-    };
-  });
-
-  let account = accountTx.snapshot.val() || {};
-  if (alreadyClaimed || account.treasureChestClaim?.status === "granted") {
-    const count = Number((await db.ref(`users/${uid}/treasureChests`).get()).val()) || 0;
-    return { ok: true, alreadyClaimed: true, month, remaining: count };
-  }
-  if (!accountTx.committed && account.treasureChestClaim?.status === "reserved") {
-    throw new HttpsError("aborted", "무료 보물상자 지급을 처리 중입니다. 잠시 후 다시 확인해주세요.");
-  }
-  if (account.treasureChestClaim?.claimId !== claimId) {
-    throw new HttpsError("aborted", "이번 달 무료 보물상자를 예약하지 못했습니다.");
-  }
-
-  const subscriptionExpiresAt = await getSubscriptionExpiry(db, uid);
-  if (subscriptionExpiresAt <= now && !adminEligible) {
-    // 예약 전에는 활성 구독을 확인하지만, 이 방어 검사는 호출자 외부에서
-    // 직접 이 helper를 재사용하는 경우에도 월 무료 지급 기준을 지킨다.
-    await accountRef.child("treasureChestClaim").remove();
-    throw new HttpsError("failed-precondition", "활성 통합 구독이 필요합니다. 구독 인증 상태를 확인해주세요.");
-  }
-
-  const userRef = db.ref(`users/${uid}`);
-  let grantAlreadyExists = false;
-  const userTx = await userRef.transaction((current) => {
-    if (!current) return current;
-    const grantIds = current.treasureChestGrantIds || {};
-    if (grantIds[claimId]) {
-      grantAlreadyExists = true;
-      return current;
-    }
-    return {
-      ...current,
-      treasureChests: (Number(current.treasureChests) || 0) + 1,
-      treasureChestGrantIds: { ...grantIds, [claimId]: now },
-    };
-  });
-  if (!userTx.committed || !userTx.snapshot.val()?.treasureChestGrantIds?.[claimId]) {
-    throw new HttpsError("aborted", "무료 보물상자 지급을 완료하지 못했습니다. 다시 시도해주세요.");
-  }
-
-  await accountRef.child("treasureChestClaim").update({ status: "granted", grantedAt: now, leaseUntil: null });
-  return {
-    ok: true,
-    alreadyClaimed: grantAlreadyExists,
-    month,
-    remaining: Number(userTx.snapshot.val()?.treasureChests) || 0,
-  };
+  throw new HttpsError("failed-precondition", "무료 보물상자 지급은 일시 중단되었습니다.");
 }
 
 module.exports = {

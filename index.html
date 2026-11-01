@@ -502,22 +502,21 @@
 </div>
 
 <!-- ══════════════════════════════════════════
-     자산 충전 — 방식 선택 (보물상자 구매 / 보물상자 열기)
+     보물상자 관리 — 관리자 전용 테스트
 ══════════════════════════════════════════ -->
 <div id="asset-charge-modal" class="promo-modal-overlay" style="z-index:4000;">
     <div class="promo-modal-content" style="max-width:380px;text-align:center;">
-        <div class="promo-modal-header"><h2>💰 자산 충전</h2></div>
+        <div class="promo-modal-header"><h2>🎁 보물상자 관리</h2></div>
         <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-bottom:14px;text-align:left;">
-            <div id="monthly-free-chest-status" role="status" aria-live="polite" style="font-size:13px;color:#cbd5e1;line-height:1.6;">이번 달 무료 보물상자 상태를 확인하고 있어요.</div>
-            <button id="claim-monthly-free-chest-btn" type="button" hidden style="width:100%;margin-top:9px;background:#38bdf8;color:#0f172a;border:0;padding:11px;border-radius:9px;font-weight:800;cursor:pointer;">🎁 이번 달 무료 보물상자 1개 받기</button>
-            <button id="monthly-free-chest-subscription-btn" type="button" hidden style="width:100%;margin-top:9px;background:#334155;color:#f8fafc;border:0;padding:10px;border-radius:9px;font-weight:700;cursor:pointer;">통합 구독 인증하기</button>
+            <div id="monthly-free-chest-status" role="status" aria-live="polite" style="font-size:13px;color:#cbd5e1;line-height:1.6;">일반 사용자 대상 구매·개봉과 구독 무료 지급은 기능 재개 전까지 중단되었습니다. 기존 보유 상자는 계정에 유지됩니다.</div>
         </div>
         <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
-            <li>🎁 <b>추가 보물상자:</b> 후원창(별풍선 33개/개)으로 신청 → 관리자 확인 후 지급</li>
+            <li>🎁 <b>캐시 구매:</b> 1개당 33캐시, 관리자만 이용 가능</li>
             <li>📦 <b>보물상자 열기:</b> 보유한 상자를 열어 95% 50만원 / 5% 500만원 획득</li>
+            <li>🧾 구매 후 7일 이내 미사용 상자만 취소할 수 있습니다. 사용된 상자는 취소할 수 없습니다.</li>
         </ul>
         <div style="display:flex;flex-direction:column;gap:10px;">
-            <button onclick="openTreasureChestBuyModal()" class="btn-confirm-contact">🎁 보물상자 구매</button>
+            <button onclick="openTreasureChestBuyModal()" class="btn-confirm-contact">🎁 통합 캐시로 구매</button>
             <button onclick="openTreasureChestOpenModal()" style="width:100%;background:#a855f7;color:white;border:none;padding:14px;border-radius:12px;cursor:pointer;font-weight:800;font-size:15px;">📦 보물상자 열기</button>
             <button onclick="closeAssetChargeModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
         </div>
@@ -525,15 +524,15 @@
 </div>
 
 <!-- ══════════════════════════════════════════
-     보물상자 구매 (별풍선 33개/개, 10개 이상 한 번에 구매 시 10% 보너스)
+     보물상자 구매 (통합 캐시 33캐시/개, 유료 상자 10개마다 보너스 1개)
 ══════════════════════════════════════════ -->
 <div id="treasure-chest-buy-modal" class="promo-modal-overlay" style="z-index:4000;">
     <div class="promo-modal-content" style="max-width:420px;">
-        <div class="promo-modal-header"><h2>🎁 보물상자 구매</h2></div>
+        <div class="promo-modal-header"><h2>🎁 통합 캐시로 보물상자 구매</h2></div>
         <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
-            <li>💰 <b>가격:</b> 1개당 별풍선 33개</li>
-            <li>🎉 <b>보너스:</b> 10개 이상 한 번에 구매 시 상자 10% 추가 지급</li>
-            <li>✅ <b>확인:</b> 관리자가 후원 내역을 직접 확인한 뒤 상자를 지급합니다</li>
+            <li>💰 <b>가격:</b> 1개당 통합 캐시 33캐시</li>
+            <li>🎉 <b>보너스:</b> 유료 상자 10개마다 보너스 상자 1개 지급</li>
+            <li>✅ 사용 가능한 잔액에서만 구매하며, 환불 검수 중인 캐시는 사용할 수 없습니다.</li>
         </ul>
 
         <div style="background:rgba(255,255,255,0.05);border:1px solid #475569;border-radius:10px;padding:14px;margin-bottom:14px;">
@@ -545,24 +544,21 @@
                 <button onclick="adjustChestQty(1)" style="background:#334155;color:white;border:none;width:36px;height:36px;border-radius:8px;cursor:pointer;font-weight:700;">+1</button>
                 <button onclick="adjustChestQty(10)" style="background:#334155;color:white;border:none;width:44px;height:36px;border-radius:8px;cursor:pointer;font-weight:700;">+10</button>
             </div>
-            <div style="text-align:center;font-size:13px;color:#94a3b8;">별풍선 <b id="chest-balloon-cost" style="color:#facc15;">33</b>개 필요</div>
+            <div style="text-align:center;font-size:13px;color:#94a3b8;">필요 캐시 <b id="chest-balloon-cost" style="color:#facc15;">33</b>캐시</div>
             <div id="chest-bonus-text" style="text-align:center;font-size:12px;color:#4ade80;font-weight:700;margin-top:4px;display:none;"></div>
             <div style="text-align:center;font-size:14px;color:#f8fafc;font-weight:800;margin-top:6px;">받을 상자: <span id="chest-total-count">1</span>개</div>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
-            <input type="text" id="chest-buy-nickname" placeholder="닉네임"
-                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
-            <input type="text" id="chest-buy-soopid" placeholder="아이디 (예: skftodwocks2)"
-                style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
-        </div>
+        <div id="chest-wallet-summary" role="status" aria-live="polite" style="background:rgba(255,255,255,0.05);padding:10px 12px;border-radius:9px;margin-bottom:12px;font-size:12px;color:#cbd5e1;text-align:left;">캐시와 보유 상자 정보를 불러오는 중...</div>
+        <div id="chest-pending-recovery" style="display:none;margin-bottom:12px;"></div>
+        <div id="chest-purchase-history" style="max-height:220px;overflow:auto;text-align:left;margin-bottom:12px;"></div>
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            "구매하기"를 누르면 신청이 접수되고 후원창이 열립니다. 후원창에서 위에 표시된 별풍선 개수만큼 후원해주세요 — 후원할 때 사용한 닉네임/아이디와 위 입력값이 같아야 관리자가 확인할 수 있어요.
+            구매 즉시 캐시가 차감되고 상자가 지급됩니다. 구매 후 7일 이내 미사용 낱개 상자는 33캐시씩 취소할 수 있습니다. 10개 구매 보너스 묶음(유료 10개+보너스 1개)은 11개 전부 미사용일 때만 묶음 전체(330캐시)를 취소할 수 있습니다. 개봉한 상자는 취소 대상이 아닙니다. 기존 보유 상자는 가장 오래된 재고로 먼저 개봉됩니다.
         </div>
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
             <button onclick="backToAssetChargeModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">뒤로</button>
-            <button id="chest-buy-submit-btn" onclick="submitTreasureChestPurchase()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">🎁 구매하기</button>
+            <button id="chest-buy-submit-btn" onclick="submitTreasureChestPurchase()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">🎁 캐시로 구매</button>
         </div>
     </div>
 </div>
@@ -1097,7 +1093,7 @@
         <div class="stock-subscription-benefits" role="note">
             <strong>인증 후 이용할 수 있는 서비스</strong>
             <ul>
-                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장 · 매월 홍보 이용권 5종과 무료 보물상자 1개</span></li>
+                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장 · 매월 홍보 이용권 5종 · 보물상자 기능은 일시 중단</span></li>
                 <li><b>홍보 이용권</b><span>우측 배너 7일 · 차트 배너 7일 · 카드 배너 7일 · 최상단 고정 12시간 · 중계방 8시간</span></li>
                 <li><b>초기화와 검수</b><span>KST 매월 1일 초기화 · 미사용분 이월 없음 · 신청 후 관리자 승인 시 노출 시작</span></li>
                 <li><b>고점체크</b><span>기간별 최고 시청 순간 분석 · 같은 날 2명 비교 · 키워드로 여러 스트리머 비교</span></li>
@@ -1280,7 +1276,7 @@
                 </div>
                 <div id="wallet-details" class="wallet-details">
                     <div class="wallet-control-buttons">
-                        <button onclick="openAssetChargeModal()"
+                        <button id="asset-charge-open-btn" onclick="openAssetChargeModal()"
                             style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
                             💰 자산 충전
                         </button>
@@ -1413,7 +1409,11 @@ const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동
 // isAdminUser는 auth 상태가 바뀔 때마다 refreshAdminStatus()가 갱신하는 캐시값이다.
 let isAdminUser = false;
 async function refreshAdminStatus(user) {
-    if (!user || user.isAnonymous) { isAdminUser = false; return; }
+    if (!user || user.isAnonymous) {
+        isAdminUser = false;
+        window.dispatchEvent(new Event('stock-admin-status-change'));
+        return;
+    }
     try {
         const result = await whoAmICallable();
         isAdminUser = !!(result.data && result.data.isAdmin);
@@ -1421,6 +1421,7 @@ async function refreshAdminStatus(user) {
         console.error('관리자 여부 확인 실패:', e);
         isAdminUser = false;
     }
+    window.dispatchEvent(new Event('stock-admin-status-change'));
 }
 
 // 테스트 기간 동안 플레이 시간 충전(유료)만 막았었다 — 2026-07-12 해제.
@@ -1527,14 +1528,15 @@ const linkKakaoAccountCallable = httpsCallable(functions, 'linkKakaoAccount');
 const linkGoogleAccountCallable = httpsCallable(functions, 'linkGoogleAccount');
 const initializeUserCallable   = httpsCallable(functions, 'initializeUser');
 const submitCashChargeRequestCallable = httpsCallable(functions, 'submitCashChargeRequest');
-const submitTreasureChestPurchaseRequestCallable = httpsCallable(functions, 'submitTreasureChestPurchaseRequest');
 const openTreasureChestCallable = httpsCallable(functions, 'openTreasureChest');
+const getAdminTreasureChestStateCallable = httpsCallable(functions, 'getAdminTreasureChestState');
+const purchaseTreasureChestsWithCashCallable = httpsCallable(functions, 'purchaseTreasureChestsWithCash');
+const cancelTreasureChestCashPurchaseCallable = httpsCallable(functions, 'cancelTreasureChestCashPurchase');
 const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
 const heartbeatCallable = httpsCallable(functions, 'heartbeat');
 const buyPlayTimeCallable = httpsCallable(functions, 'buyPlayTime');
 const submitRelayRoomRequestCallable = httpsCallable(functions, 'submitRelayRoomRequest');
 const getStockSubscriptionBenefitsCallable = httpsCallable(functions, 'getStockSubscriptionBenefits');
-const claimMonthlyFreeTreasureChestCallable = httpsCallable(functions, 'claimMonthlyFreeTreasureChest');
 const unfreezeWithCashCallable = httpsCallable(functions, 'unfreezeWithCash');
 const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUnfreezeDonationRequest');
 const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequest');
@@ -1794,9 +1796,9 @@ function renderStockSubscriptionModal(message = '') {
     if (message) {
         status.textContent = message;
     } else if (state.isAdmin) {
-        status.textContent = '관리자 권한으로 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권·무료 보물상자를 이용할 수 있어요.';
+        status.textContent = '관리자 권한으로 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권을 이용할 수 있어요. 보물상자는 관리자 전용 점검 중입니다.';
     } else if (state.subscribed) {
-        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권 5종·무료 보물상자 1개를 이용할 수 있어요. 이용권은 KST 매월 1일 초기화되고 미사용분은 이월되지 않습니다.`;
+        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권 5종을 이용할 수 있어요. 보물상자 기능은 관리자 전용 점검 중입니다. 이용권은 KST 매월 1일 초기화되고 미사용분은 이월되지 않습니다.`;
     } else if (!protectedAccount) {
         status.textContent = '익명 계정은 구독 인증을 신청할 수 없어요. 먼저 계정을 보호해 주세요.';
     } else if (hasPending) {
@@ -2919,10 +2921,11 @@ initPromotions({
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
         getStockSubscriptionBenefitsCallable,
-        claimMonthlyFreeTreasureChestCallable,
         submitCashChargeRequestCallable,
-        submitTreasureChestPurchaseRequestCallable,
         openTreasureChestCallable,
+        getAdminTreasureChestStateCallable,
+        purchaseTreasureChestsWithCashCallable,
+        cancelTreasureChestCashPurchaseCallable,
         unfreezeWithCashCallable,
         submitUnfreezeDonationRequestCallable,
         submitListingRequestCallable,

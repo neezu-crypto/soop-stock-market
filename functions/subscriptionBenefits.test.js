@@ -167,31 +167,17 @@ test("a refunded entitlement cannot be approved after the queue status update fa
   assert.equal(activeDb.data.stocks, undefined);
 });
 
-test("monthly free treasure chest can only be granted once", async () => {
+test("monthly free treasure chest is suspended even for active subscribers and admins", async () => {
   activeDb = baseDatabase();
-  const first = await benefits.claimMonthlyFreeTreasureChest(activeDb, auth.uid, NOW, auth);
-  const retry = await benefits.claimMonthlyFreeTreasureChest(activeDb, auth.uid, NOW + 1000, auth);
-
-  assert.equal(first.alreadyClaimed, false);
-  assert.equal(retry.alreadyClaimed, true);
-  assert.equal(activeDb.data.users[auth.uid].treasureChests, 1);
-  assert.equal(activeDb.data.stockSubscriptionBenefits[auth.uid]["2026-10"].treasureChestClaim.status, "granted");
-});
-
-test("a stale chest claim reservation can be recovered without granting twice", async () => {
-  activeDb = baseDatabase();
-  const month = benefits.kstMonthKey(NOW);
-  activeDb.data.stockSubscriptionBenefits = {
-    [auth.uid]: { [month]: { treasureChestClaim: { status: "reserved", claimId: `free-chest-${month}`, leaseUntil: NOW + 30_000 } } },
-  };
   await assert.rejects(
     benefits.claimMonthlyFreeTreasureChest(activeDb, auth.uid, NOW, auth),
-    (error) => error.code === "aborted",
+    (error) => error.code === "failed-precondition",
   );
-
-  const recovered = await benefits.claimMonthlyFreeTreasureChest(activeDb, auth.uid, NOW + 60_001, auth);
-  assert.equal(recovered.alreadyClaimed, false);
-  assert.equal(activeDb.data.users[auth.uid].treasureChests, 1);
+  const view = benefits.getBenefitView({}, ACTIVE_SUBSCRIPTION.expiresAt, NOW, false);
+  assert.equal(view.treasureChest.suspended, true);
+  assert.equal(view.treasureChest.available, false);
+  assert.equal(activeDb.data.users[auth.uid].treasureChests, 0);
+  assert.equal(activeDb.data.stockSubscriptionBenefits, undefined, "중단된 무료 지급은 수령 예약 기록을 만들지 않아야 함");
 });
 
 test("KST monthly boundaries reset at midnight on the first day", () => {

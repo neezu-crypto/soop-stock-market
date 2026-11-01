@@ -22,10 +22,11 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
         getStockSubscriptionBenefitsCallable,
-        claimMonthlyFreeTreasureChestCallable,
         submitCashChargeRequestCallable,
-        submitTreasureChestPurchaseRequestCallable,
         openTreasureChestCallable,
+        getAdminTreasureChestStateCallable,
+        purchaseTreasureChestsWithCashCallable,
+        cancelTreasureChestCashPurchaseCallable,
         unfreezeWithCashCallable,
         submitUnfreezeDonationRequestCallable,
         submitListingRequestCallable,
@@ -141,58 +142,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
 
     function renderMonthlyChestClaimStatus() {
         const status = document.getElementById('monthly-free-chest-status');
-        const claimBtn = document.getElementById('claim-monthly-free-chest-btn');
-        const subscriptionBtn = document.getElementById('monthly-free-chest-subscription-btn');
-        if (!status || !claimBtn || !subscriptionBtn) return;
-        claimBtn.hidden = true;
-        subscriptionBtn.hidden = true;
-        if (!monthlyBenefitStatus) {
-            status.textContent = '이번 달 무료 보물상자 상태를 확인하고 있어요.';
-            return;
-        }
-        if (!monthlyBenefitStatus.eligible) {
-            status.textContent = '통합 구독이 활성화된 보호 계정은 매월 보물상자 1개를 받을 수 있어요.';
-            subscriptionBtn.hidden = false;
-            return;
-        }
-        if (monthlyBenefitStatus.treasureChest?.claimed) {
-            status.textContent = '이번 달 무료 보물상자를 받았습니다. 보유 상자에서 언제든 열 수 있어요.';
-            return;
-        }
-        if (monthlyBenefitStatus.treasureChest?.pending) {
-            status.textContent = '이번 달 무료 보물상자 지급이 진행 중이거나 확인이 필요합니다. 아래 버튼으로 상태를 확인할 수 있어요.';
-            claimBtn.textContent = '🎁 무료 보물상자 지급 확인';
-            claimBtn.hidden = false;
-            return;
-        }
-        status.textContent = `이번 달 무료 보물상자 1개를 받을 수 있어요. ${formatKstMonthReset(monthlyBenefitStatus.resetsAt)} 초기화되며 이월되지 않습니다.`;
-        claimBtn.textContent = '🎁 이번 달 무료 보물상자 1개 받기';
-        claimBtn.hidden = false;
+        if (status) status.textContent = '구독자 무료 보물상자 지급은 기능 재개 전까지 중단되었습니다. 기존에 보유한 상자는 유지됩니다.';
     }
-
-    document.getElementById('claim-monthly-free-chest-btn')?.addEventListener('click', async (event) => {
-        const button = event.currentTarget;
-        button.disabled = true;
-        button.textContent = '지급 중...';
-        try {
-            const response = await claimMonthlyFreeTreasureChestCallable();
-            await refreshMonthlyBenefitStatus();
-            window.alert(response.data?.alreadyClaimed
-                ? '이번 달 무료 보물상자는 이미 받았어요.'
-                : '이번 달 무료 보물상자 1개를 지급했어요.');
-        } catch (error) {
-            window.alert(error?.message || '무료 보물상자를 받지 못했습니다. 다시 시도해주세요.');
-            try { await refreshMonthlyBenefitStatus(); } catch (_) { /* keep the last known state */ }
-        } finally {
-            button.disabled = false;
-            button.textContent = '🎁 이번 달 무료 보물상자 1개 받기';
-            renderMonthlyChestClaimStatus();
-        }
-    });
-
-    document.getElementById('monthly-free-chest-subscription-btn')?.addEventListener('click', () => {
-        window.openStockSubscriptionModal?.();
-    });
 
     // 자산충전/홍보/중계방/고정노출 등 로그인(계정 보호) 유저 전용 기능의
     // 공통 게이트 — 실제 차단은 서버(requireLinkedUser)가 하지만, 폼을 다
@@ -744,28 +695,195 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         });
     };
 
-    // ── 보물상자 (자산 충전 — 후원창 구매 신청 → 관리자 승인 → 직접 개봉) ──
+    // ── 보물상자 (관리자 전용 통합 캐시 구매·취소·개봉) ──
     // 서버(functions/common.js)와 동일한 값을 표시용으로만 들고 있는다 —
     // 최종 검증/차감은 항상 서버가 한다.
-    const TREASURE_CHEST_BALLOON_PRICE        = 33;
+    const TREASURE_CHEST_PRICE_CASH           = 33;
     const TREASURE_CHEST_MAX_BUY_COUNT        = 200;
     const TREASURE_CHEST_BULK_BONUS_THRESHOLD = 10;
-    const TREASURE_CHEST_BULK_BONUS_RATE      = 0.10;
-    // 기존 별풍선 구매형 보물상자 신청에서만 사용하는 후원 링크.
-    const TREASURE_CHEST_DONATION_URL = 'https://st.sooplive.com/app/gift_starballoon.php?szBjId=skftodwocks2&szWork=BJ_STATION&sys_type=web&location=station';
+    const CHEST_PURCHASE_RETRY_STORAGE_KEY = 'soopStockMarket.chestPurchaseRetry.v1';
+    let chestAdminState = null;
+    const chestCancelWindowMs = 7 * 24 * 60 * 60 * 1000;
+
+    function setChestAdminEntryVisibility() {
+        const button = document.getElementById('asset-charge-open-btn');
+        const admin = !!getIsAdmin();
+        if (button) button.style.display = admin ? '' : 'none';
+        if (!admin) {
+            document.getElementById('asset-charge-modal')?.classList.remove('active');
+            document.getElementById('treasure-chest-buy-modal')?.classList.remove('active');
+            document.getElementById('treasure-chest-open-modal')?.classList.remove('active');
+        }
+    }
+    setChestAdminEntryVisibility();
+    window.addEventListener('stock-admin-status-change', setChestAdminEntryVisibility);
+
+    function readPendingChestPurchase() {
+        try {
+            const value = JSON.parse(localStorage.getItem(CHEST_PURCHASE_RETRY_STORAGE_KEY) || 'null');
+            return value && typeof value.requestId === 'string' && Number.isInteger(value.chestCount) ? value : null;
+        } catch (_) { return null; }
+    }
+
+    function writePendingChestPurchase(value) {
+        try { localStorage.setItem(CHEST_PURCHASE_RETRY_STORAGE_KEY, JSON.stringify(value)); } catch (_) { /* retry safety remains server-side */ }
+    }
+
+    function clearPendingChestPurchase(requestId) {
+        const current = readPendingChestPurchase();
+        if (current?.requestId === requestId) {
+            try { localStorage.removeItem(CHEST_PURCHASE_RETRY_STORAGE_KEY); } catch (_) { /* ignore unavailable storage */ }
+        }
+    }
+
+    function chestCurrency(value) {
+        return `${(Number(value) || 0).toLocaleString()}캐시`;
+    }
+
+    function setChestButtonBusy(button, busy, label) {
+        if (!button) return;
+        button.disabled = busy;
+        if (label) button.textContent = label;
+    }
+
+    function renderChestHistory(state) {
+        const host = document.getElementById('chest-purchase-history');
+        const recoveryHost = document.getElementById('chest-pending-recovery');
+        if (!host || !recoveryHost) return;
+        host.replaceChildren();
+        recoveryHost.replaceChildren();
+        const now = Date.now();
+        const pending = Array.isArray(state.pendingCancellations) ? state.pendingCancellations : [];
+        if (pending.length) {
+            recoveryHost.style.display = 'grid';
+            const title = document.createElement('strong');
+            title.textContent = '캐시 반환 확인이 필요한 취소';
+            recoveryHost.append(title);
+            pending.forEach((item) => {
+                const retry = document.createElement('button');
+                retry.type = 'button';
+                retry.textContent = `${Number(item.cashAmount || 0).toLocaleString()}캐시 반환 재시도`;
+                retry.addEventListener('click', () => cancelChestItem({
+                    purchaseId: item.purchaseId,
+                    cancellationId: item.id,
+                    itemType: item.itemType,
+                    itemIndex: item.itemIndex,
+                    retry: true,
+                }));
+                recoveryHost.append(retry);
+            });
+        } else {
+            recoveryHost.style.display = 'none';
+        }
+
+        const purchases = Array.isArray(state.purchases) ? [...state.purchases].sort((a, b) => Number(b.sequence || 0) - Number(a.sequence || 0)) : [];
+        if (!purchases.length) {
+            const empty = document.createElement('div');
+            empty.textContent = '통합 캐시로 구매한 상자 내역이 없습니다.';
+            empty.style.cssText = 'padding:8px;color:#94a3b8;font-size:12px;';
+            host.append(empty);
+            return;
+        }
+        purchases.forEach((purchase) => {
+            const row = document.createElement('article');
+            row.style.cssText = 'padding:9px 0;border-top:1px solid rgba(148,163,184,.2);font-size:12px;';
+            const date = new Date(Number(purchase.requestedAt) || 0);
+            const title = document.createElement('div');
+            title.style.cssText = 'display:flex;justify-content:space-between;gap:8px;';
+            const left = document.createElement('strong');
+            left.textContent = `${Number(purchase.paidChestCount || 0)}개 구매 · 보너스 ${Number(purchase.bonusChestCount || 0)}개 · ${chestCurrency(purchase.cashAmount)}`;
+            const remaining = document.createElement('span');
+            remaining.textContent = `잔여 ${Number(purchase.remainingChestCount ?? purchase.totalChestCount ?? 0)}개`;
+            title.append(left, remaining);
+            const timestamp = document.createElement('div');
+            timestamp.style.cssText = 'color:#94a3b8;margin-top:3px;';
+            timestamp.textContent = `${Number.isFinite(date.getTime()) ? date.toLocaleString('ko-KR') : '시간 정보 없음'} · 취소 가능 기간 7일`;
+            row.append(title, timestamp);
+            const canCancel = now >= Number(purchase.requestedAt) && now - Number(purchase.requestedAt) < chestCancelWindowMs;
+            const groups = Array.isArray(purchase.bundleGroups) ? purchase.bundleGroups : [];
+            groups.forEach((group, index) => {
+                if (!canCancel || group.cancelled || Number(group.remaining) !== 11 || Number(group.openedCount) !== 0) return;
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = `묶음 ${index + 1} 취소 (11개 · 330캐시)`;
+                button.style.cssText = 'margin:6px 5px 0 0;padding:5px 8px;';
+                button.addEventListener('click', () => cancelChestItem({
+                    purchaseId: purchase.purchaseId,
+                    cancellationId: `${purchase.purchaseId}_bundle_${index}`,
+                    itemType: 'bundle',
+                    itemIndex: index,
+                }));
+                row.append(button);
+            });
+            if (canCancel && Number(purchase.singleRemaining) > 0) {
+                const index = Number(purchase.singleCancelledCount || 0) + 1;
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = `낱개 1개 취소 (33캐시)`;
+                button.style.cssText = 'margin:6px 5px 0 0;padding:5px 8px;';
+                button.addEventListener('click', () => cancelChestItem({
+                    purchaseId: purchase.purchaseId,
+                    cancellationId: `${purchase.purchaseId}_single_${index}`,
+                    itemType: 'single',
+                    itemIndex: index,
+                }));
+                row.append(button);
+            }
+            host.append(row);
+        });
+    }
+
+    async function refreshChestAdminState() {
+        if (!getIsAdmin()) throw new Error('보물상자 기능은 현재 관리자 전용입니다.');
+        const response = await getAdminTreasureChestStateCallable();
+        chestAdminState = response.data || null;
+        if (!chestAdminState) throw new Error('보물상자 정보를 불러오지 못했습니다.');
+        const summary = document.getElementById('chest-wallet-summary');
+        if (summary) {
+            summary.textContent = `통합 캐시 잔액 ${chestCurrency(chestAdminState.balanceCash)} · 환불 예약 ${chestCurrency(chestAdminState.reservedRefundCash)} · 구매 가능 ${chestCurrency(chestAdminState.availableCash)} · 보유 상자 ${Number(chestAdminState.totalChestCount || 0).toLocaleString()}개 (기존 ${Number(chestAdminState.legacyChestCount || 0).toLocaleString()}개 포함)`;
+        }
+        renderChestQty();
+        renderChestHistory(chestAdminState);
+        const owned = document.getElementById('chest-owned-count');
+        if (owned) owned.textContent = Number(chestAdminState.totalChestCount || 0).toLocaleString();
+        const openButton = document.getElementById('chest-open-btn');
+        if (openButton && !openButton.classList.contains('is-opening')) {
+            openButton.disabled = Number(chestAdminState.totalChestCount || 0) < 1;
+        }
+        return chestAdminState;
+    }
+
+    async function cancelChestItem({ purchaseId, cancellationId, itemType, itemIndex, retry = false }) {
+        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
+        if (!retry) {
+            const amount = itemType === 'bundle' ? 330 : 33;
+            const count = itemType === 'bundle' ? 11 : 1;
+            if (!confirm(`미사용 보물상자 ${count}개를 취소하고 ${amount}캐시를 반환할까요?`)) return;
+        }
+        try {
+            await cancelTreasureChestCashPurchaseCallable({ purchaseId, cancellationId, itemType, itemIndex });
+            await refreshChestAdminState();
+            if (!retry) alert('보물상자 취소와 캐시 반환을 확인했습니다.');
+        } catch (error) {
+            alert(error?.message || '보물상자 취소를 처리하지 못했습니다.');
+            try { await refreshChestAdminState(); } catch (_) { /* retain visible recovery item */ }
+        }
+    }
 
     window.openAssetChargeModal = () => {
-        if (!requireLoginOrPrompt()) return;
+        setChestAdminEntryVisibility();
+        if (!getIsAdmin()) { alert('보물상자 기능은 현재 관리자 전용으로 중단되어 있습니다.'); return; }
         document.getElementById('asset-charge-modal').classList.add('active');
-        refreshMonthlyBenefitStatus().catch((error) => console.warn('월 무료 보물상자 조회 실패:', error));
+        refreshChestAdminState().catch((error) => {
+            const summary = document.getElementById('chest-wallet-summary');
+            if (summary) summary.textContent = error?.message || '보물상자 정보를 불러오지 못했습니다.';
+        });
     };
     window.closeAssetChargeModal = () => document.getElementById('asset-charge-modal').classList.remove('active');
 
     function computeChestPurchase(chestCount) {
-        const bonusChestCount = chestCount >= TREASURE_CHEST_BULK_BONUS_THRESHOLD
-            ? Math.floor(chestCount * TREASURE_CHEST_BULK_BONUS_RATE)
-            : 0;
-        return { bonusChestCount, totalChestCount: chestCount + bonusChestCount, starBalloons: chestCount * TREASURE_CHEST_BALLOON_PRICE };
+        const bonusChestCount = Math.floor(chestCount / TREASURE_CHEST_BULK_BONUS_THRESHOLD);
+        return { bonusChestCount, totalChestCount: chestCount + bonusChestCount, cashAmount: chestCount * TREASURE_CHEST_PRICE_CASH };
     }
 
     window.renderChestQty = function() {
@@ -773,11 +891,22 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         let chestCount = parseInt(input.value, 10);
         if (!Number.isInteger(chestCount) || chestCount < 1) chestCount = 1;
         if (chestCount > TREASURE_CHEST_MAX_BUY_COUNT) chestCount = TREASURE_CHEST_MAX_BUY_COUNT;
+        const pending = readPendingChestPurchase();
+        if (pending) chestCount = pending.chestCount;
+        else if (chestAdminState) {
+            const affordable = Math.floor(Number(chestAdminState.availableCash || 0) / TREASURE_CHEST_PRICE_CASH);
+            if (affordable >= 1) chestCount = Math.min(chestCount, affordable);
+        }
         input.value = chestCount;
 
-        const { bonusChestCount, totalChestCount, starBalloons } = computeChestPurchase(chestCount);
-        document.getElementById('chest-balloon-cost').innerText = starBalloons.toLocaleString();
+        const { bonusChestCount, totalChestCount, cashAmount } = computeChestPurchase(chestCount);
+        document.getElementById('chest-balloon-cost').innerText = cashAmount.toLocaleString();
         document.getElementById('chest-total-count').innerText  = totalChestCount.toLocaleString();
+        const pendingNote = pending ? '완료 여부가 불확실한 구매 요청이 있습니다. 같은 수량으로 다시 눌러 결과를 확인하세요.' : '';
+        const summary = document.getElementById('chest-wallet-summary');
+        if (summary && chestAdminState) {
+            summary.textContent = `${pendingNote ? `${pendingNote} · ` : ''}통합 캐시 잔액 ${chestCurrency(chestAdminState.balanceCash)} · 환불 예약 ${chestCurrency(chestAdminState.reservedRefundCash)} · 구매 가능 ${chestCurrency(chestAdminState.availableCash)} · 보유 상자 ${Number(chestAdminState.totalChestCount || 0).toLocaleString()}개`;
+        }
         const bonusEl = document.getElementById('chest-bonus-text');
         if (bonusChestCount > 0) {
             bonusEl.style.display = 'block';
@@ -785,6 +914,10 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         } else {
             bonusEl.style.display = 'none';
         }
+        const purchaseButton = document.getElementById('chest-buy-submit-btn');
+        if (purchaseButton) purchaseButton.disabled = !!(chestAdminState && Number(chestAdminState.availableCash || 0) < cashAmount);
+        input.disabled = !!pending;
+        document.querySelectorAll('#treasure-chest-buy-modal button[onclick^="adjustChestQty"]').forEach((button) => { button.disabled = !!pending; });
     };
 
     window.adjustChestQty = function(delta) {
@@ -795,10 +928,15 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     };
 
     window.openTreasureChestBuyModal = () => {
+        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
         window.closeAssetChargeModal();
-        document.getElementById('chest-qty-input').value = '1';
+        document.getElementById('chest-qty-input').value = String(readPendingChestPurchase()?.chestCount || 1);
         window.renderChestQty();
         document.getElementById('treasure-chest-buy-modal').classList.add('active');
+        refreshChestAdminState().catch((error) => {
+            const summary = document.getElementById('chest-wallet-summary');
+            if (summary) summary.textContent = error?.message || '구매 가능 잔액을 확인하지 못했습니다.';
+        });
     };
     window.closeTreasureChestBuyModal = () => document.getElementById('treasure-chest-buy-modal').classList.remove('active');
     window.backToAssetChargeModal = () => {
@@ -808,34 +946,43 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     };
 
     window.submitTreasureChestPurchase = async function() {
-        await submitRequestForm({
-            submitBtnId: 'chest-buy-submit-btn',
-            submitLabel: '🎁 구매하기',
-            validateAndBuild() {
-                const nickname   = document.getElementById('chest-buy-nickname').value.trim();
-                const soopId     = document.getElementById('chest-buy-soopid').value.trim().toLowerCase();
-                const chestCount = parseInt(document.getElementById('chest-qty-input').value, 10);
-                if (!nickname) { alert('닉네임을 입력해주세요.'); return null; }
-                if (!isValidSoopId(soopId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
-                if (!Number.isInteger(chestCount) || chestCount < 1 || chestCount > TREASURE_CHEST_MAX_BUY_COUNT) {
-                    alert(`구매 개수는 1~${TREASURE_CHEST_MAX_BUY_COUNT}개 사이로 입력해주세요.`);
-                    return null;
-                }
-                return { nickname, soopId, chestCount };
-            },
-            callable: submitTreasureChestPurchaseRequestCallable,
-            onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다! 후원창에서 별풍선 ${result.data.starBalloons.toLocaleString()}개를 후원해주세요.\n관리자가 확인 후 보물상자 ${result.data.totalChestCount.toLocaleString()}개를 지급합니다.`);
-                window.open(TREASURE_CHEST_DONATION_URL, '_blank');
-            },
-            resetFn() {
-                document.getElementById('chest-buy-nickname').value = '';
-                document.getElementById('chest-buy-soopid').value = '';
-                document.getElementById('chest-qty-input').value = '1';
-                window.renderChestQty();
-            },
-            closeFn: window.closeTreasureChestBuyModal,
-        });
+        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
+        const button = document.getElementById('chest-buy-submit-btn');
+        const chestCount = parseInt(document.getElementById('chest-qty-input').value, 10);
+        if (!Number.isInteger(chestCount) || chestCount < 1 || chestCount > TREASURE_CHEST_MAX_BUY_COUNT) {
+            return alert(`구매 개수는 1~${TREASURE_CHEST_MAX_BUY_COUNT}개 사이여야 합니다.`);
+        }
+        const { cashAmount, totalChestCount, bonusChestCount } = computeChestPurchase(chestCount);
+        if (!chestAdminState) {
+            try { await refreshChestAdminState(); } catch (error) { return alert(error?.message || '구매 가능 잔액을 확인하지 못했습니다.'); }
+        }
+        if (cashAmount > Number(chestAdminState?.availableCash || 0)) {
+            await refreshChestAdminState().catch(() => {});
+            return alert(`구매 가능 캐시가 부족합니다. 필요 ${chestCurrency(cashAmount)}, 현재 ${chestCurrency(chestAdminState?.availableCash)}입니다.`);
+        }
+        const pending = readPendingChestPurchase();
+        if (pending && pending.chestCount !== chestCount) {
+            return alert('완료 여부를 확인 중인 구매 요청이 있습니다. 표시된 같은 수량으로 먼저 결과를 확인해 주세요.');
+        }
+        if (!confirm(`${chestCount}개를 ${cashAmount.toLocaleString()}캐시로 구매할까요? 보너스 ${bonusChestCount}개, 총 ${totalChestCount}개가 지급됩니다.`)) return;
+        const requestId = pending?.requestId || `chestp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        writePendingChestPurchase({ requestId, chestCount });
+        setChestButtonBusy(button, true, '구매 처리 중...');
+        try {
+            const response = await purchaseTreasureChestsWithCashCallable({ requestId, chestCount });
+            clearPendingChestPurchase(requestId);
+            alert(`보물상자 ${Number(response.data?.totalChestCount || totalChestCount).toLocaleString()}개를 지급했습니다. ${chestCurrency(response.data?.remainingCash)}가 남았습니다.`);
+            await refreshChestAdminState();
+        } catch (error) {
+            if (String(error?.code || '').includes('failed-precondition') || String(error?.code || '').includes('invalid-argument') || String(error?.code || '').includes('permission-denied')) {
+                clearPendingChestPurchase(requestId);
+            }
+            alert(error?.message || '구매 처리 결과를 확인하지 못했습니다. 같은 요청을 다시 실행해 주세요.');
+            try { await refreshChestAdminState(); } catch (_) { /* keep retry note */ }
+        } finally {
+            setChestButtonBusy(button, false, '🎁 캐시로 구매');
+            window.renderChestQty();
+        }
     };
 
     // 상자를 열 때 아이콘 중심에서 톡 터지며 흩어지는 파티클 — 복권 긁기
@@ -858,30 +1005,33 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     }
 
     window.openTreasureChestOpenModal = () => {
+        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
         window.closeAssetChargeModal();
-        const myData = getMyData();
-        document.getElementById('chest-owned-count').innerText = (myData?.treasureChests || 0).toLocaleString();
+        refreshChestAdminState().catch((error) => alert(error?.message || '보유 상자 정보를 불러오지 못했습니다.'));
         const icon = document.getElementById('chest-open-icon');
         icon.className = 'chest-icon';
         icon.innerText = '🎁';
         document.getElementById('chest-open-result-text').innerText = '';
         const btn = document.getElementById('chest-open-btn');
         btn.style.display = 'block';
-        btn.disabled = false;
+        btn.disabled = !Number(chestAdminState?.totalChestCount || 0);
+        btn.classList.remove('is-opening');
         btn.innerText = '📦 열기';
         document.getElementById('treasure-chest-open-modal').classList.add('active');
     };
     window.closeTreasureChestOpenModal = () => document.getElementById('treasure-chest-open-modal').classList.remove('active');
 
     window.openTreasureChest = async function() {
+        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
         if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
-        const myData = getMyData();
-        if (!(myData?.treasureChests > 0)) { alert('보유한 보물상자가 없습니다.'); return; }
+        try { await refreshChestAdminState(); } catch (error) { return alert(error?.message || '보유 상자를 확인하지 못했습니다.'); }
+        if (!(chestAdminState?.totalChestCount > 0)) { alert('보유한 보물상자가 없습니다.'); return; }
 
         const btn      = document.getElementById('chest-open-btn');
         const icon     = document.getElementById('chest-open-icon');
         const resultEl = document.getElementById('chest-open-result-text');
         btn.disabled = true;
+        btn.classList.add('is-opening');
         btn.innerText = '여는 중...';
         icon.className = 'chest-icon shaking';
         resultEl.innerText = '';
@@ -889,6 +1039,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         try {
             const result = await openTreasureChestCallable();
             const { reward, isBig, remaining } = result.data;
+            await refreshChestAdminState();
             setTimeout(() => {
                 icon.className = `chest-icon opened${isBig ? ' big-win' : ''}`;
                 icon.innerText = isBig ? '💎' : '💰';
@@ -903,11 +1054,13 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 } else {
                     btn.style.display = 'none';
                 }
+                btn.classList.remove('is-opening');
             }, 500); // 흔들리는 연출이 끝날 때까지 대기한 뒤 결과 표시
         } catch (e) {
             icon.className = 'chest-icon';
             alert(e?.message || '상자 개봉 중 오류가 발생했습니다.');
             btn.disabled = false;
+            btn.classList.remove('is-opening');
             btn.innerText = '📦 열기';
         }
     };
