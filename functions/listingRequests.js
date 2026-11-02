@@ -11,6 +11,9 @@ const { requireLinkedUser, requireNotInMaintenance, findStockIdByName, grantAchi
 
 const MAX_STOCK_NAME_LENGTH        = 12;
 const LISTING_REQUEST_COOLDOWN_MS  = 60 * 1000; // 매크로/도배 방지용 최소 재신청 간격
+const SUPPRESSED_LISTING_NAMES = new Set(['나리$']);
+const SUPPRESSED_LISTING_SOOP_IDS = new Set(['naaary']);
+const SUPPRESSED_LISTING_REASON = '스트리머 요청에 따라 상장 신청을 자동 반려했습니다.';
 
 // 종목 표기에는 "[크루명] 스트리머"처럼 방송 그룹 접두어가 붙는 경우가 많다.
 // 상장 신청에서 맨 이름만 입력하면 별도 종목으로 통과하던 문제를 막기 위해,
@@ -25,6 +28,11 @@ function normalizeListingName(name) {
     .replace(/\s+/g, ' ')
     .trim()
     .toLocaleLowerCase('ko-KR');
+}
+
+function isSuppressedListingName(name) {
+  const normalized = normalizeListingName(name).replace(/\s+/g, '');
+  return SUPPRESSED_LISTING_NAMES.has(normalized) || SUPPRESSED_LISTING_SOOP_IDS.has(normalized);
 }
 
 async function findExistingListingStock(db, stockName) {
@@ -53,9 +61,15 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   await requireNotInMaintenance(db, auth);
   await assertNotBanned(db, auth);
 
+  const now = Date.now();
+  const stockName = String(request.data?.stockName || "").trim();
+  if (!stockName) throw new HttpsError("invalid-argument", "종목명을 입력해주세요.");
+  if (stockName.length > MAX_STOCK_NAME_LENGTH) {
+    throw new HttpsError("invalid-argument", `종목명은 ${MAX_STOCK_NAME_LENGTH}자 이하로 입력해주세요.`);
+  }
+
   // 매크로/도배성 연속 신청을 막기 위한 쿨다운 — 트랜잭션으로 검사와 갱신을
   // 원자적으로 처리해 동시에 여러 번 호출해도 하나만 통과한다.
-  const now = Date.now();
   let tooSoon = false;
   await db.ref(`users/${auth.uid}/lastListingRequestAt`).transaction((last) => {
     if (last && now - last < LISTING_REQUEST_COOLDOWN_MS) {
@@ -64,14 +78,27 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     }
     return now;
   });
-  if (tooSoon) {
-    throw new HttpsError("resource-exhausted", "상장 신청이 너무 빠릅니다. 1분 후 다시 시도해주세요.");
+
+  if (isSuppressedListingName(stockName)) {
+    if (tooSoon) {
+      return { ok: true, status: "rejected", autoRejected: true, message: SUPPRESSED_LISTING_REASON };
+    }
+    const ref = db.ref("listingRequests").push();
+    await ref.set({
+      stockName,
+      status: "rejected",
+      requestedAt: now,
+      requesterUid: auth.uid,
+      reviewedAt: Date.now(),
+      reviewedBy: "automatic",
+      autoRejected: true,
+      rejectionReason: SUPPRESSED_LISTING_REASON,
+    });
+    return { ok: true, id: ref.key, status: "rejected", autoRejected: true, message: SUPPRESSED_LISTING_REASON };
   }
 
-  const stockName = String(request.data?.stockName || "").trim();
-  if (!stockName) throw new HttpsError("invalid-argument", "종목명을 입력해주세요.");
-  if (stockName.length > MAX_STOCK_NAME_LENGTH) {
-    throw new HttpsError("invalid-argument", `종목명은 ${MAX_STOCK_NAME_LENGTH}자 이하로 입력해주세요.`);
+  if (tooSoon) {
+    throw new HttpsError("resource-exhausted", "상장 신청이 너무 빠릅니다. 1분 후 다시 시도해주세요.");
   }
 
   const existingId = await findExistingListingStock(db, stockName);
@@ -124,9 +151,23 @@ async function actionApproveListingRequest(db, { requestId, stockName }) {
   const reqSnap = await db.ref(`listingRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
+  if (reqData.status !== "pending") {
+    throw new HttpsError("failed-precondition", "이미 처리된 상장 신청입니다.");
+  }
 
   const finalStockName = String(stockName || "").trim() || reqData.stockName;
   if (!finalStockName) throw new HttpsError("invalid-argument", "종목명을 입력해주세요.");
+
+  if (isSuppressedListingName(reqData.stockName) || isSuppressedListingName(finalStockName)) {
+    await db.ref(`listingRequests/${requestId}`).update({
+      status: "rejected",
+      reviewedAt: Date.now(),
+      reviewedBy: "automatic",
+      autoRejected: true,
+      rejectionReason: SUPPRESSED_LISTING_REASON,
+    });
+    return { ok: true, status: "rejected", autoRejected: true };
+  }
 
   // 신청 이후 같은 이름이 이미 상장됐을 수 있으므로 승인 시점에 다시 확인한다.
   const existingId = await findExistingListingStock(db, finalStockName);
@@ -166,4 +207,5 @@ module.exports = {
   actionApproveListingRequest,
   actionRejectListingRequest,
   normalizeListingName,
+  isSuppressedListingName,
 };

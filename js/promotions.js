@@ -643,7 +643,11 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 return { stockName };
             },
             callable: submitListingRequestCallable,
-            onSuccess() {
+            onSuccess(result) {
+                if (result?.data?.autoRejected === true) {
+                    alert('해당 스트리머는 요청에 따라 상장 신청이 자동 반려되었습니다.');
+                    return;
+                }
                 alert('✅ 상장 신청이 접수됐습니다!\n관리자 검수 후 새 종목으로 상장됩니다.');
             },
             resetFn() {
