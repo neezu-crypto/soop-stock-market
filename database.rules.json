@@ -9,6 +9,16 @@
       }
     },
 
+    "gameSeriesWallet": {
+      "accounts": {
+        "$uid": {
+          "balanceCash": {
+            ".read": "auth != null && auth.uid === $uid"
+          }
+        }
+      }
+    },
+
     "stocks": {
       ".read": "auth != null && root.child('adminCenter/adminUids').child(auth.uid).exists()",
       "$stockId": {

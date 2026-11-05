@@ -94,7 +94,7 @@ test.skip("legacy subscription promo request handlers reserve the requested mont
     [banner.submitChartBannerRequest, { stockId: "stock1", nickname: "테스트 종목", streamerId: "streamer1", bannerImg: "https://example.com/banner.png", days: 3 }, "chartBannerRequests", "chartBannerDaysUsed", 3],
     [cardBanner.submitCardBannerRequest, { nickname: "테스트 종목", streamerId: "streamer1", days: 4 }, "cardBannerRequests", "cardBannerDaysUsed", 4],
     [pin.submitPinRequest, { stockName: "테스트 종목", hours: 5 }, "pinRequests", "pinHoursUsed", 5],
-    [relay.submitRelayRoomRequest, { stockName: "테스트 종목", streamerId: "streamer1", hours: 6 }, "relayRoomRequests", "relayHoursUsed", 6],
+    [relay.submitRelayRoomRequest, { streamerId: "streamer1", hours: 6 }, "relayRoomRequests", "relayHoursUsed", 6],
   ];
 
   for (let i = 0; i < requests.length; i++) {

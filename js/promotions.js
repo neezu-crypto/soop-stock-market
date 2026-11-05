@@ -97,6 +97,12 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         return !!definition && (Number(monthlyBenefitStatus?.balanceCash) || 0) >= required;
     }
 
+    function setCashShortageTooltip(submitBtnId, insufficient) {
+        const button = document.getElementById(submitBtnId);
+        const anchor = button?.closest('.cash-submit-tooltip');
+        if (anchor) anchor.dataset.cashShortage = insufficient ? 'true' : 'false';
+    }
+
     function setupBenefitSummary({ product, summaryId, unitInputId, submitBtnId, canSubmit = () => true }) {
         const update = () => {
             const summary = document.getElementById(summaryId);
@@ -108,14 +114,16 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             if (!monthlyBenefitStatus) {
                 summary.textContent = '통합 캐시 잔액을 확인하고 있어요.';
                 if (button) button.disabled = true;
+                setCashShortageTooltip(submitBtnId, false);
                 return;
             }
             const price = Number(benefit?.price) || 0;
             const required = price * units;
             const balance = Number(monthlyBenefitStatus.balanceCash) || 0;
             const enough = !!benefit && balance >= required;
-            summary.innerHTML = `통합 캐시 잔액 <b>${balance.toLocaleString()}캐시</b> · 신청 금액 <b>${required.toLocaleString()}캐시</b> (${price.toLocaleString()}캐시/${benefit?.unit || '단위'})${enough ? '' : ' · <a href="https://neezu-crypto.github.io/streamer-game-series-shop/customer-center.html" target="_blank" rel="noopener noreferrer">충전하기 ↗</a>'}`;
+            summary.innerHTML = `통합 캐시 잔액 <b>${balance.toLocaleString()}캐시</b> · 신청 금액 <b>${required.toLocaleString()}캐시</b> (${price.toLocaleString()}캐시/${benefit?.unit || '단위'})${enough ? '' : ' <a class="integrated-cash-charge-link" href="https://neezu-crypto.github.io/streamer-game-series-shop/customer-center.html" target="_blank" rel="noopener noreferrer">충전하기 ↗</a>'}`;
             if (button) button.disabled = !enough || !canSubmit();
+            setCashShortageTooltip(submitBtnId, !!benefit && !enough);
         };
         document.getElementById(unitInputId)?.addEventListener('input', update);
         update();
@@ -127,6 +135,33 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             .forEach((update) => { if (typeof update === 'function') update(); });
         renderMonthlyChestClaimStatus();
     }
+
+    // 다른 탭의 통합 캐시 충전 승인도 본인 balanceCash 구독으로 전달된다.
+    // 신청 가능 여부는 즉시 갱신하지만, 실제 차감·승인 가능 여부는 각 서버
+    // 함수가 현재 잔액으로 다시 트랜잭션 검증한다.
+    window.addEventListener('stock-wallet-balance-change', (event) => {
+        const rawBalance = event.detail?.balanceCash;
+        if (rawBalance == null) {
+            monthlyBenefitStatus = null;
+            refreshAllBenefitSummaries();
+            return;
+        }
+        const balanceCash = Number(rawBalance);
+        if (!Number.isSafeInteger(balanceCash) || balanceCash < 0) return;
+        if (monthlyBenefitStatus) {
+            monthlyBenefitStatus = { ...monthlyBenefitStatus, balanceCash };
+            refreshAllBenefitSummaries();
+        }
+        if (chestAdminState) {
+            const reservedRefundCash = Number(chestAdminState.reservedRefundCash || 0);
+            chestAdminState = {
+                ...chestAdminState,
+                balanceCash,
+                availableCash: Math.max(0, balanceCash - reservedRefundCash),
+            };
+            window.renderChestQty?.();
+        }
+    });
 
     function renderMonthlyChestClaimStatus() {
         const status = document.getElementById('monthly-free-chest-status');
@@ -475,16 +510,13 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     }
     document.getElementById('chart-ad-nickname')?.addEventListener('input', checkChartAdStockListed);
 
-    // ── 중계방 홍보 신청 (종목명 검색 + 아이디 입력 → 실시간 미리보기 → 신청) ──
-    // 우측 홍보 배너와 동일하게 자유 닉네임 대신 이미 상장된 종목명만 받는다
-    // (datalist 자동완성 + 실시간 검증) — 상장 여부가 유일한 검수 포인트였으므로
-    // 신청 시점에 걸러지면 관리자 승인 없이 바로 등록할 수 있다.
-    const updateRelayEntitlement = setupBenefitSummary({ product: 'relayRoom', summaryId: 'relay-entitlement-summary', unitInputId: 'relay-hours', submitBtnId: 'relay-submit-btn', canSubmit: () => { const name = document.getElementById('relay-stock-name')?.value.trim() || ''; return !name || getAllStocks().some((stock) => stock.name === name); } });
+    // ── 중계방 홍보 신청 (스트리머 아이디 입력 → 실시간 미리보기 → 신청) ──
+    // 중계방은 특정 주식 종목이 아니라 현재 방송 중인 스트리머의 방송국을 소개하는
+    // 별도 슬롯이다. 따라서 상장 종목명은 받지 않으며, 아이디가 노출 대상이 된다.
+    const updateRelayEntitlement = setupBenefitSummary({ product: 'relayRoom', summaryId: 'relay-entitlement-summary', unitInputId: 'relay-hours', submitBtnId: 'relay-submit-btn' });
 
     window.openRelayRoomModal  = () => {
         if (!requireLoginOrPrompt()) return;
-        populateRelayStockDatalist();
-        checkRelayStockListed();
         setPromoStep('relay-room', 'info');
         document.getElementById('relay-room-modal').classList.add('active');
         refreshAllBenefitSummaries();
@@ -505,43 +537,17 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         errorText: '이미지 없음',
     });
 
-    function populateRelayStockDatalist() {
-        const datalist = document.getElementById('relay-stock-datalist');
-        if (!datalist) return;
-        datalist.innerHTML = getAllStocks()
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map(s => `<option value="${s.name.replace(/"/g, '&quot;')}"></option>`)
-            .join('');
-    }
-
-    function checkRelayStockListed() {
-        const name       = document.getElementById('relay-stock-name')?.value.trim() || '';
-        const warning    = document.getElementById('relay-not-listed-warning');
-        const submitBtn  = document.getElementById('relay-submit-btn');
-        const isListed   = name && getAllStocks().some(s => s.name === name);
-        if (warning)   warning.style.display = (name && !isListed) ? 'block' : 'none';
-        if (submitBtn) submitBtn.disabled    = (name ? !isListed : false) || !hasEnoughBenefit('relayRoom', parseInt(document.getElementById('relay-hours')?.value, 10) || 1);
-    }
-    document.getElementById('relay-stock-name')?.addEventListener('input', checkRelayStockListed);
-
     window.submitRelayRoomRequest = async function() {
         await submitRequestForm({
             submitBtnId: 'relay-submit-btn',
             submitLabel: '신청하기',
             requestScope: 'relayRoom',
             validateAndBuild() {
-                const stockName  = document.getElementById('relay-stock-name').value.trim();
                 const streamerId = document.getElementById('relay-streamer-id').value.trim().toLowerCase();
                 const hours      = parseInt(document.getElementById('relay-hours').value, 10);
-                if (!stockName) { alert('종목명을 입력해주세요.'); return null; }
-                if (!getAllStocks().some(s => s.name === stockName)) {
-                    alert('상장되지 않은 종목명이에요. 먼저 종목 상장 신청을 해주세요.');
-                    return null;
-                }
                 if (!isValidSoopId(streamerId)) { alert('아이디는 영문 소문자/숫자 2~20자로 입력해주세요.'); return null; }
                 if (!Number.isInteger(hours) || hours < 1 || hours > 8) { alert('홍보 시간은 1~8시간 사이로 입력해주세요.'); return null; }
-                return { stockName, streamerId, hours };
+                return { streamerId, hours };
             },
             callable: submitRelayRoomRequestCallable,
             async onSuccess(result) {
@@ -549,12 +555,10 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 await refreshMonthlyBenefitStatus();
             },
             resetFn() {
-                document.getElementById('relay-stock-name').value = '';
                 document.getElementById('relay-streamer-id').value = '';
                 document.getElementById('relay-hours').value = '1';
                 updateRelayPreview();
                 updateRelayEntitlement();
-                checkRelayStockListed();
             },
             closeFn: window.closeRelayRoomModal,
         });
@@ -937,6 +941,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         }
         const purchaseButton = document.getElementById('chest-buy-submit-btn');
         if (purchaseButton) purchaseButton.disabled = !!(chestAdminState && Number(chestAdminState.availableCash || 0) < cashAmount);
+        setCashShortageTooltip('chest-buy-submit-btn', !!(chestAdminState && Number(chestAdminState.availableCash || 0) < cashAmount));
         input.disabled = !!pending;
         document.querySelectorAll('#treasure-chest-buy-modal button[onclick^="adjustChestQty"]').forEach((button) => { button.disabled = !!pending; });
     };

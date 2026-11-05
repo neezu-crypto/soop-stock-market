@@ -4,7 +4,6 @@ const {
   STREAMER_ID_RE,
   MAX_RELAY_ROOM_HOURS,
   MAX_RELAY_ROOMS,
-  findStockIdByName,
   requireLinkedUser,
   requireNotInMaintenance,
   grantAchievement,
@@ -28,10 +27,9 @@ function buildRelayPreview(streamerId) {
 
 /**
  * 중계방 홍보 신청 접수. 로그인(익명 포함)한 누구나 호출 가능. 다른 셀프
- * 신청(최상단 고정 노출 등)과 동일하게 대상은 반드시 이미 상장된
- * 종목명이어야 한다. 월 구독 이용권을 예약해 신청만 접수하고, 등록은 관리자가
- * 검수해 승인(actionApproveRelayRoomRequest)한 뒤 시작한다. 과거 별풍선 방식
- * 신청은 관리자 검수 화면에서 결제 방식이 구분되도록 유지한다.
+ * 신청 접수. 중계방은 특정 주식 종목이 아닌 방송국을 소개하므로 스트리머
+ * 아이디만 받는다. 등록은 관리자가 검수해 승인(actionApproveRelayRoomRequest)한
+ * 뒤 시작한다.
  */
 const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
@@ -42,11 +40,9 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
   await requireNotInMaintenance(db, auth);
   await assertNotBanned(db, auth);
 
-  const stockName  = String(request.data?.stockName || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
   const hours      = parseInt(request.data?.hours, 10);
 
-  if (!stockName) throw new HttpsError("invalid-argument", "종목명을 입력해주세요.");
   if (!STREAMER_ID_RE.test(streamerId)) {
     throw new HttpsError("invalid-argument", "아이디는 영문 소문자/숫자 2~20자여야 합니다.");
   }
@@ -54,17 +50,9 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
     throw new HttpsError("invalid-argument", `홍보 시간은 1~${MAX_RELAY_ROOM_HOURS}시간 사이로 입력해주세요.`);
   }
 
-  // 중계방도 이미 상장된 종목만 가능 — 오타로 새 종목이 생기지 않도록 미리 확인.
-  if (!(await findStockIdByName(db, stockName))) {
-    throw new HttpsError(
-      "failed-precondition",
-      "현재 상장되지 않은 종목입니다. 먼저 종목 상장 신청을 통해 상장한 뒤 다시 신청해주세요."
-    );
-  }
-
   const { previewImg, stationLink } = buildRelayPreview(streamerId);
   const requestData = {
-    nickname: stockName,
+    nickname: streamerId,
     streamerId,
     previewImg,
     stationLink,
