@@ -91,6 +91,12 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         return monthlyBenefitStatus;
     }
 
+    function hasEnoughBenefit(product, units) {
+        const definition = monthlyBenefitStatus?.products?.[product];
+        const required = (Number(definition?.price) || 0) * Math.max(1, Number(units) || 1);
+        return !!definition && (Number(monthlyBenefitStatus?.balanceCash) || 0) >= required;
+    }
+
     function setupBenefitSummary({ product, summaryId, unitInputId, submitBtnId, canSubmit = () => true }) {
         const update = () => {
             const summary = document.getElementById(summaryId);
