@@ -561,7 +561,7 @@ async function actionListPurchaseHistory(db) {
   Object.entries(bannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "banner", typeLabel: "📢 우측 배너",
     label: `${r.nickname || "-"} (${r.days || 0}일)`,
-    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, cashAmount: r.cashAmount || 0, uid: r.requesterUid, status: r.status,
     paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
     benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "일",
     refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
@@ -571,7 +571,7 @@ async function actionListPurchaseHistory(db) {
   Object.entries(cardBannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "cardBanner", typeLabel: "🎴 종목 카드 배너",
     label: `${r.nickname || "-"} (${r.days || 0}일)`,
-    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, cashAmount: r.cashAmount || 0, uid: r.requesterUid, status: r.status,
     paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
     benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "일",
     refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
@@ -581,7 +581,7 @@ async function actionListPurchaseHistory(db) {
   Object.entries(chartBannerSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "chartBanner", typeLabel: "🖼 차트 하단 배너",
     label: `${r.stockName || r.nickname || "-"} (${r.days || 0}일)`,
-    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, cashAmount: r.cashAmount || 0, uid: r.requesterUid, status: r.status,
     paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
     benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "일",
     refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
@@ -591,7 +591,7 @@ async function actionListPurchaseHistory(db) {
   Object.entries(pinSnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "pin", typeLabel: "📌 최상단 고정",
     label: `${r.stockName || "-"} (${r.hours || 0}시간)`,
-    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, cashAmount: r.cashAmount || 0, uid: r.requesterUid, status: r.status,
     paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
     benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "시간",
     refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
@@ -601,7 +601,7 @@ async function actionListPurchaseHistory(db) {
   Object.entries(relaySnap.val() || {}).forEach(([id, r]) => purchases.push({
     id, type: "relayRoom", typeLabel: "🎥 중계방",
     label: `${r.nickname || "-"} (${r.hours || 0}시간)`,
-    amount: r.starBalloons || 0, uid: r.requesterUid, status: r.status,
+    amount: r.starBalloons || 0, cashAmount: r.cashAmount || 0, uid: r.requesterUid, status: r.status,
     paymentMethod: r.paymentMethod || "star-balloons", benefitMonth: r.benefitMonth || "",
     benefitUnits: r.benefitUnits || 0, benefitUnit: r.benefitUnit || "시간",
     refundStatus: r.refundStatus || "", refundUnits: r.refundUnits || 0,
@@ -862,11 +862,11 @@ async function actionGetOverviewStats(db) {
   // 매출·후원 집계는 실제로 결제가 있었던 과거 별풍선 신청과 플레이타임만
   // 반영한다. 신규 통합 구독 이용권 신청은 결제가 아니므로 집계에서 제외한다.
   const donationEntries = [
-    ...Object.values(bannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
-    ...Object.values(chartBannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
-    ...Object.values(cardBannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
-    ...Object.values(pinSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
-    ...Object.values(relaySnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(bannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement" && r.paymentMethod !== "integrated-cash").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(chartBannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement" && r.paymentMethod !== "integrated-cash").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(cardBannerSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement" && r.paymentMethod !== "integrated-cash").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(pinSnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement" && r.paymentMethod !== "integrated-cash").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
+    ...Object.values(relaySnap.val() || {}).filter((r) => r.status === "approved" && r.paymentMethod !== "subscription-entitlement" && r.paymentMethod !== "integrated-cash").map((r) => ({ amount: r.starBalloons || 0, at: r.requestedAt || 0 })),
   ];
   const cashEntries = [
     ...Object.values(playTimeSnap.val() || {}).map((r) => ({ amount: r.chargedAmount || 0, at: r.purchasedAt || 0 })),

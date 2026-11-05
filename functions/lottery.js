@@ -42,7 +42,7 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   const adminUser = await isAdmin(db, uid, auth.token?.email);
   const kstDay = todayKeyKST();
   const freeClaimRef = db.ref(`lotteryFreeClaims/${uid}/${kstDay}`);
-  const activeSubscription = adminUser || Number((await db.ref(`streamerFanPageViewerSubscriptions/${uid}/expiresAt`).get()).val()) > Date.now();
+  const activeSubscription = adminUser;
 
   if (request.data?.action === "status") {
     const freeClaim = (await freeClaimRef.get()).val();

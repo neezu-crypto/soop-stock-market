@@ -11,14 +11,12 @@ const {
   assertNotBanned
 } = require("./common");
 const {
-  isSubscriptionEntitlementRequest,
-  reserveMonthlyBenefit,
-  rejectSubscriptionRequest,
-  rejectExpiredSubscriptionRequest,
-  isSubscriptionApprovalRetryable,
+  isCashPromotionRequest,
+  reserveCashPromotion,
+  rejectCashPromotionRequest,
   isRequestActionable,
-  commitSubscriptionApproval,
-} = require("./subscriptionBenefits");
+  commitCashPromotionApproval,
+} = require("./promotionCash");
 
 // ══════════════════════════════════════════════════════════
 // 홍보 배너 신청 (우측 랭킹 배너) — 신청은 카카오 연동(또는 관리자) 유저만,
@@ -71,6 +69,8 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
+  throw new HttpsError("failed-precondition", "우측 홍보 배너 신규 신청은 종료되었습니다.");
+
   const db = admin.database();
   await requireLinkedUser(db, auth.uid, auth);
   await requireNotInMaintenance(db, auth);
@@ -105,13 +105,13 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
     stationLink,
     days,
   };
-  return reserveMonthlyBenefit(db, {
+  return reserveCashPromotion(db, {
     uid: auth.uid,
     product: "banner",
     units: days,
     requestId: request.data?.requestId,
     requestData,
-    auth,
+    requestPath: "bannerRequests",
   });
 });
 
@@ -131,14 +131,11 @@ async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
   const reqSnap = await db.ref(`bannerRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
-  if (isSubscriptionEntitlementRequest(reqData)) {
+  if (isCashPromotionRequest(reqData)) {
     if (reqData.status === "approved") return { ok: true, alreadyProcessed: true, endDate: reqData.approvedEndDate || "" };
-    if (!isSubscriptionApprovalRetryable(reqData)) throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");
-    if (await rejectExpiredSubscriptionRequest(db, "bannerRequests", requestId, reqData)) {
-      throw new HttpsError("failed-precondition", "통합 구독이 만료되어 신청을 거절했습니다. 이용권 반환 상태를 확인해주세요.");
-    }
+    if (reqData.status !== "pending" && !(reqData.status === "approving" && Number(reqData.approvalLeaseUntil) <= Date.now())) throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");
   }
-  const daysNum = isSubscriptionEntitlementRequest(reqData) ? Number(reqData.days) : parseInt(days, 10);
+  const daysNum = isCashPromotionRequest(reqData) ? Number(reqData.days) : parseInt(days, 10);
   if (!Number.isFinite(daysNum) || daysNum < 1 || daysNum > MAX_BANNER_REQUEST_DAYS) {
     throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이여야 합니다.`);
   }
@@ -184,7 +181,7 @@ async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
     [`bannerRequests/${requestId}/reviewedAt`]: Date.now(),
     [`bannerRequests/${requestId}/approvedEndDate`]: endDateStr,
   };
-  const approval = await commitSubscriptionApproval(db, "bannerRequests", requestId, reqData, updates);
+  const approval = await commitCashPromotionApproval(db, "bannerRequests", requestId, reqData, updates);
   if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, endDate: approval.request?.approvedEndDate || endDateStr };
   if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
@@ -197,10 +194,10 @@ async function actionRejectBannerRequest(db, { requestId }) {
   const reqSnap = await db.ref(`bannerRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
-  if (isSubscriptionEntitlementRequest(reqData) && reqData.status === "rejected") {
-    return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundUnits: reqData.refundUnits || 0 };
+  if (isCashPromotionRequest(reqData) && reqData.status === "rejected") {
+    return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundCash: reqData.refundCash || 0 };
   }
-  return rejectSubscriptionRequest(db, "bannerRequests", requestId, reqData);
+  return rejectCashPromotionRequest(db, "bannerRequests", requestId, reqData);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -277,13 +274,13 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
     promoLink,
     days,
   };
-  return reserveMonthlyBenefit(db, {
+  return reserveCashPromotion(db, {
     uid: auth.uid,
     product: "chartBanner",
     units: days,
     requestId: request.data?.requestId,
     requestData,
-    auth,
+    requestPath: "chartBannerRequests",
   }).then((result) => ({ ...result, stockId }));
 });
 
@@ -308,12 +305,9 @@ async function actionApproveChartBannerRequest(db, { requestId, days, nickname, 
   const reqSnap = await db.ref(`chartBannerRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
-  if (isSubscriptionEntitlementRequest(reqData)) {
+  if (isCashPromotionRequest(reqData)) {
     if (reqData.status === "approved") return { ok: true, alreadyProcessed: true, stockId: reqData.stockId, endDate: reqData.approvedEndDate || "" };
-    if (!isSubscriptionApprovalRetryable(reqData)) throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");
-    if (await rejectExpiredSubscriptionRequest(db, "chartBannerRequests", requestId, reqData)) {
-      throw new HttpsError("failed-precondition", "통합 구독이 만료되어 신청을 거절했습니다. 이용권 반환 상태를 확인해주세요.");
-    }
+    if (reqData.status !== "pending" && !(reqData.status === "approving" && Number(reqData.approvalLeaseUntil) <= Date.now())) throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");
   }
 
   // 관리자가 승인 직전 신청 내용을 검수하며 고칠 수 있다 — 없으면 신청 당시 값 사용
@@ -340,7 +334,7 @@ async function actionApproveChartBannerRequest(db, { requestId, days, nickname, 
 
   let endDateStr = reqData.endDate;
   if (!endDateStr) {
-    const daysNum = isSubscriptionEntitlementRequest(reqData) ? Number(reqData.days) : parseInt(days, 10);
+    const daysNum = isCashPromotionRequest(reqData) ? Number(reqData.days) : parseInt(days, 10);
     if (!Number.isFinite(daysNum) || daysNum < 1 || daysNum > MAX_BANNER_REQUEST_DAYS) {
       throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이여야 합니다.`);
     }
@@ -363,7 +357,7 @@ async function actionApproveChartBannerRequest(db, { requestId, days, nickname, 
     [`chartBannerRequests/${requestId}/reviewedAt`]: Date.now(),
     [`chartBannerRequests/${requestId}/approvedEndDate`]: endDateStr,
   };
-  const approval = await commitSubscriptionApproval(db, "chartBannerRequests", requestId, reqData, updates);
+  const approval = await commitCashPromotionApproval(db, "chartBannerRequests", requestId, reqData, updates);
   if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, stockId: targetId, endDate: approval.request?.approvedEndDate || endDateStr };
   if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
@@ -376,10 +370,10 @@ async function actionRejectChartBannerRequest(db, { requestId }) {
   const reqSnap = await db.ref(`chartBannerRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
-  if (isSubscriptionEntitlementRequest(reqData) && reqData.status === "rejected") {
-    return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundUnits: reqData.refundUnits || 0 };
+  if (isCashPromotionRequest(reqData) && reqData.status === "rejected") {
+    return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundCash: reqData.refundCash || 0 };
   }
-  return rejectSubscriptionRequest(db, "chartBannerRequests", requestId, reqData);
+  return rejectCashPromotionRequest(db, "chartBannerRequests", requestId, reqData);
 }
 
 module.exports = {

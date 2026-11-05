@@ -21,7 +21,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         submitCardBannerRequestCallable,
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
-        getStockSubscriptionBenefitsCallable,
+        getPromotionCashStatusCallable,
         submitCashChargeRequestCallable,
         openTreasureChestCallable,
         getAdminTreasureChestStateCallable,
@@ -46,7 +46,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         checkPromoStockListed();
         document.getElementById('promo-modal').classList.add('active');
         refreshAllBenefitSummaries();
-        refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
+        refreshMonthlyBenefitStatus().catch((error) => console.warn('통합 캐시 조회 실패:', error));
     };
     window.closePromoModal   = () => document.getElementById('promo-modal').classList.remove('active');
 
@@ -85,26 +85,10 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     }
 
     async function refreshMonthlyBenefitStatus() {
-        const response = await getStockSubscriptionBenefitsCallable();
+        const response = await getPromotionCashStatusCallable();
         monthlyBenefitStatus = response.data || null;
         refreshAllBenefitSummaries();
         return monthlyBenefitStatus;
-    }
-
-    function formatKstMonthReset(timestamp) {
-        if (!timestamp) return '다음 달';
-        return new Intl.DateTimeFormat('ko-KR', {
-            month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul',
-        }).format(new Date(timestamp)) + ' KST';
-    }
-
-    function remainingBenefit(product) {
-        return Number(monthlyBenefitStatus?.benefits?.[product]?.remaining) || 0;
-    }
-
-    function hasEnoughBenefit(product, units) {
-        if (!monthlyBenefitStatus) return false;
-        return monthlyBenefitStatus.eligible === true && remainingBenefit(product) >= units;
     }
 
     function setupBenefitSummary({ product, summaryId, unitInputId, submitBtnId, canSubmit = () => true }) {
@@ -113,21 +97,19 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             const button = document.getElementById(submitBtnId);
             const input = document.getElementById(unitInputId);
             if (!summary || !input) return;
-            const benefit = monthlyBenefitStatus?.benefits?.[product];
+            const benefit = monthlyBenefitStatus?.products?.[product];
             const units = Math.max(1, parseInt(input.value, 10) || 1);
             if (!monthlyBenefitStatus) {
-                summary.textContent = '이번 달 이용권을 확인하고 있어요.';
+                summary.textContent = '통합 캐시 잔액을 확인하고 있어요.';
                 if (button) button.disabled = true;
                 return;
             }
-            if (!monthlyBenefitStatus.eligible) {
-                summary.textContent = '활성 통합 구독 계정에서 이용할 수 있어요. 구독 인증을 확인해주세요.';
-            } else if (!benefit || benefit.remaining < units) {
-                summary.textContent = `이번 달 잔여 이용권이 부족합니다. 신청 ${units}${benefit?.unit || ''} · 잔여 ${benefit?.remaining || 0}${benefit?.unit || ''} · ${formatKstMonthReset(monthlyBenefitStatus.resetsAt)} 초기화`;
-            } else {
-                summary.textContent = `이번 달 ${benefit.label} ${benefit.limit}${benefit.unit} 중 ${benefit.remaining}${benefit.unit} 남음 · 신청 후 ${benefit.remaining - units}${benefit.unit} · ${formatKstMonthReset(monthlyBenefitStatus.resetsAt)} 초기화`;
-            }
-            if (button) button.disabled = !hasEnoughBenefit(product, units) || !canSubmit();
+            const price = Number(benefit?.price) || 0;
+            const required = price * units;
+            const balance = Number(monthlyBenefitStatus.balanceCash) || 0;
+            const enough = !!benefit && balance >= required;
+            summary.innerHTML = `통합 캐시 잔액 <b>${balance.toLocaleString()}캐시</b> · 신청 금액 <b>${required.toLocaleString()}캐시</b> (${price.toLocaleString()}캐시/${benefit?.unit || '단위'})${enough ? '' : ' · <a href="https://neezu-crypto.github.io/streamer-game-series-shop/customer-center.html" target="_blank" rel="noopener noreferrer">충전하기 ↗</a>'}`;
+            if (button) button.disabled = !enough || !canSubmit();
         };
         document.getElementById(unitInputId)?.addEventListener('input', update);
         update();
@@ -279,7 +261,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitBannerRequestCallable,
             async onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다. 이번 달 우측 배너 이용권 ${result.data.remaining}일이 남았습니다.\n관리자 승인 후 노출됩니다.`);
+                alert(`✅ ${result.data.cashAmount}캐시가 차감되어 신청이 접수됐습니다.\n관리자 승인 후 노출되며, 거절 시 전액 환불됩니다.`);
                 await refreshMonthlyBenefitStatus();
             },
             resetFn() {
@@ -421,7 +403,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitCardBannerRequestCallable,
             async onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다. 이번 달 카드 배너 이용권 ${result.data.remaining}일이 남았습니다.\n관리자 승인 후 노출됩니다. 보유 수량이 10주 미만으로 떨어지면 자동 종료되고 이용권은 반환되지 않습니다.`);
+                alert(`✅ ${result.data.cashAmount}캐시가 차감되어 신청이 접수됐습니다.\n관리자 승인 후 노출되며, 거절 시 전액 환불됩니다. 보유 수량이 10주 미만으로 떨어져 자동 종료되면 환불되지 않습니다.`);
                 await refreshMonthlyBenefitStatus();
             },
             resetFn() {
@@ -557,7 +539,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitRelayRoomRequestCallable,
             async onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다. 이번 달 중계방 홍보 이용권 ${result.data.remaining}시간이 남았습니다.\n관리자 승인 후 등록됩니다.`);
+                alert(`✅ ${result.data.cashAmount}캐시가 차감되어 신청이 접수됐습니다.\n관리자 승인 후 등록되며, 거절 시 전액 환불됩니다.`);
                 await refreshMonthlyBenefitStatus();
             },
             resetFn() {
@@ -628,7 +610,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitPinRequestCallable,
             async onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다. 이번 달 최상단 고정 이용권 ${result.data.remaining}시간이 남았습니다.\n관리자 승인 후 고정 노출됩니다.`);
+                alert(`✅ ${result.data.cashAmount}캐시가 차감되어 신청이 접수됐습니다.\n관리자 승인 후 고정 노출되며, 거절 시 전액 환불됩니다.`);
                 await refreshMonthlyBenefitStatus();
             },
             resetFn() {
@@ -963,6 +945,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     window.openTreasureChestBuyModal = () => {
         if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
         window.closeAssetChargeModal();
+        window.setSimpleApplicationStep('treasure-chest-buy', false);
         document.getElementById('chest-qty-input').value = String(readPendingChestPurchase()?.chestCount || 1);
         window.renderChestQty();
         document.getElementById('treasure-chest-buy-modal').classList.add('active');
@@ -1134,7 +1117,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             },
             callable: submitChartBannerRequestCallable,
             async onSuccess(result) {
-                alert(`✅ 신청이 접수됐습니다. 이번 달 차트 배너 이용권 ${result.data.remaining}일이 남았습니다.\n관리자 승인 후 노출됩니다.`);
+                alert(`✅ ${result.data.cashAmount}캐시가 차감되어 신청이 접수됐습니다.\n관리자 승인 후 노출되며, 거절 시 전액 환불됩니다.`);
                 await refreshMonthlyBenefitStatus();
             },
             resetFn() {

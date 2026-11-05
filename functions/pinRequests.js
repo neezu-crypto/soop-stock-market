@@ -9,15 +9,7 @@ const {
   grantAchievement,
   assertNotBanned
 } = require("./common");
-const {
-  isSubscriptionEntitlementRequest,
-  reserveMonthlyBenefit,
-  rejectSubscriptionRequest,
-  rejectExpiredSubscriptionRequest,
-  isSubscriptionApprovalRetryable,
-  isRequestActionable,
-  commitSubscriptionApproval,
-} = require("./subscriptionBenefits");
+const { isCashPromotionRequest, reserveCashPromotion, rejectCashPromotionRequest, isRequestActionable, commitCashPromotionApproval } = require("./promotionCash");
 
 // ══════════════════════════════════════════════════════════
 // 최상단 고정 노출 신청 — 종목 리스트 최상위에 최대 3개까지 고정 노출
@@ -61,13 +53,13 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
     stockName,
     hours,
   };
-  return reserveMonthlyBenefit(db, {
+  return reserveCashPromotion(db, {
     uid: auth.uid,
     product: "pin",
     units: hours,
     requestId: request.data?.requestId,
     requestData,
-    auth,
+    requestPath: "pinRequests",
   });
 });
 
@@ -99,14 +91,11 @@ async function actionApprovePinRequest(db, { requestId, hours, stockName }) {
   const reqSnap = await db.ref(`pinRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
-  if (isSubscriptionEntitlementRequest(reqData)) {
+  if (isCashPromotionRequest(reqData)) {
     if (reqData.status === "approved") return { ok: true, alreadyProcessed: true, pinnedUntil: reqData.approvedPinnedUntil || 0 };
-    if (!isSubscriptionApprovalRetryable(reqData)) throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");
-    if (await rejectExpiredSubscriptionRequest(db, "pinRequests", requestId, reqData)) {
-      throw new HttpsError("failed-precondition", "통합 구독이 만료되어 신청을 거절했습니다. 이용권 반환 상태를 확인해주세요.");
-    }
+    if (reqData.status !== "pending" && !(reqData.status === "approving" && Number(reqData.approvalLeaseUntil) <= Date.now())) throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");
   }
-  const hoursNum = isSubscriptionEntitlementRequest(reqData) ? Number(reqData.hours) : parseInt(hours, 10);
+  const hoursNum = isCashPromotionRequest(reqData) ? Number(reqData.hours) : parseInt(hours, 10);
   if (!Number.isFinite(hoursNum) || hoursNum < 1 || hoursNum > MAX_PIN_HOURS) {
     throw new HttpsError("invalid-argument", `고정 노출 시간은 1~${MAX_PIN_HOURS}시간 사이여야 합니다.`);
   }
@@ -151,7 +140,7 @@ async function actionApprovePinRequest(db, { requestId, hours, stockName }) {
     [`pinRequests/${requestId}/reviewedAt`]:  Date.now(),
     [`pinRequests/${requestId}/approvedPinnedUntil`]: pinnedUntil,
   };
-  const approval = await commitSubscriptionApproval(db, "pinRequests", requestId, reqData, updates);
+  const approval = await commitCashPromotionApproval(db, "pinRequests", requestId, reqData, updates);
   if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, pinnedUntil: approval.request?.approvedPinnedUntil || pinnedUntil };
   if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
 
@@ -164,10 +153,10 @@ async function actionRejectPinRequest(db, { requestId }) {
   const reqSnap = await db.ref(`pinRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
-  if (isSubscriptionEntitlementRequest(reqData) && reqData.status === "rejected") {
-    return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundUnits: reqData.refundUnits || 0 };
+  if (isCashPromotionRequest(reqData) && reqData.status === "rejected") {
+    return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundCash: reqData.refundCash || 0 };
   }
-  return rejectSubscriptionRequest(db, "pinRequests", requestId, reqData);
+  return rejectCashPromotionRequest(db, "pinRequests", requestId, reqData);
 }
 
 /** 관리자가 고정 노출을 만료 전에 직접 해제해 슬롯을 비운다. */

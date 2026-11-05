@@ -64,23 +64,15 @@ const claimDailyAttendance = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     throw new HttpsError("already-exists", "오늘 출석 보상은 이미 받았습니다.");
   }
 
-  const [isAdmin, subscriptionSnapshot] = await Promise.all([
-    checkIsAdmin(db, uid, auth.token?.email),
-    db.ref(`streamerFanPageViewerSubscriptions/${uid}`).get(),
-  ]);
-  // 통합 구독은 고점체크·갤러리와 같은 원장으로 판정한다. 브라우저가 보내는
-  // 구독 여부는 신뢰하지 않고, 만료 시각을 서버에서 직접 확인한다.
-  const subscriptionExpiresAt = Number(subscriptionSnapshot.val()?.expiresAt) || 0;
-  const hasActiveSubscription = subscriptionExpiresAt > Date.now();
-  // 관리자는 구독자 혜택을 모두 이용할 수 있으므로 광고 선택 없이 2배 지급한다.
-  const doubled   = hasActiveSubscription || isAdmin;
-  const reward    = doubled ? claimed.reward * 2 : claimed.reward;
+  const isAdmin = await checkIsAdmin(db, uid, auth.token?.email);
+  const doubled = isAdmin;
+  const reward = doubled ? claimed.reward * 2 : claimed.reward;
 
   await creditUserCash(db, uid, reward);
   if (claimed.streak === DAILY_ATTENDANCE_REWARDS.length) {
     await grantAchievement(db, uid, "attendance_streak");
   }
-  return { ok: true, streak: claimed.streak, reward, doubled, subscriptionExpiresAt };
+  return { ok: true, streak: claimed.streak, reward, doubled, adminOnly: true };
 });
 
 module.exports = { claimDailyAttendance };

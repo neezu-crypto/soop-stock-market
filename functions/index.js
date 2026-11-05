@@ -50,6 +50,7 @@ const { checkProfitRanking } = require("./profitRanking");
 const { claimDailyAttendance } = require("./attendance");
 const { buyLotteryTicket } = require("./lottery");
 const { getStockSubscriptionBenefitsCallable } = require("./subscriptionBenefits");
+const { getPromotionCashStatusCallable } = require("./promotionCash");
 const { requestStreamerVerification } = require("./streamerVerification");
 const {
   submitTreasureChestPurchaseRequest,
@@ -89,6 +90,7 @@ exports.checkProfitRanking            = checkProfitRanking;
 exports.claimDailyAttendance          = claimDailyAttendance;
 exports.buyLotteryTicket              = buyLotteryTicket;
 exports.getStockSubscriptionBenefits  = getStockSubscriptionBenefitsCallable;
+exports.getPromotionCashStatus = getPromotionCashStatusCallable;
 exports.claimMonthlyFreeTreasureChest = claimMonthlyFreeTreasureChest;
 exports.getAdminTreasureChestState = getAdminTreasureChestState;
 exports.purchaseTreasureChestsWithCash = purchaseTreasureChestsWithCash;

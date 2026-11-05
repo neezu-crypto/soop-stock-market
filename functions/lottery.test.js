@@ -82,6 +82,7 @@ test("free ticket is first, adds no cash to the pool, then paid purchases charge
     lottery: { pool: 1000000 },
   });
   const oldRandom = Math.random;
+  adminEnabled = true;
   Math.random = () => 0; // deterministic non-winning 1-1-1 tickets
   try {
     const auth = { uid, token: { email: "user@example.com" } };
@@ -114,6 +115,7 @@ test("free ticket is first, adds no cash to the pool, then paid purchases charge
     assert.equal(Object.keys(activeDb.data.users[uid].lotteryTicketPayouts || {}).length, 0);
   } finally {
     Math.random = oldRandom;
+    adminEnabled = false;
   }
 });
 
@@ -166,6 +168,7 @@ test("a winning free ticket pays 90 percent once and resets the pool", async () 
   const auth = { uid, token: { email: "user@example.com" } };
   const request = { auth, data: { requestId: "winning-free-ticket-request-01" } };
   const oldRandom = Math.random;
+  adminEnabled = true;
   Math.random = () => 0.999999;
   try {
     const [result, retry] = await Promise.all([buyLotteryTicket(request), buyLotteryTicket(request)]);
@@ -178,6 +181,7 @@ test("a winning free ticket pays 90 percent once and resets the pool", async () 
     assert.equal(activeDb.data.lotteryLastWin.prizeAmount, 1800000);
   } finally {
     Math.random = oldRandom;
+    adminEnabled = false;
   }
 });
 

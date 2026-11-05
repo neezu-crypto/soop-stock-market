@@ -941,6 +941,9 @@
         .stock-subscription-status { min-height: 20px; margin: 0 0 12px; color: #cbd5e1; font-size: 12px; line-height: 1.55; }
         .stock-subscription-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
         .stock-subscription-actions #stock-subscription-submit-btn { background: #d9b354; color: #1a1304; }
+        .stock-subscription-info-actions { display: flex; gap: 8px; }
+        .stock-subscription-info-actions button { flex: 1; min-height: 42px; border: 0; border-radius: 9px; padding: 10px 12px; background: #334155; color: #f8fafc; font-size: 13px; font-weight: 800; cursor: pointer; }
+        .stock-subscription-info-actions button:last-child { flex: 1.55; background: #d9b354; color: #1a1304; }
         @media (max-width: 480px) {
             .stock-subscription-modal-content { padding: 22px 18px; }
             .stock-subscription-benefits { padding: 14px; }

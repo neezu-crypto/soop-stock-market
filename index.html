@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261106-application-step-visibility1">
+    <link rel="stylesheet" href="styles.css?v=20261106-modal-step-layout2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -212,7 +212,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 거래소 우측 상단 배너</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
-            <li>🎁 <b>이용권:</b> 통합 구독자에게 매월 7일 제공</li>
+            <li>💰 <b>가격:</b> 통합 캐시 1캐시 / 1일</li>
             <li>✅ <b>대상:</b> 이미 상장된 종목만 신청 가능 (검색해서 선택)</li>
         </ul>
 
@@ -244,7 +244,7 @@
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청할 기간만큼 이번 달 이용권이 차감됩니다. 관리자가 검수해 승인한 시점부터 노출되며, 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
+            신청 즉시 통합 캐시가 차감됩니다. 관리자가 검수해 승인한 시점부터 노출되며, 거절되면 차감한 캐시는 전액 환불됩니다.<br>
             직접 제작한 이미지를 쓰고 싶다면 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> 으로 문의해주세요. (클릭 시 이메일 주소 복사)
         </div>
 
@@ -264,7 +264,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 종목 카드 안 원형 자리(PC는 종목명 옆, 모바일은 미니 차트 위에 겹쳐서) — 스크롤할 때마다 보이는 가장 눈에 띄는 자리예요. 빈 카드에서 📢 아이콘을 눌러도 바로 신청할 수 있어요</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
-            <li>🎁 <b>이용권:</b> 통합 구독자에게 매월 7일 제공</li>
+            <li>💰 <b>가격:</b> 통합 캐시 1캐시 / 1일</li>
             <li>🔒 <b>신청 자격:</b> 해당 종목을 <b style="color:#38bdf8;">10주 이상 보유</b>한 유저만 신청 가능 — 실제 이 종목의 "소유주"만 홍보할 수 있게 하기 위함</li>
         </ul>
 
@@ -308,7 +308,7 @@
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청할 기간만큼 이번 달 이용권이 차감됩니다. 관리자가 검수해 승인한 시점부터 노출됩니다. 보유량이 10주 미만으로 떨어져 자동 종료되면 남은 이용권은 반환되지 않습니다.
+            신청 즉시 통합 캐시가 차감됩니다. 관리자가 검수해 승인한 시점부터 노출됩니다. 보유량이 10주 미만으로 떨어져 자동 종료되면 남은 기간은 환불되지 않습니다.
         </div>
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
@@ -457,7 +457,7 @@
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            📊 모든 종목의 차트 하단에 노출됩니다. 한 번에 하나의 배너가 공통으로 표시됩니다. 신청할 기간만큼 이번 달 이용권이 차감되고, 관리자가 이미지와 내용을 검수해 승인한 시점부터 노출됩니다. 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
+            📊 모든 종목의 차트 하단에 노출됩니다. 한 번에 하나의 배너가 공통으로 표시됩니다. 신청 즉시 통합 캐시 20캐시/일이 차감되고, 관리자가 이미지와 내용을 검수해 승인한 시점부터 노출됩니다. 거절되면 차감한 캐시는 전액 환불됩니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 
@@ -552,13 +552,25 @@
      보물상자 구매 (통합 캐시 33캐시/개, 유료 상자 10개마다 보너스 1개)
 ══════════════════════════════════════════ -->
 <div id="treasure-chest-buy-modal" class="promo-modal-overlay" style="z-index:4000;">
-    <div class="promo-modal-content" style="max-width:420px;">
+    <div class="promo-modal-content" style="max-width:420px;max-height:calc(100dvh - 32px);overflow-y:auto;">
         <div class="promo-modal-header"><h2>🎁 통합 캐시로 보물상자 구매</h2></div>
+        <section id="treasure-chest-buy-step-info">
+        <p style="color:#94a3b8;font-size:13px;">1 / 2 · 구매 안내</p>
         <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
             <li>💰 <b>가격:</b> 1개당 통합 캐시 33캐시</li>
             <li>🎉 <b>보너스:</b> 유료 상자 10개마다 보너스 상자 1개 지급</li>
             <li>✅ 사용 가능한 잔액에서만 구매하며, 환불 검수 중인 캐시는 사용할 수 없습니다.</li>
         </ul>
+        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;text-align:left;">
+            구매 즉시 캐시가 차감되고 상자가 지급됩니다. 구매 후 7일 이내 미사용 낱개 상자는 33캐시씩 취소할 수 있습니다. 10개 구매 보너스 묶음(유료 10개+보너스 1개)은 11개 전부 미사용일 때만 묶음 전체(330캐시)를 취소할 수 있습니다. 개봉한 상자는 취소 대상이 아닙니다.
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button type="button" onclick="backToAssetChargeModal()" style="flex:1;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;">뒤로</button>
+            <button type="button" onclick="setSimpleApplicationStep('treasure-chest-buy',true)" style="flex:2;background:var(--primary);color:#0f172a;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:800;font-size:14px;">수량 선택 →</button>
+        </div>
+        </section>
+        <section id="treasure-chest-buy-step-form" hidden>
+        <p style="color:#94a3b8;font-size:13px;">2 / 2 · 수량 및 결제 확인</p>
 
         <div style="background:rgba(255,255,255,0.05);border:1px solid #475569;border-radius:10px;padding:14px;margin-bottom:14px;">
             <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px;">
@@ -582,14 +594,12 @@
         </a>
         <div id="chest-pending-recovery" style="display:none;margin-bottom:12px;"></div>
         <div id="chest-purchase-history" style="max-height:220px;overflow:auto;text-align:left;margin-bottom:12px;"></div>
-        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            구매 즉시 캐시가 차감되고 상자가 지급됩니다. 구매 후 7일 이내 미사용 낱개 상자는 33캐시씩 취소할 수 있습니다. 10개 구매 보너스 묶음(유료 10개+보너스 1개)은 11개 전부 미사용일 때만 묶음 전체(330캐시)를 취소할 수 있습니다. 개봉한 상자는 취소 대상이 아닙니다. 기존 보유 상자는 가장 오래된 재고로 먼저 개봉됩니다.
-        </div>
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
-            <button onclick="backToAssetChargeModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">뒤로</button>
+            <button type="button" onclick="setSimpleApplicationStep('treasure-chest-buy',false)" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">← 이전</button>
             <button id="chest-buy-submit-btn" onclick="submitTreasureChestPurchase()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">🎁 캐시로 구매</button>
         </div>
+        </section>
     </div>
 </div>
 
@@ -675,7 +685,7 @@
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 종목 리스트 최상단 (가격순 정렬과 무관하게 항상 맨 위)</li>
             <li>🔢 <b>슬롯:</b> 동시 최대 3개 종목만 고정 가능</li>
-            <li>🎁 <b>이용권:</b> 통합 구독자에게 매월 12시간 제공</li>
+            <li>💰 <b>가격:</b> 통합 캐시 1캐시 / 1시간</li>
             <li>⏱ <b>기간:</b> 시간 단위 신청, 최대 12시간</li>
         </ul>
 
@@ -700,7 +710,7 @@
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청할 시간만큼 이번 달 이용권이 차감됩니다. 관리자가 승인한 시점부터 고정되며, 슬롯 3개가 가득 차면 승인이 늦어질 수 있어요. 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
+            신청 즉시 통합 캐시가 차감됩니다. 관리자가 승인한 시점부터 고정되며, 슬롯 3개가 가득 차면 승인이 늦어질 수 있어요. 거절되면 차감한 캐시는 전액 환불됩니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 
@@ -1052,7 +1062,7 @@
             <li>📍 <b>위치:</b> 종목 리스트 위 "중계방" 영역</li>
             <li>🔢 <b>인원:</b> 동시 최대 3명까지만 등록 가능</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
-            <li>🎁 <b>이용권:</b> 통합 구독자에게 매월 8시간 제공</li>
+            <li>💰 <b>가격:</b> 통합 캐시 1캐시 / 1시간</li>
             <li>⏱ <b>기간:</b> 최소 1시간 ~ 최대 8시간</li>
             <li>🚫 <b>중복:</b> 이미 진행 중인 아이디는 종료 후에만 재신청 가능</li>
             <li>✅ <b>대상:</b> 이미 상장된 종목만 신청 가능 (검색해서 선택)</li>
@@ -1089,7 +1099,7 @@
         </div>
 
         <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            신청할 시간만큼 이번 달 이용권이 차감됩니다. 관리자가 승인한 시점부터 중계방에 노출됩니다. 중계방이 이미 진행 중이거나 3개 슬롯이 가득 차면 승인이 지연될 수 있어요. 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
+            신청 즉시 통합 캐시가 차감됩니다. 관리자가 승인한 시점부터 중계방에 노출됩니다. 중계방이 이미 진행 중이거나 3개 슬롯이 가득 차면 승인이 지연될 수 있어요. 거절되면 차감한 캐시는 전액 환불됩니다.<br>
             문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
         </div>
 
@@ -1142,14 +1152,12 @@
         <div class="stock-subscription-benefits" role="note">
             <strong>인증 후 이용할 수 있는 서비스</strong>
             <ul>
-                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장 · 매월 홍보 이용권 4종 · 보물상자 기능은 일시 중단</span></li>
-                <li><b>홍보 이용권</b><span>차트 배너 7일 · 카드 배너 7일 · 최상단 고정 12시간 · 중계방 8시간</span></li>
-                <li><b>초기화와 검수</b><span>KST 매월 1일 초기화 · 미사용분 이월 없음 · 신청 후 관리자 승인 시 노출 시작</span></li>
-                <li><b>고점체크</b><span>기간별 최고 시청 순간 분석 · 같은 날 2명 비교 · 키워드로 여러 스트리머 비교</span></li>
-                <li><b>스트리머 갤러리</b><span>모든 스트리머의 잠긴 이미지 원본 열람 및 다운로드</span></li>
+                <li><b>관리자 전용</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장</span></li>
+                <li><b>홍보 상품</b><span>통합 캐시로 필요한 기간만큼 직접 신청 · 관리자 승인 후 노출</span></li>
+                <li><b>통합 캐시</b><span>차트 배너 20캐시/일 · 카드 배너 1캐시/일 · 최상단 고정·중계방 1캐시/시간</span></li>
             </ul>
         </div>
-        <div style="display:flex;gap:8px;"><button type="button" onclick="closeStockSubscriptionModal()">닫기</button><button type="button" onclick="setSimpleApplicationStep('stock-subscription',true)">인증 진행 →</button></div>
+        <div class="stock-subscription-info-actions"><button type="button" onclick="closeStockSubscriptionModal()">닫기</button><button type="button" onclick="setSimpleApplicationStep('stock-subscription',true)">인증 진행 →</button></div>
         </section><section id="stock-subscription-step-form" hidden>
         <div id="stock-subscription-login-note" class="stock-subscription-login-note" hidden>
             <strong>계정 보호 후 신청할 수 있어요.</strong>
@@ -1602,7 +1610,7 @@ const submitPinRequestCallable = httpsCallable(functions, 'submitPinRequest');
 const heartbeatCallable = httpsCallable(functions, 'heartbeat');
 const buyPlayTimeCallable = httpsCallable(functions, 'buyPlayTime');
 const submitRelayRoomRequestCallable = httpsCallable(functions, 'submitRelayRoomRequest');
-const getStockSubscriptionBenefitsCallable = httpsCallable(functions, 'getStockSubscriptionBenefits');
+const getPromotionCashStatusCallable = httpsCallable(functions, 'getPromotionCashStatus');
 const unfreezeWithCashCallable = httpsCallable(functions, 'unfreezeWithCash');
 const submitUnfreezeDonationRequestCallable = httpsCallable(functions, 'submitUnfreezeDonationRequest');
 const submitListingRequestCallable = httpsCallable(functions, 'submitListingRequest');
@@ -1830,10 +1838,8 @@ function scheduleStockSubscriptionRefresh(uid) {
 function updateStockSubscriptionButton() {
     const button = document.getElementById('stock-subscription-open-btn');
     if (!button) return;
-    button.style.display = auth.currentUser ? 'inline-flex' : 'none';
-    button.textContent = stockSubscriptionState.subscribed || stockSubscriptionState.isAdmin
-        ? '✨ 구독자 혜택 · 출석·복권·홍보 이용권'
-        : '✨ 통합 구독 혜택';
+    button.style.display = stockSubscriptionState.isAdmin ? 'inline-flex' : 'none';
+    button.textContent = '✨ 관리자 혜택';
 }
 
 function renderStockSubscriptionModal(message = '') {
@@ -1862,7 +1868,7 @@ function renderStockSubscriptionModal(message = '') {
     if (message) {
         status.textContent = message;
     } else if (state.isAdmin) {
-        status.textContent = '관리자 권한으로 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권을 이용할 수 있어요. 보물상자는 관리자 전용 점검 중입니다.';
+        status.textContent = '관리자 권한으로 매일 출석 2배와 무료 복권 1장을 이용할 수 있어요. 홍보는 통합 캐시로 신청합니다.';
     } else if (state.subscribed) {
         status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권 4종을 이용할 수 있어요. 보물상자 기능은 관리자 전용 점검 중입니다. 이용권은 KST 매월 1일 초기화되고 미사용분은 이월되지 않습니다.`;
     } else if (!protectedAccount) {
@@ -2987,7 +2993,7 @@ initPromotions({
         submitCardBannerRequestCallable,
         submitPinRequestCallable,
         submitRelayRoomRequestCallable,
-        getStockSubscriptionBenefitsCallable,
+        getPromotionCashStatusCallable,
         submitCashChargeRequestCallable,
         openTreasureChestCallable,
         getAdminTreasureChestStateCallable,
