@@ -16,6 +16,7 @@ const {
   actionListChartBannerRequests,
   actionApproveChartBannerRequest,
   actionRejectChartBannerRequest,
+  findActiveChartBanner,
 } = require("./bannerRequests");
 const {
   actionListCardBannerRequests,
@@ -299,6 +300,11 @@ async function actionUpdateBanner(db, { type, stockId, name, img, link, endDate 
   if (!bannerImg) throw new HttpsError("invalid-argument", "배너 이미지 링크를 입력해주세요.");
 
   if (type === "chart") {
+    const activeBanner = await findActiveChartBanner(db);
+    if (activeBanner && activeBanner.stockId !== stockId) {
+      const endLabel = activeBanner.banner.endDate ? ` (${activeBanner.banner.endDate}까지)` : "";
+      throw new HttpsError("resource-exhausted", `현재 차트 공통 배너가 노출 중${endLabel}입니다. 기존 배너를 종료하거나 삭제한 뒤 변경해주세요.`);
+    }
     await db.ref(`chartBanner/${stockId}`).set({
       name:    String(name || "").trim(),
       img:     bannerImg,

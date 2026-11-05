@@ -138,6 +138,31 @@ test("approval applies the reserved duration and rejects a pending request after
   assert.equal(db.data.stockSubscriptionBenefits[uid][db.data.pinRequests[requestId(2)].benefitMonth].pinHoursUsed, 0);
 });
 
+test("chart banner accepts neither a new request nor an approval while the shared slot is active", async () => {
+  const db = setup();
+  db.data.stocks.stock2 = { name: "다른 종목", price: 100000 };
+  const endDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  db.data.chartBanner = {
+    stock2: { name: "기존 광고주", img: "https://example.com/current.png", link: "https://example.com", endDate },
+  };
+
+  await assert.rejects(
+    banner.submitChartBannerRequest({ auth, data: { stockId: "stock1", nickname: "테스트 종목", streamerId: "streamer1", bannerImg: "https://example.com/new.png", days: 1, requestId: requestId(8) } }),
+    (error) => error.code === "resource-exhausted",
+  );
+
+  delete db.data.chartBanner;
+  await banner.submitChartBannerRequest({ auth, data: { stockId: "stock1", nickname: "테스트 종목", streamerId: "streamer1", bannerImg: "https://example.com/queued.png", days: 1, requestId: requestId(9) } });
+  db.data.chartBanner = {
+    stock2: { name: "기존 광고주", img: "https://example.com/current.png", link: "https://example.com", endDate },
+  };
+  await assert.rejects(
+    banner.actionApproveChartBannerRequest(db, { requestId: requestId(9) }),
+    (error) => error.code === "resource-exhausted",
+  );
+  assert.equal(db.data.chartBannerRequests[requestId(9)].status, "pending");
+});
+
 test("concurrent approval of one request applies the entitlement only once", async () => {
   const db = setup();
   await banner.submitBannerRequest({ auth, data: { nickname: "테스트 종목", streamerId: "streamer1", days: 2, requestId: requestId(4) } });

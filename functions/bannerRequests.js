@@ -33,6 +33,30 @@ function buildBannerPreview(streamerId) {
   };
 }
 
+// 차트 배너는 종목별 데이터 경로를 계속 쓰지만, 화면에서는 모든 차트에 공통으로
+// 하나만 노출한다. 신청/승인/관리자 수정 경로가 같은 "활성 슬롯 1개" 규칙을
+// 판단하도록 이 검사를 공유한다. 종료일이 없는 과거 데이터는 임의로 숨기지 않고
+// 활성으로 취급해 새 배너가 그 위에 덮어써지는 일을 막는다.
+function chartBannerExpiresAt(endDate) {
+  const value = String(endDate || "").trim();
+  if (!value) return Infinity;
+  // 잘못된 종료일은 공개 배너 조회에서도 노출하지 않는다. 관리자가 올바른
+  // 값으로 교체할 수 있도록 이 슬롯을 활성 상태로 묶어두지는 않는다.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return 0;
+  const expiresAt = Date.parse(`${value}T23:59:59.999+09:00`) + 1;
+  return Number.isFinite(expiresAt) ? expiresAt : null;
+}
+
+async function findActiveChartBanner(db, now = Date.now()) {
+  const items = (await db.ref("chartBanner").get()).val() || {};
+  for (const [stockId, banner] of Object.entries(items)) {
+    if (!banner || typeof banner !== "object" || !String(banner.img || "").trim()) continue;
+    const expiresAt = chartBannerExpiresAt(banner.endDate);
+    if (expiresAt > now) return { stockId, banner, expiresAt };
+  }
+  return null;
+}
+
 /**
  * 홍보 배너 신청 접수. 카카오 연동된(또는 관리자) 유저만 호출 가능.
  * 월 구독 이용권을 예약해 신청만 접수하고, 노출은 관리자가 검수한 뒤
@@ -222,6 +246,12 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
     throw new HttpsError("invalid-argument", `노출 기간은 1~${MAX_BANNER_REQUEST_DAYS}일 사이로 입력해주세요.`);
   }
 
+  const activeBanner = await findActiveChartBanner(db);
+  if (activeBanner) {
+    const endLabel = activeBanner.banner.endDate ? ` (${activeBanner.banner.endDate}까지)` : "";
+    throw new HttpsError("resource-exhausted", `현재 차트 공통 배너가 노출 중${endLabel}이라 새 신청을 받을 수 없습니다.`);
+  }
+
   // 홍보 페이지 링크는 별도 입력 없이 아이디 기준 방송국 페이지로 자동 연결한다.
   const promoLink = `https://www.sooplive.com/station/${streamerId}`;
 
@@ -302,6 +332,12 @@ async function actionApproveChartBannerRequest(db, { requestId, days, nickname, 
     throw new HttpsError("not-found", "대상 종목이 삭제됐습니다. 거절해주세요.");
   }
 
+  const activeBanner = await findActiveChartBanner(db);
+  if (activeBanner) {
+    const endLabel = activeBanner.banner.endDate ? ` (${activeBanner.banner.endDate}까지)` : "";
+    throw new HttpsError("resource-exhausted", `현재 차트 공통 배너가 노출 중${endLabel}이라 이 신청을 승인할 수 없습니다.`);
+  }
+
   let endDateStr = reqData.endDate;
   if (!endDateStr) {
     const daysNum = isSubscriptionEntitlementRequest(reqData) ? Number(reqData.days) : parseInt(days, 10);
@@ -355,4 +391,5 @@ module.exports = {
   actionListChartBannerRequests,
   actionApproveChartBannerRequest,
   actionRejectChartBannerRequest,
+  findActiveChartBanner,
 };

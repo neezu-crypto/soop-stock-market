@@ -236,7 +236,6 @@
 
             /* 화면을 가리던 세 고정 기능을 하나의 모바일 빠른 메뉴로 모은다. */
             .my-stocks-toggle-btn { display: none !important; }
-            #banner-list > .banner-item:first-child { display: none !important; }
             #game-series-emote-launcher { display: none !important; }
             .mobile-quick-menu {
                 display: flex; position: fixed; right: max(12px, env(safe-area-inset-right, 0px));
@@ -555,6 +554,9 @@
             border-radius: 24px; border: 1px solid var(--primary);
             padding: 30px; box-shadow: 0 0 40px rgba(56,189,248,0.3); text-align: center;
         }
+        /* 단계 전환 모달: 안내와 입력 폼이 동시에 보이지 않도록 HTML hidden을
+           브라우저 기본 스타일에 의존하지 않고 모달 범위에서 강제한다. */
+        .promo-modal-content [hidden] { display: none !important; }
         .promo-modal-content button:hover { filter: brightness(1.1); transform: translateY(-1px); transition: all 0.2s; }
         .promo-modal-header h2 { margin: 0; font-size: 20px; color: var(--primary); margin-bottom: 15px; }
         .promo-info-list { list-style: none; padding: 0; margin: 20px 0; text-align: left; font-size: 14px; line-height: 2; }

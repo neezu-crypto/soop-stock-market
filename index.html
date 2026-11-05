@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261030-ranking-width-fix1">
+    <link rel="stylesheet" href="styles.css?v=20261106-application-step-visibility1">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -179,7 +179,6 @@
     <div id="mobile-quick-menu-items" class="mobile-quick-menu-items" hidden>
         <p id="mobile-quick-menu-status" class="mobile-quick-menu-status" role="status" aria-live="polite" hidden></p>
         <button type="button" data-quick-action="my-stocks">📊 <span>내 보유 주식</span></button>
-        <button type="button" data-quick-action="promo">📣 <span>방송국 홍보</span></button>
         <button type="button" data-quick-action="emote" disabled aria-disabled="true">✨ <span>감정표현</span></button>
         <button type="button" data-quick-action="fullscreen" aria-pressed="false">
             <span aria-hidden="true">⛶</span><span>전체 화면 보기</span>
@@ -258,8 +257,10 @@
 
 <!-- ── 배너 홍보(종목 카드 프로필 배너) 신청 모달 — 누구나 열람 가능, 신청은 10주 이상 보유자만 ── -->
 <div id="card-banner-modal" class="promo-modal-overlay">
-    <div class="promo-modal-content">
+    <div class="promo-modal-content" style="max-height:calc(100dvh - 32px);overflow-y:auto;">
         <div class="promo-modal-header"><h2>📢 배너 홍보</h2></div>
+        <section id="card-banner-step-info">
+        <p style="color:#94a3b8;font-size:13px;">1 / 2 · 광고 안내</p>
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 종목 카드 안 원형 자리(PC는 종목명 옆, 모바일은 미니 차트 위에 겹쳐서) — 스크롤할 때마다 보이는 가장 눈에 띄는 자리예요. 빈 카드에서 📢 아이콘을 눌러도 바로 신청할 수 있어요</li>
             <li>🔗 <b>기능:</b> 클릭 시 내 방송국으로 즉시 이동</li>
@@ -271,6 +272,13 @@
             ⚠️ <b>되팔기 방지:</b> 신청 후 보유 수량이 10주 미만으로 떨어지면(매도 등) 홍보가 <b>자동으로 즉시 삭제</b>됩니다. 남은 기간에 대한 환불은 없으니, 홍보를 유지하려면 10주 이상을 계속 보유해주세요.
         </div>
 
+        <div style="display:flex;gap:8px;">
+            <button type="button" onclick="closeCardBannerModal()" style="flex:1;background:#334155;color:white;border:0;padding:12px;border-radius:10px;font-weight:700;">닫기</button>
+            <button type="button" onclick="setCardBannerStep('form')" style="flex:2;background:var(--primary);color:#0f172a;border:0;padding:12px;border-radius:10px;font-weight:800;">신청 내용 입력 →</button>
+        </div>
+        </section>
+        <section id="card-banner-step-form" hidden>
+        <p style="color:#94a3b8;font-size:13px;">2 / 2 · 신청 내용 입력</p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
             <input type="text" id="card-banner-stock-name" list="card-banner-stock-datalist" placeholder="종목명 검색 (10주 이상 보유 중인 종목만 가능)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
@@ -304,9 +312,10 @@
         </div>
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
-            <button onclick="closeCardBannerModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button type="button" onclick="setCardBannerStep('info')" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">← 이전</button>
             <button id="card-banner-submit-btn" class="btn-confirm-contact" onclick="submitCardBannerRequest()" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청하기</button>
         </div>
+        </section>
     </div>
 </div>
 
@@ -436,15 +445,29 @@
      차트 하단 배너 광고 신청 모달
 ══════════════════════════════════════════ -->
 <div id="chart-ad-modal" class="promo-modal-overlay" style="z-index:4000;">
-    <div class="promo-modal-content" style="max-width:420px;">
+    <div class="promo-modal-content" style="max-width:420px;max-height:calc(100dvh - 32px);overflow-y:auto;">
         <div class="promo-modal-header">
             <h2>📺 차트 하단 배너 광고 신청</h2>
         </div>
 
+        <section id="chart-ad-step-info">
+            <p style="color:#94a3b8;font-size:13px;">1 / 2 · 광고 안내</p>
         <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;text-align:center;">
-            📊 신청 대상 종목: <b id="chart-ad-target-stock" style="color:#38bdf8;">-</b>
+            📊 신청한 차트: <b id="chart-ad-target-stock" style="color:#38bdf8;">-</b> · 승인 후 모든 종목의 차트에 노출됩니다.
         </div>
 
+        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
+            📊 모든 종목의 차트 하단에 노출됩니다. 한 번에 하나의 배너가 공통으로 표시됩니다. 신청할 기간만큼 이번 달 이용권이 차감되고, 관리자가 이미지와 내용을 검수해 승인한 시점부터 노출됩니다. 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
+            문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
+        </div>
+
+        <div style="display:flex;gap:8px;">
+            <button type="button" onclick="closeChartAdModal()" style="flex:1;background:#334155;color:white;border:0;padding:13px;border-radius:10px;font-weight:700;">닫기</button>
+            <button type="button" onclick="setChartAdStep('form')" style="flex:2;background:var(--primary);color:#0f172a;border:0;padding:13px;border-radius:10px;font-weight:800;">신청 내용 입력 →</button>
+        </div>
+        </section>
+        <section id="chart-ad-step-form" hidden>
+            <p style="color:#94a3b8;font-size:13px;">2 / 2 · 신청 내용 입력</p>
         <!-- 배너 미리보기 영역 -->
         <div style="margin-bottom:16px;">
             <!-- 사이즈 태그 -->
@@ -484,21 +507,18 @@
             <div id="chart-ad-entitlement-summary" class="subscription-benefit-summary" role="status" aria-live="polite">이번 달 이용권을 확인하고 있어요.</div>
         </div>
 
-        <div style="background:rgba(255,255,255,0.05);padding:12px 15px;border-radius:8px;margin-bottom:20px;border-left:4px solid #38bdf8;font-size:12px;color:var(--text-sub);line-height:1.7;">
-            📊 해당 종목 차트창을 여는 유저에게 단독 노출되는 배너입니다. 신청할 기간만큼 이번 달 이용권이 차감되고, 관리자가 이미지와 내용을 검수해 승인한 시점부터 노출됩니다. 거절되면 같은 달에는 이용권을 돌려받고 월이 지나면 반환되지 않습니다.<br>
-            문의사항은 <span onclick="copyAdminEmail(event)" style="color:#38bdf8;text-decoration:underline;cursor:pointer;">skftodwocks2@gmail.com</span> (클릭 시 복사)
-        </div>
 
         <div style="display:flex;gap:8px;">
-            <button onclick="closeChartAdModal()"
+            <button type="button" onclick="setChartAdStep('info')"
                 style="flex:1;background:#334155;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;">
-                닫기
+                ← 이전
             </button>
             <button id="chart-ad-submit-btn" onclick="submitChartBannerRequest()"
                 style="flex:2;background:var(--primary);color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:800;font-size:14px;">
                 신청하기
             </button>
         </div>
+        </section>
     </div>
 </div>
 
@@ -648,8 +668,10 @@
      최상단 고정 노출 모달 (종목 리스트 최상위 최대 3슬롯)
 ══════════════════════════════════════════ -->
 <div id="pin-modal" class="promo-modal-overlay" style="z-index:4000;">
-    <div class="promo-modal-content" style="max-width:420px;">
+    <div class="promo-modal-content" style="max-width:420px;max-height:calc(100dvh - 32px);overflow-y:auto;">
         <div class="promo-modal-header"><h2>📌 최상단 고정 노출</h2></div>
+        <section id="pin-step-info">
+        <p style="color:#94a3b8;font-size:13px;">1 / 2 · 신청 안내</p>
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 종목 리스트 최상단 (가격순 정렬과 무관하게 항상 맨 위)</li>
             <li>🔢 <b>슬롯:</b> 동시 최대 3개 종목만 고정 가능</li>
@@ -657,6 +679,9 @@
             <li>⏱ <b>기간:</b> 시간 단위 신청, 최대 12시간</li>
         </ul>
 
+        <div style="display:flex;gap:8px;"><button type="button" onclick="closePinModal()" style="flex:1;background:#334155;color:white;border:0;padding:12px;border-radius:10px;font-weight:700;">닫기</button><button type="button" onclick="setPromoStep('pin','form')" style="flex:2;background:var(--primary);color:#0f172a;border:0;padding:12px;border-radius:10px;font-weight:800;">신청 내용 입력 →</button></div>
+        </section><section id="pin-step-form" hidden>
+        <p style="color:#94a3b8;font-size:13px;">2 / 2 · 신청 내용 입력</p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
             <input type="text" id="pin-stock-name" list="pin-stock-datalist" placeholder="종목명 검색 (이미 상장된 종목만 고정 가능)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
@@ -680,9 +705,10 @@
         </div>
 
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-            <button onclick="closePinModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button type="button" onclick="setPromoStep('pin','info')" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">← 이전</button>
             <button id="pin-submit-btn" onclick="submitPinRequest()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청하기</button>
         </div>
+        </section>
     </div>
 </div>
 
@@ -917,14 +943,19 @@
      종목 상장 신청 모달 (검색해도 없는 스트리머를 새 종목으로 상장 요청)
 ══════════════════════════════════════════ -->
 <div id="listing-modal" class="promo-modal-overlay" style="z-index:4000;">
-    <div class="promo-modal-content" style="max-width:420px;">
+    <div class="promo-modal-content" style="max-width:420px;max-height:calc(100dvh - 32px);overflow-y:auto;">
         <div class="promo-modal-header"><h2>🏷 종목 상장 신청</h2></div>
+        <section id="listing-step-info">
+        <p style="color:#94a3b8;font-size:13px;">1 / 2 · 신청 안내</p>
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>🔍 <b>대상:</b> 검색해도 나오지 않는, 아직 상장되지 않은 스트리머</li>
             <li>💰 <b>비용:</b> 무료 (관리자 검수 후 상장)</li>
             <li>✏️ <b>제한:</b> 종목명 최대 12자, 1분에 1번만 신청 가능 (매크로/도배 방지)</li>
         </ul>
 
+        <div style="display:flex;gap:8px;"><button type="button" onclick="closeListingModal()" style="flex:1;background:#334155;color:white;border:0;padding:12px;border-radius:10px;font-weight:700;">닫기</button><button type="button" onclick="setPromoStep('listing','form')" style="flex:2;background:var(--primary);color:#0f172a;border:0;padding:12px;border-radius:10px;font-weight:800;">신청 내용 입력 →</button></div>
+        </section><section id="listing-step-form" hidden>
+        <p style="color:#94a3b8;font-size:13px;">2 / 2 · 신청 내용 입력</p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
             <input type="text" id="listing-stock-name" placeholder="상장을 원하는 종목명(스트리머 닉네임)" maxlength="12"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
@@ -936,9 +967,10 @@
         </div>
 
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-            <button onclick="closeListingModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button type="button" onclick="setPromoStep('listing','info')" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">← 이전</button>
             <button id="listing-submit-btn" onclick="submitListingRequest()" class="btn-confirm-contact" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청하기</button>
         </div>
+        </section>
     </div>
 </div>
 
@@ -1012,8 +1044,10 @@
      중계방 홍보 신청 모달 (현재 플레이 중인 스트리머 소개)
 ══════════════════════════════════════════ -->
 <div id="relay-room-modal" class="promo-modal-overlay">
-    <div class="promo-modal-content">
+    <div class="promo-modal-content" style="max-height:calc(100dvh - 32px);overflow-y:auto;">
         <div class="promo-modal-header"><h2>🎥 중계방 홍보 신청</h2></div>
+        <section id="relay-room-step-info">
+        <p style="color:#94a3b8;font-size:13px;">1 / 2 · 신청 안내</p>
         <ul class="promo-info-list" style="margin-bottom:16px;">
             <li>📍 <b>위치:</b> 종목 리스트 위 "중계방" 영역</li>
             <li>🔢 <b>인원:</b> 동시 최대 3명까지만 등록 가능</li>
@@ -1024,6 +1058,9 @@
             <li>✅ <b>대상:</b> 이미 상장된 종목만 신청 가능 (검색해서 선택)</li>
         </ul>
 
+        <div style="display:flex;gap:8px;"><button type="button" onclick="closeRelayRoomModal()" style="flex:1;background:#334155;color:white;border:0;padding:12px;border-radius:10px;font-weight:700;">닫기</button><button type="button" onclick="setPromoStep('relay-room','form')" style="flex:2;background:var(--primary);color:#0f172a;border:0;padding:12px;border-radius:10px;font-weight:800;">신청 내용 입력 →</button></div>
+        </section><section id="relay-room-step-form" hidden>
+        <p style="color:#94a3b8;font-size:13px;">2 / 2 · 신청 내용 입력</p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
             <input type="text" id="relay-stock-name" list="relay-stock-datalist" placeholder="종목명 검색 (이미 상장된 종목만 가능)"
                 style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:12px;border-radius:8px;box-sizing:border-box;font-size:14px;">
@@ -1057,9 +1094,10 @@
         </div>
 
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap: wrap;">
-            <button onclick="closeRelayRoomModal()" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
+            <button type="button" onclick="setPromoStep('relay-room','info')" style="flex:1;min-width:80px;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">← 이전</button>
             <button id="relay-submit-btn" class="btn-confirm-contact" onclick="submitRelayRoomRequest()" style="flex:2;min-width:120px;font-weight:bold;font-size:14px;">신청하기</button>
         </div>
+        </section>
     </div>
 </div>
 
@@ -1099,17 +1137,20 @@
 <div id="stock-subscription-modal" class="promo-modal-overlay" style="z-index:5200;">
     <div class="promo-modal-content stock-subscription-modal-content" style="max-height:calc(100dvh - 32px);overflow-y:auto;">
         <div class="promo-modal-header"><h2>✨ 통합 구독 인증</h2></div>
+        <section id="stock-subscription-step-info">
         <p class="stock-subscription-intro">개발자의 SOOP 방송국 구독을 인증하면, 아래 서비스를 이용할 수 있어요.</p>
         <div class="stock-subscription-benefits" role="note">
             <strong>인증 후 이용할 수 있는 서비스</strong>
             <ul>
-                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장 · 매월 홍보 이용권 5종 · 보물상자 기능은 일시 중단</span></li>
-                <li><b>홍보 이용권</b><span>우측 배너 7일 · 차트 배너 7일 · 카드 배너 7일 · 최상단 고정 12시간 · 중계방 8시간</span></li>
+                <li><b>스트리머 주식시장</b><span>매일 출석 보상 2배 · 매일 무료 복권 1장 · 매월 홍보 이용권 4종 · 보물상자 기능은 일시 중단</span></li>
+                <li><b>홍보 이용권</b><span>차트 배너 7일 · 카드 배너 7일 · 최상단 고정 12시간 · 중계방 8시간</span></li>
                 <li><b>초기화와 검수</b><span>KST 매월 1일 초기화 · 미사용분 이월 없음 · 신청 후 관리자 승인 시 노출 시작</span></li>
                 <li><b>고점체크</b><span>기간별 최고 시청 순간 분석 · 같은 날 2명 비교 · 키워드로 여러 스트리머 비교</span></li>
                 <li><b>스트리머 갤러리</b><span>모든 스트리머의 잠긴 이미지 원본 열람 및 다운로드</span></li>
             </ul>
         </div>
+        <div style="display:flex;gap:8px;"><button type="button" onclick="closeStockSubscriptionModal()">닫기</button><button type="button" onclick="setSimpleApplicationStep('stock-subscription',true)">인증 진행 →</button></div>
+        </section><section id="stock-subscription-step-form" hidden>
         <div id="stock-subscription-login-note" class="stock-subscription-login-note" hidden>
             <strong>계정 보호 후 신청할 수 있어요.</strong>
             <p>카카오·구글 연동 또는 스트리머 인증으로 현재 계정을 보호한 뒤 구독 인증을 신청해 주세요.</p>
@@ -1140,6 +1181,8 @@
             <button type="button" onclick="closeStockSubscriptionModal()">닫기</button>
             <button id="stock-subscription-submit-btn" type="button">인증 코드 발급</button>
         </div>
+        <button type="button" onclick="setSimpleApplicationStep('stock-subscription',false)">← 이전</button>
+        </section>
     </div>
 </div>
 
@@ -1151,18 +1194,23 @@
         <div class="promo-modal-header"><h2>🎙️ 스트리머 인증</h2></div>
 
         <div id="streamer-verify-form">
+            <section id="streamer-verify-step-info">
             <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:16px;">
                 방송 닉네임을 입력하고 신청하면 <b style="color:#38bdf8;">즉시 관리자에게 신청이 전달</b>돼요.<br>
                 관리자가 확인 후 승인해드려요.
             </p>
+            <div style="display:flex;gap:8px;"><button type="button" onclick="closeStreamerVerifyModal()" style="flex:1;background:#334155;color:white;border:0;padding:12px;border-radius:10px;">닫기</button><button type="button" onclick="setSimpleApplicationStep('streamer-verify',true)" style="flex:2;background:var(--primary);border:0;padding:12px;border-radius:10px;">신청 내용 입력 →</button></div>
+            </section><section id="streamer-verify-step-form" hidden>
             <input id="streamer-verify-nickname" type="text" maxlength="20" placeholder="방송 닉네임 입력"
                 style="width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:14px;margin-bottom:12px;">
             <input id="streamer-verify-soopid" type="text" maxlength="20" placeholder="SOOP 아이디 입력 (영문 소문자/숫자)"
                 style="width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:14px;margin-bottom:12px;">
-            <button onclick="submitStreamerVerification()"
+            <button id="streamer-verify-submit" onclick="submitStreamerVerification()"
                 style="width:100%;background:#38bdf8;color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;margin-bottom:10px;">
                 신청하기
             </button>
+            <button type="button" onclick="setSimpleApplicationStep('streamer-verify',false)">← 이전</button>
+            </section>
         </div>
 
         <div id="streamer-verify-pending" style="display:none;">
@@ -1172,7 +1220,7 @@
                 <button id="streamer-verify-note-code" type="button" style="width:100%;padding:10px;font-size:20px;font-weight:800;letter-spacing:4px;"></button>
                 <a href="https://note.sooplive.com/app/index.php?page=write&amp;id_list=skftodwocks2" target="_blank" rel="noopener noreferrer" style="display:block;margin:10px 0;">SOOP 쪽지 보내기 ↗</a>
                 <p id="streamer-verify-note-status" role="status"></p>
-                <button onclick="renewStreamerVerificationCode()" type="button">새 코드 발급 (이전 코드 무효화)</button>
+                <button id="streamer-verify-renew" onclick="renewStreamerVerificationCode()" type="button">새 코드 발급 (이전 코드 무효화)</button>
             </div>
             <button onclick="checkStreamerVerificationStatus()"
                 style="width:100%;background:#38bdf8;color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;margin-bottom:10px;">
@@ -1237,7 +1285,11 @@
             </div>
             <div style="background:#0f172a;border:1px solid #475569;border-radius:10px;padding:14px;">
                 <div style="font-weight:800;font-size:14px;margin-bottom:6px;">📡 라이브 방송 후원으로 해제</div>
+                <section id="unfreeze-donation-step-info">
                 <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">별풍선 50개 후원 후 신청하면, 관리자 확인을 거쳐 100만원이 지급됩니다</div>
+                <button id="unfreeze-donation-next" type="button" onclick="setSimpleApplicationStep('unfreeze-donation',true)">후원 신청 내용 입력 →</button>
+                </section>
+                <section id="unfreeze-donation-step-form" hidden>
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <input type="text" id="unfreeze-donation-nickname" placeholder="닉네임"
                         style="width:100%;background:rgba(255,255,255,0.05);border:1px solid #475569;color:white;padding:10px;border-radius:8px;box-sizing:border-box;font-size:13px;">
@@ -1250,6 +1302,8 @@
                             style="flex:1.4;background:#334155;color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:13px;">신청하기</button>
                     </div>
                 </div>
+                <button type="button" onclick="setSimpleApplicationStep('unfreeze-donation',false)">← 이전</button>
+                </section>
             </div>
         </div>
 
@@ -1373,12 +1427,7 @@
         <div id="relay-room-row" class="relay-room-row"></div>
     </div>
     <main id="stock-list"></main>
-    <div class="banner-container" id="banner-list">
-        <div onclick="openPromoModal()" class="banner-item">
-            <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
-            <div class="banner-name">문의하기</div>
-        </div>
-    </div>
+    <div class="banner-container" id="banner-list"></div>
 </div>
 
 <footer style="text-align:center;padding:24px 20px 40px;font-size:12px;color:var(--text-sub);">
@@ -1402,8 +1451,8 @@ import { getFunctions, httpsCallable }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-functions.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken }
                              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app-check.js";
-import { initChartModal } from "./js/chartModal.js";
-import { initPromotions } from "./js/promotions.js?v=20261102-nari-listing-reject1";
+import { initChartModal } from "./js/chartModal.js?v=20261105-shared-chart-ad1";
+import { initPromotions } from "./js/promotions.js?v=20261105-more-steps2";
 import { initAssetHistory } from "./js/assetHistory.js";
 
 (function () {
@@ -1815,7 +1864,7 @@ function renderStockSubscriptionModal(message = '') {
     } else if (state.isAdmin) {
         status.textContent = '관리자 권한으로 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권을 이용할 수 있어요. 보물상자는 관리자 전용 점검 중입니다.';
     } else if (state.subscribed) {
-        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권 5종을 이용할 수 있어요. 보물상자 기능은 관리자 전용 점검 중입니다. 이용권은 KST 매월 1일 초기화되고 미사용분은 이월되지 않습니다.`;
+        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권 4종을 이용할 수 있어요. 보물상자 기능은 관리자 전용 점검 중입니다. 이용권은 KST 매월 1일 초기화되고 미사용분은 이월되지 않습니다.`;
     } else if (!protectedAccount) {
         status.textContent = '익명 계정은 구독 인증을 신청할 수 없어요. 먼저 계정을 보호해 주세요.';
     } else if (hasPending) {
@@ -1867,6 +1916,7 @@ async function refreshStockSubscriptionStatus() {
 window.openStockSubscriptionModal = async function() {
     const modal = document.getElementById('stock-subscription-modal');
     if (!modal) return;
+    setSimpleApplicationStep('stock-subscription', false);
     modal.classList.add('active');
     renderStockSubscriptionModal('구독 상태를 확인하고 있어요.');
     await refreshStockSubscriptionStatus();
@@ -2851,7 +2901,7 @@ window.buyPlayTime = async function() {
 // 있어 안전하게 분리 가능한 범위였음). getAllStocks/getChangePercent를
 // 접근자로 넘겨 allStocks 재할당 이후에도 항상 최신값을 참조하게 한다.
 // ══════════════════════════════════════════════════════════════
-const { closeChartModal, getCurrentStockId } = initChartModal({ db, getAllStocks: () => allStocks, getChangePercent });
+const { closeChartModal, getCurrentStockId } = initChartModal({ db, getAllStocks: () => allStocks, getChangePercent, getChartBanners: httpsCallable(functions, 'getSharedChartBanners') });
 
 // ── 거래 함수 ────────────────────────────────────────────────
 // 가격 계산·잔고 검증·기록은 전부 Cloud Function(trade)이 서버에서 처리한다.
@@ -2990,7 +3040,20 @@ window.closeAccountProtectModal = function() {
 };
 
 // ── 스트리머 인증 (카카오/구글을 꺼리는 유저를 위한 대체 계정 보호) ──
+window.setSimpleApplicationStep = function(id, showForm) {
+    const info = document.getElementById(id + '-step-info');
+    const form = document.getElementById(id + '-step-form');
+    const next = document.getElementById(id + '-next');
+    if (info) info.hidden = showForm;
+    if (form) form.hidden = !showForm;
+    if (next) next.hidden = showForm;
+    const content = (form || info)?.closest('.promo-modal-content');
+    if (content) content.scrollTop = 0;
+    if (showForm) form?.querySelector('input')?.focus();
+};
+
 window.openStreamerVerifyModal = function() {
+    setSimpleApplicationStep('streamer-verify', false);
     document.getElementById('streamer-verify-form').style.display = 'block';
     document.getElementById('streamer-verify-pending').style.display = 'none';
     document.getElementById('streamer-verify-nickname').value = '';
@@ -3001,7 +3064,24 @@ window.closeStreamerVerifyModal = function() {
     document.getElementById('streamer-verify-modal')?.classList.remove('active');
 };
 
-function showStreamerVerifyPending(nickname, isSwitch, verificationCode, expiresAt, noteEligible) {
+let streamerVerifyBusy = false;
+let streamerVerifyRenewBusy = false;
+let streamerVerifyNextCodeAt = 0;
+let streamerVerifyCooldownTimer = null;
+function updateStreamerVerifyCooldown(nextAt) {
+    streamerVerifyNextCodeAt = Number(nextAt) || 0;
+    clearInterval(streamerVerifyCooldownTimer);
+    const refresh = () => {
+        const button = document.getElementById('streamer-verify-renew');
+        const remaining = Math.max(0, Math.ceil((streamerVerifyNextCodeAt - Date.now()) / 1000));
+        button.disabled = streamerVerifyRenewBusy || remaining > 0;
+        button.textContent = remaining ? `새 코드 발급 (${remaining}초 후 가능)` : '새 코드 발급 (이전 코드 무효화)';
+        if (!remaining) clearInterval(streamerVerifyCooldownTimer);
+    };
+    refresh();
+    if (streamerVerifyNextCodeAt > Date.now()) streamerVerifyCooldownTimer = setInterval(refresh, 1000);
+}
+function showStreamerVerifyPending(nickname, isSwitch, verificationCode, expiresAt, noteEligible, nextCodeIssueAt) {
     document.getElementById('streamer-verify-form').style.display = 'none';
     const pending = document.getElementById('streamer-verify-pending');
     pending.style.display = 'block';
@@ -3010,6 +3090,7 @@ function showStreamerVerifyPending(nickname, isSwitch, verificationCode, expires
     const status = document.getElementById('streamer-verify-note-status');
     const canSendNote = noteEligible === true || (!isSwitch && noteEligible !== false);
     note.style.display = canSendNote ? 'block' : 'none';
+    updateStreamerVerifyCooldown(nextCodeIssueAt);
     const code = Number(expiresAt) > Date.now() ? verificationCode || '' : '';
     codeButton.textContent = code || '코드 없음';
     codeButton.disabled = !code;
@@ -3037,6 +3118,10 @@ window.submitStreamerVerification = async function() {
     if (!nickname) return alert('닉네임을 입력해주세요.');
     const soopId = document.getElementById('streamer-verify-soopid').value.trim();
     if (!/^[a-z0-9]{2,20}$/.test(soopId)) return alert('SOOP 아이디는 영문 소문자/숫자 2~20자로 입력해주세요.');
+    if (streamerVerifyBusy) return;
+    streamerVerifyBusy = true;
+    const submitButton = document.getElementById('streamer-verify-submit');
+    submitButton.disabled = true;
     try {
         const result = await requestStreamerVerificationCallable({ nickname, soopId });
         const { action, nickname: returnedNickname, isSwitch, customToken } = result.data;
@@ -3051,10 +3136,13 @@ window.submitStreamerVerification = async function() {
             alert('✅ 방송 다시보기 검수 기록이 확인되어 스트리머 인증이 자동 완료됐어요.');
             updateAccountProtectionUI();
         } else {
-            showStreamerVerifyPending(returnedNickname, isSwitch, result.data.verificationCode, result.data.verificationCodeExpiresAt, result.data.noteEligible);
+            showStreamerVerifyPending(returnedNickname, isSwitch, result.data.verificationCode, result.data.verificationCodeExpiresAt, result.data.noteEligible, result.data.nextCodeIssueAt);
         }
     } catch (e) {
         alert('스트리머 인증 신청 중 오류가 발생했습니다: ' + (e?.message || e));
+    } finally {
+        streamerVerifyBusy = false;
+        submitButton.disabled = false;
     }
 };
 
@@ -3075,7 +3163,7 @@ window.checkStreamerVerificationStatus = async function() {
             alert('✅ 방송 다시보기 검수 기록이 확인되어 스트리머 인증이 자동 완료됐어요.');
             updateAccountProtectionUI();
         } else {
-            showStreamerVerifyPending(nickname, isSwitch, previousCode, result.data.verificationCodeExpiresAt, result.data.noteEligible);
+            showStreamerVerifyPending(nickname, isSwitch, previousCode, result.data.verificationCodeExpiresAt, result.data.noteEligible, result.data.nextCodeIssueAt);
             alert('아직 관리자 확인 전이에요. 잠시 후 다시 확인해주세요.');
         }
     } catch (e) {
@@ -3084,11 +3172,20 @@ window.checkStreamerVerificationStatus = async function() {
 };
 
 window.renewStreamerVerificationCode = async function() {
+    if (streamerVerifyRenewBusy || streamerVerifyNextCodeAt > Date.now()) return;
+    streamerVerifyRenewBusy = true;
+    updateStreamerVerifyCooldown(streamerVerifyNextCodeAt);
     try {
-        const result = await requestStreamerVerificationCallable({});
-        if (result.data.action !== 'pending') return checkStreamerVerificationStatus();
-        showStreamerVerifyPending(result.data.nickname, result.data.isSwitch, result.data.verificationCode, result.data.verificationCodeExpiresAt, result.data.noteEligible);
-    } catch (e) { alert('새 코드 발급에 실패했습니다: ' + (e?.message || e)); }
+        const result = await requestStreamerVerificationCallable({ renewCode: true });
+        if (result.data.action !== 'pending') return await checkStreamerVerificationStatus();
+        showStreamerVerifyPending(result.data.nickname, result.data.isSwitch, result.data.verificationCode, result.data.verificationCodeExpiresAt, result.data.noteEligible, result.data.nextCodeIssueAt);
+    } catch (e) {
+        if (e?.details?.nextCodeIssueAt) updateStreamerVerifyCooldown(e.details.nextCodeIssueAt);
+        alert('새 코드 발급에 실패했습니다: ' + (e?.message || e));
+    } finally {
+        streamerVerifyRenewBusy = false;
+        updateStreamerVerifyCooldown(streamerVerifyNextCodeAt);
+    }
 };
 
 function updateAccountProtectionUI() {
@@ -3398,12 +3495,8 @@ function renderBanners() {
     // 2. 남은 기간(diffDays)이 큰 순서대로 정렬 (내림차순)
     activeBanners.sort((a, b) => b.diffDays - a.diffDays);
 
-    // 3. 문의하기 버튼 항상 최상단 고정
-    bannerList.innerHTML = `
-        <div onclick="openPromoModal()" class="banner-item" style="cursor:pointer; margin-bottom: 5px;">
-            <div class="banner-circle"><div class="banner-no-img">방송국 홍보 가능</div></div>
-            <div class="banner-name">문의하기</div>
-        </div>`;
+    // 3. 승인된 배너만 표시
+    bannerList.innerHTML = '';
 
     activeBanners.forEach(s => {
         const dDayText = s.diffDays === Infinity ? "AD" : (s.diffDays === 0 ? "오늘만료" : `D-${s.diffDays}`);
@@ -3920,8 +4013,6 @@ function initMobileQuickMenu() {
         setOpen(false);
         if (action === 'my-stocks') {
             window.openMyStocksPanel();
-        } else if (action === 'promo') {
-            window.openPromoModal?.();
         } else if (action === 'emote') {
             document.getElementById('game-series-emote-button')?.click();
         }

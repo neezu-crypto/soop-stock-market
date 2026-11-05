@@ -301,12 +301,29 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     const CARD_BANNER_MIN_HOLDING_QTY = 10;
     const updateCardBannerEntitlement = setupBenefitSummary({ product: 'cardBanner', summaryId: 'card-banner-entitlement-summary', unitInputId: 'card-banner-days', submitBtnId: 'card-banner-submit-btn', canSubmit: () => { const name = document.getElementById('card-banner-stock-name')?.value.trim() || ''; if (!name) return true; const stock = getAllStocks().find((item) => item.name === name); return !!stock && ((getMyData()?.stocks || {})[stock.id]?.qty || 0) >= CARD_BANNER_MIN_HOLDING_QTY; } });
 
+    window.setPromoStep = (id, step) => {
+        const form = step === 'form';
+        document.getElementById(`${id}-step-info`).hidden = form;
+        document.getElementById(`${id}-step-form`).hidden = !form;
+        document.querySelector(`#${id}-modal .promo-modal-content`).scrollTop = 0;
+        if (form) document.querySelector(`#${id}-step-form input`)?.focus();
+    };
+
+    window.setCardBannerStep = (step) => {
+        const form = step === 'form';
+        document.getElementById('card-banner-step-info').hidden = form;
+        document.getElementById('card-banner-step-form').hidden = !form;
+        document.querySelector('#card-banner-modal .promo-modal-content').scrollTop = 0;
+        if (form) document.getElementById('card-banner-stock-name').focus();
+    };
+
     window.openCardBannerModal = (prefillStockName) => {
         if (!requireLoginOrPrompt()) return;
         populateCardBannerStockDatalist();
         const nameInput = document.getElementById('card-banner-stock-name');
         if (prefillStockName && nameInput) nameInput.value = prefillStockName;
         checkCardBannerEligibility();
+        setCardBannerStep('info');
         document.getElementById('card-banner-modal').classList.add('active');
         refreshAllBenefitSummaries();
         refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
@@ -421,6 +438,14 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
 
     const updateChartAdEntitlement = setupBenefitSummary({ product: 'chartBanner', summaryId: 'chart-ad-entitlement-summary', unitInputId: 'chart-ad-days', submitBtnId: 'chart-ad-submit-btn', canSubmit: () => { const name = document.getElementById('chart-ad-nickname')?.value.trim() || ''; return !name || getAllStocks().some((stock) => stock.name === name); } });
 
+    window.setChartAdStep = (step) => {
+        const form = step === 'form';
+        document.getElementById('chart-ad-step-info').hidden = form;
+        document.getElementById('chart-ad-step-form').hidden = !form;
+        document.querySelector('#chart-ad-modal .promo-modal-content').scrollTop = 0;
+        if (form) document.getElementById('chart-ad-nickname').focus();
+    };
+
     window.openChartAdModal  = () => {
         if (!requireLoginOrPrompt()) return;
         const stockId = getCurrentChartStockId(); // closeChartModal()이 초기화하기 전에 먼저 붙잡아둔다
@@ -431,6 +456,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         closeChartModal();   // 차트창 먼저 닫기
         populateChartAdStockDatalist();
         checkChartAdStockListed();
+        setChartAdStep('info');
         document.getElementById('chart-ad-modal').classList.add('active');
         refreshAllBenefitSummaries();
         refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
@@ -471,6 +497,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         if (!requireLoginOrPrompt()) return;
         populateRelayStockDatalist();
         checkRelayStockListed();
+        setPromoStep('relay-room', 'info');
         document.getElementById('relay-room-modal').classList.add('active');
         refreshAllBenefitSummaries();
         refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
@@ -565,6 +592,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         if (!requireLoginOrPrompt()) return;
         populatePinStockDatalist();
         checkPinStockListed();
+        setPromoStep('pin', 'info');
         document.getElementById('pin-modal').classList.add('active');
         refreshAllBenefitSummaries();
         refreshMonthlyBenefitStatus().catch((error) => console.warn('월 이용권 조회 실패:', error));
@@ -619,6 +647,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     window.openListingModal = (prefillName = '') => {
         if (!requireLoginOrPrompt()) return;
         document.getElementById('listing-stock-name').value = prefillName;
+        setPromoStep('listing', 'info');
         document.getElementById('listing-modal').classList.add('active');
     };
     window.closeListingModal = () => document.getElementById('listing-modal').classList.remove('active');
@@ -1154,6 +1183,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         pendingUnfreezeStockId = stockId;
         document.getElementById('unfreeze-target-stock').innerText = stock.name || stockId;
         closeChartModal();
+        window.setSimpleApplicationStep('unfreeze-donation', false);
         document.getElementById('unfreeze-modal').classList.add('active');
     };
     window.closeUnfreezeModal = () => document.getElementById('unfreeze-modal').classList.remove('active');

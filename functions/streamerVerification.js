@@ -16,6 +16,7 @@ const { isStreamerStockListed } = require("./streamerStockListing");
 
 const VERIFY_NOTE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const VERIFY_NOTE_CODE_TTL_MS = 15 * 60 * 1000;
+const VERIFY_NOTE_CODE_COOLDOWN_MS = 60 * 1000;
 
 function createVerificationNoteCode() {
   const bytes = crypto.randomBytes(6);
@@ -28,15 +29,31 @@ function verificationNoteCodeHash(requestId, code) {
   return crypto.createHash("sha256").update(requestId + ":" + code).digest("hex");
 }
 
-async function issueVerificationNoteCode(db, requestId) {
+async function issueVerificationNoteCode(db, requestId, uid) {
   const code = createVerificationNoteCode();
   const issuedAt = Date.now();
-  await db.ref(`streamerVerificationRequests/${requestId}`).update({
-    noteVerificationCodeHash: verificationNoteCodeHash(requestId, code),
-    noteVerificationCodeIssuedAt: issuedAt,
-    noteVerificationCodeExpiresAt: issuedAt + VERIFY_NOTE_CODE_TTL_MS,
+  const ref = db.ref(`streamerVerificationRequests/${requestId}`);
+  // Prime the transaction cache: an uncached RTDB transaction can initially see null.
+  await ref.once("value");
+  const tx = await ref.transaction((current) => {
+    if (!current || current.uid !== uid || current.status !== "pending") return;
+    if (Number(current.noteVerificationCodeIssuedAt || 0) + VERIFY_NOTE_CODE_COOLDOWN_MS > issuedAt) return;
+    if (current.noteVerificationClaim && issuedAt - Number(current.noteVerificationClaim.claimedAt || 0) < 2 * 60 * 1000) return;
+    return { ...current,
+      noteVerificationCodeHash: verificationNoteCodeHash(requestId, code),
+      noteVerificationCodeIssuedAt: issuedAt,
+      noteVerificationCodeExpiresAt: issuedAt + VERIFY_NOTE_CODE_TTL_MS,
+    };
   });
-  return { code, expiresAt: issuedAt + VERIFY_NOTE_CODE_TTL_MS };
+  if (!tx.committed) {
+    const current = tx.snapshot.val();
+    const nextAt = Number(current?.noteVerificationCodeIssuedAt || 0) + VERIFY_NOTE_CODE_COOLDOWN_MS;
+    if (current?.uid === uid && current?.status === "pending" && nextAt > issuedAt) {
+      throw new HttpsError("resource-exhausted", `새 코드는 ${Math.ceil((nextAt - issuedAt) / 1000)}초 후 발급할 수 있습니다.`, { nextCodeIssueAt: nextAt });
+    }
+    throw new HttpsError("failed-precondition", "인증 신청 상태가 변경되었거나 쪽지를 확인 중입니다. 상태를 확인해주세요.");
+  }
+  return { code, expiresAt: issuedAt + VERIFY_NOTE_CODE_TTL_MS, nextCodeIssueAt: issuedAt + VERIFY_NOTE_CODE_COOLDOWN_MS };
 }
 
 // streamerVerifications는 스트리머 배팅시장과 공유하는 노드다. 그쪽 앱은 SOOP
@@ -231,7 +248,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     // request. Do not rotate its note code: doing so invalidates a note the
     // streamer may already have sent. A normal request call remains the
     // explicit way to issue a fresh code.
-    if (request.data?.checkOnly === true) {
+    if (request.data?.checkOnly === true || (request.data?.renewCode !== true && (request.data?.nickname || request.data?.soopId))) {
       const noteEligible = await canIssueVerificationNoteCode(db, latest);
       const canUseNoteCode = noteEligible && !!latest.noteVerificationCodeHash && Number(latest.noteVerificationCodeExpiresAt) > Date.now();
       return {
@@ -239,15 +256,17 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
         noteEligible,
         verificationCode: "",
         verificationCodeExpiresAt: canUseNoteCode ? Number(latest.noteVerificationCodeExpiresAt) || 0 : 0,
+        nextCodeIssueAt: Number(latest.noteVerificationCodeIssuedAt || 0) + VERIFY_NOTE_CODE_COOLDOWN_MS,
       };
     }
     const noteEligible = await canIssueVerificationNoteCode(db, latest);
-    const challenge = noteEligible ? await issueVerificationNoteCode(db, latest.id) : null;
+    const challenge = noteEligible ? await issueVerificationNoteCode(db, latest.id, uid) : null;
     return {
       ok: true, action: "pending", nickname: latest.nickname, isSwitch: !!latest.isSwitch,
       noteEligible,
       verificationCode: challenge ? challenge.code : "",
       verificationCodeExpiresAt: challenge ? challenge.expiresAt : 0,
+      nextCodeIssueAt: challenge ? challenge.nextCodeIssueAt : 0,
     };
   }
 
@@ -356,6 +375,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
     ok: true, action: "pending", nickname, isSwitch, noteEligible,
     verificationCode: noteChallenge,
     verificationCodeExpiresAt: noteChallenge ? record.noteVerificationCodeExpiresAt : 0,
+    nextCodeIssueAt: noteChallenge ? record.noteVerificationCodeIssuedAt + VERIFY_NOTE_CODE_COOLDOWN_MS : 0,
   };
 });
 
