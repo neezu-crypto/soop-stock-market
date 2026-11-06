@@ -64,12 +64,13 @@ const common = {
   TREASURE_CHEST_REWARD_SMALL: 500000,
   TREASURE_CHEST_REWARD_BIG: 5000000,
   requireNotInMaintenance: async () => {},
-  requireAdmin: async (db, auth) => {
+  requireLinkedUser: async (db, uid, auth) => {
     if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
-    const adminSnap = await db.ref(`adminCenter/adminUids/${auth.uid}`).get();
-    if (adminSnap.val() === true || auth.token?.email === "skftodwocks2@gmail.com") return;
-    throw new HttpsError("permission-denied", "관리자 권한이 없습니다.");
+    const user = (await db.ref(`users/${uid}`).get()).val() || {};
+    if (user.kakaoLinked || user.googleLinked || user.streamerVerified || auth.token?.email === "skftodwocks2@gmail.com") return;
+    throw new HttpsError("permission-denied", "계정 보호가 필요합니다.");
   },
+  assertNotBanned: async () => {},
   creditUserCash: async (_db, uid, amount) => {
     const user = readPath(`users/${uid}`) || {};
     writePath(`users/${uid}`, { ...user, cash: (Number(user.cash) || 0) + amount });
@@ -88,6 +89,7 @@ Module._load = originalLoad;
 
 const adminUser = { auth: { uid: "chest-admin" }, data: {} };
 const regularUser = { auth: { uid: "regular-user" }, data: {} };
+const anonymousUser = { auth: { uid: "anonymous-user" }, data: {} };
 const emailFallbackAdmin = { auth: { uid: "legacy-admin", token: { email: "skftodwocks2@gmail.com" } }, data: {} };
 const call = (name, user, data = {}) => chest[name]({ auth: user.auth, data });
 async function expectCode(promise, code) {
@@ -97,14 +99,30 @@ async function expectCode(promise, code) {
 async function main() {
   tree = {
     adminCenter: { adminUids: { "chest-admin": true } },
-    gameSeriesWallet: { accounts: { "chest-admin": { balanceCash: 2000 } } },
-    users: { "chest-admin": { treasureChests: 2, cash: 0 } },
+    users: {
+      "chest-admin": { treasureChests: 2, cash: 0, googleLinked: true },
+      "regular-user": { treasureChests: 0, cash: 0, kakaoLinked: true },
+    },
+    gameSeriesWallet: { accounts: {
+      "chest-admin": { balanceCash: 2000 },
+      "regular-user": { balanceCash: 66 },
+    } },
   };
 
-  await expectCode(call("getAdminTreasureChestState", regularUser), "permission-denied");
-  assert.equal((await call("getAdminTreasureChestState", emailFallbackAdmin)).ok, true, "기존 관리자 이메일 대체 판별과 일치해야 함");
-  await expectCode(call("purchaseTreasureChestsWithCash", regularUser, { requestId: "regular-chest-1", chestCount: 1 }), "permission-denied");
-  await expectCode(call("openTreasureChest", regularUser), "permission-denied");
+  await expectCode(call("getAdminTreasureChestState", anonymousUser), "permission-denied");
+  assert.equal((await call("getAdminTreasureChestState", regularUser)).ok, true, "계정 보호 로그인 이용자는 보물상자 상태를 볼 수 있어야 함");
+  const regularPurchase = await call("purchaseTreasureChestsWithCash", regularUser, { requestId: "regular-chest-1", chestCount: 1 });
+  assert.equal(regularPurchase.totalChestCount, 1, "계정 보호 로그인 이용자는 구매할 수 있어야 함");
+  const regularOpen = await call("openTreasureChest", regularUser);
+  assert.equal(regularOpen.remaining, 0, "일반 로그인 이용자는 본인 상자를 개봉할 수 있어야 함");
+  await call("purchaseTreasureChestsWithCash", regularUser, { requestId: "regular-chest-2", chestCount: 1 });
+  const regularCancel = await call("cancelTreasureChestCashPurchase", regularUser, {
+    purchaseId: "regular-chest-2", cancellationId: "regular-chest-2_single_1", itemType: "single", itemIndex: 1,
+  });
+  assert.equal(regularCancel.cashAmount, 33, "일반 로그인 이용자는 미사용 상자를 취소할 수 있어야 함");
+  assert.equal(readPath("gameSeriesWallet/accounts/regular-user/balanceCash"), 33, "일반 이용자 취소 금액은 본인 통합 캐시로만 반환돼야 함");
+  assert.equal(readPath("gameSeriesWallet/accounts/chest-admin/balanceCash"), 2000, "일반 이용자의 구매·개봉은 다른 이용자 지갑에 영향을 주면 안 됨");
+  assert.equal((await call("getAdminTreasureChestState", emailFallbackAdmin)).ok, true, "관리자 계정도 로그인 이용자로 계속 이용할 수 있어야 함");
   await expectCode(call("submitTreasureChestPurchaseRequest", regularUser, { chestCount: 1 }), "failed-precondition");
   await expectCode(call("claimMonthlyFreeTreasureChest", regularUser), "failed-precondition");
 
@@ -168,7 +186,7 @@ async function main() {
   const ledgerCancel = readPath("gameSeriesWallet/ledger/chest-admin/chest-order-19_single_1_treasureChestCancellation");
   assert.equal(ledgerPurchase.kind, "treasureChestPurchase");
   assert.equal(ledgerCancel.kind, "treasureChestCancellation");
-  console.log("treasure chest checks passed: admin gate, stopped legacy/free paths, cash debit, exact bundle bonus, retry safety, FIFO, single/bundle cancellation, expiry, refund reservation");
+  console.log("treasure chest checks passed: protected-user gate, stopped legacy/free paths, cash debit, exact bundle bonus, retry safety, FIFO, single/bundle cancellation, expiry, refund reservation");
 }
 
 main().catch((error) => {

@@ -7,7 +7,8 @@ const {
   TREASURE_CHEST_REWARD_SMALL,
   TREASURE_CHEST_REWARD_BIG,
   requireNotInMaintenance,
-  requireAdmin,
+  requireLinkedUser,
+  assertNotBanned,
   creditUserCash,
 } = require("./common");
 
@@ -33,9 +34,15 @@ function requireUid(request) {
   return uid;
 }
 
-async function requireChestAdmin(db, request) {
+/**
+ * 보물상자 캐시 상품은 계정 보호를 마친 로그인 이용자에게만 제공한다.
+ * 관리자 여부는 이 기능의 접근 기준이 아니다. 실제 캐시 잔액·상자 재고는
+ * 언제나 요청한 UID 아래에서만 처리한다.
+ */
+async function requireChestUser(db, request) {
   const uid = requireUid(request);
-  await requireAdmin(db, request.auth);
+  await requireLinkedUser(db, uid, request.auth);
+  await assertNotBanned(db, request.auth);
   return uid;
 }
 
@@ -90,7 +97,7 @@ function normalizeRequestCount(value) {
 // 신규 신청은 중단한다. 이미 제출된 별풍선 신청은 관리자 검수 기능으로 계속 처리할 수 있다.
 const submitTreasureChestPurchaseRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   requireUid(request);
-  throw new HttpsError("failed-precondition", "별풍선 보물상자 신청은 중단되었습니다. 보물상자는 현재 관리자 전용 캐시 구매 흐름에서만 이용할 수 있습니다.");
+  throw new HttpsError("failed-precondition", "별풍선 보물상자 신청은 중단되었습니다. 보물상자는 통합 캐시 구매로 이용해 주세요.");
 });
 
 // 구독자 무료 지급은 기능 재개 전까지 중단한다. 과거 지급 기록과 보유 수량은 수정하지 않는다.
@@ -99,9 +106,10 @@ const claimMonthlyFreeTreasureChest = onCall({ cors: true, timeoutSeconds: 30, m
   throw new HttpsError("failed-precondition", "무료 보물상자 지급은 일시 중단되었습니다.");
 });
 
+// 함수명은 기존 클라이언트 호환을 위해 유지한다. 접근 권한은 로그인 이용자 기준이다.
 const getAdminTreasureChestState = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const db = admin.database();
-  const uid = await requireChestAdmin(db, request);
+  const uid = await requireChestUser(db, request);
   const [accountSnap, inventorySnap, legacySnap] = await Promise.all([
     db.ref(`${WALLET_ROOT}/accounts/${uid}`).get(),
     db.ref(`${CHEST_INVENTORY_ROOT}/${uid}`).get(),
@@ -134,7 +142,7 @@ const getAdminTreasureChestState = onCall({ cors: true, timeoutSeconds: 30, memo
 
 const purchaseTreasureChestsWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const db = admin.database();
-  const uid = await requireChestAdmin(db, request);
+  const uid = await requireChestUser(db, request);
   const requestId = safeRequestId(request.data?.requestId, "구매 요청 번호");
   const chestCount = normalizeRequestCount(request.data?.chestCount);
   const purchase = computeChestPurchase(chestCount);
@@ -273,7 +281,7 @@ const purchaseTreasureChestsWithCash = onCall({ cors: true, timeoutSeconds: 30, 
 
 const cancelTreasureChestCashPurchase = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const db = admin.database();
-  const uid = await requireChestAdmin(db, request);
+  const uid = await requireChestUser(db, request);
   const purchaseId = safeRequestId(request.data?.purchaseId, "구매 번호");
   const cancellationId = safeRequestId(request.data?.cancellationId, "취소 요청 번호");
   const itemType = String(request.data?.itemType || "");
@@ -492,10 +500,10 @@ async function consumeOldestChest(db, uid) {
   return consumed;
 }
 
-/** 보물상자 개봉은 일반 공개 전까지 관리자만 이용할 수 있다. */
+/** 계정 보호 로그인 이용자가 본인 보물상자만 개봉한다. */
 const openTreasureChest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const db = admin.database();
-  const uid = await requireChestAdmin(db, request);
+  const uid = await requireChestUser(db, request);
   await requireNotInMaintenance(db, request.auth);
 
   const consumed = await consumeOldestChest(db, uid);

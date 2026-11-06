@@ -165,7 +165,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
 
     function renderMonthlyChestClaimStatus() {
         const status = document.getElementById('monthly-free-chest-status');
-        if (status) status.textContent = '구독자 무료 보물상자 지급은 기능 재개 전까지 중단되었습니다. 기존에 보유한 상자는 유지됩니다.';
+        if (status) status.textContent = '계정 보호를 마친 로그인 이용자는 통합 캐시로 구매·개봉할 수 있습니다. 구독자 무료 지급은 현재 중단되어 있습니다.';
     }
 
     // 자산충전/홍보/중계방/고정노출 등 로그인(계정 보호) 유저 전용 기능의
@@ -720,7 +720,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
         });
     };
 
-    // ── 보물상자 (관리자 전용 통합 캐시 구매·취소·개봉) ──
+    // ── 보물상자 (계정 보호 로그인 이용자 통합 캐시 구매·취소·개봉) ──
     // 서버(functions/common.js)와 동일한 값을 표시용으로만 들고 있는다 —
     // 최종 검증/차감은 항상 서버가 한다.
     const TREASURE_CHEST_PRICE_CASH           = 33;
@@ -730,18 +730,14 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     let chestAdminState = null;
     const chestCancelWindowMs = 7 * 24 * 60 * 60 * 1000;
 
-    function setChestAdminEntryVisibility() {
+    function setChestEntryVisibility() {
         const button = document.getElementById('asset-charge-open-btn');
-        const admin = !!getIsAdmin();
-        if (button) button.style.display = admin ? '' : 'none';
-        if (!admin) {
-            document.getElementById('asset-charge-modal')?.classList.remove('active');
-            document.getElementById('treasure-chest-buy-modal')?.classList.remove('active');
-            document.getElementById('treasure-chest-open-modal')?.classList.remove('active');
-        }
+        // 계정 보호 여부는 누르면 즉시 안내한다. 로그인 전에도 버튼을 숨기지 않아
+        // 이용 경로를 찾지 못하는 일이 없게 한다.
+        if (button) button.style.display = '';
     }
-    setChestAdminEntryVisibility();
-    window.addEventListener('stock-admin-status-change', setChestAdminEntryVisibility);
+    setChestEntryVisibility();
+    window.addEventListener('stock-admin-status-change', setChestEntryVisibility);
 
     function readPendingChestPurchase() {
         try {
@@ -859,7 +855,6 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     }
 
     async function refreshChestAdminState() {
-        if (!getIsAdmin()) throw new Error('보물상자 기능은 현재 관리자 전용입니다.');
         const response = await getAdminTreasureChestStateCallable();
         chestAdminState = response.data || null;
         if (!chestAdminState) throw new Error('보물상자 정보를 불러오지 못했습니다.');
@@ -879,7 +874,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     }
 
     async function cancelChestItem({ purchaseId, cancellationId, itemType, itemIndex, retry = false }) {
-        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
+        if (!requireLoginOrPrompt()) return;
         if (!retry) {
             const amount = itemType === 'bundle' ? 330 : 33;
             const count = itemType === 'bundle' ? 11 : 1;
@@ -896,8 +891,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     }
 
     window.openAssetChargeModal = () => {
-        setChestAdminEntryVisibility();
-        if (!getIsAdmin()) { alert('보물상자 기능은 현재 관리자 전용으로 중단되어 있습니다.'); return; }
+        setChestEntryVisibility();
+        if (!requireLoginOrPrompt()) return;
         document.getElementById('asset-charge-modal').classList.add('active');
         refreshChestAdminState().catch((error) => {
             const summary = document.getElementById('chest-wallet-summary');
@@ -954,7 +949,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     };
 
     window.openTreasureChestBuyModal = () => {
-        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
+        if (!requireLoginOrPrompt()) return;
         window.closeAssetChargeModal();
         window.setSimpleApplicationStep('treasure-chest-buy', false);
         document.getElementById('chest-qty-input').value = String(readPendingChestPurchase()?.chestCount || 1);
@@ -973,7 +968,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     };
 
     window.submitTreasureChestPurchase = async function() {
-        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
+        if (!requireLoginOrPrompt()) return;
         const button = document.getElementById('chest-buy-submit-btn');
         const chestCount = parseInt(document.getElementById('chest-qty-input').value, 10);
         if (!Number.isInteger(chestCount) || chestCount < 1 || chestCount > TREASURE_CHEST_MAX_BUY_COUNT) {
@@ -1032,7 +1027,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     }
 
     window.openTreasureChestOpenModal = () => {
-        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
+        if (!requireLoginOrPrompt()) return;
         window.closeAssetChargeModal();
         refreshChestAdminState().catch((error) => alert(error?.message || '보유 상자 정보를 불러오지 못했습니다.'));
         const icon = document.getElementById('chest-open-icon');
@@ -1049,7 +1044,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
     window.closeTreasureChestOpenModal = () => document.getElementById('treasure-chest-open-modal').classList.remove('active');
 
     window.openTreasureChest = async function() {
-        if (!getIsAdmin()) return alert('보물상자 기능은 현재 관리자 전용입니다.');
+        if (!requireLoginOrPrompt()) return;
         if (window.blockIfMaintenance && window.blockIfMaintenance()) return;
         try { await refreshChestAdminState(); } catch (error) { return alert(error?.message || '보유 상자를 확인하지 못했습니다.'); }
         if (!(chestAdminState?.totalChestCount > 0)) { alert('보유한 보물상자가 없습니다.'); return; }

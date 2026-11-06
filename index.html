@@ -574,22 +574,22 @@
 </div>
 
 <!-- ══════════════════════════════════════════
-     보물상자 관리 — 관리자 전용 테스트
+     보물상자 — 계정 보호 로그인 이용자용
 ══════════════════════════════════════════ -->
 <div id="asset-charge-modal" class="promo-modal-overlay" style="z-index:4000;">
     <div class="promo-modal-content" style="max-width:380px;text-align:center;">
-        <div class="promo-modal-header"><h2>🎁 보물상자 관리</h2></div>
+        <div class="promo-modal-header"><h2>🎁 보물상자</h2></div>
         <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.35);border-radius:10px;padding:12px;margin-bottom:14px;text-align:left;">
-            <div id="monthly-free-chest-status" role="status" aria-live="polite" style="font-size:13px;color:#cbd5e1;line-height:1.6;">일반 사용자 대상 구매·개봉과 구독 무료 지급은 기능 재개 전까지 중단되었습니다. 기존 보유 상자는 계정에 유지됩니다.</div>
+            <div id="monthly-free-chest-status" role="status" aria-live="polite" style="font-size:13px;color:#cbd5e1;line-height:1.6;">계정 보호를 마친 로그인 이용자는 통합 캐시로 구매·개봉할 수 있습니다. 구독자 무료 지급은 현재 중단되어 있습니다.</div>
         </div>
         <ul class="promo-info-list" style="margin-bottom:16px;text-align:left;">
-            <li>🎁 <b>캐시 구매:</b> 1개당 33캐시, 관리자만 이용 가능</li>
+            <li>🎁 <b>캐시 구매:</b> 1개당 33캐시</li>
             <li>📦 <b>보물상자 열기:</b> 보유한 상자를 열어 95% 50만원 / 5% 500만원 획득</li>
             <li>🧾 구매 후 7일 이내 미사용 상자만 취소할 수 있습니다. 사용된 상자는 취소할 수 없습니다.</li>
         </ul>
         <div style="display:flex;flex-direction:column;gap:10px;">
             <a data-admin-only-integrated-cash href="https://neezu-crypto.github.io/streamer-game-series-shop/customer-center.html" target="_blank" rel="noopener noreferrer"
-                style="display:none;width:100%;box-sizing:border-box;background:#334155;color:#f8fafc;text-decoration:none;text-align:center;padding:12px;border-radius:10px;font-weight:700;font-size:14px;">
+                style="width:100%;box-sizing:border-box;background:#334155;color:#f8fafc;text-decoration:none;text-align:center;padding:12px;border-radius:10px;font-weight:700;font-size:14px;">
                 💰 통합 캐시 충전·내역
             </a>
             <button onclick="openTreasureChestBuyModal()" class="btn-confirm-contact">🎁 통합 캐시로 구매</button>
@@ -639,7 +639,7 @@
 
         <div id="chest-wallet-summary" role="status" aria-live="polite" style="background:rgba(255,255,255,0.05);padding:10px 12px;border-radius:9px;margin-bottom:12px;font-size:12px;color:#cbd5e1;text-align:left;">캐시와 보유 상자 정보를 불러오는 중...</div>
         <a data-admin-only-integrated-cash href="https://neezu-crypto.github.io/streamer-game-series-shop/customer-center.html" target="_blank" rel="noopener noreferrer"
-            style="display:none;margin:0 0 12px;padding:10px 12px;border:1px solid rgba(56,189,248,.4);border-radius:9px;color:#7dd3fc;background:rgba(56,189,248,.08);text-decoration:none;text-align:center;font-size:12px;font-weight:700;">
+            style="display:block;margin:0 0 12px;padding:10px 12px;border:1px solid rgba(56,189,248,.4);border-radius:9px;color:#7dd3fc;background:rgba(56,189,248,.08);text-decoration:none;text-align:center;font-size:12px;font-weight:700;">
             💰 잔액이 부족한가요? 통합 캐시 충전·내역 열기 ↗<br>
             <small style="font-weight:400;color:#cbd5e1;">충전 승인 후 이 화면을 다시 열면 잔액을 불러옵니다.</small>
         </a>
@@ -1395,7 +1395,7 @@
                     <div class="wallet-control-buttons">
                         <button id="asset-charge-open-btn" onclick="openAssetChargeModal()"
                             style="margin-left:8px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
-                            💰 자산 충전
+                            🎁 보물상자
                         </button>
                         <button id="sound-settings-btn" onclick="openSoundSettingsModal()"
                             style="margin-left:6px;background:#334155;color:#f8fafc;border:none;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">
@@ -1522,7 +1522,7 @@ const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동
 let isAdminUser = false;
 function updateIntegratedCashLinksVisibility() {
     document.querySelectorAll('[data-admin-only-integrated-cash]').forEach((link) => {
-        link.style.display = isAdminUser ? 'block' : 'none';
+        link.style.display = 'block';
     });
 }
 window.addEventListener('stock-admin-status-change', updateIntegratedCashLinksVisibility);
@@ -1915,7 +1915,7 @@ function renderStockSubscriptionModal(message = '') {
     } else if (state.isAdmin) {
         status.textContent = '관리자 권한으로 매일 출석 2배와 무료 복권 1장을 이용할 수 있어요. 홍보는 통합 캐시로 신청합니다.';
     } else if (state.subscribed) {
-        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권 4종을 이용할 수 있어요. 보물상자 기능은 관리자 전용 점검 중입니다. 이용권은 KST 매월 1일 초기화되고 미사용분은 이월되지 않습니다.`;
+        status.textContent = `${formatStockSubscriptionDate(state.expiresAt)}까지 통합 구독이 활성화되어 있어요. 매일 출석 2배·무료 복권 1장과 매월 홍보 이용권 4종을 이용할 수 있어요. 보물상자 구매·개봉은 계정 보호 로그인 후 통합 캐시로 이용할 수 있고, 무료 지급은 현재 중단되어 있습니다. 이용권은 KST 매월 1일 초기화되고 미사용분은 이월되지 않습니다.`;
     } else if (!protectedAccount) {
         status.textContent = '익명 계정은 구독 인증을 신청할 수 없어요. 먼저 계정을 보호해 주세요.';
     } else if (hasPending) {
