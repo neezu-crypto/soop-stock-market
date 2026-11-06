@@ -1,6 +1,7 @@
 const { createHash } = require("node:crypto");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const { getDatabaseWithUrl } = require("firebase-admin/database");
 const { isAdmin, assertNotBanned } = require("./common");
 
 const SUBSCRIPTION_PATH = "streamerFanPageViewerSubscriptions";
@@ -8,6 +9,11 @@ const BENEFIT_PATH = "stockSubscriptionBenefits";
 const SUBSCRIPTION_PAYMENT_METHOD = "subscription-entitlement";
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const APPROVAL_LEASE_MS = 60 * 1000;
+const FANPAGE_DATABASE_URL = "https://streamer-fanpage-rtdb.firebaseio.com";
+
+function fanpageDatabase() {
+  return getDatabaseWithUrl(FANPAGE_DATABASE_URL, admin.app());
+}
 
 const BENEFITS = Object.freeze({
   banner: { limit: 7, unit: "일", usageField: "bannerDaysUsed", requestPath: "bannerRequests", label: "우측 랭킹 배너" },
@@ -39,8 +45,8 @@ function requestFingerprint(value) {
   return createHash("sha256").update(stableSerialize(value)).digest("hex");
 }
 
-async function getSubscriptionExpiry(db, uid) {
-  const snap = await db.ref(`${SUBSCRIPTION_PATH}/${uid}/expiresAt`).get();
+async function getSubscriptionExpiry(_sharedDb, uid) {
+  const snap = await fanpageDatabase().ref(`${SUBSCRIPTION_PATH}/${uid}/expiresAt`).get();
   return Number(snap.val()) || 0;
 }
 

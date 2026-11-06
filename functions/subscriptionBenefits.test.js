@@ -39,6 +39,7 @@ function makeDatabase(seed = {}) {
 }
 
 let activeDb;
+let activeFanpageDb;
 const HttpsError = class extends Error {
   constructor(code, message) { super(message); this.code = code; }
 };
@@ -49,7 +50,8 @@ const common = {
 const originalLoad = Module._load;
 Module._load = function(request, parent, isMain) {
   if (request === "firebase-functions/v2/https") return { onCall: (_options, handler) => handler, HttpsError };
-  if (request === "firebase-admin") return { database: () => activeDb };
+  if (request === "firebase-admin") return { database: () => activeDb, app: () => ({}) };
+  if (request === "firebase-admin/database") return { getDatabaseWithUrl: () => activeFanpageDb };
   if (request === "./common" && /\/functions\/subscriptionBenefits\.js$/.test(parent?.filename || "")) return common;
   return originalLoad.call(this, request, parent, isMain);
 };
@@ -62,10 +64,12 @@ const REQUEST_ID = "request-id-00000001";
 const auth = { uid: "member-1", token: { email: "member@example.com" } };
 
 function baseDatabase() {
-  return makeDatabase({
+  const database = makeDatabase({
     streamerFanPageViewerSubscriptions: { [auth.uid]: ACTIVE_SUBSCRIPTION },
     users: { [auth.uid]: { kakaoLinked: true, treasureChests: 0 } },
   });
+  activeFanpageDb = database;
+  return database;
 }
 
 function requestData() {
