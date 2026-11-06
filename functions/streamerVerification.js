@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const { getDatabaseWithUrl } = require("firebase-admin/database");
 const crypto = require("node:crypto");
 const {
   STREAMER_VERIFICATION_NICKNAME_MAX_LENGTH,
@@ -17,6 +18,11 @@ const { isStreamerStockListed } = require("./streamerStockListing");
 const VERIFY_NOTE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const VERIFY_NOTE_CODE_TTL_MS = 15 * 60 * 1000;
 const VERIFY_NOTE_CODE_COOLDOWN_MS = 60 * 1000;
+const LIFE_GAME_DATABASE_URL = "https://streamer-life-game-rtdb.firebaseio.com";
+
+function lifeGameDatabase() {
+  return getDatabaseWithUrl(LIFE_GAME_DATABASE_URL, admin.app());
+}
 
 function createVerificationNoteCode() {
   const bytes = crypto.randomBytes(6);
@@ -232,7 +238,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
 
   if (latest?.status === "pending") {
     const reviewed = latest.soopId && !latest.isSwitch
-      ? await db.ref(`lifeGame/playedStreamerAllowlist/${uid}/${latest.soopId}`).get()
+      ? await lifeGameDatabase().ref(`lifeGame/playedStreamerAllowlist/${uid}/${latest.soopId}`).get()
       : null;
     if (reviewed?.exists() && reviewed.val().nickname === latest.nickname) {
       const existing = await findExistingStreamerRecord(db, latest.nickname, latest.soopId);
@@ -333,7 +339,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   // 호출부(주식시장 자체)는 이 필드를 안 보내므로 기본값으로 하위 호환.
   const source = String(request.data?.source || "stock-market").trim() || "stock-market";
 
-  const allowlistRef = db.ref(`lifeGame/playedStreamerAllowlist/${uid}/${soopId}`);
+  const allowlistRef = lifeGameDatabase().ref(`lifeGame/playedStreamerAllowlist/${uid}/${soopId}`);
   const reviewedSnap = await allowlistRef.get();
   // 자매 페이지(예: 인생게임)도 이 공용 callable로 신청하므로 source와 무관하게
   // 모든 자동승인 경로에 주식시장 상장 조건을 적용한다. 미상장 신청은 아래에서
