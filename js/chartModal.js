@@ -61,6 +61,48 @@ export function initChartModal({ db, getAllStocks, getChangePercent, getChartBan
     let chartIsLoading       = false;  // 중복 fetch 방지
     let bannerRequestId = 0;
     let bannerExpiryTimer = null;
+    // 공통 배너는 한 번에 하나만 노출되고 변경 빈도가 낮다. 모달을 열 때마다
+    // 함수 왕복 → 이미지 다운로드를 직렬로 기다리지 않도록 페이지 체류 중 캐시한다.
+    const CHART_BANNER_CACHE_TTL_MS = 60 * 1000;
+    let cachedChartBanners = null;
+    let chartBannerCachedAt = 0;
+    let chartBannerFetchPromise = null;
+    const warmedBannerImages = new Set();
+
+    function preloadBannerImage(source) {
+        const url = String(source || '').trim();
+        if (!url || warmedBannerImages.has(url)) return;
+        warmedBannerImages.add(url);
+        const image = new Image();
+        image.decoding = 'async';
+        // fetchPriority를 지원하는 브라우저에서는 모달 진입 전 이미지 요청을
+        // 우선 처리한다. 미지원 브라우저는 일반 선로딩으로 자연스럽게 동작한다.
+        image.fetchPriority = 'high';
+        image.src = url;
+    }
+
+    function warmBannerImages(banners) {
+        (Array.isArray(banners) ? banners : []).forEach((banner) => preloadBannerImage(banner?.img));
+    }
+
+    async function loadSharedChartBanners({ force = false } = {}) {
+        const isFresh = cachedChartBanners !== null && (Date.now() - chartBannerCachedAt) < CHART_BANNER_CACHE_TTL_MS;
+        if (!force && isFresh) return cachedChartBanners;
+        if (chartBannerFetchPromise) return chartBannerFetchPromise;
+        chartBannerFetchPromise = getChartBanners()
+            .then((response) => {
+                cachedChartBanners = Array.isArray(response.data?.banners) ? response.data.banners : [];
+                chartBannerCachedAt = Date.now();
+                warmBannerImages(cachedChartBanners);
+                return cachedChartBanners;
+            })
+            .finally(() => { chartBannerFetchPromise = null; });
+        return chartBannerFetchPromise;
+    }
+
+    // 사용자가 차트를 열기 전부터 공통 배너와 이미지를 준비한다.
+    // 실패해도 모달 진입 시 기존 재시도 경로가 그대로 동작한다.
+    void loadSharedChartBanners().catch(() => {});
 
     // ── 차트 모달 열기 ───────────────────────────────────────────
     window.openChartModal = function(stockId) {
@@ -100,9 +142,6 @@ export function initChartModal({ db, getAllStocks, getChangePercent, getChartBan
         const emptyEl = document.getElementById('chart-ad-empty');
         const emptyTextEl = document.getElementById('chart-ad-empty-text');
         const emptyCtaEl = document.getElementById('chart-ad-empty-cta');
-        linkEl.style.display = 'none';
-        emptyEl.style.display = 'none';
-
         function showMessage(message, allowApply) {
             linkEl.style.display = 'none';
             emptyEl.style.display = 'flex';
@@ -111,37 +150,47 @@ export function initChartModal({ db, getAllStocks, getChangePercent, getChartBan
             emptyTextEl.textContent = message;
             emptyCtaEl.style.display = allowApply ? '' : 'none';
         }
-        try {
-            const response = await getChartBanners();
+
+        function render(banners) {
             if (requestId !== bannerRequestId || !chartModalStockId) return;
-            const banners = Array.isArray(response.data?.banners) ? response.data.banners : [];
-            function render() {
-                if (requestId !== bannerRequestId || !chartModalStockId) return;
-                const now = Date.now();
-                const active = banners.filter(b => !b.expiresAt || b.expiresAt > now);
-                if (!active.length) {
-                    clearTimeout(bannerExpiryTimer);
-                    showMessage('이 자리에 내 방송국을 홍보해보세요!', true);
-                    return;
-                }
-                const banner = active[0];
-                imgEl.src = banner.img;
-                imgEl.alt = banner.name ? `${banner.name} 광고 배너` : '광고 배너';
-                if (banner.link) linkEl.href = banner.link;
-                else linkEl.removeAttribute('href');
-                linkEl.style.display = 'flex';
-                emptyEl.style.display = 'none';
+            const now = Date.now();
+            const active = banners.filter(b => !b.expiresAt || b.expiresAt > now);
+            if (!active.length) {
+                clearTimeout(bannerExpiryTimer);
+                showMessage('이 자리에 내 방송국을 홍보해보세요!', true);
+                return;
             }
-            render();
-            const expiresAt = banners[0]?.expiresAt;
-            function scheduleExpiry() {
+            const banner = active[0];
+            preloadBannerImage(banner.img);
+            imgEl.src = banner.img;
+            imgEl.alt = banner.name ? `${banner.name} 광고 배너` : '광고 배너';
+            if (banner.link) linkEl.href = banner.link;
+            else linkEl.removeAttribute('href');
+            linkEl.style.display = 'flex';
+            emptyEl.style.display = 'none';
+
+            const expiresAt = Number(banner.expiresAt);
+            if (banner.expiresAt == null || !Number.isFinite(expiresAt)) return;
+            const scheduleExpiry = () => {
                 const remaining = expiresAt - Date.now();
-                if (remaining <= 0) { render(); return; }
+                if (remaining <= 0) { render(banners); return; }
                 bannerExpiryTimer = setTimeout(scheduleExpiry, Math.min(remaining, 2147483647));
-            }
-            if (expiresAt) scheduleExpiry();
+            };
+            scheduleExpiry();
+        }
+
+        // 캐시가 있으면 그 즉시 그린다. 최신화는 배경에서만 진행해 배너가
+        // 매 모달 진입마다 사라졌다가 다시 나타나는 현상을 없앤다.
+        const cachedBeforeRefresh = cachedChartBanners;
+        const hasCachedBanner = cachedBeforeRefresh !== null;
+        if (hasCachedBanner) render(cachedBeforeRefresh);
+        else showMessage('배너를 불러오는 중…', false);
+
+        try {
+            const banners = await loadSharedChartBanners({ force: !hasCachedBanner });
+            if (!hasCachedBanner || banners !== cachedBeforeRefresh) render(banners);
         } catch (e) {
-            if (requestId === bannerRequestId && chartModalStockId) {
+            if (!hasCachedBanner && requestId === bannerRequestId && chartModalStockId) {
                 showMessage('배너를 불러오지 못했어요. 차트를 다시 열어주세요.', false);
             }
         }
