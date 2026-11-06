@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261106-series-menu-scroll-lock">
+    <link rel="stylesheet" href="styles.css?v=20261107-series-menu-touch-lock">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -48,6 +48,7 @@
     var track = document.getElementById('topnavTrack');
     var menuToggle = document.getElementById('topnavMenuToggle');
     var lockedScrollY = null;
+    var menuTouchStartY = null;
     if (!nav || !viewport || !track) return;
 
     function isCompactNav() {
@@ -81,6 +82,12 @@
       window.scrollTo(0, scrollY);
     }
 
+    function isMenuScrollBoundary(deltaY) {
+      var top = viewport.scrollTop <= 0;
+      var bottom = viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 1;
+      return (deltaY > 0 && top) || (deltaY < 0 && bottom);
+    }
+
     function setMenuOpen(open, restoreFocus) {
       viewport.classList.toggle('is-open', open);
       if (open) lockPageScroll();
@@ -112,6 +119,28 @@
       document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && viewport.classList.contains('is-open')) setMenuOpen(false, true);
       });
+      viewport.addEventListener('touchstart', function (event) {
+        menuTouchStartY = event.touches && event.touches[0] ? event.touches[0].clientY : null;
+      }, { passive: true });
+      viewport.addEventListener('touchmove', function (event) {
+        if (menuTouchStartY === null || !event.touches || !event.touches[0]) return;
+        var deltaY = event.touches[0].clientY - menuTouchStartY;
+        if (isMenuScrollBoundary(deltaY)) event.preventDefault();
+      }, { passive: false });
+      viewport.addEventListener('touchend', function () { menuTouchStartY = null; }, { passive: true });
+      viewport.addEventListener('wheel', function (event) {
+        if (isMenuScrollBoundary(-event.deltaY)) event.preventDefault();
+      }, { passive: false });
+      document.addEventListener('touchmove', function (event) {
+        var target = event.target;
+        var insideMenu = target && typeof target.closest === 'function' && target.closest('#topnavViewport');
+        if (viewport.classList.contains('is-open') && !insideMenu) event.preventDefault();
+      }, { passive: false });
+      document.addEventListener('wheel', function (event) {
+        var target = event.target;
+        var insideMenu = target && typeof target.closest === 'function' && target.closest('#topnavViewport');
+        if (viewport.classList.contains('is-open') && !insideMenu) event.preventDefault();
+      }, { passive: false });
       window.addEventListener('pagehide', function () { unlockPageScroll(); });
     }
 
