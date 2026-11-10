@@ -3374,10 +3374,7 @@ function selectStreamerVerifyCandidate(item) {
     verifyEl('selected-name').textContent = item.nickname;
     verifyEl('selected-id').textContent = ` · ${item.soopId}`;
     const avatar = verifyEl('selected-avatar');
-    const selectedAvatarUrl = streamerVerifyAvatarUrl(item);
-    avatar.hidden = !selectedAvatarUrl;
-    avatar.onerror = () => { avatar.hidden = true; };
-    if (selectedAvatarUrl) avatar.src = selectedAvatarUrl;
+    applyStreamerVerifyAvatar(avatar, item);
     verifyEl('search-step').hidden = true;
     verifyEl('selected').hidden = false;
     clearStreamerVerifyResults();
@@ -3385,11 +3382,25 @@ function selectStreamerVerifyCandidate(item) {
     verifyEl('submit').focus({ preventScroll: true });
 }
 const STREAMER_VERIFY_AVATAR_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><circle cx="18" cy="18" r="18" fill="#475569"/><circle cx="18" cy="14" r="6" fill="#cbd5e1"/><path d="M6 32c2-7 8-9 12-9s10 2 12 9z" fill="#cbd5e1"/></svg>');
-// 서버가 avatarUrl을 비워 보내도 SOOP 프로필 이미지 규칙으로 미리보기를 만든다.
-function streamerVerifyAvatarUrl(item) {
-    if (item.avatarUrl) return item.avatarUrl;
+// SOOP 프로필 이미지 후보 주소. 서버가 추정해 내려주는 stimg 주소는 일부 계정에서 404라서
+// 검색 응답의 station_logo와 같은 profile.img 주소를 먼저 쓰고, 실패하면 stimg → 기본 아이콘 순으로 대체한다.
+function streamerVerifyAvatarCandidates(item) {
     const id = String(item.soopId || '').toLowerCase();
-    return /^[a-z0-9]{2,20}$/.test(id) ? `https://stimg.sooplive.com/LOGO/${id.slice(0, 2)}/${id}/${id}.jpg` : '';
+    const urls = [];
+    if (/^[a-z0-9]{2,20}$/.test(id)) {
+        const folder = id.slice(0, 2);
+        urls.push(`https://profile.img.sooplive.com/LOGO/${folder}/${id}/${id}.jpg`);
+        urls.push(`https://stimg.sooplive.com/LOGO/${folder}/${id}/${id}.jpg`);
+    }
+    if (item.avatarUrl && !urls.includes(item.avatarUrl)) urls.push(item.avatarUrl);
+    return urls;
+}
+function applyStreamerVerifyAvatar(img, item) {
+    const queue = streamerVerifyAvatarCandidates(item);
+    img.hidden = false;
+    const next = () => { img.src = queue.length ? queue.shift() : STREAMER_VERIFY_AVATAR_PLACEHOLDER; };
+    img.onerror = () => { if (queue.length) next(); else { img.onerror = null; img.src = STREAMER_VERIFY_AVATAR_PLACEHOLDER; } };
+    next();
 }
 function renderStreamerVerifyResults(streamers) {
     const list = verifyEl('results');
@@ -3402,10 +3413,8 @@ function renderStreamerVerifyResults(streamers) {
         const avatar = document.createElement('img');
         avatar.alt = ''; avatar.width = 36; avatar.height = 36; avatar.loading = 'lazy'; avatar.referrerPolicy = 'no-referrer';
         avatar.style.cssText = 'flex:none;width:36px;height:36px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,0.1);';
-        const avatarUrl = streamerVerifyAvatarUrl(item);
-        // 이미지가 없는 계정도 목록 정렬이 흐트러지지 않도록 기본 아이콘으로 대체한다.
-        avatar.onerror = () => { avatar.onerror = null; avatar.src = STREAMER_VERIFY_AVATAR_PLACEHOLDER; };
-        avatar.src = avatarUrl || STREAMER_VERIFY_AVATAR_PLACEHOLDER;
+        // 이미지가 없는 계정도 목록 정렬이 흐트러지지 않도록 후보 주소를 차례로 시도한 뒤 기본 아이콘으로 대체한다.
+        applyStreamerVerifyAvatar(avatar, item);
         const text = document.createElement('span');
         text.style.cssText = 'display:flex;flex:1;min-width:0;align-items:center;justify-content:space-between;gap:10px;';
         const name = document.createElement('strong'); name.textContent = item.nickname; name.style.cssText = 'min-width:0;overflow-wrap:anywhere;';
