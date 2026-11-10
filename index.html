@@ -1242,6 +1242,7 @@
 <!-- ══════════════════════════════════════════
      🎙️ 스트리머 인증 (카카오/구글 대체 계정 보호)
 ══════════════════════════════════════════ -->
+<style>#streamer-verify-modal [hidden]{display:none!important}#streamer-verify-modal #streamer-verify-results button:hover,#streamer-verify-modal #streamer-verify-results button:focus-visible{border-color:#38bdf8!important;outline:none;box-shadow:0 0 0 3px rgba(56,189,248,.2)}#streamer-verify-submit:disabled{opacity:.45;cursor:not-allowed}#streamer-verify-search:focus{outline:none;border-color:#38bdf8!important;box-shadow:0 0 0 3px rgba(56,189,248,.2)}</style>
 <div id="streamer-verify-modal" class="promo-modal-overlay" style="z-index:5150;">
     <div class="promo-modal-content" style="max-width:380px;max-height:calc(100dvh - 32px);overflow-y:auto;text-align:center;border-color:#d9b354;box-shadow:0 0 40px rgba(217,179,84,0.3);">
         <div class="promo-modal-header"><h2>🎙️ 스트리머 인증</h2></div>
@@ -1249,20 +1250,40 @@
         <div id="streamer-verify-form">
             <section id="streamer-verify-step-info">
             <p style="font-size:13px;color:var(--text-sub);line-height:1.7;margin-bottom:16px;">
-                방송 닉네임을 입력하고 신청하면 <b style="color:#38bdf8;">즉시 관리자에게 신청이 전달</b>돼요.<br>
+                닉네임이나 SOOP 아이디로 검색해 본인을 선택하면 <b style="color:#38bdf8;">즉시 관리자에게 신청이 전달</b>돼요.<br>
                 관리자가 확인 후 승인해드려요.
             </p>
             <div style="display:flex;gap:8px;"><button type="button" onclick="closeStreamerVerifyModal()" style="flex:1;background:#334155;color:white;border:0;padding:12px;border-radius:10px;">닫기</button><button type="button" onclick="setSimpleApplicationStep('streamer-verify',true)" style="flex:2;background:var(--primary);border:0;padding:12px;border-radius:10px;">신청 내용 입력 →</button></div>
             </section><section id="streamer-verify-step-form" hidden>
+            <div id="streamer-verify-search-step">
+                <div id="streamer-verify-search-box">
+                <input id="streamer-verify-search" type="search" maxlength="40" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="streamer-verify-results"
+                    placeholder="닉네임 또는 SOOP 아이디 (2자 이상)"
+                    style="width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:14px;">
+                <ul id="streamer-verify-results" role="listbox" aria-label="검색 결과" hidden
+                    style="list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px;max-height:min(260px,36dvh);overflow-y:auto;"></ul>
+                <p id="streamer-verify-search-hint" role="status" aria-live="polite" style="min-height:18px;margin:8px 0 0;font-size:12px;color:#94a3b8;text-align:center;"></p>
+                </div>
+                <button id="streamer-verify-manual-toggle" type="button"
+                    style="margin:4px 0 12px;padding:6px 0;border:0;background:none;color:#94a3b8;font-size:12px;font-weight:600;text-decoration:underline;cursor:pointer;">찾는 스트리머가 없나요? 직접 입력하기</button>
+            </div>
+            <div id="streamer-verify-selected" hidden
+                style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:rgba(255,255,255,0.05);text-align:left;">
+                <img id="streamer-verify-selected-avatar" alt="" width="44" height="44" referrerpolicy="no-referrer" style="flex:none;width:44px;height:44px;border-radius:50%;object-fit:cover;">
+                <div style="flex:1;min-width:0;overflow-wrap:anywhere;"><strong id="streamer-verify-selected-name" style="font-size:14px;"></strong><span id="streamer-verify-selected-id" style="font-size:12px;opacity:.7;"></span></div>
+                <button id="streamer-verify-reselect" type="button" style="flex:none;background:#334155;color:white;border:0;padding:8px 10px;border-radius:8px;font-size:12px;cursor:pointer;">다시 선택</button>
+            </div>
+            <div id="streamer-verify-manual" hidden>
             <input id="streamer-verify-nickname" type="text" maxlength="20" placeholder="방송 닉네임 입력"
                 style="width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:14px;margin-bottom:12px;">
             <input id="streamer-verify-soopid" type="text" maxlength="20" placeholder="SOOP 아이디 입력 (영문 소문자/숫자)"
                 style="width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:14px;margin-bottom:12px;">
-            <button id="streamer-verify-submit" onclick="submitStreamerVerification()"
+            </div>
+            <button id="streamer-verify-submit" onclick="submitStreamerVerification()" disabled
                 style="width:100%;background:#38bdf8;color:#0f172a;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;margin-bottom:10px;">
                 신청하기
             </button>
-            <button type="button" onclick="setSimpleApplicationStep('streamer-verify',false)">← 이전</button>
+            <button type="button" onclick="setSimpleApplicationStep('streamer-verify',false)" style="width:100%;background:#334155;color:white;border:0;padding:11px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:13px;margin-bottom:10px;">← 이전</button>
             </section>
         </div>
 
@@ -1673,6 +1694,8 @@ const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking'
 const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttendance');
 const buyLotteryTicketCallable = httpsCallable(functions, 'buyLotteryTicket');
 const requestStreamerVerificationCallable = httpsCallable(functions, 'requestStreamerVerification');
+// 팬페이지와 같은 SOOP 검색 callable을 쓴다(검색 결과 저장 없음, 로그인 필요, 계정별 분당 한도).
+const verifySearchCallable = httpsCallable(functions, 'streamerFanPageVerifySearch');
 const logStockMarketVisitCallable = httpsCallable(functions, 'logStockMarketVisit');
 
 async function callUnifiedViewerSubscription(data) {
@@ -3157,13 +3180,132 @@ window.openStreamerVerifyModal = function() {
     setSimpleApplicationStep('streamer-verify', false);
     document.getElementById('streamer-verify-form').style.display = 'block';
     document.getElementById('streamer-verify-pending').style.display = 'none';
-    document.getElementById('streamer-verify-nickname').value = '';
-    document.getElementById('streamer-verify-soopid').value = '';
+    resetStreamerVerifySearch();
     document.getElementById('streamer-verify-modal')?.classList.add('active');
 };
 window.closeStreamerVerifyModal = function() {
     document.getElementById('streamer-verify-modal')?.classList.remove('active');
 };
+
+// 스트리머 인증: SOOP 검색 → 선택 → 인증 신청. 팬페이지와 같은 흐름이다.
+const STREAMER_VERIFY_SEARCH_DEBOUNCE_MS = 350;
+let streamerVerifySearchTimer = 0;
+let streamerVerifySearchSequence = 0;
+const verifyEl = (id) => document.getElementById(`streamer-verify-${id}`);
+function updateStreamerVerifySubmitState() {
+    const manual = !verifyEl('manual').hidden;
+    const ready = !verifyEl('selected').hidden || (manual && verifyEl('nickname').value.trim() && verifyEl('soopid').value.trim());
+    // 선택 전에는 비활성 버튼 대신 안내 문구만 보이게 하고, 선택하거나 직접 입력을 채우면 신청 버튼이 나타난다.
+    verifyEl('submit').hidden = !ready;
+    verifyEl('submit').disabled = !ready;
+}
+function clearStreamerVerifyResults(hint = '') {
+    const list = verifyEl('results');
+    list.replaceChildren();
+    list.hidden = true;
+    verifyEl('search').setAttribute('aria-expanded', 'false');
+    verifyEl('search-hint').textContent = hint;
+}
+function resetStreamerVerifySearch() {
+    streamerVerifySearchSequence += 1;
+    window.clearTimeout(streamerVerifySearchTimer);
+    verifyEl('search').value = '';
+    verifyEl('nickname').value = '';
+    verifyEl('soopid').value = '';
+    verifyEl('search-step').hidden = false;
+    verifyEl('selected').hidden = true;
+    verifyEl('manual').hidden = true;
+    verifyEl('search-box').hidden = false;
+    verifyEl('manual-toggle').textContent = '찾는 스트리머가 없나요? 직접 입력하기';
+    clearStreamerVerifyResults('검색해서 스트리머를 선택하면 바로 신청할 수 있어요.');
+    updateStreamerVerifySubmitState();
+}
+function setStreamerVerifyManualMode(on) {
+    verifyEl('manual').hidden = !on;
+    verifyEl('search-box').hidden = on;
+    verifyEl('manual-toggle').textContent = on ? '검색으로 돌아가기' : '찾는 스트리머가 없나요? 직접 입력하기';
+    if (on) verifyEl('nickname').focus({ preventScroll: true });
+    updateStreamerVerifySubmitState();
+}
+function selectStreamerVerifyCandidate(item) {
+    verifyEl('nickname').value = item.nickname;
+    verifyEl('soopid').value = item.soopId;
+    verifyEl('selected-name').textContent = item.nickname;
+    verifyEl('selected-id').textContent = ` · ${item.soopId}`;
+    const avatar = verifyEl('selected-avatar');
+    avatar.hidden = !item.avatarUrl;
+    avatar.onerror = () => { avatar.hidden = true; };
+    if (item.avatarUrl) avatar.src = item.avatarUrl;
+    verifyEl('search-step').hidden = true;
+    verifyEl('manual').hidden = true;
+    verifyEl('selected').hidden = false;
+    clearStreamerVerifyResults();
+    updateStreamerVerifySubmitState();
+    verifyEl('submit').focus({ preventScroll: true });
+}
+function renderStreamerVerifyResults(streamers) {
+    const list = verifyEl('results');
+    list.replaceChildren(...streamers.map((item) => {
+        const row = document.createElement('li');
+        row.setAttribute('role', 'option');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.style.cssText = 'display:flex;width:100%;min-height:44px;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border:1px solid #334155;border-radius:9px;background:rgba(255,255,255,0.05);color:#f8fafc;font-size:13px;font-weight:600;text-align:left;cursor:pointer;';
+        const name = document.createElement('strong'); name.textContent = item.nickname;
+        const id = document.createElement('span'); id.textContent = item.soopId; id.style.cssText = 'flex:none;font-size:12px;font-weight:500;opacity:.7;';
+        button.append(name, id);
+        button.addEventListener('click', () => selectStreamerVerifyCandidate(item));
+        row.append(button);
+        return row;
+    }));
+    list.hidden = streamers.length === 0;
+    verifyEl('search').setAttribute('aria-expanded', String(streamers.length > 0));
+}
+async function runStreamerVerifySearch(query) {
+    const sequence = ++streamerVerifySearchSequence;
+    verifyEl('search-hint').textContent = '검색하고 있어요…';
+    try {
+        const result = (await verifySearchCallable({ query })).data || {};
+        if (sequence !== streamerVerifySearchSequence) return;
+        const streamers = Array.isArray(result.streamers) ? result.streamers : [];
+        renderStreamerVerifyResults(streamers);
+        verifyEl('search-hint').textContent = streamers.length
+            ? `${streamers.length}명을 찾았어요. 본인을 선택해 주세요.`
+            : '검색 결과가 없어요. 닉네임이나 아이디를 확인하거나 직접 입력해 주세요.';
+    } catch (error) {
+        if (sequence !== streamerVerifySearchSequence) return;
+        clearStreamerVerifyResults(error?.code === 'functions/resource-exhausted'
+            ? '검색이 너무 잦아요. 잠시 후 다시 시도해 주세요.'
+            : '검색을 불러오지 못했어요. 아래의 직접 입력하기를 이용해 주세요.');
+    }
+}
+verifyEl('search').addEventListener('input', (event) => {
+    window.clearTimeout(streamerVerifySearchTimer);
+    streamerVerifySearchSequence += 1;
+    const query = event.target.value.trim();
+    if (query.length < 2) { clearStreamerVerifyResults(query ? '두 글자 이상 입력해 주세요.' : ''); return; }
+    streamerVerifySearchTimer = window.setTimeout(() => { void runStreamerVerifySearch(query); }, STREAMER_VERIFY_SEARCH_DEBOUNCE_MS);
+});
+verifyEl('search').addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') {
+        const first = verifyEl('results').querySelector('button');
+        if (first) { event.preventDefault(); first.focus(); }
+    }
+});
+verifyEl('results').addEventListener('keydown', (event) => {
+    const buttons = [...verifyEl('results').querySelectorAll('button')];
+    const index = buttons.indexOf(document.activeElement);
+    if (index < 0) return;
+    if (event.key === 'ArrowDown') { event.preventDefault(); buttons[Math.min(index + 1, buttons.length - 1)].focus(); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); (index === 0 ? verifyEl('search') : buttons[index - 1]).focus(); }
+    else if (event.key === 'Escape') { event.preventDefault(); verifyEl('search').focus(); }
+});
+verifyEl('manual-toggle').addEventListener('click', () => setStreamerVerifyManualMode(verifyEl('manual').hidden));
+verifyEl('reselect').addEventListener('click', () => {
+    resetStreamerVerifySearch();
+    verifyEl('search').focus({ preventScroll: true });
+});
+['nickname', 'soopid'].forEach((id) => verifyEl(id).addEventListener('input', updateStreamerVerifySubmitState));
 
 let streamerVerifyBusy = false;
 let streamerVerifyRenewBusy = false;
@@ -3243,7 +3385,7 @@ window.submitStreamerVerification = async function() {
         alert('스트리머 인증 신청 중 오류가 발생했습니다: ' + (e?.message || e));
     } finally {
         streamerVerifyBusy = false;
-        submitButton.disabled = false;
+        updateStreamerVerifySubmitState();
     }
 };
 
