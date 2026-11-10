@@ -8,7 +8,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
     <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
-    <link rel="stylesheet" href="styles.css?v=20261107-series-menu-touch-lock">
+    <link rel="stylesheet" href="styles.css?v=20261110-lottery-history">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
@@ -374,6 +374,11 @@
 <div id="lottery-modal" class="promo-modal-overlay">
     <div class="promo-modal-content" style="max-width:380px;text-align:center;">
         <div class="promo-modal-header"><h2>🎟️ 복권함</h2></div>
+        <div class="lottery-tabs" role="tablist" aria-label="복권함 메뉴">
+            <button type="button" role="tab" id="lottery-tab-buy" class="lottery-tab active" aria-selected="true" aria-controls="lottery-buy-pane" onclick="switchLotteryTab('buy')">복권 구매</button>
+            <button type="button" role="tab" id="lottery-tab-history" class="lottery-tab" aria-selected="false" aria-controls="lottery-history-pane" tabindex="-1" onclick="switchLotteryTab('history')">🏆 당첨 이력</button>
+        </div>
+        <div id="lottery-buy-pane" role="tabpanel" aria-labelledby="lottery-tab-buy">
         <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.4);border-radius:10px;padding:14px;margin-bottom:16px;">
             <div style="font-size:12px;color:#94a3b8;margin-bottom:4px;">현재 누적 모금액</div>
             <div id="lottery-modal-pool" style="font-size:26px;font-weight:900;color:#c084fc;">-</div>
@@ -396,6 +401,12 @@
         </div>
 
         <button id="lottery-buy-submit-btn" onclick="buyLotteryTicket()" disabled style="width:100%;margin-bottom:10px;background:#a855f7;color:white;border:none;padding:13px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">복권 상태 확인 중…</button>
+        </div>
+        <div id="lottery-history-pane" role="tabpanel" aria-labelledby="lottery-tab-history" hidden>
+            <div id="lottery-history-summary" class="lottery-history-summary"></div>
+            <div id="lottery-history-list" class="lottery-history-list" aria-live="polite"></div>
+            <button type="button" id="lottery-history-more" class="lottery-history-more" onclick="loadMoreLotteryHistory()" hidden>더 보기</button>
+        </div>
         <button onclick="closeLotteryModal()" style="width:100%;background:#334155;color:white;border:none;padding:12px;border-radius:10px;cursor:pointer;font-weight:bold;font-size:14px;">닫기</button>
     </div>
 </div>
@@ -1492,6 +1503,7 @@
             <span>🎟️ 복권함 모금액: <b id="lottery-pool-amount">-</b></span>
             <span class="lottery-buy-btn">구매하기</span>
         </div>
+        <button type="button" class="lottery-win-chip" id="lottery-win-chip" onclick="event.stopPropagation(); openLotteryHistoryModal();">🏆 당첨 이력 불러오는 중…</button>
     </div>
     <div class="relay-room-bar" id="relay-room-bar">
         <div class="relay-room-title">
@@ -2426,12 +2438,149 @@ onValue(ref(marketDb, 'lottery/pool'), (snap) => {
     if (modalEl) modalEl.innerText = (latestLotteryPool || 0).toLocaleString() + '원';
 });
 
-onValue(ref(marketDb, 'lotteryLastWin'), (snap) => {
-    if (!snap.exists()) return;
-    const win = snap.val();
-    if (!win.at || win.at <= pageLoadTime) return;
-    alert(`🎟️ 복권함에서 777이 나왔습니다!\n어떤 유저가 ${win.prizeAmount.toLocaleString()}원을 받았습니다!\n\n모금액이 초기화됐어요.`);
-});
+// ── 🏆 복권 당첨 이력(공개): 회차·시각·실수령금만 저장된다 ──────────
+const LOTTERY_HISTORY_PAGE = 20;
+let lotteryHistoryLimit = LOTTERY_HISTORY_PAGE;
+let lotteryHistoryUnsub = null;
+let lotteryHistoryState = 'loading'; // loading | ready | error
+let lotteryHistoryWins = [];         // 최신순
+let lotteryLatestWin = null;
+let lotteryWinToastReady = false;
+let lotteryLastToastSeq = 0;
+
+function lotteryWinsFromSnapshot(snap) {
+    const wins = [];
+    snap.forEach((child) => {
+        const v = child.val();
+        if (v && Number.isFinite(v.at) && Number.isFinite(v.prizeAmount)) wins.push({ seq: Number(v.seq) || 0, at: v.at, prizeAmount: v.prizeAmount });
+    });
+    return wins.sort((a, b) => b.at - a.at);
+}
+function lotteryRelativeTime(at) {
+    const diff = Math.max(0, Date.now() - at);
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return '방금 전';
+    if (min < 60) return `${min}분 전`;
+    const hour = Math.floor(min / 60);
+    if (hour < 24) return `${hour}시간 전`;
+    const day = Math.floor(hour / 24);
+    if (day < 7) return `${day}일 전`;
+    return new Date(at).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' });
+}
+function lotteryDateText(at) {
+    return new Date(at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function renderLotteryWinChip() {
+    const chip = document.getElementById('lottery-win-chip');
+    if (!chip) return;
+    chip.innerText = lotteryLatestWin
+        ? `🏆 최근 777 ${lotteryLatestWin.prizeAmount.toLocaleString()}원 수령 · ${lotteryRelativeTime(lotteryLatestWin.at)}`
+        : '🏆 아직 777 당첨자가 없어요';
+}
+function renderLotteryHistory() {
+    const list = document.getElementById('lottery-history-list');
+    const summary = document.getElementById('lottery-history-summary');
+    const more = document.getElementById('lottery-history-more');
+    if (!list || !summary || !more) return;
+    more.hidden = true;
+    if (lotteryHistoryState === 'loading') {
+        summary.innerText = '';
+        list.innerHTML = '<div class="lottery-history-skeleton"></div><div class="lottery-history-skeleton"></div><div class="lottery-history-skeleton"></div>';
+        return;
+    }
+    if (lotteryHistoryState === 'error') {
+        summary.innerText = '';
+        list.innerHTML = '<div class="lottery-history-empty">당첨 이력을 불러오지 못했어요.<br><button type="button" class="lottery-history-retry" onclick="startLotteryHistory()">다시 시도</button></div>';
+        return;
+    }
+    if (!lotteryHistoryWins.length) {
+        summary.innerText = '';
+        list.innerHTML = `<div class="lottery-history-empty">아직 777 당첨자가 없어요.<br>첫 주인공이 되어 보세요! 현재 모금액 ${(latestLotteryPool || 0).toLocaleString()}원</div>`;
+        return;
+    }
+    summary.innerText = `누적 777 당첨 ${Math.max(...lotteryHistoryWins.map((w) => w.seq)).toLocaleString()}회`;
+    list.innerHTML = lotteryHistoryWins.map((w) => `<article class="lottery-history-item" aria-label="회차 ${w.seq}, ${lotteryDateText(w.at)}, 실수령금 ${w.prizeAmount.toLocaleString()}원">
+        <div class="lottery-history-meta"><span>#${w.seq}</span><time>${lotteryDateText(w.at)}</time></div>
+        <div class="lottery-history-prize"><span>실수령금</span><b>${w.prizeAmount.toLocaleString()}원</b></div>
+    </article>`).join('');
+    more.hidden = lotteryHistoryWins.length < lotteryHistoryLimit;
+    more.disabled = false;
+    more.innerText = '더 보기';
+}
+window.startLotteryHistory = function() {
+    if (lotteryHistoryUnsub) { lotteryHistoryUnsub(); lotteryHistoryUnsub = null; }
+    lotteryHistoryState = 'loading';
+    renderLotteryHistory();
+    lotteryHistoryUnsub = onValue(query(ref(marketDb, 'lotteryWinHistory'), orderByChild('at'), limitToLast(lotteryHistoryLimit)), (snap) => {
+        lotteryHistoryWins = lotteryWinsFromSnapshot(snap);
+        lotteryHistoryState = 'ready';
+        renderLotteryHistory();
+    }, () => { lotteryHistoryState = 'error'; renderLotteryHistory(); });
+};
+window.loadMoreLotteryHistory = function() {
+    const more = document.getElementById('lottery-history-more');
+    if (more) { more.disabled = true; more.innerText = '불러오는 중…'; }
+    lotteryHistoryLimit += LOTTERY_HISTORY_PAGE;
+    window.startLotteryHistory();
+};
+function showLotteryWinToast(prizeAmount) {
+    document.getElementById('lottery-win-toast')?.remove();
+    const toast = document.createElement('div');
+    toast.id = 'lottery-win-toast';
+    toast.className = 'lottery-win-toast';
+    toast.setAttribute('role', 'status');
+    const text = document.createElement('span');
+    text.innerText = `🎟️ 777 당첨! ${prizeAmount.toLocaleString()}원이 지급됐어요.`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.innerText = '이력 보기';
+    btn.onclick = () => { toast.remove(); window.openLotteryHistoryModal(); };
+    toast.append(text, btn);
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 10000);
+}
+// 항상 최신 1건만 구독해 바 요약과 새 당첨 토스트를 처리한다.
+onValue(query(ref(marketDb, 'lotteryWinHistory'), orderByChild('at'), limitToLast(1)), (snap) => {
+    const wins = lotteryWinsFromSnapshot(snap);
+    lotteryLatestWin = wins[0] || null;
+    renderLotteryWinChip();
+    const win = lotteryLatestWin;
+    // 접속 시점 이전 당첨은 알리지 않고, 같은 회차는 한 번만 알린다.
+    if (!lotteryWinToastReady) { lotteryWinToastReady = true; if (win) lotteryLastToastSeq = win.seq; return; }
+    if (!win || win.at <= pageLoadTime || win.seq <= lotteryLastToastSeq) return;
+    lotteryLastToastSeq = win.seq;
+    // 본인 구매 결과 화면과 겹치지 않도록 결과 반영을 잠깐 기다린 뒤 판단한다.
+    setTimeout(() => { if (!currentLotteryTicket?.won) showLotteryWinToast(win.prizeAmount); }, 2000);
+}, () => { lotteryLatestWin = null; const chip = document.getElementById('lottery-win-chip'); if (chip) chip.innerText = '🏆 당첨 이력 보기'; });
+setInterval(renderLotteryWinChip, 60000);
+
+window.switchLotteryTab = function(tab) {
+    if (tab === 'buy' && !(isMyAccountProtected() || isAdminUser)) {
+        window.openAccountProtectModal();
+        return;
+    }
+    const buy = tab === 'buy';
+    document.getElementById('lottery-buy-pane').hidden = !buy;
+    document.getElementById('lottery-history-pane').hidden = buy;
+    for (const [id, active] of [['lottery-tab-buy', buy], ['lottery-tab-history', !buy]]) {
+        const el = document.getElementById(id);
+        el.classList.toggle('active', active);
+        el.setAttribute('aria-selected', String(active));
+        el.tabIndex = active ? 0 : -1;
+    }
+    if (buy) {
+        if (lotteryHistoryUnsub) { lotteryHistoryUnsub(); lotteryHistoryUnsub = null; }
+        refreshLotteryAvailability().catch(() => {});
+    } else {
+        lotteryHistoryLimit = LOTTERY_HISTORY_PAGE;
+        window.startLotteryHistory();
+    }
+};
+// 이력은 누구나 볼 수 있다(구매만 계정 보호 필요).
+window.openLotteryHistoryModal = function() {
+    document.getElementById('lottery-modal').classList.add('active');
+    window.switchLotteryTab('history');
+};
 
 window.openLotteryModal = async function() {
     const isLinked = isMyAccountProtected() || isAdminUser;
@@ -2440,6 +2589,15 @@ window.openLotteryModal = async function() {
         return;
     }
     currentLotteryTicket = null;
+    document.getElementById('lottery-buy-pane').hidden = false;
+    document.getElementById('lottery-history-pane').hidden = true;
+    for (const [id, active] of [['lottery-tab-buy', true], ['lottery-tab-history', false]]) {
+        const tab = document.getElementById(id);
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+    }
+    if (lotteryHistoryUnsub) { lotteryHistoryUnsub(); lotteryHistoryUnsub = null; }
     document.getElementById('lottery-scratch-area').style.display = 'none';
     document.getElementById('lottery-buy-submit-btn').style.display = 'block';
     [0, 1, 2].forEach(i => {
@@ -2455,6 +2613,7 @@ window.openLotteryModal = async function() {
     }
 };
 window.closeLotteryModal = function() {
+    if (lotteryHistoryUnsub) { lotteryHistoryUnsub(); lotteryHistoryUnsub = null; }
     document.getElementById('lottery-modal').classList.remove('active');
 };
 

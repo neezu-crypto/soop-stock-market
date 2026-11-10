@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const crypto = require("node:crypto");
 const {
   LOTTERY_TICKET_PRICE,
   LOTTERY_POOL_FLOOR,
@@ -23,6 +24,12 @@ const { getMarketDatabaseContext } = require("./marketDatabases");
 
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const SETTLEMENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+// 공개 이력 키: ticketId(푸시 키)를 해시해 공개 경로에서 티켓·계정 흔적을 없애고,
+// 같은 티켓은 항상 같은 키가 되게 해 재시도해도 한 건만 남긴다.
+function winHistoryKey(ticketId) {
+  return crypto.createHash("sha256").update(String(ticketId)).digest("hex").slice(0, 20);
+}
 
 function rollDigit() {
   return LOTTERY_DIGIT_MIN + Math.floor(Math.random() * (LOTTERY_DIGIT_MAX - LOTTERY_DIGIT_MIN + 1));
@@ -147,15 +154,17 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
     const poolAfterTicket = poolBefore + chargedAmount;
     const prizeAmount = ticket.won ? Math.round(poolAfterTicket * LOTTERY_PAYOUT_RATIO) : 0;
     const now = Date.now();
+    const winSeq = ticket.won ? (Number(lottery.winSeq) || 0) + 1 : null;
     for (const [id, entry] of Object.entries(settlements)) {
       if ((entry?.settledAt || 0) < now - SETTLEMENT_RETENTION_MS) delete settlements[id];
     }
     return {
       ...lottery,
       pool: ticket.won ? LOTTERY_POOL_FLOOR : poolAfterTicket,
+      ...(ticket.won ? { winSeq } : {}),
       settlements: {
         ...settlements,
-        [ticket.ticketId]: { ticketId: ticket.ticketId, uid, source, won: !!ticket.won, digits: ticket.digits, chargedAmount, prizeAmount, poolAfter: ticket.won ? LOTTERY_POOL_FLOOR : poolAfterTicket, settledAt: now },
+        [ticket.ticketId]: { ticketId: ticket.ticketId, uid, source, won: !!ticket.won, digits: ticket.digits, chargedAmount, prizeAmount, poolAfter: ticket.won ? LOTTERY_POOL_FLOOR : poolAfterTicket, settledAt: now, ...(ticket.won ? { winSeq } : {}) },
       },
     };
   });
@@ -179,6 +188,10 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
     });
     await db.ref(`lotteryTripleSevenLog/${ticket.ticketId}`).set({ uid, digits: ticket.digits, at: settlement.settledAt });
     await grantAchievement(db, uid, "lottery_winner", { accountPath });
+    // 공개 당첨 이력: 회차·시각·실수령금만 남긴다(uid·티켓·숫자 없음). 재시도에서도 같은 값으로 보충된다.
+    if (Number.isInteger(settlement.winSeq)) {
+      await db.ref(`lotteryWinHistory/${winHistoryKey(ticket.ticketId)}`).set({ seq: settlement.winSeq, at: settlement.settledAt, prizeAmount: settlement.prizeAmount });
+    }
     if (settlementTx.committed) await db.ref("lotteryLastWin").set({ prizeAmount: settlement.prizeAmount, at: settlement.settledAt });
   }
 

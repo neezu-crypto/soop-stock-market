@@ -179,9 +179,42 @@ test("a winning free ticket pays 90 percent once and resets the pool", async () 
     assert.equal(activeDb.data.lottery.pool, 1000000);
     assert.equal(Object.keys(activeDb.data.lotteryTripleSevenLog).length, 1);
     assert.equal(activeDb.data.lotteryLastWin.prizeAmount, 1800000);
+    const history = Object.entries(activeDb.data.lotteryWinHistory);
+    assert.equal(history.length, 1);
+    assert.match(history[0][0], /^[0-9a-f]{20}$/);
+    assert.deepEqual(Object.keys(history[0][1]).sort(), ["at", "prizeAmount", "seq"]);
+    assert.equal(history[0][1].seq, 1);
+    assert.equal(history[0][1].prizeAmount, 1800000);
+    assert.equal(activeDb.data.lottery.winSeq, 1);
   } finally {
     Math.random = oldRandom;
     adminEnabled = false;
+  }
+});
+
+test("win history is skipped for non-winning tickets and numbers wins sequentially", async () => {
+  const uid = "history-user";
+  activeDb = makeDatabase({
+    users: { [uid]: { googleLinked: true, cash: 1000000 } },
+    lottery: { pool: 1000000 },
+  });
+  const auth = { uid, token: { email: "user@example.com" } };
+  const oldRandom = Math.random;
+  adminEnabled = false;
+  try {
+    Math.random = () => 0;
+    await buyLotteryTicket({ auth, data: { requestId: "history-lose-request-0001" } });
+    assert.equal(activeDb.data.lotteryWinHistory, undefined);
+    Math.random = () => 0.999999;
+    const first = await buyLotteryTicket({ auth, data: { requestId: "history-win-request-00001" } });
+    const second = await buyLotteryTicket({ auth, data: { requestId: "history-win-request-00002" } });
+    assert.equal(first.won && second.won, true);
+    const seqs = Object.values(activeDb.data.lotteryWinHistory).map((entry) => entry.seq).sort();
+    assert.deepEqual(seqs, [1, 2]);
+    assert.equal(JSON.stringify(activeDb.data.lotteryWinHistory).includes(uid), false);
+    assert.equal(JSON.stringify(activeDb.data.lotteryWinHistory).includes("ticket_"), false);
+  } finally {
+    Math.random = oldRandom;
   }
 });
 
