@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { isSchedulerEnabled, recordSchedulerRun, STOCK_DELIST_JOB } = require("./schedulerControl");
 const admin = require("firebase-admin");
 const {
   STREAMER_ID_RE,
@@ -284,6 +285,8 @@ const checkFrozenStockDelistings = onSchedule("every 10 minutes", async () => {
   const sharedDatabase = admin.database();
   const marketContext = await getMarketDatabaseContext({ sharedDatabase });
   const { db } = marketContext;
+  // 관리자 센터에서 꺼 둔 동안(이용 일시중지 등)은 stocks 전체를 읽지 않고 바로 끝낸다.
+  if (!(await isSchedulerEnabled(db, STOCK_DELIST_JOB))) return;
   const snap = await db.ref("stocks").get();
   const data = snap.val() || {};
   const now = Date.now();
@@ -294,6 +297,7 @@ const checkFrozenStockDelistings = onSchedule("every 10 minutes", async () => {
   for (const [stockId, stock] of toDelist) {
     await delistStock(db, stockId, stock, marketContext.mode === "stock" ? "stockMarket/accounts" : "users");
   }
+  await recordSchedulerRun(db, STOCK_DELIST_JOB, { lastDelistedCount: toDelist.length });
 });
 
 /** 관리자 페이지 — 상장폐지 이력 조회 (최신순). */

@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { isSchedulerEnabled, recordSchedulerRun, CREW_SYNC_JOB } = require("./schedulerControl");
 const { HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { getMarketDatabaseContext } = require("./marketDatabases");
@@ -526,6 +527,9 @@ const syncCrewRosterFromSheet = onSchedule({ schedule: "every 15 minutes", timeZ
   // 전환 phase를 확인해야 기본 DB의 옛 stocks를 계속 갱신하지 않는다.
   const sharedDatabase = admin.database();
   const { db } = await getMarketDatabaseContext({ sharedDatabase });
+  // 관리자 센터에서 꺼 둔 동안은 잠금·시트 확인 없이 바로 끝낸다.
+  if (!(await isSchedulerEnabled(db, CREW_SYNC_JOB))) return;
+  await recordSchedulerRun(db, CREW_SYNC_JOB);
   const release = await acquireLock(db);
   try {
     const [settingsSnap, stateSnap, statusSnap, identityCacheSnap] = await Promise.all([
