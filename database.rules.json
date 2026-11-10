@@ -227,6 +227,11 @@
       ".write": false
     },
 
+    "servicePause": {
+      ".read": true,
+      ".write": false
+    },
+
     "announcement": {
       ".read": true,
       ".write": false
