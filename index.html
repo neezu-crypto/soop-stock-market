@@ -1576,7 +1576,17 @@ const firebaseConfig = {
     appId:       "1:997788925900:web:cb613d438efec019a3a769"
 };
 const app       = initializeApp(firebaseConfig);
-const db        = getDatabase(app);
+// 전용 시장 DB 전환을 위한 이중 접근 계층이다. 전환이 완료되기 전까지 기존
+// 화면의 `db` 별칭은 공유 기본 DB를 가리킨다. 인증·통합 캐시·점검 상태처럼
+// 공유 데이터를 전용 DB로 잘못 읽지 않도록, 새 시장 reader는 전환 시점에만
+// `stockDb`를 명시적으로 사용한다.
+const sharedDb  = getDatabase(app);
+const stockDb   = getDatabase(app, "https://soop-stock-market-rtdb.firebaseio.com");
+const db        = sharedDb;
+// 운영 데이터 hash 대조와 서버 writer 전환이 끝난 배포에서만 true로 변경한다.
+// 이 플래그는 전용 DB가 비어 있는 준비 단계에서 공개 시세 화면이 깨지는 것을 막는다.
+const STOCK_MARKET_DATABASE_PRIMARY = true;
+const marketDb = STOCK_MARKET_DATABASE_PRIMARY ? stockDb : sharedDb;
 // 통합 구독 callable은 고점체크용 App Check를 강제한다. 주식시장의 기존
 // Auth 세션은 유지하고, 구독 요청에만 같은 프로젝트의 고점체크 App Check 토큰을 쓴다.
 const subscriptionApp = initializeApp({
@@ -1834,6 +1844,26 @@ function startApp() {
 
 // ── 상태 ────────────────────────────────────────────────────
 let myData           = null;
+let identityData     = {};
+let marketAccountData = {};
+
+// 전환 후에는 공유 users/{uid}의 로그인·인증 정보와
+// stockMarket/accounts/{uid}의 게임자산을 이 화면 상태로만 합친다. 둘 중 하나를
+// 다른 DB에 다시 쓰지 않아 신원 데이터와 시장 원장이 섞이지 않게 한다.
+function refreshMergedUserData() {
+    const account = STOCK_MARKET_DATABASE_PRIMARY ? marketAccountData : identityData;
+    myData = {
+        ...identityData,
+        ...account,
+        cash: account?.cash ?? INITIAL_CASH,
+        stocks: account?.stocks || {},
+    };
+    updateAccountProtectionUI();
+    updateAttendanceUI();
+    updateAchievementsUI();
+    updateUI(true);
+    seedSparklinesForCurrentUser(myData.stocks);
+}
 
 /** 카카오/구글 연동 또는 스트리머 인증 중 하나라도 됐으면 "계정 보호됨"으로 취급한다(서버 isUserProtected와 동일 기준). */
 function isMyAccountProtected() {
@@ -2047,6 +2077,7 @@ let stockObservedVerificationState = null;
 let stockObservedAuthUid = '';
 let streamerSwitchHandoffInProgress = false;
 let userDataUnsubscribe = null;
+let marketAccountUnsubscribe = null;
 let walletBalanceUnsubscribe = null;
 let isBannerRendered = false;
 let sigOpeningStarted = false;
@@ -2100,7 +2131,7 @@ async function seedSparklines(ids) {
     await Promise.all(idsToSeed.map(async (id) => {
         seededSparklineIds.add(id); // 실패해도 매번 재시도하지 않도록 먼저 마킹(다음 접속 때 재시도됨)
         try {
-            const snap = await get(ref(db, `sparklines/${id}`));
+            const snap = await get(ref(marketDb, `sparklines/${id}`));
             const arr = snap.val();
             // 그 사이 라이브 틱으로 실제 이력(2개 이상)이 쌓였으면 서버 이력(과거)으로
             // 덮어쓰지 않는다 — 최초 로드 시 recordPriceTick이 현재가 1개짜리 배열을
@@ -2264,7 +2295,7 @@ function playHoverSound() {
 
 // ── rankings/top5 구독 (읽기 전용 — 갱신은 서버 trade 함수가 처리) ──
 
-onValue(ref(db, 'rankings/top5'), (snap) => {
+onValue(ref(marketDb, 'rankings/top5'), (snap) => {
     if (!snap.exists()) {
         const rankDiv = document.getElementById('top-rankers');
         if (rankDiv) rankDiv.innerHTML = `<span style="color:var(--text-sub);font-size:12px;">집계 데이터 없음</span>`;
@@ -2277,7 +2308,7 @@ onValue(ref(db, 'rankings/top5'), (snap) => {
 // 종목 자체가 top100 가격순위 밖에 있어도 고정 노출은 항상 보여야 하므로,
 // 이 id 목록만 별도로 가볍게 구독해 resyncSubscriptions()의 "항상 구독"
 // 대상에 포함시킨다.
-onValue(ref(db, 'pinnedStocks'), (snap) => {
+onValue(ref(marketDb, 'pinnedStocks'), (snap) => {
     pinnedStockIds = new Set(snap.exists() ? Object.keys(snap.val()) : []);
     updateUI(true);
 });
@@ -2286,7 +2317,7 @@ onValue(ref(db, 'pinnedStocks'), (snap) => {
 // 페이지를 연 시점 이후에 발생한 이벤트만 알림으로 띄운다(과거 이벤트가
 // 접속 직후 다시 뜨는 것 방지).
 const pageLoadTime = Date.now();
-onValue(ref(db, 'lastUnfreezeEvent'), (snap) => {
+onValue(ref(marketDb, 'lastUnfreezeEvent'), (snap) => {
     if (!snap.exists()) return;
     const event = snap.val();
     if (!event.at || event.at <= pageLoadTime) return;
@@ -2364,7 +2395,7 @@ function showPurchasedLottery(result) {
     if (result.free) refreshLotteryAvailability().catch(() => {});
 }
 
-onValue(ref(db, 'lottery/pool'), (snap) => {
+onValue(ref(marketDb, 'lottery/pool'), (snap) => {
     latestLotteryPool = snap.val();
     const el = document.getElementById('lottery-pool-amount');
     if (el) el.innerText = (latestLotteryPool || 0).toLocaleString() + '원';
@@ -2372,7 +2403,7 @@ onValue(ref(db, 'lottery/pool'), (snap) => {
     if (modalEl) modalEl.innerText = (latestLotteryPool || 0).toLocaleString() + '원';
 });
 
-onValue(ref(db, 'lotteryLastWin'), (snap) => {
+onValue(ref(marketDb, 'lotteryLastWin'), (snap) => {
     if (!snap.exists()) return;
     const win = snap.val();
     if (!win.at || win.at <= pageLoadTime) return;
@@ -2624,6 +2655,7 @@ async function handleStockStreamerSwitchApproval(uid, requestId) {
 
 onAuthStateChanged(auth, async (user) => {
     if (userDataUnsubscribe) { userDataUnsubscribe(); userDataUnsubscribe = null; }
+    if (marketAccountUnsubscribe) { marketAccountUnsubscribe(); marketAccountUnsubscribe = null; }
     if (walletBalanceUnsubscribe) { walletBalanceUnsubscribe(); walletBalanceUnsubscribe = null; }
     if ((user?.uid || '') !== stockObservedAuthUid) {
         stockObservedAuthUid = user?.uid || '';
@@ -2656,7 +2688,10 @@ onAuthStateChanged(auth, async (user) => {
         // 상태 조회가 일시적으로 늦어도 사용자가 구독 창을 열어 다시 확인할 수 있게 한다.
         updateStockSubscriptionButton();
         refreshStockSubscriptionStatus();
-        const userRef  = ref(db, `users/${userUID}`);
+        const userRef  = ref(sharedDb, `users/${userUID}`);
+        const marketAccountRef = ref(marketDb, STOCK_MARKET_DATABASE_PRIMARY ? `stockMarket/accounts/${userUID}` : `users/${userUID}`);
+        identityData = {};
+        marketAccountData = {};
         if (!myData) myData = { cash: INITIAL_CASH, stocks: {} };
 
         // 신규 유저 초기 자산 지급 — 서버가 users/{uid}가 없을 때만 지급하는
@@ -2685,15 +2720,12 @@ onAuthStateChanged(auth, async (user) => {
             let serverData = {};
             if (snapshot.exists()) {
                 serverData = snapshot.val();
-                myData = { cash: serverData.cash ?? INITIAL_CASH, stocks: serverData.stocks || {}, ...serverData };
+                identityData = serverData;
             } else {
-                if (!myData || myData.cash === undefined) myData = { cash: INITIAL_CASH, stocks: {} };
+                identityData = {};
             }
-            updateAccountProtectionUI();
-            updateAttendanceUI();
-            updateAchievementsUI();
-            updateUI(true);
-            seedSparklinesForCurrentUser(myData.stocks);
+            if (!STOCK_MARKET_DATABASE_PRIMARY) marketAccountData = identityData;
+            refreshMergedUserData();
 
             const streamerVerified = myData.streamerVerified === true;
             if (stockObservedVerificationState === false && streamerVerified) {
@@ -2722,6 +2754,13 @@ onAuthStateChanged(auth, async (user) => {
                 logStockMarketVisitCallable().catch(() => {});
             }
         });
+        if (STOCK_MARKET_DATABASE_PRIMARY) {
+            marketAccountUnsubscribe = onValue(marketAccountRef, (snapshot) => {
+                if (auth.currentUser?.uid !== user.uid) return;
+                marketAccountData = snapshot.exists() ? snapshot.val() : {};
+                refreshMergedUserData();
+            });
+        }
     } else {
         window.dispatchEvent(new CustomEvent('stock-wallet-balance-change', { detail: { balanceCash: null } }));
         signInAnonymously(auth);
@@ -2963,7 +3002,7 @@ window.buyPlayTime = async function() {
 // 있어 안전하게 분리 가능한 범위였음). getAllStocks/getChangePercent를
 // 접근자로 넘겨 allStocks 재할당 이후에도 항상 최신값을 참조하게 한다.
 // ══════════════════════════════════════════════════════════════
-const { closeChartModal, getCurrentStockId } = initChartModal({ db, getAllStocks: () => allStocks, getChangePercent, getChartBanners: httpsCallable(functions, 'getSharedChartBanners') });
+const { closeChartModal, getCurrentStockId } = initChartModal({ db: marketDb, getAllStocks: () => allStocks, getChangePercent, getChartBanners: httpsCallable(functions, 'getSharedChartBanners') });
 
 // ── 거래 함수 ────────────────────────────────────────────────
 // 가격 계산·잔고 검증·기록은 전부 Cloud Function(trade)이 서버에서 처리한다.
@@ -3042,7 +3081,7 @@ initPromotions({
     getIsAdmin: () => isAdminUser,
     closeChartModal,
     getCurrentChartStockId: getCurrentStockId,
-    db, dbRef: ref, dbGet: get, dbQuery: query, orderByChild, limitToLast, startAt,
+    db: marketDb, dbRef: ref, dbGet: get, dbQuery: query, orderByChild, limitToLast, startAt,
     callables: {
         submitBannerRequestCallable,
         submitChartBannerRequestCallable,
@@ -3649,7 +3688,7 @@ function renderStocks(filter = "") {
 // 최신화된다.
 function subscribeStock(id) {
     if (stockSubscriptions[id]) return;
-    stockSubscriptions[id] = onValue(ref(db, `stocksPublic/${id}`), (snap) => {
+    stockSubscriptions[id] = onValue(ref(marketDb, `stocksPublic/${id}`), (snap) => {
         if (!snap.exists()) return;
         const ns  = { ...snap.val(), id };
         recordPriceTick(id, ns.price);
@@ -3853,7 +3892,7 @@ function updateCardContent(card, s, userStock) {
 // ── 주식 목록 최초 1회 로드 (검색/정렬 기준 데이터) ──────────
 // 실시간 갱신은 뷰포트에 실제로 보이는 종목만 resyncSubscriptions()/
 // cardObserver로 개별 구독(스크롤해서 벗어나면 자동 구독 해제)
-get(ref(db, 'stocksPublic/')).then((snap) => {
+get(ref(marketDb, 'stocksPublic/')).then((snap) => {
     const data = snap.val() || {};
     allStocks  = Object.keys(data).map(key => ({ ...data[key], id: key }));
     allStocks.forEach(s => recordPriceTick(s.id, s.price));
@@ -3881,7 +3920,7 @@ get(ref(db, 'stocksPublic/')).then((snap) => {
 });
 
 // ── 중계방 최초 1회 로드 (배너와 동일하게 페이지 로드 시 1회만 조회) ──
-get(ref(db, 'relayRooms')).then((snap) => {
+get(ref(marketDb, 'relayRooms')).then((snap) => {
     renderRelayRooms(snap.val() || {});
 });
 

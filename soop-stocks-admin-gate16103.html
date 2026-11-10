@@ -597,6 +597,10 @@
     };
     const app       = initializeApp(firebaseConfig);
     const db        = getDatabase(app);
+    // 시세·랭킹은 시장 소유 데이터라 전환 배포에서만 전용 DB로 읽는다. 점검·공지는 공유 기본 DB를 유지한다.
+    const stockDb   = getDatabase(app, "https://soop-stock-market-rtdb.firebaseio.com");
+    const STOCK_MARKET_DATABASE_PRIMARY = true;
+    const marketDb  = STOCK_MARKET_DATABASE_PRIMARY ? stockDb : db;
     const auth      = getAuth(app);
     const provider  = new GoogleAuthProvider();
     const functions = getFunctions(app);
@@ -622,7 +626,7 @@
         const statusEl = document.getElementById('stocks-load-status');
         if (statusEl) statusEl.innerText = '로딩 중...';
         try {
-            const snap = await get(ref(db, 'stocksPublic/'));
+            const snap = await get(ref(marketDb, 'stocksPublic/'));
             allStocksData = snap.val() || {};
             const count = Object.keys(allStocksData).length;
             if (statusEl) statusEl.innerText = `${count}개 종목 로드됨`;
@@ -638,7 +642,7 @@
         const statusEl = document.getElementById('ranking-status');
         if (!statusEl) return;
         try {
-            const snap = await get(ref(db, 'rankings/top5'));
+            const snap = await get(ref(marketDb, 'rankings/top5'));
             if (snap.exists()) {
                 const data = snap.val();
                 const savedAt = data.savedAt ? new Date(data.savedAt).toLocaleString('ko-KR') : '시각 불명';
@@ -1705,7 +1709,7 @@
         const searchName = document.getElementById('edit-search-name').value.trim();
         if (!searchName) return alert("닉네임을 입력해주세요.");
         try {
-            const snapshot = await get(ref(db, 'stocksPublic/'));
+            const snapshot = await get(ref(marketDb, 'stocksPublic/'));
             const data = snapshot.val();
             if (!data) return alert("데이터가 없습니다.");
             let targetId = null, targetData = null;
