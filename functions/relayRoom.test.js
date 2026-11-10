@@ -14,6 +14,9 @@ function loadRelayRoom({ reserveCashPromotion }) {
   Module._load = function(request, parent, isMain) {
     if (request === "firebase-functions/v2/https") return { onCall: (_options, handler) => handler, HttpsError };
     if (request === "firebase-admin") return { database: () => ({}) };
+    if (request === "./marketDatabases" && /relayRoom\.js$/.test(parent?.filename || "")) {
+      return { getMarketDatabaseContext: async ({ sharedDatabase }) => ({ db: sharedDatabase }) };
+    }
     if (request === "./common" && /relayRoom\.js$/.test(parent?.filename || "")) {
       return {
         STREAMER_ID_RE: /^[a-z0-9]{2,20}$/,

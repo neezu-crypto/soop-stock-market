@@ -164,9 +164,9 @@ const ACHIEVEMENTS = [
  * 호출부는 대부분 best-effort(try/catch로 감싸 실패해도 본 기능은
  * 그대로 성공하도록)로 사용한다.
  */
-async function grantAchievement(db, uid, achievementId) {
+async function grantAchievement(db, uid, achievementId, { accountPath = `users/${uid}` } = {}) {
   if (!uid || !achievementId) return false;
-  const ref  = db.ref(`users/${uid}/achievements/${achievementId}`);
+  const ref  = db.ref(`${accountPath}/achievements/${achievementId}`);
   const snap = await ref.get();
   if (snap.exists()) return false;
   await ref.set(Date.now());
@@ -319,8 +319,8 @@ function bannerStatus(endDateStr) {
  * 그대로 cost만큼 차감해 마이너스 자산(미수금)이 되도록 허용한다.
  * 반환값의 resultingCash로 차감 후 잔액(음수 여부)을 호출자가 알 수 있다.
  */
-async function chargeUserCash(db, uid, cost, { allowNegative = false } = {}) {
-  const userRef  = db.ref(`users/${uid}`);
+async function chargeUserCash(db, uid, cost, { allowNegative = false, accountPath = `users/${uid}` } = {}) {
+  const userRef  = db.ref(accountPath);
   const trueUser = (await userRef.get()).val();
   let insufficient = false;
 
@@ -367,7 +367,7 @@ async function computeTotalAssets(db, user) {
  * 무거운 보유주식 가격 조회가 반복되지 않게 한다. 오래된 기록은 매번
  * 같이 정리해 저장량이 무한정 늘지 않게 한다.
  */
-async function recordDailyAssetSnapshot(db, uid, user) {
+async function recordDailyAssetSnapshot(db, uid, user, { accountPath = `users/${uid}` } = {}) {
   const today = todayKeyKST();
   if (!user || user.lastAssetSnapshotDate === today) return;
 
@@ -376,29 +376,29 @@ async function recordDailyAssetSnapshot(db, uid, user) {
   const stockValue = totalAssets - cash;
 
   const updates = {
-    [`users/${uid}/assetHistory/${today}`]: {
+    [`${accountPath}/assetHistory/${today}`]: {
       totalAssets: Math.round(totalAssets),
       cash: Math.round(cash),
       stockValue: Math.round(stockValue),
       at: Date.now(),
     },
-    [`users/${uid}/lastAssetSnapshotDate`]: today,
+    [`${accountPath}/lastAssetSnapshotDate`]: today,
   };
 
   const cutoffKey = todayKeyKST(-ASSET_HISTORY_RETENTION_DAYS);
-  const histSnap = await db.ref(`users/${uid}/assetHistory`).get();
+  const histSnap = await db.ref(`${accountPath}/assetHistory`).get();
   const hist = histSnap.val() || {};
   Object.keys(hist).forEach((dateKey) => {
-    if (dateKey < cutoffKey) updates[`users/${uid}/assetHistory/${dateKey}`] = null;
+    if (dateKey < cutoffKey) updates[`${accountPath}/assetHistory/${dateKey}`] = null;
   });
 
   await db.ref().update(updates);
 }
 
 /** 유저 게임자산(cash)에 amount만큼 더한다 (배너 신청 환불, 카카오 연동 보너스, 자산 충전 승인 등에 재사용). */
-async function creditUserCash(db, uid, amount) {
+async function creditUserCash(db, uid, amount, { accountPath = `users/${uid}` } = {}) {
   if (!uid || !amount) return;
-  const userRef  = db.ref(`users/${uid}`);
+  const userRef  = db.ref(accountPath);
   const trueUser = (await userRef.get()).val();
   await userRef.transaction((currentUser) => {
     const user = currentUser || trueUser;

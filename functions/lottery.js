@@ -13,6 +13,7 @@ const {
   grantAchievement,
   assertNotBanned
 } = require("./common");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 무료 구독자 티켓은 KST 하루 1장, 무료분을 쓴 뒤에는 기존처럼 유료 구매한다.
@@ -31,15 +32,18 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db  = admin.database();
+  const sharedDatabase = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const db = marketContext.db;
+  const accountPath = marketContext.accountPath(auth.uid);
   const uid = auth.uid;
 
-  await requireLinkedUser(db, uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  await requireLinkedUser(sharedDatabase, uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
 
-  const user = (await db.ref(`users/${uid}`).get()).val();
-  const adminUser = await isAdmin(db, uid, auth.token?.email);
+  const user = (await marketContext.accountRef(uid).get()).val();
+  const adminUser = await isAdmin(sharedDatabase, uid, auth.token?.email);
   const kstDay = todayKeyKST();
   const freeClaimRef = db.ref(`lotteryFreeClaims/${uid}/${kstDay}`);
   const activeSubscription = adminUser;
@@ -114,7 +118,7 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   const source = ticket.source;
   const chargedAmount = source === "subscription-free" ? 0 : LOTTERY_TICKET_PRICE;
   if (chargedAmount > 0) {
-    const userRef = db.ref(`users/${uid}`);
+    const userRef = marketContext.accountRef(uid);
     let insufficient = false;
     const chargeTx = await userRef.transaction((current) => {
       const currentUser = current || user;
@@ -160,7 +164,7 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   if (!settlement) throw new HttpsError("aborted", "복권 결과를 정산하지 못했습니다. 다시 시도해 주세요.");
 
   if (settlement.won) {
-    const userRef = db.ref(`users/${uid}`);
+    const userRef = marketContext.accountRef(uid);
     const trueUser = (await userRef.get()).val();
     await userRef.transaction((current) => {
       const currentUser = current || trueUser;
@@ -174,7 +178,7 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
       };
     });
     await db.ref(`lotteryTripleSevenLog/${ticket.ticketId}`).set({ uid, digits: ticket.digits, at: settlement.settledAt });
-    await grantAchievement(db, uid, "lottery_winner");
+    await grantAchievement(db, uid, "lottery_winner", { accountPath });
     if (settlementTx.committed) await db.ref("lotteryLastWin").set({ prizeAmount: settlement.prizeAmount, at: settlement.settledAt });
   }
 
@@ -194,8 +198,8 @@ const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
     [`lotteryTicketRequests/${uid}/${requestId}/status`]: "complete",
     [`lotteryTicketRequests/${uid}/${requestId}/result`]: result,
     [`lotteryTicketRequests/${uid}/${requestId}/completedAt`]: completedAt,
-    [`users/${uid}/lotteryTicketCharges/${ticket.ticketId}`]: null,
-    [`users/${uid}/lotteryTicketPayouts/${ticket.ticketId}`]: null,
+    [`${accountPath}/lotteryTicketCharges/${ticket.ticketId}`]: null,
+    [`${accountPath}/lotteryTicketPayouts/${ticket.ticketId}`]: null,
   };
   if (source === "subscription-free") {
     completionUpdates[`${ticketFreeClaimPath}/status`] = "complete";

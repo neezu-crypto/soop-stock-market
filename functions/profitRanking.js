@@ -10,6 +10,7 @@ const {
   assertNotBanned
 } = require("./common");
 const { ensurePublicId } = require('./publicIdentity');
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 순수 매매 손익 랭킹
@@ -37,36 +38,39 @@ const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
   const uid = auth.uid;
-  const db  = admin.database();
+  const sharedDatabase = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const marketDatabase = marketContext.db;
+  const accountPath = marketContext.accountPath(uid);
 
-  await requireLinkedUser(db, uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  await requireLinkedUser(sharedDatabase, uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
 
-  const userSnap = await db.ref(`users/${uid}`).get();
+  const userSnap = await marketContext.accountRef(uid).get();
   const user     = userSnap.val() || {};
   const totalPL  = Math.round(user.realizedPL || 0);
 
   // 1) 확인 비용 차감 (실패 시 여기서 예외 — 아래 랭킹 갱신은 진행되지 않는다)
-  await chargeUserCash(db, uid, PROFIT_RANKING_CHECK_COST);
+  await chargeUserCash(marketDatabase, uid, PROFIT_RANKING_CHECK_COST, { accountPath });
 
   // 2) 내 순위표 항목 갱신
-  const publicId = await ensurePublicId(db, 'stock', uid);
+  const publicId = await ensurePublicId(sharedDatabase, 'stock', uid);
   const anonId = anonIdFor(publicId);
-  await db.ref(`rankings/profitEntries/${uid}`).set({
+  await marketDatabase.ref(`rankings/profitEntries/${uid}`).set({
     anonId,
     publicId,
     value: totalPL,
     updatedAt: Date.now(),
   });
-  await db.ref(`rankings/profitEntriesPublic/${publicId}`).set({
+  await marketDatabase.ref(`rankings/profitEntriesPublic/${publicId}`).set({
     anonId,
     value: totalPL,
     updatedAt: Date.now(),
   });
 
   // 3) 상위 N명 조회
-  const topSnap = await db.ref("rankings/profitEntriesPublic")
+  const topSnap = await marketDatabase.ref("rankings/profitEntriesPublic")
     .orderByChild("value")
     .limitToLast(PROFIT_RANKING_TOP_N)
     .get();
@@ -75,7 +79,7 @@ const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256
   topRaw.sort((a, b) => b.value - a.value);
 
   // 4) 내 순위 계산 (나보다 값이 큰 사람 수 + 1)
-  const higherSnap = await db.ref("rankings/profitEntriesPublic")
+  const higherSnap = await marketDatabase.ref("rankings/profitEntriesPublic")
     .orderByChild("value")
     .startAt(totalPL + 1)
     .get();
@@ -83,8 +87,8 @@ const checkProfitRanking = onCall({ cors: true, timeoutSeconds: 30, memory: "256
 
   // 도전과제 판정 (best-effort — 실패해도 랭킹 확인 결과에는 영향 없음)
   try {
-    await grantAchievement(db, uid, "profit_published");
-    if (myRank <= PROFIT_RANKING_TOP_N) await grantAchievement(db, uid, "profit_top10");
+    await grantAchievement(marketDatabase, uid, "profit_published", { accountPath });
+    if (myRank <= PROFIT_RANKING_TOP_N) await grantAchievement(marketDatabase, uid, "profit_top10", { accountPath });
   } catch (e) {
     // 도전과제 지급 실패는 무시 (다음 확인 때 재시도됨)
   }

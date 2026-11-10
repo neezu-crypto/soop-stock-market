@@ -11,6 +11,13 @@ const {
   assertNotBanned,
   creditUserCash,
 } = require("./common");
+const { getMarketDatabaseContext } = require("./marketDatabases");
+const {
+  claimMarketOperation,
+  completeMarketOperation,
+  failMarketOperation,
+  writeMarketAudit,
+} = require("./marketOperations");
 
 const WALLET_ROOT = "gameSeriesWallet";
 const CHEST_INVENTORY_ROOT = "stockMarket/treasureChestInventory";
@@ -44,6 +51,18 @@ async function requireChestUser(db, request) {
   await requireLinkedUser(db, uid, request.auth);
   await assertNotBanned(db, request.auth);
   return uid;
+}
+
+// 통합 캐시 지갑은 모든 시리즈가 공유하므로 기본 DB에 계속 둔다. 반면 보물
+// 상자 재고·개봉 보상은 주식시장 데이터이므로 시장 DB로 옮긴다. 전환 전에는
+// marketDatabase가 sharedDatabase와 같아 기존 경로·동작이 그대로 유지된다.
+async function getChestContext(sharedDatabase = admin.database()) {
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  return {
+    sharedDatabase,
+    marketContext,
+    marketDatabase: marketContext.db,
+  };
 }
 
 function safeRequestId(value, label = "요청 번호") {
@@ -108,12 +127,12 @@ const claimMonthlyFreeTreasureChest = onCall({ cors: true, timeoutSeconds: 30, m
 
 // 함수명은 기존 클라이언트 호환을 위해 유지한다. 접근 권한은 로그인 이용자 기준이다.
 const getAdminTreasureChestState = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
-  const db = admin.database();
-  const uid = await requireChestUser(db, request);
+  const { sharedDatabase, marketContext, marketDatabase } = await getChestContext();
+  const uid = await requireChestUser(sharedDatabase, request);
   const [accountSnap, inventorySnap, legacySnap] = await Promise.all([
-    db.ref(`${WALLET_ROOT}/accounts/${uid}`).get(),
-    db.ref(`${CHEST_INVENTORY_ROOT}/${uid}`).get(),
-    db.ref(`users/${uid}/treasureChests`).get(),
+    sharedDatabase.ref(`${WALLET_ROOT}/accounts/${uid}`).get(),
+    marketDatabase.ref(`${CHEST_INVENTORY_ROOT}/${uid}`).get(),
+    marketContext.accountRef(uid).child("treasureChests").get(),
   ]);
   const account = accountSnap.val() || {};
   const inventory = inventorySnap.val() || {};
@@ -141,12 +160,23 @@ const getAdminTreasureChestState = onCall({ cors: true, timeoutSeconds: 30, memo
 });
 
 const purchaseTreasureChestsWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
-  const db = admin.database();
-  const uid = await requireChestUser(db, request);
+  const { sharedDatabase, marketDatabase, marketContext } = await getChestContext();
+  const uid = await requireChestUser(sharedDatabase, request);
   const requestId = safeRequestId(request.data?.requestId, "구매 요청 번호");
   const chestCount = normalizeRequestCount(request.data?.chestCount);
   const purchase = computeChestPurchase(chestCount);
-  const accountRef = db.ref(`${WALLET_ROOT}/accounts/${uid}`);
+  const operation = await claimMarketOperation(marketDatabase, {
+    operationId: `chest_purchase_${requestId}`,
+    uid,
+    kind: "treasure-chest-purchase",
+    request: { requestId, chestCount, cashAmount: purchase.cashAmount },
+  });
+  if (operation.action === "replay") return operation.operation.result;
+  if (operation.action === "conflict") throw new HttpsError("already-exists", "요청 번호가 다른 구매 내역에 이미 사용됐습니다.");
+  if (operation.action === "in-progress") throw new HttpsError("aborted", "같은 구매 요청을 처리 중입니다. 잠시 후 다시 확인해 주세요.");
+
+  try {
+  const accountRef = sharedDatabase.ref(`${WALLET_ROOT}/accounts/${uid}`);
   const accountBefore = (await accountRef.get()).val() || null;
   let insufficientBalance = false;
   let availableAtRequest = 0;
@@ -195,7 +225,7 @@ const purchaseTreasureChestsWithCash = onCall({ cors: true, timeoutSeconds: 30, 
   if (insufficientBalance) throw new HttpsError("failed-precondition", `사용 가능한 캐시가 부족합니다. 필요 ${purchase.cashAmount.toLocaleString()}캐시, 사용 가능 ${availableAtRequest.toLocaleString()}캐시`);
   if (!debit.committed) throw new HttpsError("aborted", "캐시 차감이 완료되지 않았습니다. 같은 요청 번호로 다시 시도해 주세요.");
 
-  const inventoryRef = db.ref(`${CHEST_INVENTORY_ROOT}/${uid}`);
+  const inventoryRef = marketDatabase.ref(`${CHEST_INVENTORY_ROOT}/${uid}`);
   const inventoryBefore = (await inventoryRef.get()).val() || null;
   let inventoryConflict = false;
   const inventoryTx = await inventoryRef.transaction((value) => {
@@ -258,7 +288,7 @@ const purchaseTreasureChestsWithCash = onCall({ cors: true, timeoutSeconds: 30, 
     throw new HttpsError("aborted", "상자는 지급됐지만 구매 처리를 마무리하지 못했습니다. 구매 요청을 다시 불러와 주세요.");
   }
 
-  await db.ref(`${WALLET_ROOT}/ledger/${uid}/${requestId}_treasureChestPurchase`).set({
+  await sharedDatabase.ref(`${WALLET_ROOT}/ledger/${uid}/${requestId}_treasureChestPurchase`).set({
     kind: "treasureChestPurchase",
     requestId,
     productId: "treasureChest",
@@ -270,18 +300,27 @@ const purchaseTreasureChestsWithCash = onCall({ cors: true, timeoutSeconds: 30, 
     createdAt: Number(purchaseRecord?.requestedAt) || Date.now(),
     createdByUid: uid,
   });
-  return {
+  const result = {
     ok: true,
     requestId,
     ...purchase,
     remainingCash: nonNegativeInteger(finalize.snapshot.val()?.balanceCash),
-    totalOwnedChestCount: nonNegativeInteger((await db.ref(`users/${uid}/treasureChests`).get()).val()) + inventoryChestCount(inventoryTx.snapshot.val()),
+    totalOwnedChestCount: nonNegativeInteger((await marketContext.accountRef(uid).child("treasureChests").get()).val()) + inventoryChestCount(inventoryTx.snapshot.val()),
   };
+  await completeMarketOperation(operation.ref, { requestHash: operation.requestHash, result });
+  await writeMarketAudit(marketDatabase, `chest_purchase_${requestId}`, {
+    kind: "treasure-chest-purchase", uid, requestId, cashAmount: purchase.cashAmount,
+  });
+  return result;
+  } catch (error) {
+    await failMarketOperation(operation.ref, { requestHash: operation.requestHash, error });
+    throw error;
+  }
 });
 
 const cancelTreasureChestCashPurchase = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
-  const db = admin.database();
-  const uid = await requireChestUser(db, request);
+  const { sharedDatabase, marketDatabase, marketContext } = await getChestContext();
+  const uid = await requireChestUser(sharedDatabase, request);
   const purchaseId = safeRequestId(request.data?.purchaseId, "구매 번호");
   const cancellationId = safeRequestId(request.data?.cancellationId, "취소 요청 번호");
   const itemType = String(request.data?.itemType || "");
@@ -289,8 +328,19 @@ const cancelTreasureChestCashPurchase = onCall({ cors: true, timeoutSeconds: 30,
   if (!Number.isSafeInteger(itemIndex) || itemIndex < 0 || !["bundle", "single"].includes(itemType)) {
     throw new HttpsError("invalid-argument", "취소할 상자 항목을 확인할 수 없습니다.");
   }
+  const operation = await claimMarketOperation(marketDatabase, {
+    operationId: `chest_cancel_${cancellationId}`,
+    uid,
+    kind: "treasure-chest-cancellation",
+    request: { purchaseId, cancellationId, itemType, itemIndex },
+  });
+  if (operation.action === "replay") return operation.operation.result;
+  if (operation.action === "conflict") throw new HttpsError("already-exists", "취소 요청 번호가 다른 처리에 이미 사용됐습니다.");
+  if (operation.action === "in-progress") throw new HttpsError("aborted", "같은 취소 요청을 처리 중입니다. 잠시 후 다시 확인해 주세요.");
+
+  try {
   const now = Date.now();
-  const inventoryRef = db.ref(`${CHEST_INVENTORY_ROOT}/${uid}`);
+  const inventoryRef = marketDatabase.ref(`${CHEST_INVENTORY_ROOT}/${uid}`);
   const inventoryBefore = (await inventoryRef.get()).val() || null;
   let cancelError = "";
   const inventoryTx = await inventoryRef.transaction((value) => {
@@ -354,7 +404,7 @@ const cancelTreasureChestCashPurchase = onCall({ cors: true, timeoutSeconds: 30,
 
   const cancellation = inventoryTx.snapshot.val()?.cancellations?.[cancellationId];
   if (!cancellation) throw new HttpsError("data-loss", "취소 기록을 확인할 수 없습니다.");
-  const accountRef = db.ref(`${WALLET_ROOT}/accounts/${uid}`);
+  const accountRef = sharedDatabase.ref(`${WALLET_ROOT}/accounts/${uid}`);
   const accountBefore = (await accountRef.get()).val() || null;
   let missingPurchase = false;
   let cashOverflow = false;
@@ -404,7 +454,7 @@ const cancelTreasureChestCashPurchase = onCall({ cors: true, timeoutSeconds: 30,
   if (cashOverflow) throw new HttpsError("failed-precondition", "캐시 잔액 한도를 초과해 취소 환급을 완료할 수 없습니다.");
   if (!refundTx.committed) throw new HttpsError("aborted", "캐시 반환을 완료하지 못했습니다. 같은 취소 요청 번호로 다시 시도해 주세요.");
 
-  await db.ref(`${WALLET_ROOT}/ledger/${uid}/${cancellationId}_treasureChestCancellation`).set({
+  await sharedDatabase.ref(`${WALLET_ROOT}/ledger/${uid}/${cancellationId}_treasureChestCancellation`).set({
     kind: "treasureChestCancellation",
     requestId: cancellationId,
     purchaseId,
@@ -417,8 +467,8 @@ const cancelTreasureChestCashPurchase = onCall({ cors: true, timeoutSeconds: 30,
     createdByUid: uid,
   });
   await inventoryRef.child(`cancellations/${cancellationId}`).update({ walletCredited: true, creditedAt: now });
-  const latest = await getChestCounts(db, uid);
-  return {
+  const latest = await getChestCounts(marketDatabase, uid, marketContext.accountPath(uid));
+  const result = {
     ok: true,
     cancellationId,
     purchaseId,
@@ -428,11 +478,21 @@ const cancelTreasureChestCashPurchase = onCall({ cors: true, timeoutSeconds: 30,
     balanceCash: nonNegativeInteger(refundTx.snapshot.val()?.balanceCash),
     totalChestCount: latest.totalChestCount,
   };
+  await completeMarketOperation(operation.ref, { requestHash: operation.requestHash, result });
+  await writeMarketAudit(marketDatabase, `chest_cancel_${cancellationId}`, {
+    kind: "treasure-chest-cancellation", uid, purchaseId, cancellationId,
+    cashAmount: Number(cancellation.cashAmount),
+  });
+  return result;
+  } catch (error) {
+    await failMarketOperation(operation.ref, { requestHash: operation.requestHash, error });
+    throw error;
+  }
 });
 
-async function getChestCounts(db, uid) {
+async function getChestCounts(db, uid, accountPath = `users/${uid}`) {
   const [legacySnap, inventorySnap] = await Promise.all([
-    db.ref(`users/${uid}/treasureChests`).get(),
+    db.ref(`${accountPath}/treasureChests`).get(),
     db.ref(`${CHEST_INVENTORY_ROOT}/${uid}`).get(),
   ]);
   const legacyChestCount = nonNegativeInteger(legacySnap.val());
@@ -444,8 +504,8 @@ async function getChestCounts(db, uid) {
  * Existing aggregate chest balances are treated as the oldest stock because their
  * original acquisition order is unavailable. Cash purchases follow by server sequence.
  */
-async function consumeOldestChest(db, uid) {
-  const legacyRef = db.ref(`users/${uid}/treasureChests`);
+async function consumeOldestChest(db, uid, accountPath = `users/${uid}`) {
+  const legacyRef = db.ref(`${accountPath}/treasureChests`);
   const legacyBefore = (await legacyRef.get()).val();
   if (nonNegativeInteger(legacyBefore) > 0) {
     let legacyUnavailable = false;
@@ -502,15 +562,16 @@ async function consumeOldestChest(db, uid) {
 
 /** 계정 보호 로그인 이용자가 본인 보물상자만 개봉한다. */
 const openTreasureChest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
-  const db = admin.database();
-  const uid = await requireChestUser(db, request);
-  await requireNotInMaintenance(db, request.auth);
+  const { sharedDatabase, marketDatabase, marketContext } = await getChestContext();
+  const uid = await requireChestUser(sharedDatabase, request);
+  await requireNotInMaintenance(sharedDatabase, request.auth);
 
-  const consumed = await consumeOldestChest(db, uid);
+  const accountPath = marketContext.accountPath(uid);
+  const consumed = await consumeOldestChest(marketDatabase, uid, accountPath);
   const isBig = Math.random() < TREASURE_CHEST_OPEN_BIG_RATE;
   const reward = isBig ? TREASURE_CHEST_REWARD_BIG : TREASURE_CHEST_REWARD_SMALL;
-  await creditUserCash(db, uid, reward);
-  await db.ref("treasureChestOpens").push({
+  await creditUserCash(marketDatabase, uid, reward, { accountPath });
+  await marketDatabase.ref("treasureChestOpens").push({
     uid,
     reward,
     isBig,
@@ -519,12 +580,13 @@ const openTreasureChest = onCall({ cors: true, timeoutSeconds: 30, memory: "256M
     ...(consumed.purchaseId ? { purchaseId: consumed.purchaseId } : {}),
     ...(Number.isInteger(consumed.itemIndex) ? { bundleGroupIndex: consumed.itemIndex } : {}),
   });
-  const counts = await getChestCounts(db, uid);
+  const counts = await getChestCounts(marketDatabase, uid, accountPath);
   return { ok: true, reward, isBig, remaining: counts.totalChestCount, source: consumed.source };
 });
 
 async function actionListTreasureChestRequests(db) {
-  const snap = await db.ref("treasureChestRequests").get();
+  const { marketDatabase } = await getChestContext(db);
+  const snap = await marketDatabase.ref("treasureChestRequests").get();
   const data = snap.val() || {};
   const requests = Object.entries(data)
     .map(([id, value]) => ({ id, ...value }))
@@ -535,18 +597,19 @@ async function actionListTreasureChestRequests(db) {
 
 async function actionApproveTreasureChestRequest(db, { requestId }) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
+  const { marketDatabase, marketContext } = await getChestContext(db);
 
-  const reqSnap = await db.ref(`treasureChestRequests/${requestId}`).get();
+  const reqSnap = await marketDatabase.ref(`treasureChestRequests/${requestId}`).get();
   if (!reqSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   const reqData = reqSnap.val();
   if (reqData.status !== "pending") {
     throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");
   }
 
-  const chestRef = db.ref(`users/${reqData.requesterUid}/treasureChests`);
+  const chestRef = marketContext.accountRef(reqData.requesterUid).child("treasureChests");
   await chestRef.transaction((current) => (current || 0) + (reqData.totalChestCount || 0));
 
-  await db.ref(`treasureChestRequests/${requestId}`).update({
+  await marketDatabase.ref(`treasureChestRequests/${requestId}`).update({
     status: "approved",
     reviewedAt: Date.now(),
   });
@@ -556,7 +619,8 @@ async function actionApproveTreasureChestRequest(db, { requestId }) {
 
 async function actionRejectTreasureChestRequest(db, { requestId }) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
-  const requestRef = db.ref(`treasureChestRequests/${requestId}`);
+  const { marketDatabase } = await getChestContext(db);
+  const requestRef = marketDatabase.ref(`treasureChestRequests/${requestId}`);
   const requestSnap = await requestRef.get();
   if (!requestSnap.exists()) throw new HttpsError("not-found", "신청 내역을 찾을 수 없습니다.");
   if (requestSnap.val().status !== "pending") throw new HttpsError("failed-precondition", "이미 처리된 신청입니다.");

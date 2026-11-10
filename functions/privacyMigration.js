@@ -2,33 +2,36 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { requireAdmin } = require('./common');
 const { ensurePublicId, publicIdFor } = require('./publicIdentity');
+const { activeStockMarketDatabase } = require('./marketDatabases');
 
 // UID가 들어 있던 공개 미러를 앱 전용 공개 ID 기반으로 옮긴다. 이 함수는 관리자만
 // 호출할 수 있으며, 기존 원장(UID 포함)은 삭제하지 않고 서버 내부 호환용으로 남긴다.
 const migratePublicIdentityData = onCall({ cors: true, timeoutSeconds: 60, memory: '256MiB' }, async (request) => {
-  const db = admin.database();
-  await requireAdmin(db, request.auth);
+  const sharedDatabase = admin.database();
+  await requireAdmin(sharedDatabase, request.auth);
+  const marketDatabase = await activeStockMarketDatabase(sharedDatabase);
 
   const [verificationSnap, profitSnap, profileSnap, rankingSnap, stocksSnap] = await Promise.all([
-    db.ref('streamerVerifications').get(),
-    db.ref('rankings/profitEntries').get(),
-    db.ref('bettingMarket/profiles').get(),
-    db.ref('bettingMarket/rankings').get(),
-    db.ref('stocks').get(),
+    sharedDatabase.ref('streamerVerifications').get(),
+    marketDatabase.ref('rankings/profitEntries').get(),
+    sharedDatabase.ref('bettingMarket/profiles').get(),
+    sharedDatabase.ref('bettingMarket/rankings').get(),
+    marketDatabase.ref('stocks').get(),
   ]);
 
-  const updates = {};
+  const sharedUpdates = {};
+  const marketUpdates = {};
   let verificationCount = 0;
   verificationSnap.forEach((child) => {
     const record = child.val() || {};
     if (!record.uid) return;
-    updates[`streamerVerificationsPublic/${child.key}`] = {
+    sharedUpdates[`streamerVerificationsPublic/${child.key}`] = {
       nickname: record.nickname || '',
       soopId: record.soopId || null,
       verifiedAt: record.verifiedAt || null,
     };
-    updates[`users/${record.uid}/streamerVerified`] = true;
-    updates[`users/${record.uid}/streamerProfile`] = {
+    sharedUpdates[`users/${record.uid}/streamerVerified`] = true;
+    sharedUpdates[`users/${record.uid}/streamerProfile`] = {
       nickname: record.nickname || '',
       soopId: record.soopId || null,
     };
@@ -41,9 +44,9 @@ const migratePublicIdentityData = onCall({ cors: true, timeoutSeconds: 60, memor
     const value = child.val() || {};
     if (!uid || uid.startsWith('STO-')) return;
     const publicId = value.publicId || publicIdFor('stock', uid);
-    updates[`privateUserIds/stock/byUid/${uid}`] = publicId;
-    updates[`privateUserIds/stock/byPublicId/${publicId}`] = uid;
-    updates[`rankings/profitEntriesPublic/${publicId}`] = {
+    sharedUpdates[`privateUserIds/stock/byUid/${uid}`] = publicId;
+    sharedUpdates[`privateUserIds/stock/byPublicId/${publicId}`] = uid;
+    marketUpdates[`rankings/profitEntriesPublic/${publicId}`] = {
       anonId: value.anonId || `트레이더-${publicId.slice(-6)}`,
       value: Number(value.value) || 0,
       updatedAt: value.updatedAt || null,
@@ -57,9 +60,9 @@ const migratePublicIdentityData = onCall({ cors: true, timeoutSeconds: 60, memor
     const profile = child.val() || {};
     if (!uid) return;
     const publicId = publicIdFor('bet', uid);
-    updates[`privateUserIds/bet/byUid/${uid}`] = publicId;
-    updates[`privateUserIds/bet/byPublicId/${publicId}`] = uid;
-    updates[`bettingMarket/publicProfiles/${publicId}`] = {
+    sharedUpdates[`privateUserIds/bet/byUid/${uid}`] = publicId;
+    sharedUpdates[`privateUserIds/bet/byPublicId/${publicId}`] = uid;
+    sharedUpdates[`bettingMarket/publicProfiles/${publicId}`] = {
       nickname: profile.nickname || '',
       avatarUrl: profile.avatarUrl || '',
     };
@@ -75,8 +78,8 @@ const migratePublicIdentityData = onCall({ cors: true, timeoutSeconds: 60, memor
       const uid = entry.uid || child.key;
       if (!uid) return;
       const publicId = publicIdFor('bet', uid);
-      updates[`privateUserIds/bet/byUid/${uid}`] = publicId;
-      updates[`privateUserIds/bet/byPublicId/${publicId}`] = uid;
+      sharedUpdates[`privateUserIds/bet/byUid/${uid}`] = publicId;
+      sharedUpdates[`privateUserIds/bet/byPublicId/${publicId}`] = uid;
       const sanitized = Object.assign({}, entry);
       delete sanitized.uid;
       sanitized.publicId = publicId;
@@ -85,17 +88,20 @@ const migratePublicIdentityData = onCall({ cors: true, timeoutSeconds: 60, memor
     rankingPublic[category] = dest;
   }
   rankingPublic.updatedAt = rankingSnap.child('updatedAt').val() || null;
-  updates['bettingMarket/rankingsPublic'] = rankingPublic;
+  sharedUpdates['bettingMarket/rankingsPublic'] = rankingPublic;
 
   stocksSnap.forEach((child) => {
     const value = Object.assign({}, child.val() || {});
     delete value.cardBannerHolderUid;
     delete value.freezeTriggerUid;
     delete value.triggerUid;
-    updates[`stocksPublic/${child.key}`] = value;
+    marketUpdates[`stocksPublic/${child.key}`] = value;
   });
 
-  await db.ref().update(updates);
+  await Promise.all([
+    sharedDatabase.ref().update(sharedUpdates),
+    marketDatabase.ref().update(marketUpdates),
+  ]);
   return { ok: true, verificationCount, profitCount, profileCount };
 });
 

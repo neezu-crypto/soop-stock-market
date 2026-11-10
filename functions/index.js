@@ -61,12 +61,14 @@ const {
   openTreasureChest,
 } = require("./treasureChest");
 const { logStockMarketVisit } = require("./streamerVisitLog");
-const { syncStreamerNameOnStockChange } = require("./streamerNamesSync");
+const { syncStreamerNameOnStockChange, syncDedicatedStockPublicOnStockChange } = require("./streamerNamesSync");
 const { migratePublicIdentityData } = require("./privacyMigration");
 const { getStockMarketPresenceCount } = require("./presence");
 const { getStockMarketUsage } = require("./usageMetrics");
 const { syncCrewRosterFromSheet } = require("./crewSheetSync");
 const { getSharedChartBanners } = require("./sharedChartBanners");
+const { getStockMarketMigrationStatus } = require("./marketMigrationMonitoring");
+const { syncStockMarketAdminUidMirror } = require("./marketAdminMirror");
 
 exports.initializeUser          = initializeUser;
 exports.trade                   = trade;
@@ -101,8 +103,11 @@ exports.openTreasureChest                  = openTreasureChest;
 exports.stockWhoAmI                        = stockWhoAmI;
 exports.logStockMarketVisit                = logStockMarketVisit;
 exports.syncStreamerNameOnStockChange      = syncStreamerNameOnStockChange;
+exports.syncDedicatedStockPublicOnStockChange = syncDedicatedStockPublicOnStockChange;
 exports.migratePublicIdentityData           = migratePublicIdentityData;
 exports.getStockMarketPresenceCount         = getStockMarketPresenceCount;
 exports.getStockMarketUsage                  = getStockMarketUsage;
 exports.syncCrewRosterFromSheet             = syncCrewRosterFromSheet;
 exports.getSharedChartBanners               = getSharedChartBanners;
+exports.getStockMarketMigrationStatus       = getStockMarketMigrationStatus;
+exports.syncStockMarketAdminUidMirror       = syncStockMarketAdminUidMirror;

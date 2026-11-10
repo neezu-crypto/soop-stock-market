@@ -11,6 +11,7 @@ const {
   assertNotBanned
 } = require("./common");
 const { isCashPromotionRequest, reserveCashPromotion, rejectCashPromotionRequest, isRequestActionable, commitCashPromotionApproval } = require("./promotionCash");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 종목 카드 프로필 배너 — 우측 랭킹 배너와 신청 방식(닉네임+아이디+기간)은
@@ -51,10 +52,12 @@ const submitCardBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db = admin.database();
-  await requireLinkedUser(db, auth.uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  const sharedDatabase = admin.database();
+  await requireLinkedUser(sharedDatabase, auth.uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const db = marketContext.db;
 
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
@@ -78,7 +81,7 @@ const submitCardBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
 
   // 실제 소유주만 신청 가능 — 되팔기 방지 규칙과 짝을 이루는 최소 보유 수량 검증.
   // (최종 판정은 승인 시점에 다시 한다 — 신청 후 승인 전에 매도했을 수 있음.)
-  const qtySnap = await db.ref(`users/${auth.uid}/stocks/${targetId}/qty`).get();
+  const qtySnap = await marketContext.accountRef(auth.uid).child(`stocks/${targetId}/qty`).get();
   const qty = qtySnap.val() || 0;
   if (qty < CARD_BANNER_MIN_HOLDING_QTY) {
     throw new HttpsError(
@@ -103,6 +106,7 @@ const submitCardBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory:
     requestId: request.data?.requestId,
     requestData,
     requestPath: "cardBannerRequests",
+    sharedDatabase,
   });
 });
 
@@ -116,7 +120,7 @@ async function actionListCardBannerRequests(db) {
   return { ok: true, requests };
 }
 
-async function actionApproveCardBannerRequest(db, { requestId, days, nickname }) {
+async function actionApproveCardBannerRequest(db, { requestId, days, nickname }, { accountPathForUid } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`cardBannerRequests/${requestId}`).get();
@@ -143,7 +147,8 @@ async function actionApproveCardBannerRequest(db, { requestId, days, nickname })
   }
 
   // 신청 후 승인 전에 매도해 최소 보유 수량 미달이 됐을 수 있으므로 승인 시점에 다시 확인한다.
-  const qtySnap = await db.ref(`users/${reqData.requesterUid}/stocks/${targetId}/qty`).get();
+  const accountPath = accountPathForUid ? accountPathForUid(reqData.requesterUid) : `users/${reqData.requesterUid}`;
+  const qtySnap = await db.ref(`${accountPath}/stocks/${targetId}/qty`).get();
   const qty = qtySnap.val() || 0;
   if (qty < CARD_BANNER_MIN_HOLDING_QTY) {
     throw new HttpsError(
@@ -175,12 +180,14 @@ async function actionApproveCardBannerRequest(db, { requestId, days, nickname })
   };
   const approval = await commitCashPromotionApproval(db, "cardBannerRequests", requestId, reqData, updates);
   if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, endDate: approval.request?.approvedEndDate || endDateStr };
-  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
+  if (reqData.requesterUid) {
+    await grantAchievement(db, reqData.requesterUid, "first_support", { accountPath });
+  }
 
   return { ok: true, endDate: endDateStr };
 }
 
-async function actionRejectCardBannerRequest(db, { requestId }) {
+async function actionRejectCardBannerRequest(db, { requestId }, { sharedDatabase = db } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`cardBannerRequests/${requestId}`).get();
@@ -189,7 +196,7 @@ async function actionRejectCardBannerRequest(db, { requestId }) {
   if (isCashPromotionRequest(reqData) && reqData.status === "rejected") {
     return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundCash: reqData.refundCash || 0 };
   }
-  return rejectCashPromotionRequest(db, "cardBannerRequests", requestId, reqData);
+  return rejectCashPromotionRequest(db, "cardBannerRequests", requestId, reqData, Date.now(), { sharedDatabase });
 }
 
 module.exports = {

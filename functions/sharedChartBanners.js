@@ -1,5 +1,6 @@
 const { onCall } = require("firebase-functions/v2/https");
 const { getDatabase } = require("firebase-admin/database");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 function publicChartBanners(data, now = Date.now()) {
   return Object.entries(data || {}).sort(([a], [b]) => a.localeCompare(b)).flatMap(([, item]) => {
@@ -20,7 +21,9 @@ function publicChartBanners(data, now = Date.now()) {
 }
 
 const getSharedChartBanners = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async () => {
-  const snapshot = await getDatabase().ref("chartBanner").get();
+  const sharedDatabase = getDatabase();
+  const { db } = await getMarketDatabaseContext({ sharedDatabase });
+  const snapshot = await db.ref("chartBanner").get();
   return { banners: publicChartBanners(snapshot.val()).slice(0, 1) };
 });
 

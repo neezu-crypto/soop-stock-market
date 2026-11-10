@@ -68,6 +68,7 @@ const {
   actionApproveListingRequest,
   actionRejectListingRequest,
 } = require("./listingRequests");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 const {
   actionListStreamerVerificationRequests,
   actionListVerifiedStreamers,
@@ -349,9 +350,9 @@ async function actionDeleteBanner(db, { type, stockId }) {
   return { ok: true };
 }
 
-async function calcTop5(db) {
+async function calcTop5(db, { accountRoot = "users" } = {}) {
   const [usersSnap, stocksSnap] = await Promise.all([
-    db.ref("users").get(),
+    db.ref(accountRoot).get(),
     db.ref("stocks").get(),
   ]);
   const usersData  = usersSnap.val()  || {};
@@ -373,12 +374,12 @@ async function calcTop5(db) {
     .slice(0, 5);
 }
 
-async function actionPreviewRankings(db) {
-  return { ok: true, top5: await calcTop5(db) };
+async function actionPreviewRankings(db, options) {
+  return { ok: true, top5: await calcTop5(db, options) };
 }
 
-async function actionSaveRankings(db) {
-  const top5 = await calcTop5(db);
+async function actionSaveRankings(db, options) {
+  const top5 = await calcTop5(db, options);
   const payload = {
     savedAt: new Date().toISOString(),
     items: top5.map((s, i) => ({ rank: i + 1, id: s.id, name: s.name, price: s.price, totalQty: s.totalQty })),
@@ -399,28 +400,28 @@ function isInactiveUser(user) {
   return isDefaultCash && (hasNoStocks || hasZeroStocks);
 }
 
-async function getInactiveUserIds(db) {
-  const snap = await db.ref("users").get();
+async function getInactiveUserIds(db, { accountRoot = "users" } = {}) {
+  const snap = await db.ref(accountRoot).get();
   const data = snap.val() || {};
   return Object.entries(data)
     .filter(([, user]) => isInactiveUser(user))
     .map(([uid]) => uid);
 }
 
-async function actionPreviewInactiveUsers(db) {
-  const inactive = await getInactiveUserIds(db);
+async function actionPreviewInactiveUsers(db, options) {
+  const inactive = await getInactiveUserIds(db, options);
   return { ok: true, count: inactive.length };
 }
 
-async function actionCleanupInactiveUsers(db) {
-  const inactive = await getInactiveUserIds(db);
+async function actionCleanupInactiveUsers(db, { accountRoot = "users" } = {}) {
+  const inactive = await getInactiveUserIds(db, { accountRoot });
   if (inactive.length === 0) return { ok: true, count: 0 };
 
   const BATCH = 500;
   for (let i = 0; i < inactive.length; i += BATCH) {
     const batch   = inactive.slice(i, i + BATCH);
     const updates = {};
-    batch.forEach((uid) => { updates[`users/${uid}`] = null; });
+    batch.forEach((uid) => { updates[`${accountRoot}/${uid}`] = null; });
     await db.ref().update(updates);
   }
   return { ok: true, count: inactive.length };
@@ -502,31 +503,36 @@ async function actionListProfitRankings(db) {
  * 페이지 진입 시점에 "지금 뭐가 밀려있는지"를 한눈에 보여주는 용도라
  * 별도로 가볍게 카운트만 뽑는다.
  */
-async function actionGetPendingSummary(db) {
+async function actionGetPendingSummary(db, { sharedDatabase = db } = {}) {
   const sections = [
-    { key: "banner",      sectionId: "section-banner",      label: "배너 광고",       paths: ["bannerRequests", "chartBannerRequests", "cardBannerRequests"] },
-    { key: "cashcharge",  sectionId: "section-cashcharge",  label: "자산 충전 신청", paths: ["cashChargeRequests"] },
-    { key: "treasurechest", sectionId: "section-treasure-chest", label: "보물상자 구매 신청", paths: ["treasureChestRequests"] },
-    { key: "pin",         sectionId: "section-pin",         label: "최상단 고정 노출", paths: ["pinRequests"] },
-    { key: "listing",     sectionId: "section-listing",     label: "종목 상장 신청", paths: ["listingRequests"] },
-    { key: "relay",       sectionId: "section-relay",       label: "중계방 홍보",     paths: ["relayRoomRequests"] },
-    { key: "freeze",      sectionId: "section-freeze",      label: "동결 해제(방송 후원)", paths: ["unfreezeDonationRequests"] },
-    { key: "streamer",    sectionId: "section-streamer-verification", label: "스트리머 인증", paths: ["streamerVerificationRequests"] },
+    { key: "banner",      sectionId: "section-banner",      label: "배너 광고",       paths: ["bannerRequests", "chartBannerRequests", "cardBannerRequests"], source: "market" },
+    { key: "cashcharge",  sectionId: "section-cashcharge",  label: "자산 충전 신청", paths: ["cashChargeRequests"], source: "shared" },
+    { key: "treasurechest", sectionId: "section-treasure-chest", label: "보물상자 구매 신청", paths: ["treasureChestRequests"], source: "market" },
+    { key: "pin",         sectionId: "section-pin",         label: "최상단 고정 노출", paths: ["pinRequests"], source: "market" },
+    { key: "listing",     sectionId: "section-listing",     label: "종목 상장 신청", paths: ["listingRequests"], source: "market" },
+    { key: "relay",       sectionId: "section-relay",       label: "중계방 홍보",     paths: ["relayRoomRequests"], source: "market" },
+    { key: "freeze",      sectionId: "section-freeze",      label: "동결 해제(방송 후원)", paths: ["unfreezeDonationRequests"], source: "market" },
+    { key: "streamer",    sectionId: "section-streamer-verification", label: "스트리머 인증", paths: ["streamerVerificationRequests"], source: "shared" },
   ];
 
-  const allPaths = [...new Set(sections.flatMap((s) => s.paths))];
-  const snaps = await Promise.all(allPaths.map((p) => db.ref(p).get()));
+  const sourcePaths = sections.flatMap((section) => section.paths.map((path) => ({
+    key: `${section.source}:${path}`,
+    path,
+    source: section.source,
+  })));
+  const uniquePaths = [...new Map(sourcePaths.map((item) => [item.key, item])).values()];
+  const snaps = await Promise.all(uniquePaths.map((item) => (item.source === "shared" ? sharedDatabase : db).ref(item.path).get()));
   const countByPath = {};
-  allPaths.forEach((p, i) => {
+  uniquePaths.forEach(({ key }, i) => {
     const data = snaps[i].val() || {};
-    countByPath[p] = Object.values(data).filter((r) => isRequestActionable(r)).length;
+    countByPath[key] = Object.values(data).filter((r) => isRequestActionable(r)).length;
   });
 
   const items = sections.map((s) => ({
     key: s.key,
     sectionId: s.sectionId,
     label: s.label,
-    count: s.paths.reduce((sum, p) => sum + countByPath[p], 0),
+    count: s.paths.reduce((sum, path) => sum + countByPath[`${s.source}:${path}`], 0),
   }));
 
   return { ok: true, items, totalCount: items.reduce((sum, i) => sum + i.count, 0) };
@@ -766,9 +772,9 @@ async function actionSetAnnouncement(db, { active, text }) {
 // 개별 클레임 로그는 남기지 않고 users/{uid}.lastAttendanceDate/attendanceStreak만
 // 갱신되므로, "오늘 몇 명이 받았고 총 얼마가 나갔는지"는 전체 유저를 스캔해
 // lastAttendanceDate가 오늘인 사람만 집계해서 구한다.
-async function actionGetAttendanceStats(db) {
+async function actionGetAttendanceStats(db, { accountRoot = "users" } = {}) {
   const today = todayKeyKST();
-  const snap  = await db.ref("users").get();
+  const snap  = await db.ref(accountRoot).get();
   const data  = snap.val() || {};
 
   let claimedCount   = 0;
@@ -835,16 +841,18 @@ async function actionApplyCrewPrefixRemove(db, { crewName, stockIds }) {
 // ── 통계 요약 ────────────────────────────────────────────────
 // 관리자 페이지 곳곳에 흩어져 있는 통계(출석 보상, 구매 매출, 유저 현황,
 // 손익 랭킹 게시 건수)를 한 화면에서 확인할 수 있도록 모아서 반환한다.
-async function actionGetOverviewStats(db) {
+async function actionGetOverviewStats(db, { sharedDatabase = db, accountRoot = "users" } = {}) {
   const [
     attendance,
     usersSnap,
+    identitySnap,
     bannerSnap, chartBannerSnap, cardBannerSnap, pinSnap, relaySnap, playTimeSnap,
     profitSnap,
     lotterySnap, lotteryPoolSnap,
   ] = await Promise.all([
-    actionGetAttendanceStats(db),
-    db.ref("users").get(),
+    actionGetAttendanceStats(db, { accountRoot }),
+    db.ref(accountRoot).get(),
+    sharedDatabase.ref("users").get(),
     db.ref("bannerRequests").get(),
     db.ref("chartBannerRequests").get(),
     db.ref("cardBannerRequests").get(),
@@ -894,7 +902,11 @@ async function actionGetOverviewStats(db) {
   };
 
   const usersData = usersSnap.val() || {};
-  const userList  = Object.values(usersData);
+  const identities = identitySnap.val() || {};
+  const userList  = Object.entries(usersData).map(([uid, account]) => ({
+    ...account,
+    ...(identities[uid] || {}),
+  }));
   const users = {
     totalUsers: userList.length,
     protectedUsers: userList.filter((u) => isUserProtected(u)).length,
@@ -929,16 +941,23 @@ async function actionGetOverviewStats(db) {
 // ── 유저 상세 조회 및 수동 조치 ──────────────────────────────
 // 개별 거래는 로그로 남기지 않으므로(체결가/잔고만 갱신), 보여줄 수 있는 건
 // 현재 보유 스냅샷과 손익 누적치까지다.
-async function actionGetUserDetail(db, { uid }) {
+async function actionGetUserDetail(db, { uid }, {
+  sharedDatabase = db,
+  accountPathForUid = (targetUid) => `users/${targetUid}`,
+} = {}) {
   if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
-  const snap = await db.ref(`users/${uid}`).get();
-  if (!snap.exists()) throw new HttpsError("not-found", "해당 uid의 유저를 찾을 수 없습니다.");
-  const user = snap.val();
+  const [accountSnap, identitySnap] = await Promise.all([
+    db.ref(accountPathForUid(uid)).get(),
+    sharedDatabase.ref(`users/${uid}`).get(),
+  ]);
+  if (!accountSnap.exists() && !identitySnap.exists()) throw new HttpsError("not-found", "해당 uid의 유저를 찾을 수 없습니다.");
+  const user = accountSnap.val() || {};
+  const identity = identitySnap.val() || {};
 
   // 20번 2단계 — 공유 bannedAccounts/{uid} 원장에서 이 저장소(stockMarket) 관점의
   // 정지 상태를 같이 내려준다(StreamBet-Market의 adminLookupUser가 banned를
   // 반환하는 것과 동일한 형태 - admin-center가 두 게임 모두 같은 방식으로 표시).
-  const banSnap = await db.ref(`bannedAccounts/${uid}`).get();
+  const banSnap = await sharedDatabase.ref(`bannedAccounts/${uid}`).get();
   const banData = banSnap.val();
   let banned = null;
   if (banData) {
@@ -965,9 +984,9 @@ async function actionGetUserDetail(db, { uid }) {
     ok: true,
     uid,
     cash: user.cash ?? INITIAL_CASH,
-    kakaoLinked: !!user.kakaoLinked,
-    googleLinked: !!user.googleLinked,
-    streamerVerified: !!user.streamerVerified,
+    kakaoLinked: !!identity.kakaoLinked,
+    googleLinked: !!identity.googleLinked,
+    streamerVerified: !!identity.streamerVerified,
     realizedPL: user.realizedPL || 0,
     lastTradeTime: user.lastTradeTime || null,
     lastAttendanceDate: user.lastAttendanceDate || null,
@@ -979,7 +998,7 @@ async function actionGetUserDetail(db, { uid }) {
 }
 
 /** amount는 양수(지급)/음수(차감) 모두 가능. 조정 사유와 함께 adminCashAdjustments에 기록해 감사 추적을 남긴다. */
-async function actionAdjustUserCash(db, { uid, amount, reason }) {
+async function actionAdjustUserCash(db, { uid, amount, reason }, { accountPathForUid } = {}) {
   if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
   const delta = Math.round(Number(amount));
   if (!Number.isFinite(delta) || delta === 0) {
@@ -987,9 +1006,9 @@ async function actionAdjustUserCash(db, { uid, amount, reason }) {
   }
 
   if (delta > 0) {
-    await creditUserCash(db, uid, delta);
+    await creditUserCash(db, uid, delta, { accountPath: accountPathForUid ? accountPathForUid(uid) : `users/${uid}` });
   } else {
-    await chargeUserCash(db, uid, -delta, { allowNegative: true });
+    await chargeUserCash(db, uid, -delta, { allowNegative: true, accountPath: accountPathForUid ? accountPathForUid(uid) : `users/${uid}` });
   }
 
   const ref = db.ref("adminCashAdjustments").push();
@@ -1009,9 +1028,11 @@ async function actionResetUserProfitRanking(db, { uid }) {
   return { ok: true };
 }
 
-async function actionDeleteUser(db, { uid }) {
+async function actionDeleteUser(db, { uid }, { accountPathForUid } = {}) {
   if (!uid) throw new HttpsError("invalid-argument", "uid가 필요합니다.");
-  await db.ref(`users/${uid}`).remove();
+  // 전용 시장 DB 전환 뒤 삭제는 시장 계정만 지운다. 공유 로그인·인증 레코드를
+  // 지우면 다른 스트리머 시리즈 서비스까지 로그아웃되는 사고가 생긴다.
+  await db.ref(accountPathForUid ? accountPathForUid(uid) : `users/${uid}`).remove();
   return { ok: true };
 }
 
@@ -1067,21 +1088,56 @@ function summarizeAuditPayload(payload) {
  * 클라이언트는 { action, payload }만 전달하고, 실제 stocks/users/rankings/
  * chartBanner 쓰기·users 읽기는 전부 여기서 Admin SDK로 처리한다.
  */
+// 이 묶음은 공유 신원·지갑을 읽지 않고 주식시장 데이터만 다룬다. 전용 DB가
+// primary가 된 뒤에도 관리자 가격/종목 도구가 이전 DB를 수정하지 않게 한다.
+const MARKET_ONLY_ADMIN_ACTIONS = new Set([
+  "updateSinglePrice", "updateStockData", "adjustAllPrices", "resetAllPrices",
+  "uploadStocks", "deleteStocks", "cleanupDuplicateStocks",
+  "listActiveBanners", "updateBanner", "deleteBanner",
+  "listListingRequests", "approveListingRequest", "rejectListingRequest",
+  "listPinRequests", "listActivePins", "approvePinRequest", "rejectPinRequest", "deletePin",
+  "listRelayRoomRequests", "listActiveRelayRooms", "approveRelayRoomRequest", "rejectRelayRoomRequest", "deleteRelayRoom",
+  "listBannerRequests", "approveBannerRequest", "rejectBannerRequest",
+  "listChartBannerRequests", "approveChartBannerRequest", "rejectChartBannerRequest",
+  "listCardBannerRequests", "approveCardBannerRequest", "rejectCardBannerRequest",
+  "listUnfreezeDonationRequests", "approveUnfreezeDonationRequest", "rejectUnfreezeDonationRequest",
+  "previewRankings", "saveRankings", "previewInactiveUsers", "cleanupInactiveUsers",
+  "listProfitRankings", "getAttendanceStats",
+  "getUserDetail", "adjustUserCash", "resetUserProfitRanking", "deleteUser",
+  "getOverviewStats",
+  "getPendingSummary", "listPurchaseHistory", "listLotteryTripleSevenLog",
+  "previewCrewPrefixMatch", "applyCrewPrefix", "previewCrewPrefixRemove", "applyCrewPrefixRemove",
+  "getCrewSheetSyncStatus", "saveCrewSheetSyncSettings", "previewCrewSheetSync", "applyCrewSheetSyncPreview",
+  "listFrozenStocks", "forceUnfreezeStock", "listDelistedStocks",
+  "createStockSimSession", "listStockSimSessions", "updateStockSimSession",
+  "endStockSimSession", "runStockSimTrade",
+]);
+
 const adminAction = onCall({ cors: true, timeoutSeconds: 120, memory: "256MiB" }, async (request) => {
-  const db = admin.database();
-  await requireAdmin(db, request.auth);
+  const sharedDatabase = admin.database();
+  await requireAdmin(sharedDatabase, request.auth);
 
   const action  = String(request.data?.action || "");
   const payload = request.data?.payload || {};
+  const marketContext = MARKET_ONLY_ADMIN_ACTIONS.has(action)
+    ? await getMarketDatabaseContext({ sharedDatabase })
+    : null;
+  const db = marketContext?.db || sharedDatabase;
 
-  const result = await dispatchAdminAction(db, action, payload, request.auth);
+  const result = await dispatchAdminAction(db, action, payload, request.auth, { marketContext });
   if (AUDIT_LOGGED_ACTIONS.has(action)) {
-    await logAdminAction(db, request.auth, action, summarizeAuditPayload(payload));
+    // 감사 로그는 다른 시리즈 관리자 기능과 같은 공유 DB에 일관되게 보관한다.
+    await logAdminAction(sharedDatabase, request.auth, action, summarizeAuditPayload(payload));
   }
   return result;
 });
 
-async function dispatchAdminAction(db, action, payload, auth) {
+async function dispatchAdminAction(db, action, payload, auth, { marketContext = null } = {}) {
+  const marketAccountOptions = {
+    accountRoot: marketContext?.mode === "stock" ? "stockMarket/accounts" : "users",
+    accountPathForUid: marketContext?.accountPath,
+    sharedDatabase: marketContext?.sharedDb || db,
+  };
   switch (action) {
     case "updateSinglePrice":      return actionUpdateSinglePrice(db, payload);
     case "updateStockData":        return actionUpdateStockData(db, payload);
@@ -1101,22 +1157,24 @@ async function dispatchAdminAction(db, action, payload, auth) {
     case "rejectTreasureChestRequest":  return actionRejectTreasureChestRequest(db, payload);
     case "listPinRequests":    return actionListPinRequests(db);
     case "listActivePins":     return actionListActivePins(db);
-    case "approvePinRequest":  return actionApprovePinRequest(db, payload);
-    case "rejectPinRequest":   return actionRejectPinRequest(db, payload);
+    case "approvePinRequest":  return actionApprovePinRequest(db, payload, { accountPathForUid: marketContext?.accountPath });
+    case "rejectPinRequest":   return actionRejectPinRequest(db, payload, { sharedDatabase: marketContext?.sharedDb || db });
     case "deletePin":          return actionDeletePin(db, payload);
     case "listRelayRoomRequests":    return actionListRelayRoomRequests(db);
     case "listActiveRelayRooms":     return actionListActiveRelayRooms(db);
-    case "approveRelayRoomRequest":  return actionApproveRelayRoomRequest(db, payload);
-    case "rejectRelayRoomRequest":   return actionRejectRelayRoomRequest(db, payload);
+    case "approveRelayRoomRequest":  return actionApproveRelayRoomRequest(db, payload, { accountPathForUid: marketContext?.accountPath });
+    case "rejectRelayRoomRequest":   return actionRejectRelayRoomRequest(db, payload, { sharedDatabase: marketContext?.sharedDb || db });
     case "deleteRelayRoom":          return actionDeleteRelayRoom(db, payload);
     case "listUnfreezeDonationRequests":   return actionListUnfreezeDonationRequests(db);
-    case "approveUnfreezeDonationRequest": return actionApproveUnfreezeDonationRequest(db, payload);
+    case "approveUnfreezeDonationRequest": return actionApproveUnfreezeDonationRequest(db, payload, { accountPathForUid: marketContext?.accountPath });
     case "rejectUnfreezeDonationRequest":  return actionRejectUnfreezeDonationRequest(db, payload);
     case "listFrozenStocks":               return actionListFrozenStocks(db);
     case "forceUnfreezeStock":             return actionForceUnfreezeStock(db, payload);
     case "listDelistedStocks":             return actionListDelistedStocks(db);
     case "listListingRequests":    return actionListListingRequests(db);
-    case "approveListingRequest":  return actionApproveListingRequest(db, payload);
+    case "approveListingRequest":  return actionApproveListingRequest(db, payload, {
+      accountPathForUid: marketContext?.accountPath,
+    });
     case "rejectListingRequest":   return actionRejectListingRequest(db, payload);
     case "listStreamerVerificationRequests":    return actionListStreamerVerificationRequests(db);
     case "listVerifiedStreamers":                return actionListVerifiedStreamers(db);
@@ -1124,24 +1182,24 @@ async function dispatchAdminAction(db, action, payload, auth) {
     case "confirmStreamerVerificationByNote":   return actionConfirmStreamerVerificationByNote(db, payload, auth);
     case "rejectStreamerVerification":           return actionRejectStreamerVerification(db, payload, auth);
     case "revokeStreamerVerification":           return actionRevokeStreamerVerification(db, payload, auth);
-    case "previewRankings":        return actionPreviewRankings(db);
-    case "saveRankings":           return actionSaveRankings(db);
-    case "previewInactiveUsers":   return actionPreviewInactiveUsers(db);
-    case "cleanupInactiveUsers":   return actionCleanupInactiveUsers(db);
+    case "previewRankings":        return actionPreviewRankings(db, marketAccountOptions);
+    case "saveRankings":           return actionSaveRankings(db, marketAccountOptions);
+    case "previewInactiveUsers":   return actionPreviewInactiveUsers(db, marketAccountOptions);
+    case "cleanupInactiveUsers":   return actionCleanupInactiveUsers(db, marketAccountOptions);
     case "listBannerRequests":     return actionListBannerRequests(db);
-    case "approveBannerRequest":   return actionApproveBannerRequest(db, payload);
-    case "rejectBannerRequest":    return actionRejectBannerRequest(db, payload);
+    case "approveBannerRequest":   return actionApproveBannerRequest(db, payload, { accountPathForUid: marketContext?.accountPath });
+    case "rejectBannerRequest":    return actionRejectBannerRequest(db, payload, { sharedDatabase: marketContext?.sharedDb || db });
     case "listChartBannerRequests":   return actionListChartBannerRequests(db);
-    case "approveChartBannerRequest": return actionApproveChartBannerRequest(db, payload);
-    case "rejectChartBannerRequest":  return actionRejectChartBannerRequest(db, payload);
+    case "approveChartBannerRequest": return actionApproveChartBannerRequest(db, payload, { accountPathForUid: marketContext?.accountPath });
+    case "rejectChartBannerRequest":  return actionRejectChartBannerRequest(db, payload, { sharedDatabase: marketContext?.sharedDb || db });
     case "listCardBannerRequests":    return actionListCardBannerRequests(db);
-    case "approveCardBannerRequest":  return actionApproveCardBannerRequest(db, payload);
-    case "rejectCardBannerRequest":   return actionRejectCardBannerRequest(db, payload);
+    case "approveCardBannerRequest":  return actionApproveCardBannerRequest(db, payload, { accountPathForUid: marketContext?.accountPath });
+    case "rejectCardBannerRequest":   return actionRejectCardBannerRequest(db, payload, { sharedDatabase: marketContext?.sharedDb || db });
     case "setMaintenanceMode":     return actionSetMaintenanceMode(db, payload);
     case "listProfitRankings":     return actionListProfitRankings(db);
     case "listPurchaseHistory":    return actionListPurchaseHistory(db);
     case "listLotteryTripleSevenLog": return actionListLotteryTripleSevenLog(db);
-    case "getPendingSummary":      return actionGetPendingSummary(db);
+    case "getPendingSummary":      return actionGetPendingSummary(db, marketAccountOptions);
     case "previewAnonTopUp":       return actionPreviewAnonTopUp(db);
     case "applyAnonTopUp":         return actionApplyAnonTopUp(db);
     case "previewCrewPrefixMatch":  return actionPreviewCrewPrefixMatch(db, payload);
@@ -1152,16 +1210,16 @@ async function dispatchAdminAction(db, action, payload, auth) {
     case "saveCrewSheetSyncSettings": return actionSaveCrewSheetSyncSettings(db, payload);
     case "previewCrewSheetSync": return actionPreviewCrewSheetSync(db, auth);
     case "applyCrewSheetSyncPreview": return actionApplyCrewSheetSyncPreview(db, payload, auth);
-    case "getUserDetail":          return actionGetUserDetail(db, payload);
-    case "adjustUserCash":         return actionAdjustUserCash(db, payload);
+    case "getUserDetail":          return actionGetUserDetail(db, payload, marketAccountOptions);
+    case "adjustUserCash":         return actionAdjustUserCash(db, payload, marketAccountOptions);
     case "resetUserProfitRanking": return actionResetUserProfitRanking(db, payload);
-    case "deleteUser":             return actionDeleteUser(db, payload);
+    case "deleteUser":             return actionDeleteUser(db, payload, marketAccountOptions);
     case "listBannedAccounts":     return actionListBannedAccounts(db);
     case "banAccount":             return actionBanAccount(db, payload, auth);
     case "unbanAccount":           return actionUnbanAccount(db, payload);
     case "setAnnouncement":        return actionSetAnnouncement(db, payload);
-    case "getAttendanceStats":     return actionGetAttendanceStats(db);
-    case "getOverviewStats":       return actionGetOverviewStats(db);
+    case "getAttendanceStats":     return actionGetAttendanceStats(db, marketAccountOptions);
+    case "getOverviewStats":       return actionGetOverviewStats(db, marketAccountOptions);
     case "createStockSimSession":  return actionCreateStockSimSession(db, payload);
     case "listStockSimSessions":   return actionListStockSimSessions(db);
     case "updateStockSimSession":  return actionUpdateStockSimSession(db, payload);
@@ -1175,9 +1233,13 @@ async function dispatchAdminAction(db, action, payload, auth) {
 
 // 통합 관리 센터 전용 전체 통계 조회. 관리자만 사용할 수 있다.
 const getOverviewStatsForMonitoring = onCall(async (request) => {
-  const db = admin.database();
-  await requireAdmin(db, request.auth);
-  return actionGetOverviewStats(db);
+  const sharedDatabase = admin.database();
+  await requireAdmin(sharedDatabase, request.auth);
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  return actionGetOverviewStats(marketContext.db, {
+    sharedDatabase,
+    accountRoot: marketContext.mode === "stock" ? "stockMarket/accounts" : "users",
+  });
 });
 
 module.exports = { adminAction, getOverviewStatsForMonitoring };

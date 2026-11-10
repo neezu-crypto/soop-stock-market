@@ -10,6 +10,7 @@ const {
   assertNotBanned
 } = require("./common");
 const { isCashPromotionRequest, reserveCashPromotion, rejectCashPromotionRequest, isRequestActionable, commitCashPromotionApproval } = require("./promotionCash");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 중계방 홍보 — 현재 스트리머 주식시장을 플레이 중인 스트리머를 소개하는
@@ -35,10 +36,12 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db = admin.database();
-  await requireLinkedUser(db, auth.uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  const sharedDatabase = admin.database();
+  await requireLinkedUser(sharedDatabase, auth.uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const marketDatabase = marketContext.db;
 
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
   const hours      = parseInt(request.data?.hours, 10);
@@ -58,13 +61,14 @@ const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: 
     stationLink,
     hours,
   };
-  return reserveCashPromotion(db, {
+  return reserveCashPromotion(marketDatabase, {
     uid: auth.uid,
     product: "relayRoom",
     units: hours,
     requestId: request.data?.requestId,
     requestData,
     requestPath: "relayRoomRequests",
+    sharedDatabase,
   });
 });
 
@@ -90,7 +94,7 @@ async function actionListActiveRelayRooms(db) {
   return { ok: true, rooms, maxRooms: MAX_RELAY_ROOMS };
 }
 
-async function actionApproveRelayRoomRequest(db, { requestId, hours, nickname }) {
+async function actionApproveRelayRoomRequest(db, { requestId, hours, nickname }, { accountPathForUid } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`relayRoomRequests/${requestId}`).get();
@@ -143,12 +147,16 @@ async function actionApproveRelayRoomRequest(db, { requestId, hours, nickname })
   };
   const approval = await commitCashPromotionApproval(db, "relayRoomRequests", requestId, reqData, updates);
   if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, endAt: approval.request?.approvedEndAt || endAt };
-  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
+  if (reqData.requesterUid) {
+    await grantAchievement(db, reqData.requesterUid, "first_support", {
+      accountPath: accountPathForUid ? accountPathForUid(reqData.requesterUid) : `users/${reqData.requesterUid}`,
+    });
+  }
 
   return { ok: true, endAt };
 }
 
-async function actionRejectRelayRoomRequest(db, { requestId }) {
+async function actionRejectRelayRoomRequest(db, { requestId }, { sharedDatabase = db } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`relayRoomRequests/${requestId}`).get();
@@ -157,7 +165,7 @@ async function actionRejectRelayRoomRequest(db, { requestId }) {
   if (isCashPromotionRequest(reqData) && reqData.status === "rejected") {
     return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundCash: reqData.refundCash || 0 };
   }
-  return rejectCashPromotionRequest(db, "relayRoomRequests", requestId, reqData);
+  return rejectCashPromotionRequest(db, "relayRoomRequests", requestId, reqData, Date.now(), { sharedDatabase });
 }
 
 /** 관리자가 중계방을 만료 전에 직접 종료한다. */

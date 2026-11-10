@@ -17,6 +17,7 @@ const {
   grantAchievement,
   assertNotBanned
 } = require("./common");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 종목 거래 동결(서킷브레이커) — 동결 판정 자체는 functions/trade.js에서
@@ -69,10 +70,13 @@ const unfreezeWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db = admin.database();
-  await requireLinkedUser(db, auth.uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  const sharedDatabase = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const db = marketContext.db;
+  const accountPath = marketContext.accountPath(auth.uid);
+  await requireLinkedUser(sharedDatabase, auth.uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
 
   const stockId = String(request.data?.stockId || "").trim();
   if (!stockId) throw new HttpsError("invalid-argument", "stockId가 필요합니다.");
@@ -82,8 +86,8 @@ const unfreezeWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   const stock = stockSnap.val();
   assertUnfreezable(stock, auth.uid);
 
-  await chargeUserCash(db, auth.uid, UNFREEZE_CASH_COST);
-  await creditUserCash(db, auth.uid, UNFREEZE_CASH_REWARD);
+  await chargeUserCash(db, auth.uid, UNFREEZE_CASH_COST, { accountPath });
+  await creditUserCash(db, auth.uid, UNFREEZE_CASH_REWARD, { accountPath });
 
   await db.ref().update({
     [`stocks/${stockId}/price`]:            STOCK_UNFREEZE_PRICE,
@@ -95,7 +99,7 @@ const unfreezeWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   await announceUnfreeze(db, {
     stockId, stockName: stock.name || stockId, method: "cash", rewardAmount: UNFREEZE_CASH_REWARD,
   });
-  await grantAchievement(db, auth.uid, "unfreeze_hero");
+  await grantAchievement(db, auth.uid, "unfreeze_hero", { accountPath });
 
   return { ok: true, rewardAmount: UNFREEZE_CASH_REWARD };
 });
@@ -109,10 +113,12 @@ const submitUnfreezeDonationRequest = onCall({ cors: true, timeoutSeconds: 30, m
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db = admin.database();
-  await requireLinkedUser(db, auth.uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  const sharedDatabase = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const db = marketContext.db;
+  await requireLinkedUser(sharedDatabase, auth.uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
 
   const stockId  = String(request.data?.stockId || "").trim();
   const nickname = String(request.data?.nickname || "").trim();
@@ -153,7 +159,7 @@ async function actionListUnfreezeDonationRequests(db) {
   return { ok: true, requests };
 }
 
-async function actionApproveUnfreezeDonationRequest(db, { requestId }) {
+async function actionApproveUnfreezeDonationRequest(db, { requestId }, { accountPathForUid } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`unfreezeDonationRequests/${requestId}`).get();
@@ -168,8 +174,9 @@ async function actionApproveUnfreezeDonationRequest(db, { requestId }) {
   const stock = stockSnap.val();
   assertUnfreezable(stock, reqData.requesterUid);
 
-  await creditUserCash(db, reqData.requesterUid, UNFREEZE_DONATION_REWARD);
-  await grantAchievement(db, reqData.requesterUid, "unfreeze_hero");
+  const accountPath = accountPathForUid ? accountPathForUid(reqData.requesterUid) : `users/${reqData.requesterUid}`;
+  await creditUserCash(db, reqData.requesterUid, UNFREEZE_DONATION_REWARD, { accountPath });
+  await grantAchievement(db, reqData.requesterUid, "unfreeze_hero", { accountPath });
 
   await db.ref().update({
     [`stocks/${reqData.stockId}/price`]:            STOCK_UNFREEZE_PRICE,
@@ -242,13 +249,13 @@ async function actionForceUnfreezeStock(db, { stockId }) {
  * 정리한다. 삭제 직전 스냅샷(stock)을 delistedStocksLog에 남겨, 완전히
  * 사라지는 stocks/{id}와 달리 관리자 페이지에서 이력을 조회할 수 있게 한다.
  */
-async function delistStock(db, stockId, stock) {
-  const usersSnap = await db.ref("users").get();
+async function delistStock(db, stockId, stock, accountRoot = "users") {
+  const usersSnap = await db.ref(accountRoot).get();
   const usersData = usersSnap.val() || {};
   const updates = {};
   Object.entries(usersData).forEach(([uid, user]) => {
     if (user?.stocks?.[stockId]) {
-      updates[`users/${uid}/stocks/${stockId}`] = null; // 보유 주식 전액 소멸(환급 없음)
+      updates[`${accountRoot}/${uid}/stocks/${stockId}`] = null; // 보유 주식 전액 소멸(환급 없음)
     }
   });
   updates[`stocks/${stockId}`]       = null;
@@ -274,7 +281,9 @@ async function delistStock(db, stockId, stock) {
  * 신뢰할 수 없다).
  */
 const checkFrozenStockDelistings = onSchedule("every 10 minutes", async () => {
-  const db = admin.database();
+  const sharedDatabase = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const { db } = marketContext;
   const snap = await db.ref("stocks").get();
   const data = snap.val() || {};
   const now = Date.now();
@@ -283,7 +292,7 @@ const checkFrozenStockDelistings = onSchedule("every 10 minutes", async () => {
     .filter(([, s]) => s.frozenAt && s.freezeDeadline && s.freezeDeadline <= now);
 
   for (const [stockId, stock] of toDelist) {
-    await delistStock(db, stockId, stock);
+    await delistStock(db, stockId, stock, marketContext.mode === "stock" ? "stockMarket/accounts" : "users");
   }
 });
 

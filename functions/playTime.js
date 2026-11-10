@@ -17,6 +17,7 @@ const {
   isUserProtected,
   assertNotBanned
 } = require("./common");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 플레이타임 제한 — 서버 이용 비용 절감을 위해 하루 무료 이용 시간을 두고,
@@ -33,11 +34,18 @@ const {
 // ══════════════════════════════════════════════════════════
 
 /** 유저의 현재 일일 이용 한도/사용량/남은 시간을 계산한다 (하트비트 갱신 없이 조회만). */
-async function getQuotaState(db, uid, auth) {
-  if (await checkIsAdmin(db, uid, auth.token?.email)) return { unlimited: true };
+async function getQuotaState(sharedDatabase, uid, auth, suppliedMarketContext = null) {
+  if (await checkIsAdmin(sharedDatabase, uid, auth.token?.email)) return { unlimited: true };
 
-  const user = (await db.ref(`users/${uid}`).get()).val() || {};
-  if (isUserProtected(user)) return { unlimited: true };
+  // 보호 상태(연결 로그인·스트리머 인증)는 공유 계정이 기준이다. 시장 계정은
+  // 전용 DB 전환 뒤 잔액·보유종목·플레이시간 상태만 보관한다.
+  const [identitySnap, marketContext] = await Promise.all([
+    sharedDatabase.ref(`users/${uid}`).get(),
+    suppliedMarketContext || getMarketDatabaseContext({ sharedDatabase }),
+  ]);
+  if (isUserProtected(identitySnap.val() || {})) return { unlimited: true };
+
+  const user = (await marketContext.accountRef(uid).get()).val() || {};
 
   const today = todayKeyKST();
   const isNewDay = user.playQuotaDate !== today;
@@ -59,9 +67,9 @@ async function getQuotaState(db, uid, auth) {
  * 활동을 유발하는 모든 액션이 이 함수를 직접 호출해 스스로 시계를
  * 진행시키므로, heartbeat를 아예 호출하지 않아도 우회할 수 없다.
  */
-async function touchHeartbeat(db, uid) {
+async function touchHeartbeat(marketDatabase, uid, { accountPath = `users/${uid}` } = {}) {
   const now      = Date.now();
-  const userRef  = db.ref(`users/${uid}`);
+  const userRef  = marketDatabase.ref(accountPath);
   const trueUser = (await userRef.get()).val();
 
   const userTx = await userRef.transaction((currentUser) => {
@@ -87,7 +95,7 @@ async function touchHeartbeat(db, uid) {
   // 매 하트비트(20초 간격)마다 무거운 계산이 반복되지 않는다.
   if (userTx.committed && userTx.snapshot.exists()) {
     try {
-      await recordDailyAssetSnapshot(db, uid, userTx.snapshot.val());
+      await recordDailyAssetSnapshot(marketDatabase, uid, userTx.snapshot.val(), { accountPath });
     } catch (e) {
       // 다음 하트비트 때 재시도됨
     }
@@ -102,15 +110,19 @@ async function touchHeartbeat(db, uid) {
  * 판정한다 — 그래야 heartbeat 호출 없이 이 함수만 반복 호출해도 우회가
  * 안 된다(트랜잭션 자체가 시계 역할을 겸함).
  */
-async function checkPlayQuota(db, uid, auth) {
-  if (await checkIsAdmin(db, uid, auth.token?.email)) return;
+async function checkPlayQuota(sharedDatabase, uid, auth, suppliedMarketContext = null) {
+  if (await checkIsAdmin(sharedDatabase, uid, auth.token?.email)) return;
 
-  const userTx = await touchHeartbeat(db, uid);
+  const [identitySnap, marketContext] = await Promise.all([
+    sharedDatabase.ref(`users/${uid}`).get(),
+    suppliedMarketContext || getMarketDatabaseContext({ sharedDatabase }),
+  ]);
+  if (isUserProtected(identitySnap.val() || {})) return;
+
+  const userTx = await touchHeartbeat(marketContext.db, uid, { accountPath: marketContext.accountPath(uid) });
   if (!userTx.committed || !userTx.snapshot.exists()) return; // 아직 유저 데이터가 없는 극초반 — initializeUser가 곧 처리
 
   const updated = userTx.snapshot.val();
-  if (isUserProtected(updated)) return; // 계정 보호 유저는 이용시간 무제한
-
   const remainingSeconds = Math.max(
     0,
     ANON_DAILY_SECONDS + (updated.bonusSecondsToday || 0) - (updated.playSecondsUsedToday || 0)
@@ -134,31 +146,35 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db = admin.database();
+  const sharedDatabase = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const marketDatabase = marketContext.db;
+  const accountPath = marketContext.accountPath(auth.uid);
 
-  if (await checkIsAdmin(db, auth.uid, auth.token?.email)) {
+  if (await checkIsAdmin(sharedDatabase, auth.uid, auth.token?.email)) {
     // 관리자는 이용시간 무제한이라 touchHeartbeat를 타지 않지만, 자산 변동
     // 그래프 기능은 관리자 계정으로도 확인해볼 수 있게 스냅샷만 별도로 남긴다.
     try {
-      const adminUser = (await db.ref(`users/${auth.uid}`).get()).val();
-      if (adminUser) await recordDailyAssetSnapshot(db, auth.uid, adminUser);
+      const adminUser = (await marketContext.accountRef(auth.uid).get()).val();
+      if (adminUser) await recordDailyAssetSnapshot(marketDatabase, auth.uid, adminUser, { accountPath });
     } catch (e) {
       // best-effort
     }
     return { ok: true, unlimited: true, allowed: true };
   }
 
-  const userTx = await touchHeartbeat(db, auth.uid);
+  const identity = (await sharedDatabase.ref(`users/${auth.uid}`).get()).val() || {};
+  if (isUserProtected(identity)) {
+    return { ok: true, unlimited: true, allowed: true };
+  }
+
+  const userTx = await touchHeartbeat(marketDatabase, auth.uid, { accountPath });
 
   if (!userTx.committed || !userTx.snapshot.exists()) {
     return { ok: true, unlimited: false, allowed: true, remainingSeconds: ANON_DAILY_SECONDS };
   }
 
   const updated = userTx.snapshot.val();
-  if (isUserProtected(updated)) {
-    return { ok: true, unlimited: true, allowed: true };
-  }
-
   const baseLimitSeconds = ANON_DAILY_SECONDS;
   const remainingSeconds = Math.max(
     0,
@@ -183,14 +199,21 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db   = admin.database();
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  const sharedDatabase = admin.database();
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
   const uid  = auth.uid;
-  const isAdmin = await checkIsAdmin(db, uid, auth.token?.email);
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const marketDatabase = marketContext.db;
+  const accountPath = marketContext.accountPath(uid);
+  const isAdmin = await checkIsAdmin(sharedDatabase, uid, auth.token?.email);
   const today = todayKeyKST();
-  const user = (await db.ref(`users/${uid}`).get()).val() || { cash: 0, stocks: {} };
-  const isProtected = isUserProtected(user);
+  const [userSnap, identitySnap] = await Promise.all([
+    marketContext.accountRef(uid).get(),
+    sharedDatabase.ref(`users/${uid}`).get(),
+  ]);
+  const user = userSnap.val() || { cash: 0, stocks: {} };
+  const isProtected = isUserProtected(identitySnap.val() || {});
 
   // 계정 보호(카카오·구글·스트리머 인증) 유저는 이용시간이 이미 무제한이라
   // 충전이 아무 효과가 없다 — 모르고 결제해 게임자산만 낭비하는 일을 막는다.
@@ -214,7 +237,7 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   const isNewDay = user.playQuotaDate !== today;
   const purchasedTodayBefore = isNewDay ? 0 : (user.purchasedHoursToday || 0);
 
-  const totalAssets = await computeTotalAssets(db, user);
+  const totalAssets = await computeTotalAssets(marketDatabase, user);
   const basePrice   = totalAssets * PLAYTIME_BASE_RATE;
 
   // 오늘 이미 구매한 시간 수(purchasedTodayBefore) 다음부터 hours개만큼 순서대로 할증 적용
@@ -228,9 +251,9 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   // 플레이타임 충전은 총자산(현금+평가금액) 기준으로 단가가 매겨지므로,
   // 구매 시점의 현금 잔액이 그보다 적을 수 있다. 이 경우에도 구매를 막지 않고
   // 그대로 차감해 마이너스 자산(미수금)이 되도록 허용한다.
-  const { resultingCash } = await chargeUserCash(db, uid, cost, { allowNegative: true });
+  const { resultingCash } = await chargeUserCash(marketDatabase, uid, cost, { allowNegative: true, accountPath });
 
-  const userRef  = db.ref(`users/${uid}`);
+  const userRef  = marketContext.accountRef(uid);
   const trueUser = (await userRef.get()).val();
   const addedSeconds = hours * 3600;
 
@@ -249,7 +272,7 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
 
   // 관리자 "구매 현황" 조회용 기록 — 지금까지는 플레이타임 구매만 어디에도
   // 남지 않아 관리자가 이력을 확인할 방법이 없었다.
-  await db.ref("playTimePurchases").push({
+  await marketDatabase.ref("playTimePurchases").push({
     uid,
     hours,
     chargedAmount: cost,
@@ -265,4 +288,4 @@ const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" },
   };
 });
 
-module.exports = { heartbeat, buyPlayTime, checkPlayQuota, getQuotaState };
+module.exports = { heartbeat, buyPlayTime, checkPlayQuota, getQuotaState, touchHeartbeat };

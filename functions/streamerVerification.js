@@ -14,6 +14,7 @@ const { logAdminAction } = require("./adminAuditLog");
 const { syncPublicVerification, removePublicVerification, publicIdFor } = require("./publicIdentity");
 const { classifyStreamerVerificationNoteNoMatch } = require("./verificationNoteDiagnostics");
 const { isStreamerStockListed } = require("./streamerStockListing");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 const VERIFY_NOTE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const VERIFY_NOTE_CODE_TTL_MS = 15 * 60 * 1000;
@@ -185,6 +186,8 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
   const db  = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase: db });
+  const marketDb = marketContext.db;
   const uid = auth.uid;
   await requireNotInMaintenance(db, auth);
   await assertNotBanned(db, auth);
@@ -244,7 +247,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
       const existing = await findExistingStreamerRecord(db, latest.nickname, latest.soopId);
       const existingRecord = existing.exists() ? Object.values(existing.val())[0] : null;
       if (!existingRecord) {
-        const stocksSnapshot = await db.ref("stocks").get();
+        const stocksSnapshot = await marketDb.ref("stocks").get();
         if (isStreamerStockListed(stocksSnapshot.val(), latest.nickname)) {
           return autoApproveReviewedStreamer(db, latest.id, latest);
         }
@@ -346,7 +349,7 @@ const requestStreamerVerification = onCall({ cors: true, timeoutSeconds: 30, mem
   // 일반 대기 신청으로 접수되어 관리자 수동 검수가 가능하다.
   let autoApproved = false;
   if (reviewedSnap.exists() && reviewedSnap.val().nickname === nickname && !isSwitch && !existingEntry) {
-    const stocksSnapshot = await db.ref("stocks").get();
+    const stocksSnapshot = await marketDb.ref("stocks").get();
     autoApproved = isStreamerStockListed(stocksSnapshot.val(), nickname);
   }
   const ref = db.ref("streamerVerificationRequests").push();
@@ -458,7 +461,7 @@ async function actionConfirmStreamerVerificationByNote(db, { senderId, code, not
         return { ok: false, reason: "switch-sender-does-not-match-existing-account" };
       }
     }
-    const stocksSnapshot = await db.ref("stocks").get();
+    const stocksSnapshot = await marketDb.ref("stocks").get();
     if (!isStreamerStockListed(stocksSnapshot.val(), current.nickname)) {
       await releaseRequestClaim();
       await claimRef.remove();

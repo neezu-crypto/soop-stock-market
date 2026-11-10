@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { requireLinkedUser, requireNotInMaintenance, findStockIdByName, grantAchievement, assertNotBanned } = require("./common");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 종목 상장 신청 — 검색해도 없는 스트리머를 유저가 직접 상장 요청할 수
@@ -56,10 +57,15 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db = admin.database();
-  await requireLinkedUser(db, auth.uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  // 계정 보호·점검·정지·신청 쿨다운은 공유 DB가 원장이다. 반면 상장
+  // 대기열과 종목 중복 검사는 시장 DB를 사용한다. 이 둘을 하나의 db로
+  // 취급하면 전환 뒤 인증 경로를 전용 DB에서 찾는 문제가 생긴다.
+  const sharedDatabase = admin.database();
+  await requireLinkedUser(sharedDatabase, auth.uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const marketDatabase = marketContext.db;
 
   const now = Date.now();
   const stockName = String(request.data?.stockName || "").trim();
@@ -71,7 +77,7 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   // 매크로/도배성 연속 신청을 막기 위한 쿨다운 — 트랜잭션으로 검사와 갱신을
   // 원자적으로 처리해 동시에 여러 번 호출해도 하나만 통과한다.
   let tooSoon = false;
-  await db.ref(`users/${auth.uid}/lastListingRequestAt`).transaction((last) => {
+  await sharedDatabase.ref(`users/${auth.uid}/lastListingRequestAt`).transaction((last) => {
     if (last && now - last < LISTING_REQUEST_COOLDOWN_MS) {
       tooSoon = true;
       return; // abort, 값 유지
@@ -83,7 +89,7 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     if (tooSoon) {
       return { ok: true, status: "rejected", autoRejected: true, message: SUPPRESSED_LISTING_REASON };
     }
-    const ref = db.ref("listingRequests").push();
+    const ref = marketDatabase.ref("listingRequests").push();
     await ref.set({
       stockName,
       status: "rejected",
@@ -101,12 +107,12 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     throw new HttpsError("resource-exhausted", "상장 신청이 너무 빠릅니다. 1분 후 다시 시도해주세요.");
   }
 
-  const existingId = await findExistingListingStock(db, stockName);
+  const existingId = await findExistingListingStock(marketDatabase, stockName);
   if (existingId) {
     throw new HttpsError("already-exists", "이미 상장된 종목이거나 같은 스트리머의 다른 표기입니다.");
   }
 
-  const snap = await db.ref("listingRequests").get();
+  const snap = await marketDatabase.ref("listingRequests").get();
   const data = snap.val() || {};
   const normalizedName = normalizeListingName(stockName);
   const alreadyRequested = Object.values(data).some(
@@ -119,7 +125,7 @@ const submitListingRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     throw new HttpsError("already-exists", "이미 같은 종목의 상장 신청이 대기 중입니다.");
   }
 
-  const ref = db.ref("listingRequests").push();
+  const ref = marketDatabase.ref("listingRequests").push();
   await ref.set({
     stockName,
     status:       "pending",
@@ -145,7 +151,7 @@ async function actionListListingRequests(db) {
  * 다른 셀프 상장 경로인 actionUploadStocks와 동일한 초깃값). 관리자가 오타 등을
  * 발견하면 승인 시 stockName을 고쳐서 넘길 수 있다.
  */
-async function actionApproveListingRequest(db, { requestId, stockName }) {
+async function actionApproveListingRequest(db, { requestId, stockName }, { accountPathForUid } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`listingRequests/${requestId}`).get();
@@ -183,7 +189,11 @@ async function actionApproveListingRequest(db, { requestId, stockName }) {
     [`listingRequests/${requestId}/reviewedAt`]:  Date.now(),
     [`listingRequests/${requestId}/stockId`]:     newStockId,
   });
-  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "listing_approved");
+  if (reqData.requesterUid) {
+    await grantAchievement(db, reqData.requesterUid, "listing_approved", {
+      accountPath: accountPathForUid ? accountPathForUid(reqData.requesterUid) : `users/${reqData.requesterUid}`,
+    });
+  }
 
   return { ok: true, stockId: newStockId };
 }

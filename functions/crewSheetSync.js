@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 const {
   parseCrewRosterCsv,
   parseCrewSheetLinkMap,
@@ -521,7 +522,10 @@ async function actionApplyCrewSheetSyncPreview(db, payload, auth) {
 }
 
 const syncCrewRosterFromSheet = onSchedule({ schedule: "every 15 minutes", timeZone: "Asia/Seoul", timeoutSeconds: 120, memory: "512MiB" }, async () => {
-  const db = admin.database();
+  // 크루 동기화의 설정·미리보기·종목명 변경은 시장 전용 상태다. 스케줄러도
+  // 전환 phase를 확인해야 기본 DB의 옛 stocks를 계속 갱신하지 않는다.
+  const sharedDatabase = admin.database();
+  const { db } = await getMarketDatabaseContext({ sharedDatabase });
   const release = await acquireLock(db);
   try {
     const [settingsSnap, stateSnap, statusSnap, identityCacheSnap] = await Promise.all([

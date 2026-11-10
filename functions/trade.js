@@ -14,6 +14,7 @@ const {
   updateVolumeRanking
 } = require("./common");
 const { checkPlayQuota } = require("./playTime");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ── 매매 파라미터 (기존 클라이언트 로직과 동일) ──────────────
 const IMPACT_PER_QTY      = 0.001;  // 수량당 시장 충격
@@ -146,8 +147,9 @@ const initializeUser = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB"
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db      = admin.database();
-  const userRef = db.ref(`users/${auth.uid}`);
+  const sharedDatabase = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const userRef = marketContext.accountRef(auth.uid);
 
   // trade()와 동일한 이유로 진짜 값을 먼저 읽어둔다 — 트랜잭션 콜백의
   // currentUser가 캐시 미스로 null이 들어와도 "신규 유저"로 오판해 기존
@@ -186,21 +188,24 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
     throw new HttpsError("invalid-argument", "수량이 올바르지 않습니다.");
   }
 
-  const db = admin.database();
+  const sharedDatabase = admin.database();
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const db = marketContext.db;
+  const accountPath = marketContext.accountPath(uid);
   const messengerDb = messengerDatabase();
   const roomId = String(request.data?.messengerRoomId || "").trim();
   const roomTrade = roomId
-    ? await assertMessengerRoomTradeAccess(db, messengerDb, auth, roomId, stockId, request.data?.showNickname)
+    ? await assertMessengerRoomTradeAccess(sharedDatabase, messengerDb, auth, roomId, stockId, request.data?.showNickname)
     : null;
   if (!roomId && request.data?.showNickname === true) {
     throw new HttpsError("invalid-argument", "공개 닉네임은 메신저 거래에서만 설정할 수 있습니다.");
   }
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
-  await checkPlayQuota(db, uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
+  await checkPlayQuota(sharedDatabase, uid, auth, marketContext);
 
   const stockRef = db.ref(`stocks/${stockId}`);
-  const userRef  = db.ref(`users/${uid}`);
+  const userRef  = marketContext.accountRef(uid);
   const impact   = IMPACT_PER_QTY * qty;
 
   // 0) 사전 검증 (쿨다운 · 매도 보유량 — 가격과 무관하게 판정 가능한 것만)
@@ -432,10 +437,10 @@ const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async
 
   // 5) 도전과제 판정 (best-effort — 실패해도 매매 결과에는 영향 없음)
   try {
-    await grantAchievement(db, uid, "first_trade");
+    await grantAchievement(db, uid, "first_trade", { accountPath });
     const tradeCount = finalUser.tradeCount || 0;
-    if (tradeCount >= 10) await grantAchievement(db, uid, "trade_10");
-    if (tradeCount >= 50) await grantAchievement(db, uid, "trade_50");
+    if (tradeCount >= 10) await grantAchievement(db, uid, "trade_10", { accountPath });
+    if (tradeCount >= 50) await grantAchievement(db, uid, "trade_50", { accountPath });
   } catch (e) {
     // 도전과제 지급 실패는 무시 (다음 거래 때 재시도됨)
   }

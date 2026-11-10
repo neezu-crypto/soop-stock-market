@@ -17,6 +17,7 @@ const {
   isRequestActionable,
   commitCashPromotionApproval,
 } = require("./promotionCash");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 홍보 배너 신청 (우측 랭킹 배너) — 신청은 카카오 연동(또는 관리자) 유저만,
@@ -71,10 +72,12 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
 
   throw new HttpsError("failed-precondition", "우측 홍보 배너 신규 신청은 종료되었습니다.");
 
-  const db = admin.database();
-  await requireLinkedUser(db, auth.uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  const sharedDatabase = admin.database();
+  await requireLinkedUser(sharedDatabase, auth.uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const db = marketContext.db;
 
   const nickname   = String(request.data?.nickname || "").trim();
   const streamerId = String(request.data?.streamerId || "").trim().toLowerCase();
@@ -112,6 +115,7 @@ const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "25
     requestId: request.data?.requestId,
     requestData,
     requestPath: "bannerRequests",
+    sharedDatabase,
   });
 });
 
@@ -125,7 +129,7 @@ async function actionListBannerRequests(db) {
   return { ok: true, requests };
 }
 
-async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
+async function actionApproveBannerRequest(db, { requestId, days, nickname }, { accountPathForUid } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`bannerRequests/${requestId}`).get();
@@ -183,12 +187,16 @@ async function actionApproveBannerRequest(db, { requestId, days, nickname }) {
   };
   const approval = await commitCashPromotionApproval(db, "bannerRequests", requestId, reqData, updates);
   if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, endDate: approval.request?.approvedEndDate || endDateStr };
-  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
+  if (reqData.requesterUid) {
+    await grantAchievement(db, reqData.requesterUid, "first_support", {
+      accountPath: accountPathForUid ? accountPathForUid(reqData.requesterUid) : `users/${reqData.requesterUid}`,
+    });
+  }
 
   return { ok: true, endDate: endDateStr };
 }
 
-async function actionRejectBannerRequest(db, { requestId }) {
+async function actionRejectBannerRequest(db, { requestId }, { sharedDatabase = db } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`bannerRequests/${requestId}`).get();
@@ -197,7 +205,7 @@ async function actionRejectBannerRequest(db, { requestId }) {
   if (isCashPromotionRequest(reqData) && reqData.status === "rejected") {
     return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundCash: reqData.refundCash || 0 };
   }
-  return rejectCashPromotionRequest(db, "bannerRequests", requestId, reqData);
+  return rejectCashPromotionRequest(db, "bannerRequests", requestId, reqData, Date.now(), { sharedDatabase });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -220,10 +228,12 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db = admin.database();
-  await requireLinkedUser(db, auth.uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  const sharedDatabase = admin.database();
+  await requireLinkedUser(sharedDatabase, auth.uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const db = marketContext.db;
 
   const stockId    = String(request.data?.stockId || "").trim();
   const nickname   = String(request.data?.nickname || "").trim();
@@ -281,6 +291,7 @@ const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory
     requestId: request.data?.requestId,
     requestData,
     requestPath: "chartBannerRequests",
+    sharedDatabase,
   }).then((result) => ({ ...result, stockId }));
 });
 
@@ -299,7 +310,7 @@ async function actionListChartBannerRequests(db) {
  * days(관리자가 검수하며 고칠 수 있음)로 노출 기간을 계산해 slot(chartBanner
  * /{stockId})과 이미지를 한 번에 확정한다.
  */
-async function actionApproveChartBannerRequest(db, { requestId, days, nickname, bannerImg, promoLink }) {
+async function actionApproveChartBannerRequest(db, { requestId, days, nickname, bannerImg, promoLink }, { accountPathForUid } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`chartBannerRequests/${requestId}`).get();
@@ -359,12 +370,16 @@ async function actionApproveChartBannerRequest(db, { requestId, days, nickname, 
   };
   const approval = await commitCashPromotionApproval(db, "chartBannerRequests", requestId, reqData, updates);
   if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, stockId: targetId, endDate: approval.request?.approvedEndDate || endDateStr };
-  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
+  if (reqData.requesterUid) {
+    await grantAchievement(db, reqData.requesterUid, "first_support", {
+      accountPath: accountPathForUid ? accountPathForUid(reqData.requesterUid) : `users/${reqData.requesterUid}`,
+    });
+  }
 
   return { ok: true, stockId: targetId, endDate: endDateStr };
 }
 
-async function actionRejectChartBannerRequest(db, { requestId }) {
+async function actionRejectChartBannerRequest(db, { requestId }, { sharedDatabase = db } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`chartBannerRequests/${requestId}`).get();
@@ -373,7 +388,7 @@ async function actionRejectChartBannerRequest(db, { requestId }) {
   if (isCashPromotionRequest(reqData) && reqData.status === "rejected") {
     return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundCash: reqData.refundCash || 0 };
   }
-  return rejectCashPromotionRequest(db, "chartBannerRequests", requestId, reqData);
+  return rejectCashPromotionRequest(db, "chartBannerRequests", requestId, reqData, Date.now(), { sharedDatabase });
 }
 
 module.exports = {

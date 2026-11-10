@@ -10,6 +10,7 @@ const {
   grantAchievement,
   assertNotBanned
 } = require("./common");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 출석 보상 — 1~7일차 순으로 지급되는 "출석부" 방식(연속 스트릭이 아니라
@@ -23,17 +24,20 @@ const claimDailyAttendance = onCall({ cors: true, timeoutSeconds: 30, memory: "2
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db  = admin.database();
+  const sharedDatabase = admin.database();
   const uid = auth.uid;
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const marketDatabase = marketContext.db;
+  const accountPath = marketContext.accountPath(uid);
 
-  await requireLinkedUser(db, uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  await requireLinkedUser(sharedDatabase, uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
 
   const today     = todayKeyKST();
   const yesterday = todayKeyKST(-1);
 
-  const userRef  = db.ref(`users/${uid}`);
+  const userRef  = marketContext.accountRef(uid);
   const trueUser = (await userRef.get()).val();
 
   // 체크와 갱신을 트랜잭션 하나로 묶어, 동시에 두 번 눌러도(더블클릭 등)
@@ -64,13 +68,13 @@ const claimDailyAttendance = onCall({ cors: true, timeoutSeconds: 30, memory: "2
     throw new HttpsError("already-exists", "오늘 출석 보상은 이미 받았습니다.");
   }
 
-  const isAdmin = await checkIsAdmin(db, uid, auth.token?.email);
+  const isAdmin = await checkIsAdmin(sharedDatabase, uid, auth.token?.email);
   const doubled = isAdmin;
   const reward = doubled ? claimed.reward * 2 : claimed.reward;
 
-  await creditUserCash(db, uid, reward);
+  await creditUserCash(marketDatabase, uid, reward, { accountPath });
   if (claimed.streak === DAILY_ATTENDANCE_REWARDS.length) {
-    await grantAchievement(db, uid, "attendance_streak");
+    await grantAchievement(marketDatabase, uid, "attendance_streak", { accountPath });
   }
   return { ok: true, streak: claimed.streak, reward, doubled, adminOnly: true };
 });

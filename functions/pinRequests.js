@@ -10,6 +10,7 @@ const {
   assertNotBanned
 } = require("./common");
 const { isCashPromotionRequest, reserveCashPromotion, rejectCashPromotionRequest, isRequestActionable, commitCashPromotionApproval } = require("./promotionCash");
+const { getMarketDatabaseContext } = require("./marketDatabases");
 
 // ══════════════════════════════════════════════════════════
 // 최상단 고정 노출 신청 — 종목 리스트 최상위에 최대 3개까지 고정 노출
@@ -31,10 +32,12 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
-  const db = admin.database();
-  await requireLinkedUser(db, auth.uid, auth);
-  await requireNotInMaintenance(db, auth);
-  await assertNotBanned(db, auth);
+  const sharedDatabase = admin.database();
+  await requireLinkedUser(sharedDatabase, auth.uid, auth);
+  await requireNotInMaintenance(sharedDatabase, auth);
+  await assertNotBanned(sharedDatabase, auth);
+  const marketContext = await getMarketDatabaseContext({ sharedDatabase });
+  const marketDatabase = marketContext.db;
 
   const stockName = String(request.data?.stockName || "").trim();
   const hours     = parseInt(request.data?.hours, 10);
@@ -45,7 +48,7 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
   }
 
   // 고정 노출은 이미 상장된 종목만 가능 — 오타로 새 종목이 생기지 않도록 미리 확인.
-  if (!(await findStockIdByName(db, stockName))) {
+  if (!(await findStockIdByName(marketDatabase, stockName))) {
     throw new HttpsError("not-found", "해당 종목명을 찾을 수 없습니다. 정확한 종목명을 입력해주세요.");
   }
 
@@ -53,13 +56,14 @@ const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
     stockName,
     hours,
   };
-  return reserveCashPromotion(db, {
+  return reserveCashPromotion(marketDatabase, {
     uid: auth.uid,
     product: "pin",
     units: hours,
     requestId: request.data?.requestId,
     requestData,
     requestPath: "pinRequests",
+    sharedDatabase,
   });
 });
 
@@ -85,7 +89,7 @@ async function actionListActivePins(db) {
   return { ok: true, pins, maxSlots: MAX_PINNED_SLOTS };
 }
 
-async function actionApprovePinRequest(db, { requestId, hours, stockName }) {
+async function actionApprovePinRequest(db, { requestId, hours, stockName }, { accountPathForUid } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`pinRequests/${requestId}`).get();
@@ -142,12 +146,16 @@ async function actionApprovePinRequest(db, { requestId, hours, stockName }) {
   };
   const approval = await commitCashPromotionApproval(db, "pinRequests", requestId, reqData, updates);
   if (approval.alreadyProcessed) return { ok: true, alreadyProcessed: true, pinnedUntil: approval.request?.approvedPinnedUntil || pinnedUntil };
-  if (reqData.requesterUid) await grantAchievement(db, reqData.requesterUid, "first_support");
+  if (reqData.requesterUid) {
+    await grantAchievement(db, reqData.requesterUid, "first_support", {
+      accountPath: accountPathForUid ? accountPathForUid(reqData.requesterUid) : `users/${reqData.requesterUid}`,
+    });
+  }
 
   return { ok: true, pinnedUntil };
 }
 
-async function actionRejectPinRequest(db, { requestId }) {
+async function actionRejectPinRequest(db, { requestId }, { sharedDatabase = db } = {}) {
   if (!requestId) throw new HttpsError("invalid-argument", "requestId가 필요합니다.");
 
   const reqSnap = await db.ref(`pinRequests/${requestId}`).get();
@@ -156,7 +164,7 @@ async function actionRejectPinRequest(db, { requestId }) {
   if (isCashPromotionRequest(reqData) && reqData.status === "rejected") {
     return { ok: true, alreadyProcessed: true, refundStatus: reqData.refundStatus, refundCash: reqData.refundCash || 0 };
   }
-  return rejectCashPromotionRequest(db, "pinRequests", requestId, reqData);
+  return rejectCashPromotionRequest(db, "pinRequests", requestId, reqData, Date.now(), { sharedDatabase });
 }
 
 /** 관리자가 고정 노출을 만료 전에 직접 해제해 슬롯을 비운다. */
