@@ -434,12 +434,19 @@
         .lottery-history-skeleton { height: 64px; border-radius: 10px; background: rgba(168,85,247,0.08); animation: lottery-skeleton 1.2s ease-in-out infinite; }
         @keyframes lottery-skeleton { 50% { opacity: 0.4; } }
         .lottery-history-empty { padding: 28px 12px; font-size: 13px; line-height: 1.6; color: var(--text-sub); text-align: center; }
-        .lottery-history-retry, .lottery-history-more {
+        .lottery-history-retry {
             margin-top: 10px; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid rgba(168,85,247,0.4);
             background: transparent; color: #c084fc; font-weight: 800; font-size: 13px; cursor: pointer;
         }
-        .lottery-history-more { width: 100%; }
-        .lottery-history-more:disabled { opacity: 0.6; cursor: default; }
+        /* 더 보기는 닫기 버튼과 헷갈리지 않도록 버튼 모양 없는 글자 링크로 둔다 */
+        .lottery-history-more {
+            display: block; margin: 8px auto 14px; min-height: 44px; padding: 0 12px;
+            background: none; border: none; color: #c084fc; font-size: 13px; font-weight: 700;
+            text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+        }
+        .lottery-history-more:hover { color: #d8b4fe; }
+        .lottery-history-more:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
+        .lottery-history-more[hidden] { display: none; }
         .lottery-win-toast {
             position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 100000;
             display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px);
