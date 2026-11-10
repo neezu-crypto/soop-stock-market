@@ -805,6 +805,8 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
             host.append(empty);
             return;
         }
+        // 모달의 다른 버튼과 같은 모양을 쓰되, 환불 동작임이 드러나도록 붉은 테두리로 구분한다.
+        const CHEST_CANCEL_BUTTON_STYLE = 'margin:8px 6px 0 0;padding:8px 12px;border-radius:8px;border:1px solid rgba(248,113,113,.6);background:rgba(248,113,113,.12);color:#fecaca;font-size:12px;font-weight:700;cursor:pointer;';
         purchases.forEach((purchase) => {
             const row = document.createElement('article');
             row.style.cssText = 'padding:9px 0;border-top:1px solid rgba(148,163,184,.2);font-size:12px;';
@@ -827,7 +829,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.textContent = `묶음 ${index + 1} 취소 (11개 · 330캐시)`;
-                button.style.cssText = 'margin:6px 5px 0 0;padding:5px 8px;';
+                button.style.cssText = CHEST_CANCEL_BUTTON_STYLE;
                 button.addEventListener('click', () => cancelChestItem({
                     purchaseId: purchase.purchaseId,
                     cancellationId: `${purchase.purchaseId}_bundle_${index}`,
@@ -841,7 +843,7 @@ export function initPromotions({ getMyData, getAllStocks, auth, getIsAdmin, clos
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.textContent = `낱개 1개 취소 (33캐시)`;
-                button.style.cssText = 'margin:6px 5px 0 0;padding:5px 8px;';
+                button.style.cssText = CHEST_CANCEL_BUTTON_STYLE;
                 button.addEventListener('click', () => cancelChestItem({
                     purchaseId: purchase.purchaseId,
                     cancellationId: `${purchase.purchaseId}_single_${index}`,
