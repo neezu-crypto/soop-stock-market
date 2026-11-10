@@ -3233,15 +3233,23 @@ function selectStreamerVerifyCandidate(item) {
     verifyEl('selected-name').textContent = item.nickname;
     verifyEl('selected-id').textContent = ` · ${item.soopId}`;
     const avatar = verifyEl('selected-avatar');
-    avatar.hidden = !item.avatarUrl;
+    const selectedAvatarUrl = streamerVerifyAvatarUrl(item);
+    avatar.hidden = !selectedAvatarUrl;
     avatar.onerror = () => { avatar.hidden = true; };
-    if (item.avatarUrl) avatar.src = item.avatarUrl;
+    if (selectedAvatarUrl) avatar.src = selectedAvatarUrl;
     verifyEl('search-step').hidden = true;
     verifyEl('manual').hidden = true;
     verifyEl('selected').hidden = false;
     clearStreamerVerifyResults();
     updateStreamerVerifySubmitState();
     verifyEl('submit').focus({ preventScroll: true });
+}
+const STREAMER_VERIFY_AVATAR_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><circle cx="18" cy="18" r="18" fill="#475569"/><circle cx="18" cy="14" r="6" fill="#cbd5e1"/><path d="M6 32c2-7 8-9 12-9s10 2 12 9z" fill="#cbd5e1"/></svg>');
+// 서버가 avatarUrl을 비워 보내도 SOOP 프로필 이미지 규칙으로 미리보기를 만든다.
+function streamerVerifyAvatarUrl(item) {
+    if (item.avatarUrl) return item.avatarUrl;
+    const id = String(item.soopId || '').toLowerCase();
+    return /^[a-z0-9]{2,20}$/.test(id) ? `https://stimg.sooplive.com/LOGO/${id.slice(0, 2)}/${id}/${id}.jpg` : '';
 }
 function renderStreamerVerifyResults(streamers) {
     const list = verifyEl('results');
@@ -3250,10 +3258,20 @@ function renderStreamerVerifyResults(streamers) {
         row.setAttribute('role', 'option');
         const button = document.createElement('button');
         button.type = 'button';
-        button.style.cssText = 'display:flex;width:100%;min-height:44px;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border:1px solid #334155;border-radius:9px;background:rgba(255,255,255,0.05);color:#f8fafc;font-size:13px;font-weight:600;text-align:left;cursor:pointer;';
-        const name = document.createElement('strong'); name.textContent = item.nickname;
+        button.style.cssText = 'display:flex;width:100%;min-height:44px;align-items:center;justify-content:flex-start;gap:10px;padding:8px 12px;border:1px solid #334155;border-radius:9px;background:rgba(255,255,255,0.05);color:#f8fafc;font-size:13px;font-weight:600;text-align:left;cursor:pointer;';
+        const avatar = document.createElement('img');
+        avatar.alt = ''; avatar.width = 36; avatar.height = 36; avatar.loading = 'lazy'; avatar.referrerPolicy = 'no-referrer';
+        avatar.style.cssText = 'flex:none;width:36px;height:36px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,0.1);';
+        const avatarUrl = streamerVerifyAvatarUrl(item);
+        // 이미지가 없는 계정도 목록 정렬이 흐트러지지 않도록 기본 아이콘으로 대체한다.
+        avatar.onerror = () => { avatar.onerror = null; avatar.src = STREAMER_VERIFY_AVATAR_PLACEHOLDER; };
+        avatar.src = avatarUrl || STREAMER_VERIFY_AVATAR_PLACEHOLDER;
+        const text = document.createElement('span');
+        text.style.cssText = 'display:flex;flex:1;min-width:0;align-items:center;justify-content:space-between;gap:10px;';
+        const name = document.createElement('strong'); name.textContent = item.nickname; name.style.cssText = 'min-width:0;overflow-wrap:anywhere;';
         const id = document.createElement('span'); id.textContent = item.soopId; id.style.cssText = 'flex:none;font-size:12px;font-weight:500;opacity:.7;';
-        button.append(name, id);
+        text.append(name, id);
+        button.append(avatar, text);
         button.addEventListener('click', () => selectStreamerVerifyCandidate(item));
         row.append(button);
         return row;
