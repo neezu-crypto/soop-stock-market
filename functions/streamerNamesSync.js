@@ -3,6 +3,7 @@ const { getDatabase } = require("firebase-admin/database");
 const { stockDb } = require("./marketDatabases");
 
 const DEDICATED_STOCK_DATABASE_INSTANCE = "soop-stock-market-rtdb";
+const SHARED_STOCK_DATABASE_INSTANCE = "soop-stock-market-default-rtdb";
 
 function publicStockFrom(stock) {
   if (!stock || typeof stock !== "object") return null;
@@ -40,9 +41,10 @@ async function syncStockPublicProjection(event, {
   return { stockId, nameChanged: true };
 }
 
-// 기존 공유 기본 DB에서의 투영을 유지한다.
+// 기존 공유 기본 DB에서의 투영을 유지한다. instance를 지정하지 않으면 '*'로 배포되어
+// 전용 DB의 변경도 이 함수가 받아 기본 DB의 stocksPublic을 다시 쓰므로 인스턴스를 고정한다.
 const syncStreamerNameOnStockChange = onValueWritten(
-  "/stocks/{stockId}",
+  { ref: "/stocks/{stockId}", instance: SHARED_STOCK_DATABASE_INSTANCE },
   async (event) => syncStockPublicProjection(event),
 );
 
@@ -58,6 +60,7 @@ const syncDedicatedStockPublicOnStockChange = onValueWritten(
 
 module.exports = {
   DEDICATED_STOCK_DATABASE_INSTANCE,
+  SHARED_STOCK_DATABASE_INSTANCE,
   publicStockFrom,
   syncStockPublicProjection,
   syncStreamerNameOnStockChange,
