@@ -143,7 +143,7 @@ async function maybeFreezeStock(db, stockId, triggerUid) {
  * 이미 있으면 아무 것도 하지 않는(idempotent) 안전한 동작이라 여러 번
  * 호출돼도 문제없다.
  */
-const initializeUser = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const initializeUser = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
@@ -171,7 +171,7 @@ const initializeUser = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB"
  * 전부 서버(Admin SDK)에서 처리한다 — 클라이언트가 stocks/users를 직접
  * 쓰지 못하도록 database.rules.json에서 해당 경로 쓰기 권한을 막아둔다.
  */
-const trade = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const trade = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
