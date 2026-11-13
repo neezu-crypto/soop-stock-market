@@ -100,6 +100,9 @@ function createGate() {
     #series-maintenance-gate button{margin-top:18px;border:0;border-radius:10px;padding:12px 18px;background:#4285f4;color:white;font:inherit;font-weight:700;cursor:pointer}
     #series-maintenance-gate button:disabled{opacity:.6;cursor:wait}
     #series-maintenance-gate a{display:block;margin-top:16px;color:#a8caff}
+    #series-maintenance-gate .series-maintenance-links{margin:22px 0 0;padding:16px;border:1px solid #38435a;border-radius:14px;background:#141b29}
+    #series-maintenance-gate .series-maintenance-links strong{display:block;margin-bottom:6px;color:#f4f6ff;font-size:14px}
+    #series-maintenance-gate .series-maintenance-links a{margin-top:6px;font-weight:700}
   `;
   document.head.append(style);
   gate = document.createElement('section');
@@ -107,7 +110,7 @@ function createGate() {
   gate.style.display = 'none';
   gate.setAttribute('role', 'dialog');
   gate.setAttribute('aria-modal', 'true');
-  gate.innerHTML = `<div class="series-maintenance-card"><div aria-hidden="true" style="font-size:40px">🛠️</div><h1>서비스 점검 중입니다</h1><p data-maintenance-status>점검 중입니다. 관리자는 Google 계정으로 로그인해 정상 이용할 수 있습니다.</p><button type="button" data-maintenance-login>관리자 Google 로그인</button><a href="https://www.sooplive.com/station/skftodwocks2" rel="noopener">개발자 방송국에서 공지 확인하기</a></div>`;
+  gate.innerHTML = `<div class="series-maintenance-card"><div aria-hidden="true" style="font-size:40px">🛠️</div><h1>더 나은 서비스를 위해 수정 중이에요</h1><p data-maintenance-status>더 원활한 서비스를 위해 지금 수정 작업을 하고 있어요. 이용에 불편을 드려 죄송합니다. 작업이 끝나면 다시 열어 드릴게요.</p><div class="series-maintenance-links"><strong>지금 이용할 수 있는 서비스</strong><a href="https://neezu-crypto.github.io/streamer-fanpage/" rel="noopener">스트리머 팬페이지</a><a href="https://neezu-crypto.github.io/streamer-fanpage/viewer-stats.html" rel="noopener">스트리머 고점체크</a></div><button type="button" data-maintenance-login>관리자 Google 로그인</button><a href="https://www.sooplive.com/station/skftodwocks2" rel="noopener">개발자 방송국에서 공지 확인하기</a></div>`;
   document.documentElement.append(gate);
   gate.querySelector('[data-maintenance-login]').addEventListener('click', async () => {
     render('Google 계정 로그인을 기다리고 있습니다.', false);
@@ -124,7 +127,7 @@ async function verify(user) {
   if (!user || user.isAnonymous) {
     adminUnlocked = false;
     applyState();
-    render('점검 중입니다. 관리자는 Google 계정으로 로그인해 정상 이용할 수 있습니다.');
+    render('더 원활한 서비스를 위해 지금 수정 작업을 하고 있어요. 이용에 불편을 드려 죄송합니다. 작업이 끝나면 다시 열어 드릴게요.');
     return;
   }
   render('관리자 권한을 확인하고 있습니다.', false);
