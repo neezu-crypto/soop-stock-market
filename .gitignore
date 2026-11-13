@@ -14,3 +14,5 @@ firebase-debug.log*
 database.rules.json
 functions/rules/open.json
 functions/
+CLAUDE.md
+AGENTS.md
