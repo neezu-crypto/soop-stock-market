@@ -1544,6 +1544,10 @@ const firebaseConfig = {
     appId:       "1:997788925900:web:cb613d438efec019a3a769"
 };
 const app       = initializeApp(firebaseConfig);
+// 주식시장 전용 쓰기 callable(출석·복권·보물상자·신청류)은 서버가 App Check를 강제한다(2026-11-14).
+try {
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider('6Ld0AfAtAAAAABcCio4_5AoiCdrjfM7_4riWiYXR'), isTokenAutoRefreshEnabled: true });
+} catch (error) { console.warn('App Check 초기화 실패', error); }
 // 전용 시장 DB 전환을 위한 이중 접근 계층이다. 전환이 완료되기 전까지 기존
 // 화면의 `db` 별칭은 공유 기본 DB를 가리킨다. 인증·통합 캐시·점검 상태처럼
 // 공유 데이터를 전용 DB로 잘못 읽지 않도록, 새 시장 reader는 전환 시점에만
