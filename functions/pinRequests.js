@@ -28,7 +28,7 @@ const { getMarketDatabaseContext } = require("./marketDatabases");
  * 승인(actionApprovePinRequest)한 뒤 시작한다. 과거 별풍선 방식 신청도 관리자
  * 검수 화면에서 결제 방식이 구분되도록 유지한다.
  */
-const submitPinRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const submitPinRequest = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 

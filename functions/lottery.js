@@ -35,7 +35,7 @@ function rollDigit() {
   return LOTTERY_DIGIT_MIN + Math.floor(Math.random() * (LOTTERY_DIGIT_MAX - LOTTERY_DIGIT_MIN + 1));
 }
 
-const buyLotteryTicket = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const buyLotteryTicket = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 

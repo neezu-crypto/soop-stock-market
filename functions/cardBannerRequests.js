@@ -48,7 +48,7 @@ function computeCardBannerEndDate(existingStock, days) {
   return endDate.toISOString().split("T")[0];
 }
 
-const submitCardBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const submitCardBannerRequest = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 

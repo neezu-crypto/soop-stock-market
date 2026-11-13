@@ -195,7 +195,7 @@ const heartbeat = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, a
  * 단가는 총자산 기준이라 매 구매마다 새로 계산하고, 같은 날 이미 구매한
  * 횟수만큼 할증률이 누적된다.
  */
-const buyPlayTime = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const buyPlayTime = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 

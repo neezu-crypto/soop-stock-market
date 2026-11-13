@@ -32,7 +32,7 @@ function buildRelayPreview(streamerId) {
  * 아이디만 받는다. 등록은 관리자가 검수해 승인(actionApproveRelayRoomRequest)한
  * 뒤 시작한다.
  */
-const submitRelayRoomRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const submitRelayRoomRequest = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 

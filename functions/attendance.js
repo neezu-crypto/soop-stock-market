@@ -20,7 +20,7 @@ const { getMarketDatabaseContext } = require("./marketDatabases");
 // 파밍하는 어뷰징이 바로 생긴다.
 // ══════════════════════════════════════════════════════════
 
-const claimDailyAttendance = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const claimDailyAttendance = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 

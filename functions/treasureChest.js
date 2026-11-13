@@ -159,7 +159,7 @@ const getAdminTreasureChestState = onCall({ cors: true, timeoutSeconds: 30, memo
   };
 });
 
-const purchaseTreasureChestsWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const purchaseTreasureChestsWithCash = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const { sharedDatabase, marketDatabase, marketContext } = await getChestContext();
   const uid = await requireChestUser(sharedDatabase, request);
   const requestId = safeRequestId(request.data?.requestId, "구매 요청 번호");
@@ -318,7 +318,7 @@ const purchaseTreasureChestsWithCash = onCall({ cors: true, timeoutSeconds: 30, 
   }
 });
 
-const cancelTreasureChestCashPurchase = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const cancelTreasureChestCashPurchase = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const { sharedDatabase, marketDatabase, marketContext } = await getChestContext();
   const uid = await requireChestUser(sharedDatabase, request);
   const purchaseId = safeRequestId(request.data?.purchaseId, "구매 번호");
@@ -561,7 +561,7 @@ async function consumeOldestChest(db, uid, accountPath = `users/${uid}`) {
 }
 
 /** 계정 보호 로그인 이용자가 본인 보물상자만 개봉한다. */
-const openTreasureChest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const openTreasureChest = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const { sharedDatabase, marketDatabase, marketContext } = await getChestContext();
   const uid = await requireChestUser(sharedDatabase, request);
   await requireNotInMaintenance(sharedDatabase, request.auth);

@@ -66,7 +66,7 @@ async function findActiveChartBanner(db, now = Date.now()) {
  * 종목명"이어야 한다 — 신청 시점에 기존 상장 종목인지 미리 확인해 없으면
  * 상장 신청을 먼저 하도록 안내한다.
  */
-const submitBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const submitBannerRequest = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
@@ -224,7 +224,7 @@ async function actionRejectBannerRequest(db, { requestId }, { sharedDatabase = d
  * actionApproveChartBannerRequest에서 승인해야 시작한다. 과거 별풍선 방식의
  * 대기 신청은 관리자 검수 화면에서 결제 방식이 구분되도록 유지한다.
  */
-const submitChartBannerRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const submitChartBannerRequest = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 

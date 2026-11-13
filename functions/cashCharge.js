@@ -12,7 +12,7 @@ const { STREAMER_ID_RE, creditUserCash, requireLinkedUser, requireNotInMaintenan
  * 남기고, 실제 지급은 관리자가 방송에서 후원을 직접 확인한 뒤
  * actionApproveCashChargeRequest에서 지급액을 입력해 처리한다.
  */
-const submitCashChargeRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const submitCashChargeRequest = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 

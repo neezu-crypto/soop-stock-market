@@ -67,7 +67,7 @@ async function announceUnfreeze(db, { stockId, stockName, method, rewardAmount }
  * 100만원을 내고 200만원을 돌려받는 구조라 순이익은 있지만, 쿨다운과
  * "유발자 본인 불가" 제약 때문에 자기펌핑→자기해제 차익거래는 막혀 있다.
  */
-const unfreezeWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const unfreezeWithCash = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
@@ -110,7 +110,7 @@ const unfreezeWithCash = onCall({ cors: true, timeoutSeconds: 30, memory: "256Mi
  * 신청. 신청 시점엔 아무것도 차감/지급하지 않는다(실제 후원이 방송에서
  * 별도로 확인돼야 하므로 cashCharge와 동일한 패턴).
  */
-const submitUnfreezeDonationRequest = onCall({ cors: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+const submitUnfreezeDonationRequest = onCall({ cors: true, enforceAppCheck: true, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
 
