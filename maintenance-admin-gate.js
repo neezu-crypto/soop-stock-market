@@ -75,9 +75,32 @@ function applyState() {
   if (gate) gate.style.display = pauseKnown ? 'grid' : 'none';
 }
 
+// RTDB App Check 강제에 대비해 점검 플래그 REST 조회에도 App Check 토큰을 붙인다.
+// 페이지의 기본 앱이 뜰 때까지 잠깐 기다리고, 실패하면 토큰 없이 조회한다(강제 전 동작과 동일).
+const GATE_APPCHECK_SITE_KEY = '6Ld0AfAtAAAAABcCio4_5AoiCdrjfM7_4riWiYXR';
+async function pauseFetchHeaders() {
+  try {
+    let app = getApps().find((item) => item.name === '[DEFAULT]');
+    for (let i = 0; !app && i < 15; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      app = getApps().find((item) => item.name === '[DEFAULT]');
+    }
+    if (!app) return {};
+    const appCheckSdk = await import('https://www.gstatic.com/firebasejs/12.16.0/firebase-app-check.js');
+    const appCheck = appCheckSdk.initializeAppCheck(app, { provider: new appCheckSdk.ReCaptchaEnterpriseProvider(GATE_APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    const result = await Promise.race([
+      appCheckSdk.getToken(appCheck, false),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500)),
+    ]);
+    return result && result.token ? { 'X-Firebase-AppCheck': result.token } : {};
+  } catch (error) {
+    return {};
+  }
+}
+
 async function readPauseFlag() {
   try {
-    const response = await fetch(`${PAUSE_FLAG_URL}?t=${Date.now()}`, { cache: 'no-store', signal: AbortSignal.timeout(PAUSE_FETCH_TIMEOUT_MS) });
+    const response = await fetch(`${PAUSE_FLAG_URL}?t=${Date.now()}`, { headers: await pauseFetchHeaders(), cache: 'no-store', signal: AbortSignal.timeout(PAUSE_FETCH_TIMEOUT_MS) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const value = await response.json();
     paused = !(value && value.active === false);
