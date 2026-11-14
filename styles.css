@@ -121,7 +121,7 @@
             display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr);
             grid-template-areas: "info chart price trade";
             align-items: center; gap: 10px; border: 1px solid #334155;
-            cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            cursor: pointer; transition: border-color 0.2026s, box-shadow 0.2s, background 0.2s;
         }
         .stock-card:hover { border-color: var(--primary); box-shadow: 0 0 12px rgba(56,189,248,0.15); background: #2a3a50; }
         .stock-card-details { display: contents; }
@@ -1016,3 +1016,4 @@
             .stock-subscription-benefits li { grid-template-columns: 1fr; gap: 2px; }
         }
         @media (max-width: 430px) { .stock-subscription-actions button { flex: 1; } }
+:root{--ss-maker:"skftod2";--ss-room:"stk"}

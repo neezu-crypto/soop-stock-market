@@ -7,18 +7,18 @@
     <title>SOOP STOCK - 거래소</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
-    <!-- 캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
+    <!--  캐시 버스팅: styles.css를 고칠 때마다 이 쿼리 버전을 함께 올려서 브라우저 캐시로 옛 스타일이 보이는 걸 방지 -->
     <link rel="stylesheet" href="styles.css?v=20261110-lottery-history2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
     <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
-    <!-- 스타일은 styles.css로 분리됨 -->
+    <!--  스타일은 styles.css로 분리됨 -->
 </head>
-<body>
+<body data-ss-series="stock-2026" data-ssroom="skftod2-stk">
 
-<!-- ── 상단 네비게이션 바 ── -->
+<!--  ── 상단 네비게이션 바 ── -->
 <nav class="topnav">
     <div class="topnav-brand">
         <span class="topnav-title">📈 SOOP STOCK</span>
@@ -197,7 +197,7 @@
     </div>
 </div>
 
-<!-- ── 오목지면시그 시그니처 오프닝 ── -->
+<!--  ── 오목지면시그 시그니처 오프닝 ── -->
 <div id="sig-opening-stage" role="button" tabindex="0" aria-label="오프닝, 클릭 시 건너뛰기">
     <div class="sig-noise"></div>
     <div class="sig-series">
@@ -220,11 +220,11 @@
     </div>
 </div>
 
-<!-- Firebase 앱 모듈보다 먼저 시그니처 오프닝을 시작한다. 오프닝은 상위
+<!--  Firebase 앱 모듈보다 먼저 시그니처 오프닝을 시작한다. 오프닝은 상위
      레이어에 표시되고, 아래 페이지 파싱과 데이터 로딩은 동시에 진행된다. -->
 <script src="js/sig-opening.js?v=20260917-sig1"></script>
 
-<!-- ── 내 보유 주식 패널 (좁은 화면에서는 좌측 슬라이드 서랍으로 전환) ── -->
+<!--  ── 내 보유 주식 패널 (좁은 화면에서는 좌측 슬라이드 서랍으로 전환) ── -->
 <button class="my-stocks-toggle-btn" onclick="openMyStocksPanel()">📊 내 보유 주식</button>
 <div id="mobile-quick-menu" class="mobile-quick-menu" aria-label="모바일 빠른 메뉴">
     <div id="mobile-quick-menu-items" class="mobile-quick-menu-items" hidden>
@@ -306,7 +306,7 @@
     </div>
 </div>
 
-<!-- ── 배너 홍보(종목 카드 프로필 배너) 신청 모달 — 누구나 열람 가능, 신청은 10주 이상 보유자만 ── -->
+<!--  ── 배너 홍보(종목 카드 프로필 배너) 신청 모달 — 누구나 열람 가능, 신청은 10주 이상 보유자만 ── -->
 <div id="card-banner-modal" class="promo-modal-overlay">
     <div class="promo-modal-content" style="max-height:calc(100dvh - 32px);overflow-y:auto;">
         <div class="promo-modal-header"><h2>📢 배너 홍보</h2></div>
@@ -416,7 +416,7 @@
 ══════════════════════════════════════════ -->
 <div id="chart-modal-overlay">
     <div class="chart-modal">
-        <!-- 헤더 -->
+        <!--  헤더 -->
         <div class="chart-modal-header">
             <div class="chart-modal-title">
                 <span class="stock-title-name" id="cm-name">-</span>
@@ -450,7 +450,7 @@
             <span>차트를 호버하면 캔들 정보가 표시됩니다</span>
         </div>
 
-        <!-- 캔들 차트 -->
+        <!--  캔들 차트 -->
         <div class="chart-canvas-wrap">
             <canvas id="candleChart"></canvas>
             <div class="chart-empty" id="chart-empty-msg" style="display:none;">
@@ -467,7 +467,7 @@
             <div id="cm-data-range">데이터: -</div>
         </div>
 
-        <!-- 동결임박 안내 (동결 전, 목표가 근접 시에만 노출) -->
+        <!--  동결임박 안내 (동결 전, 목표가 근접 시에만 노출) -->
         <div id="cm-near-freeze-banner" style="display:none;background:rgba(249,115,22,0.1);border:1px solid #f97316;border-radius:8px;padding:10px 12px;margin-bottom:10px;text-align:center;font-size:13px;color:#fdba74;">
             ⚠️ 목표가(100만원) 근접 — 이 상태가 5분간(연속 5개 1분봉) 유지되면 거래가 자동으로 동결됩니다.
         </div>
@@ -503,7 +503,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      차트 하단 배너 광고 신청 모달
 ══════════════════════════════════════════ -->
 <div id="chart-ad-modal" class="promo-modal-overlay" style="z-index:4000;">
@@ -532,7 +532,7 @@
             <p style="color:#94a3b8;font-size:13px;">2 / 2 · 신청 내용 입력</p>
         <!-- 배너 미리보기 영역 -->
         <div style="margin-bottom:16px;">
-            <!-- 사이즈 태그 -->
+            <!--  사이즈 태그 -->
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
                 <span style="background:rgba(56,189,248,0.12);color:var(--primary);font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid rgba(56,189,248,0.3);">🖼 720 × 150 px</span>
                 <span style="background:rgba(99,102,241,0.12);color:#a5b4fc;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid rgba(99,102,241,0.3);">✅ SOOP 방송국 하단 배너와 동일 사이즈</span>
@@ -584,7 +584,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      보물상자 — 계정 보호 로그인 이용자용
 ══════════════════════════════════════════ -->
 <div id="asset-charge-modal" class="promo-modal-overlay" style="z-index:4000;">
@@ -689,7 +689,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      [레거시] 자산 충전 모달 (라이브 방송 후원 → 신청 → 관리자 승인)
      보물상자 방식으로 대체되어 메인 화면에서는 더 이상 연결되지 않지만,
      관리자 페이지에 남아있을 수 있는 과거 대기 신청 처리를 위해 백엔드
@@ -699,7 +699,7 @@
     <div class="promo-modal-content" style="max-width:420px;">
         <div class="promo-modal-header"><h2>💰 자산 충전</h2></div>
 
-        <!-- 1단계: 안내 -->
+        <!--  1단계: 안내 -->
         <div id="cash-charge-step-info">
             <ul class="promo-info-list" style="margin-bottom:16px;">
                 <li>📡 <b>방법:</b> 라이브 방송 후원(별풍선)으로 게임자산 충전</li>
@@ -784,7 +784,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      순수 매매 손익 랭킹 모달 -->
 <div id="profit-ranking-modal" class="promo-modal-overlay" style="z-index:4000;">
     <div class="promo-modal-content" style="max-width:420px;">
@@ -819,7 +819,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      손익 랭킹 공유용 카드 모달 — 저장/공유 기능 없음, 화면에 예쁘게
      띄워두면 유저가 직접 스크린샷해서 공유하는 방식
 ══════════════════════════════════════════ -->
@@ -829,7 +829,7 @@
         <p style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">화면을 직접 캡처해서 원하는 곳에 공유해보세요 — 별도의 저장/공유 기능은 없어요.</p>
 
         <div id="share-card-layout" class="share-card-layout" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
-            <!-- 옵션 패널 -->
+            <!--  옵션 패널 -->
             <div id="share-card-options" style="flex:1 1 auto;min-width:200px;display:flex;flex-direction:column;gap:16px;">
                 <div>
                     <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">표시 항목</div>
@@ -960,7 +960,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      최근 7일 자산 변동 공유용 카드 — 다른 두 스크린샷 카드와 동일한 뼈대
 ══════════════════════════════════════════ -->
 <div id="asset-history-share-card-modal" class="promo-modal-overlay" style="z-index:5300;">
@@ -969,7 +969,7 @@
         <p style="font-size:12px;color:var(--text-sub);margin-bottom:16px;">화면을 직접 캡처해서 원하는 곳에 공유해보세요 — 별도의 저장/공유 기능은 없어요.</p>
 
         <div class="share-card-layout" style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
-            <!-- 옵션 패널 -->
+            <!--  옵션 패널 -->
             <div style="flex:1 1 auto;min-width:200px;display:flex;flex-direction:column;gap:16px;">
                 <div>
                     <div style="font-size:12px;color:#94a3b8;font-weight:700;margin-bottom:8px;">표시 항목</div>
@@ -1011,7 +1011,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      종목 상장 신청 모달 (검색해도 없는 스트리머를 새 종목으로 상장 요청)
 ══════════════════════════════════════════ -->
 <div id="listing-modal" class="promo-modal-overlay" style="z-index:4000;">
@@ -1046,7 +1046,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      사운드 설정 모달 (매수/매도/호버 효과음 음소거·볼륨 조절)
 ══════════════════════════════════════════ -->
 <div id="sound-settings-modal" class="promo-modal-overlay" style="z-index:4050;">
@@ -1060,7 +1060,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      플레이 시간 충전 모달 (게임머니로 자기서비스 즉시 충전)
 ══════════════════════════════════════════ -->
 <div id="playtime-modal" class="promo-modal-overlay" style="z-index:5100;">
@@ -1197,7 +1197,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      🎙️ 스트리머 인증 (카카오/구글 대체 계정 보호)
 ══════════════════════════════════════════ -->
 <style>#streamer-verify-modal [hidden]{display:none!important}#streamer-verify-modal #streamer-verify-results button:hover,#streamer-verify-modal #streamer-verify-results button:focus-visible{border-color:#38bdf8!important;outline:none;box-shadow:0 0 0 3px rgba(56,189,248,.2)}#streamer-verify-submit:disabled{opacity:.45;cursor:not-allowed}#streamer-verify-search:focus{outline:none;border-color:#38bdf8!important;box-shadow:0 0 0 3px rgba(56,189,248,.2)}</style>
@@ -1286,7 +1286,7 @@
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════
+<!--  ══════════════════════════════════════════
      종목 거래 동결 해제 모달 (서킷브레이커)
 ══════════════════════════════════════════ -->
 <div id="unfreeze-modal" class="promo-modal-overlay">
@@ -1406,7 +1406,7 @@
                 <div class="wallet-initial-note" style="font-size:12px;color:var(--text-sub);">초기 자산 1,000,000원 지급됨</div>
             </div>
         </div>
-        <!-- ── 점검모드 안내 배너 (관리자가 실시간으로 켜고 끔 — maintenance/ 구독) — 지갑 카드는
+        <!--  ── 점검모드 안내 배너 (관리자가 실시간으로 켜고 끔 — maintenance/ 구독) — 지갑 카드는
              position:sticky라 항상 화면에 보이므로, 이 배너도 스크롤과 무관하게 항상 노출된다 ── -->
         <div id="maintenance-banner"></div>
         <!-- ── 공지 배너 (관리자가 자유 문구를 켜고 끔 — announcement/ 구독, 점검모드와 별개) ── -->
@@ -1478,14 +1478,14 @@ import { initAssetHistory } from "./js/assetHistory.js";
 
 (function () {
 
-// ══════════════════════════════════════════════════════════
-// 장기 점검 (관리자 계정으로 로그인하면 점검 화면을 건너뜀)
+//  ══════════════════════════════════════════════════════════
+//  장기 점검 (관리자 계정으로 로그인하면 점검 화면을 건너뜀)
 // ══════════════════════════════════════════════════════════
 const LONG_MAINTENANCE = false;
 const ADMIN_EMAIL      = "skftodwocks2@gmail.com"; // 관리자 페이지와 동일 계정(whoAmI 폴백 참고용, UI 판별엔 더 이상 직접 쓰지 않음)
 
 // 09번/13번 — 관리자 UI 판별을 로컬 이메일 비교 대신 서버 확인(whoAmI)으로 옮긴다.
-// adminCenter/adminUids는 .read:false라 클라이언트가 직접 읽을 수 없다.
+//  adminCenter/adminUids는 .read:false라 클라이언트가 직접 읽을 수 없다.
 // isAdminUser는 auth 상태가 바뀔 때마다 refreshAdminStatus()가 갱신하는 캐시값이다.
 let isAdminUser = false;
 function updateIntegratedCashLinksVisibility() {
@@ -1511,7 +1511,7 @@ async function refreshAdminStatus(user) {
     window.dispatchEvent(new Event('stock-admin-status-change'));
 }
 
-// 테스트 기간 동안 플레이 시간 충전(유료)만 막았었다 — 2026-07-12 해제.
+//  테스트 기간 동안 플레이 시간 충전(유료)만 막았었다 — 2026-07-12 해제.
 // 서버(functions/common.js의 TEST_PERIOD_ACTIVE)와 항상 함께 바꿔야 한다.
 const TEST_PERIOD_ACTIVE = false;
 document.getElementById('test-period-chip').style.display = TEST_PERIOD_ACTIVE ? 'inline-block' : 'none';
@@ -1522,7 +1522,7 @@ window.openTestPeriodModal = function() {
 window.closeTestPeriodModal = function() {
     document.getElementById('test-period-modal')?.classList.remove('active');
 };
-// 정책 문구를 매번 반복 노출하지 않고, 최초 1회만 확정적으로 안내한다
+//  정책 문구를 매번 반복 노출하지 않고, 최초 1회만 확정적으로 안내한다
 // (계정 보호 유도 팝업과 동일한 localStorage 1회성 플래그 패턴).
 if (TEST_PERIOD_ACTIVE && !localStorage.getItem('testPeriodNoticeShown_v1')) {
     localStorage.setItem('testPeriodNoticeShown_v1', '1');
@@ -1530,12 +1530,12 @@ if (TEST_PERIOD_ACTIVE && !localStorage.getItem('testPeriodNoticeShown_v1')) {
 }
 
 // apiKey는 의도적으로 스트리머 배팅시장·스트리머 배경시장(interior-3d-viewer)·
-// 통합 관리 센터(admin-center)와 동일한 값으로 맞춰뒀다. Firebase Auth의 브라우저
+//  통합 관리 센터(admin-center)와 동일한 값으로 맞춰뒀다. Firebase Auth의 브라우저
 // 세션은 `firebase:authUser:{apiKey}:{앱이름}` 키로 IndexedDB에 저장되는데, 이
 // 앱들이 전부 같은 오리진(neezu-crypto.github.io, 경로만 다름)에서 서빙되므로
-// apiKey만 같으면 세션(uid, 인증 스트리머 여부 포함)이 자동으로 공유된다 —
-// 한 사이트에서 로그인하면 나머지 사이트도 처음 방문 시 이미 로그인된 상태로
-// 시작한다. appId는 이 공유 메커니즘과 무관해서(저장 키에 안 들어감) 그대로 둔다.
+//  apiKey만 같으면 세션(uid, 인증 스트리머 여부 포함)이 자동으로 공유된다 —
+//  한 사이트에서 로그인하면 나머지 사이트도 처음 방문 시 이미 로그인된 상태로
+//  시작한다. appId는 이 공유 메커니즘과 무관해서(저장 키에 안 들어감) 그대로 둔다.
 const firebaseConfig = {
     apiKey:      "AIzaSyAZcjQPHphENs-Bb7IfdL2qTtOMhJrRP54",
     authDomain:  "soop-stock-market.firebaseapp.com",
@@ -1549,14 +1549,14 @@ try {
     initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider('6Ld0AfAtAAAAABcCio4_5AoiCdrjfM7_4riWiYXR'), isTokenAutoRefreshEnabled: true });
 } catch (error) { console.warn('App Check 초기화 실패', error); }
 // 전용 시장 DB 전환을 위한 이중 접근 계층이다. 전환이 완료되기 전까지 기존
-// 화면의 `db` 별칭은 공유 기본 DB를 가리킨다. 인증·통합 캐시·점검 상태처럼
-// 공유 데이터를 전용 DB로 잘못 읽지 않도록, 새 시장 reader는 전환 시점에만
-// `stockDb`를 명시적으로 사용한다.
+//  화면의 `db` 별칭은 공유 기본 DB를 가리킨다. 인증·통합 캐시·점검 상태처럼
+//  공유 데이터를 전용 DB로 잘못 읽지 않도록, 새 시장 reader는 전환 시점에만
+//  `stockDb`를 명시적으로 사용한다.
 const sharedDb  = getDatabase(app);
 const stockDb   = getDatabase(app, "https://soop-stock-market-rtdb.firebaseio.com");
 const db        = sharedDb;
 // 운영 데이터 hash 대조와 서버 writer 전환이 끝난 배포에서만 true로 변경한다.
-// 이 플래그는 전용 DB가 비어 있는 준비 단계에서 공개 시세 화면이 깨지는 것을 막는다.
+//  이 플래그는 전용 DB가 비어 있는 준비 단계에서 공개 시세 화면이 깨지는 것을 막는다.
 const STOCK_MARKET_DATABASE_PRIMARY = true;
 const marketDb = STOCK_MARKET_DATABASE_PRIMARY ? stockDb : sharedDb;
 // 통합 구독 callable은 고점체크용 App Check를 강제한다. 주식시장의 기존
@@ -1570,11 +1570,11 @@ const subscriptionAppCheck = initializeAppCheck(subscriptionApp, {
     isTokenAutoRefreshEnabled: true,
 });
 
-// 08번 — topnav(devbar와 같은 역할) 게임 링크를 RTDB(devbarLinks, admin-center에서
+//  08번 — topnav(devbar와 같은 역할) 게임 링크를 RTDB(devbarLinks, admin-center에서
 // 관리)에서 가져와 하드코딩된 링크를 대체한다. 노드가 비어있거나 조회 실패 시
 // 기존 하드코딩된 data-game-id 링크를 그대로 둔다(목록이 통째로 사라지는 사고
 // 방지) — "개발자 방송국 바로가기"(topnav-station-btn)는 devbarLinks 대상이
-// 아니라 항상 하드코딩 그대로 유지된다. 아이콘은 이 페이지의 기존 스타일에
+//  아니라 항상 하드코딩 그대로 유지된다. 아이콘은 이 페이지의 기존 스타일에
 // 맞춰 로컬 매핑을 쓴다(RTDB엔 순수 텍스트 label만 저장돼 다른 페이지와 공유됨).
 (async function () {
     const SELF_GAME_ID = 'stockMarket';
@@ -1645,7 +1645,7 @@ const checkProfitRankingCallable = httpsCallable(functions, 'checkProfitRanking'
 const claimDailyAttendanceCallable = httpsCallable(functions, 'claimDailyAttendance');
 const buyLotteryTicketCallable = httpsCallable(functions, 'buyLotteryTicket');
 const requestStreamerVerificationCallable = httpsCallable(functions, 'requestStreamerVerification');
-// 팬페이지와 같은 SOOP 검색 callable을 쓴다(검색 결과 저장 없음, 로그인 필요, 계정별 분당 한도).
+//  팬페이지와 같은 SOOP 검색 callable을 쓴다(검색 결과 저장 없음, 로그인 필요, 계정별 분당 한도).
 const verifySearchCallable = httpsCallable(functions, 'streamerFanPageVerifySearch');
 const logStockMarketVisitCallable = httpsCallable(functions, 'logStockMarketVisit');
 
@@ -1685,9 +1685,9 @@ const CARD_BANNER_MIN_HOLDING_QTY = 10; // 서버 CARD_BANNER_MIN_HOLDING_QTY와
 // 점검모드 (관리자가 관리자 페이지에서 실시간으로 켜고 끔) — LONG_MAINTENANCE와
 // 달리 코드 배포 없이 즉시 반영되고, 페이지 자체는 그대로 보여준 채 거래·홍보
 // 신청 등 게임 상태를 바꾸는 활동만 막는다. maintenance/{active, startAt}를
-// 구독해 켜지는 순간부터 startAt까지는 카운트다운 안내만 띄우고, startAt이
+//  구독해 켜지는 순간부터 startAt까지는 카운트다운 안내만 띄우고, startAt이
 // 지나야 실제로 활동을 차단한다.
-// ══════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════
 let maintenanceActive = false; // true면 거래/홍보 신청 등 활동을 막는다
 let maintenanceTickIntervalId = null;
 
@@ -1742,7 +1742,7 @@ onValue(ref(db, 'announcement'), (snap) => {
     banner.style.display = 'block';
 });
 
-// 거래/홍보 신청 등 "활동" 진입점에서 공통으로 호출 — 점검 중이면 안내하고 true 반환.
+//  거래/홍보 신청 등 "활동" 진입점에서 공통으로 호출 — 점검 중이면 안내하고 true 반환.
 // 관리자 계정은 배너는 다른 유저와 동일하게 보되(renderMaintenanceState는 그대로 두고
 // 여기서만 예외), 점검 중에도 직접 확인·테스트할 수 있도록 활동 차단에서는 제외한다.
 function blockIfMaintenance() {
@@ -1768,7 +1768,7 @@ function hideMaintenanceOverlay() {
     if (overlay) overlay.style.display = 'none';
 }
 
-// 관리자 계정 로그인 여부에 따라 점검 화면 표시/스킵 결정
+//  관리자 계정 로그인 여부에 따라 점검 화면 표시/스킵 결정
 onAuthStateChanged(auth, async (user) => {
     await refreshAdminStatus(user);
     if (user && isAdminUser) {
@@ -1779,12 +1779,12 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// 로그아웃·계정 전환(합류) 등으로 auth.currentUser가 바뀌기 직전에 호출한다.
+//  로그아웃·계정 전환(합류) 등으로 auth.currentUser가 바뀌기 직전에 호출한다.
 // presence/lastSeen은 접속이 그냥 끊긴 경우 60분 유예를 두고 접속자 수에서
 // 빠지도록 일부러 즉시 지우지 않지만, 로그아웃/계정 전환은 유저의 명시적
-// 행동이므로 예전 uid의 presence를 바로 지워 카운트에 남지 않게 한다.
-// startApp() 안팎 양쪽(카카오/구글 전환, Ctrl+Enter 로그아웃)에서 모두
-// 쓰므로 최상위(모듈) 스코프에 둔다.
+//  행동이므로 예전 uid의 presence를 바로 지워 카운트에 남지 않게 한다.
+//  startApp() 안팎 양쪽(카카오/구글 전환, Ctrl+Enter 로그아웃)에서 모두
+//  쓰므로 최상위(모듈) 스코프에 둔다.
 async function clearMyPresence() {
     if (!auth.currentUser) return;
     try {
@@ -1823,7 +1823,7 @@ let marketAccountData = {};
 
 // 전환 후에는 공유 users/{uid}의 로그인·인증 정보와
 // stockMarket/accounts/{uid}의 게임자산을 이 화면 상태로만 합친다. 둘 중 하나를
-// 다른 DB에 다시 쓰지 않아 신원 데이터와 시장 원장이 섞이지 않게 한다.
+//  다른 DB에 다시 쓰지 않아 신원 데이터와 시장 원장이 섞이지 않게 한다.
 function refreshMergedUserData() {
     const account = STOCK_MARKET_DATABASE_PRIMARY ? marketAccountData : identityData;
     myData = {
@@ -1844,9 +1844,9 @@ function isMyAccountProtected() {
     return !!(myData && (myData.kakaoLinked || myData.googleLinked || myData.streamerVerified));
 }
 
-// ── 통합 구독 상태(2026-11-13 신청 기능 종료 — 상태 조회만 남겨 관리자·기존 구독자 출석 2배 표시에 쓴다) ──
+//  ── 통합 구독 상태(2026-11-13 신청 기능 종료 — 상태 조회만 남겨 관리자·기존 구독자 출석 2배 표시에 쓴다) ──
 // 구독 원장은 고점체크·갤러리와 공유한다. 출석 2배 여부는 아래 상태가 아닌
-// attendance.js에서 같은 원장을 다시 읽어 최종 판정한다.
+//  attendance.js에서 같은 원장을 다시 읽어 최종 판정한다.
 let stockSubscriptionState = {
     loaded: false,
     accountProtected: false,
@@ -1944,7 +1944,7 @@ let pinnedStockIds     = new Set(); // 최상단 고정 노출 종목 id (pinned
 let intersectingStockIds = new Set(); // 지금 스크롤 뷰포트 안에 실제로 보이는 카드의 종목 id
 let alwaysSubscribedIds  = new Set(); // 뷰포트 밖이어도 항상 구독해야 하는 종목 id(보유 중 + 고정노출)
 
-// ── 플레이타임 제한 상태 (하트비트 응답으로 갱신, 1초마다 로컬에서 카운트다운 표시) ──
+//  ── 플레이타임 제한 상태 (하트비트 응답으로 갱신, 1초마다 로컬에서 카운트다운 표시) ──
 let playtimeUnlimited      = false; // 관리자 또는 계정 보호(카카오·구글·스트리머 인증) 유저
 let playtimeRemainingSec   = null;  // 서버가 마지막으로 알려준 남은 초
 let playtimeBaseLimitSec   = null;
@@ -1956,14 +1956,14 @@ let presenceIntervalId = null;
 const PRESENCE_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // presence/lastSeen 갱신 주기(5분) — 20초 하트비트에 얹으면 쓰기가 너무 잦아 별도 주기 사용
 const PRESENCE_GRACE_MS = 60 * 60 * 1000; // 접속 끊김 후 접속자 수에서 빠지기까지 유예 시간(60분)
 
-// ── 스파크라인/등락률용 클라이언트 가격 이력 ──────────────────
+//  ── 스파크라인/등락률용 클라이언트 가격 이력 ──────────────────
 // 보유하지 않은 종목은 지금까지처럼 라이브 틱만 로컬에 누적(서버 저장 없음).
 // 보유 중인 종목만 예외적으로 서버(sparklines/{id})에 매매마다 저장돼 있어,
 // 새로고침 직후 딱 1회 그 값을 받아와 버퍼를 채운 뒤부터는 동일하게 라이브
-// 틱을 이어붙인다 — 전체 종목이 아니라 "내 보유 종목"만 대상이라 다운로드
+//  틱을 이어붙인다 — 전체 종목이 아니라 "내 보유 종목"만 대상이라 다운로드
 // 비용이 매매 건수가 아니라 세션 수 × 보유 종목 수에만 비례한다.
 // 예외: 관리자 계정은 직접 플레이(보유)를 하지 않고 다른 플레이어 관점에서
-// 전체 시세 흐름을 살펴봐야 하므로, 전체 종목을 대상으로 채운다 — 계정이
+//  전체 시세 흐름을 살펴봐야 하므로, 전체 종목을 대상으로 채운다 — 계정이
 // 하나뿐이라 세션당 다운로드량이 늘어도(최대 종목 수 × 200B 수준) 무시 가능.
 const PRICE_HISTORY_MAX = 20;
 const priceHistoryBuffer = {}; // id -> 최근 관측 가격 배열 (최대 20개)
@@ -1988,23 +1988,23 @@ async function seedSparklines(ids) {
         try {
             const snap = await get(ref(marketDb, `sparklines/${id}`));
             const arr = snap.val();
-            // 그 사이 라이브 틱으로 실제 이력(2개 이상)이 쌓였으면 서버 이력(과거)으로
+            //  그 사이 라이브 틱으로 실제 이력(2개 이상)이 쌓였으면 서버 이력(과거)으로
             // 덮어쓰지 않는다 — 최초 로드 시 recordPriceTick이 현재가 1개짜리 배열을
             // 먼저 만들어두므로, length<2는 "아직 진짜 이력이 없다"는 뜻이라 덮어써도 된다.
             if (Array.isArray(arr) && arr.length && (!priceHistoryBuffer[id] || priceHistoryBuffer[id].length < 2)) {
                 priceHistoryBuffer[id] = arr.slice(-PRICE_HISTORY_MAX);
             }
         } catch (e) {
-            // 실패해도 무시 — 이후 라이브 틱만으로 계속 그려짐
+            //  실패해도 무시 — 이후 라이브 틱만으로 계속 그려짐
         }
     }));
     return true;
 }
 
-// 관리자면 전체 종목, 아니면 보유 종목만 대상으로 스파크라인을 채운다.
+//  관리자면 전체 종목, 아니면 보유 종목만 대상으로 스파크라인을 채운다.
 // 최초 로그인 시뿐 아니라 세션 도중 신규 매수한 종목(보유자)이나 stocks/
 // 최초 로드가 이 시점 이후 끝나는 경우(관리자)에도 각 호출 지점에서 다시
-// 불려 자동으로 채워진다 — seededSparklineIds가 중복 조회를 막아준다.
+//  불려 자동으로 채워진다 — seededSparklineIds가 중복 조회를 막아준다.
 function seedSparklinesForCurrentUser(stocks) {
     const isAdmin = isAdminUser;
     const ids = isAdmin
@@ -2023,9 +2023,9 @@ function getChangePercent(id) {
 
 // (차트 모달 상태는 js/chartModal.js로 이동 — initChartModal() 내부 클로저)
 
-// ── 사운드 ──────────────────────────────────────────────────
+//  ── 사운드 ──────────────────────────────────────────────────
 // 사운드 종류별로 각자 음소거/볼륨을 따로 조절할 수 있다. 각 효과음의
-// "원래 설계 볼륨"(baseVolume)은 그대로 두고, 유저가 그 사운드에 대해
+//  "원래 설계 볼륨"(baseVolume)은 그대로 두고, 유저가 그 사운드에 대해
 // 고른 배율(0~1, 음소거 시 0)을 곱해서 최종 볼륨을 정한다.
 const SOUND_DEFS = {
     buy:   { label: '매수 체결음',      baseVolume: 0.2 },
@@ -2045,7 +2045,7 @@ let hoverPoolIdx  = 0;
 let lastHoverTime = 0;
 const HOVER_COOLDOWN_MS = 80; // 너무 빠른 연속 재생 방지
 
-// { buy: {volume:100, muted:false}, sell: {...}, hover: {...} } — localStorage에 JSON으로 저장
+//  { buy: {volume:100, muted:false}, sell: {...}, hover: {...} } — localStorage에 JSON으로 저장
 let soundSettings = Object.fromEntries(
     Object.keys(SOUND_DEFS).map((key) => [key, { volume: 100, muted: false }])
 );
@@ -2160,9 +2160,9 @@ onValue(ref(marketDb, 'rankings/top5'), (snap) => {
 });
 
 // ── pinnedStocks 구독 (최상단 고정 노출 종목 id 집합 — 상시 실시간 유지) ──
-// 종목 자체가 top100 가격순위 밖에 있어도 고정 노출은 항상 보여야 하므로,
-// 이 id 목록만 별도로 가볍게 구독해 resyncSubscriptions()의 "항상 구독"
-// 대상에 포함시킨다.
+//  종목 자체가 top100 가격순위 밖에 있어도 고정 노출은 항상 보여야 하므로,
+//  이 id 목록만 별도로 가볍게 구독해 resyncSubscriptions()의 "항상 구독"
+//  대상에 포함시킨다.
 onValue(ref(marketDb, 'pinnedStocks'), (snap) => {
     pinnedStockIds = new Set(snap.exists() ? Object.keys(snap.val()) : []);
     updateUI(true);
@@ -2170,7 +2170,7 @@ onValue(ref(marketDb, 'pinnedStocks'), (snap) => {
 
 // ── lastUnfreezeEvent 구독 (동결 해제 공지 — 닉네임 등 개인정보는 담지 않음) ──
 // 페이지를 연 시점 이후에 발생한 이벤트만 알림으로 띄운다(과거 이벤트가
-// 접속 직후 다시 뜨는 것 방지).
+//  접속 직후 다시 뜨는 것 방지).
 const pageLoadTime = Date.now();
 onValue(ref(marketDb, 'lastUnfreezeEvent'), (snap) => {
     if (!snap.exists()) return;
@@ -2180,7 +2180,7 @@ onValue(ref(marketDb, 'lastUnfreezeEvent'), (snap) => {
     alert(`🥶 "${event.stockName}" 종목의 거래 동결이 ${methodText}(으)로 해제됐습니다!\n선착순 유저에게 ${event.rewardAmount.toLocaleString()}원이 지급됐습니다.`);
 });
 
-// ── 🎟️ 복권함 구독 + 구매/긁기 ───────────────────────────────
+//  ── 🎟️ 복권함 구독 + 구매/긁기 ───────────────────────────────
 let latestLotteryPool = null;
 let currentLotteryTicket = null; // { digits, won, prizeAmount } — 구매 직후 서버가 이미 확정한 결과
 let lotteryAvailability = { loaded: false, freeAvailable: false, eligible: false, uid: '', requestStatus: '', requestSource: '' };
@@ -2258,7 +2258,7 @@ onValue(ref(marketDb, 'lottery/pool'), (snap) => {
     if (modalEl) modalEl.innerText = (latestLotteryPool || 0).toLocaleString() + '원';
 });
 
-// ── 🏆 복권 당첨 이력(공개): 회차·시각·실수령금만 저장된다 ──────────
+//  ── 🏆 복권 당첨 이력(공개): 회차·시각·실수령금만 저장된다 ──────────
 const LOTTERY_HISTORY_PAGE = 20;
 let lotteryHistoryLimit = LOTTERY_HISTORY_PAGE;
 let lotteryHistoryUnsub = null;
@@ -2365,7 +2365,7 @@ onValue(query(ref(marketDb, 'lotteryWinHistory'), orderByChild('at'), limitToLas
     lotteryLatestWin = wins[0] || null;
     renderLotteryWinChip();
     const win = lotteryLatestWin;
-    // 접속 시점 이전 당첨은 알리지 않고, 같은 회차는 한 번만 알린다.
+    //  접속 시점 이전 당첨은 알리지 않고, 같은 회차는 한 번만 알린다.
     if (!lotteryWinToastReady) { lotteryWinToastReady = true; if (win) lotteryLastToastSeq = win.seq; return; }
     if (!win || win.at <= pageLoadTime || win.seq <= lotteryLastToastSeq) return;
     lotteryLastToastSeq = win.seq;
@@ -2429,7 +2429,7 @@ window.openLotteryModal = async function() {
     try {
         await refreshLotteryAvailability();
     } catch (_) {
-        // 상태 확인에 실패하면 이 세션에서 구매 버튼을 계속 잠가 실수 결제를 막는다.
+        //  상태 확인에 실패하면 이 세션에서 구매 버튼을 계속 잠가 실수 결제를 막는다.
     }
 };
 window.closeLotteryModal = function() {
@@ -2521,7 +2521,7 @@ function renderRankingFromCache(items) {
     `).join('');
 }
 
-// ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
+//  ── 보유 주식 클릭 → 검색창 연동 ────────────────────────────
 document.getElementById('my-stocks-list').addEventListener('click', (e) => {
     const item = e.target.closest('.my-stock-item');
     if (item) {
@@ -2541,7 +2541,7 @@ window.closeMyStocksPanel = function() {
     document.querySelector('.my-stocks-backdrop')?.classList.remove('open');
 };
 
-// ── 내 보유 주식 패널 ────────────────────────────────────────
+//  ── 내 보유 주식 패널 ────────────────────────────────────────
 function renderMyPortfolio() {
     const portfolioDiv       = document.getElementById('my-stocks-list');
     const totalAssetsDisplay = document.getElementById('total-assets');
@@ -2620,7 +2620,7 @@ function updateUI(isFullRender = true) {
     // 모달은 열릴 때 스냅샷 가격을 표시하므로 실시간 갱신 없음
 }
 
-// ── 5초 로딩 타임아웃 ────────────────────────────────────────
+//  ── 5초 로딩 타임아웃 ────────────────────────────────────────
 setTimeout(() => {
     const overlay    = document.getElementById('intro-overlay');
     const statusText = document.querySelector('#login-status p');
@@ -2679,7 +2679,7 @@ onAuthStateChanged(auth, async (user) => {
     if (auth.currentUser?.uid !== user?.uid) return;
     if (user) {
         userUID = user.uid;
-        // 통합 캐시 원장 전체가 아닌 본인 balanceCash 숫자만 실시간 구독한다.
+        //  통합 캐시 원장 전체가 아닌 본인 balanceCash 숫자만 실시간 구독한다.
         // 충전 탭에서 관리자가 승인하면 열린 신청 모달의 버튼·안내가 즉시 갱신된다.
         walletBalanceUnsubscribe = onValue(ref(db, `gameSeriesWallet/accounts/${userUID}/balanceCash`), (snapshot) => {
             if (auth.currentUser?.uid !== userUID) return;
@@ -2687,7 +2687,7 @@ onAuthStateChanged(auth, async (user) => {
                 detail: { balanceCash: snapshot.val() },
             }));
         });
-        // 상태 조회가 일시적으로 늦어도 사용자가 구독 창을 열어 다시 확인할 수 있게 한다.
+        //  상태 조회가 일시적으로 늦어도 사용자가 구독 창을 열어 다시 확인할 수 있게 한다.
         updateStockSubscriptionButton();
         refreshStockSubscriptionStatus();
         const userRef  = ref(sharedDb, `users/${userUID}`);
@@ -2702,8 +2702,8 @@ onAuthStateChanged(auth, async (user) => {
         startHeartbeatLoop();
 
         try {
-            // 유저별 전용 노드에 접속 표시 — 접속이 끊겨도 즉시 지우지 않고
-            // lastSeen만 남겨서, 접속자 수 집계 시 PRESENCE_GRACE_MS(60분)
+            //  유저별 전용 노드에 접속 표시 — 접속이 끊겨도 즉시 지우지 않고
+            //  lastSeen만 남겨서, 접속자 수 집계 시 PRESENCE_GRACE_MS(60분)
             // 이내면 계속 접속자로 카운트한다(끊김 즉시 감소 방지).
             const myPresenceRef = ref(db, `presence/stockMarket/${userUID}`);
             await set(myPresenceRef, { lastSeen: Date.now() });
@@ -2749,8 +2749,8 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // 인증 스트리머 접속 알림 - onValue는 잔고 변동 등으로 여러 번 다시
-            // 불릴 수 있어서, 플래그로 페이지 로드당 한 번만 서버를 호출한다.
-            // 실제로 알림을 보낼지(하루 한 번 제한 등)는 서버가 판단한다.
+            //  불릴 수 있어서, 플래그로 페이지 로드당 한 번만 서버를 호출한다.
+            //  실제로 알림을 보낼지(하루 한 번 제한 등)는 서버가 판단한다.
             if (myData.streamerVerified && !stockVisitLogged) {
                 stockVisitLogged = true;
                 logStockMarketVisitCallable().catch(() => {});
@@ -2769,7 +2769,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// ══════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════
 // 플레이타임 제한 — 서버에 주기적으로 하트비트를 보내 이용시간을 알리고,
 // 소진되면 클라이언트가 스스로 실시간 구독을 모두 해제해 비용을 줄인다.
 // 탭이 백그라운드일 땐 하트비트/구독을 모두 멈춰 "보고 있는 시간"만 차감한다.
@@ -2847,10 +2847,10 @@ window.showPlayTimeExpired = function() {
     document.getElementById('playtime-expired-modal')?.classList.add('active');
 };
 
-// 테스트 기간에는 플레이 시간 충전(유료)을 원칙적으로 막되, 로그인(계정
-// 보호) 유저에 한해 하루 1회·1시간만 예외로 허용한다(서버가 최종 검증).
+//  테스트 기간에는 플레이 시간 충전(유료)을 원칙적으로 막되, 로그인(계정
+//  보호) 유저에 한해 하루 1회·1시간만 예외로 허용한다(서버가 최종 검증).
 // myData가 나중에 채워지므로, 이용시간 표시가 갱신될 때마다(updatePlaytimeDisplay)
-// 함께 재평가한다 — 페이지 로드 시점의 한 번짜리 체크로는 로그인 여부를 반영 못 함.
+//  함께 재평가한다 — 페이지 로드 시점의 한 번짜리 체크로는 로그인 여부를 반영 못 함.
 function isPlaytimeTestPeriodExempt() {
     return isMyAccountProtected() || isAdminUser;
 }
@@ -2869,8 +2869,8 @@ async function runHeartbeat() {
     if (isAdminUser) {
         playtimeUnlimited = true;
         updatePlaytimeDisplay();
-        // 이용시간 체크는 관리자에게 필요 없지만, 서버 heartbeat 안에 있는
-        // "최근 7일 자산 변동" 스냅샷 기록은 관리자 계정에도 필요하다.
+        //  이용시간 체크는 관리자에게 필요 없지만, 서버 heartbeat 안에 있는
+        //  "최근 7일 자산 변동" 스냅샷 기록은 관리자 계정에도 필요하다.
         // 매 20초 하트비트마다 부르면 낭비이므로(스냅샷은 서버에서 하루 1회로
         // 제한됨) 페이지 로드당 1회만 호출해 그날 기록을 남긴다.
         if (!adminSnapshotTakenThisLoad) {
@@ -2909,12 +2909,12 @@ function startHeartbeatLoop() {
     startPresenceRefreshLoop();
 }
 
-// presence/stockMarket/{uid}의 lastSeen을 주기적으로 갱신 — 탭이 보이는 동안만
+//  presence/stockMarket/{uid}의 lastSeen을 주기적으로 갱신 — 탭이 보이는 동안만
 // 돌며(백그라운드 시 하트비트와 함께 정지), 접속자 수 집계가 60분
 // 유예 안에서 "아직 접속 중"으로 인식하도록 유지한다.
 function refreshMyPresence() {
     if (!userUID) return;
-    // 접속 표시에는 lastSeen만 갱신한다.
+    //  접속 표시에는 lastSeen만 갱신한다.
     update(ref(db, `presence/stockMarket/${userUID}`), { lastSeen: Date.now() }).catch(() => {});
 }
 function startPresenceRefreshLoop() {
@@ -2950,10 +2950,10 @@ function estimateTotalAssetsClient() {
     return cash + stockValue;
 }
 
-// 2026-07-12: 한 번의 결제로 여러 시간을 몰아 사면 할증까지 겹쳐 총자산의
+//  2026-07-12: 한 번의 결제로 여러 시간을 몰아 사면 할증까지 겹쳐 총자산의
 // 100%를 훌쩍 넘는 금액이 빠져나갈 수 있어(예: 12시간 한 번에 사면 기준
 // 단가 합만 총자산의 170%), 서버가 1회 요청당 1시간으로 제한한다(MAX_
-// PLAYTIME_BUY_HOURS=1). 클라이언트도 항상 hours=1을 고정 전송한다.
+//  PLAYTIME_BUY_HOURS=1). 클라이언트도 항상 hours=1을 고정 전송한다.
 function updatePlaytimeCostEstimate() {
     const estEl = document.getElementById('playtime-cost-estimate');
     if (!estEl) return;
@@ -2999,16 +2999,16 @@ window.buyPlayTime = async function() {
     }
 };
 
-// ══════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════
 // 분봉 차트 모달 — 별도 모듈(js/chartModal.js)로 분리 (읽기 전용 의존성만
 // 있어 안전하게 분리 가능한 범위였음). getAllStocks/getChangePercent를
-// 접근자로 넘겨 allStocks 재할당 이후에도 항상 최신값을 참조하게 한다.
+//  접근자로 넘겨 allStocks 재할당 이후에도 항상 최신값을 참조하게 한다.
 // ══════════════════════════════════════════════════════════════
 const { closeChartModal, getCurrentStockId } = initChartModal({ db: marketDb, getAllStocks: () => allStocks, getChangePercent, getChartBanners: httpsCallable(functions, 'getSharedChartBanners') });
 
-// ── 거래 함수 ────────────────────────────────────────────────
+//  ── 거래 함수 ────────────────────────────────────────────────
 // 가격 계산·잔고 검증·기록은 전부 Cloud Function(trade)이 서버에서 처리한다.
-// (클라이언트는 stocks/users를 직접 쓸 수 없도록 database.rules.json에서 막혀 있음)
+//  (클라이언트는 stocks/users를 직접 쓸 수 없도록 database.rules.json에서 막혀 있음)
 window.trade = async function (id, type, qty = 1) {
     if (blockIfMaintenance()) return;
     const currentTime  = Date.now();
@@ -3071,11 +3071,11 @@ window.trade = async function (id, type, qty = 1) {
     }
 };
 
-// ══════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════
 // 홍보성 셀프 신청 5종 — 별도 모듈(js/promotions.js)로 분리 (myData/
 // allStocks를 읽기만 하고 재할당하지 않는 단방향 의존성이라 안전하게
-// 분리 가능한 범위였음).
-// ══════════════════════════════════════════════════════════════
+//  분리 가능한 범위였음).
+//  ══════════════════════════════════════════════════════════════
 initPromotions({
     getMyData: () => myData,
     getAllStocks: () => allStocks,
@@ -3108,10 +3108,10 @@ initAssetHistory({
     getAllStocks: () => allStocks,
 });
 
-// window.confirm() 대체 — 팝업 로그인 직후처럼 브라우저가 "이 탭이 활성
+//  window.confirm() 대체 — 팝업 로그인 직후처럼 브라우저가 "이 탭이 활성
 // 상태가 아니다"로 오판하는 타이밍에 네이티브 confirm()을 부르면 크롬이
 // 다이얼로그를 아예 띄우지도 않고 조용히 억제해버리는 문제가 있다. 이
-// 커스텀 모달은 그냥 HTML이라 이 억제 규칙의 대상이 아니다.
+//  커스텀 모달은 그냥 HTML이라 이 억제 규칙의 대상이 아니다.
 function confirmModal(message) {
     return new Promise((resolve) => {
         const modal   = document.getElementById('app-confirm-modal');
@@ -3134,7 +3134,7 @@ function confirmModal(message) {
     });
 }
 
-// ── 계정 보호 (카카오·구글 중 하나 이상 연동해 익명 계정의 자산을 보호) ──
+//  ── 계정 보호 (카카오·구글 중 하나 이상 연동해 익명 계정의 자산을 보호) ──
 window.openAccountProtectModal = function() {
     document.getElementById('account-protect-modal')?.classList.add('active');
 };
@@ -3142,7 +3142,7 @@ window.closeAccountProtectModal = function() {
     document.getElementById('account-protect-modal')?.classList.remove('active');
 };
 
-// ── 스트리머 인증 (카카오/구글을 꺼리는 유저를 위한 대체 계정 보호) ──
+//  ── 스트리머 인증 (카카오/구글을 꺼리는 유저를 위한 대체 계정 보호) ──
 window.setSimpleApplicationStep = function(id, showForm) {
     const info = document.getElementById(id + '-step-info');
     const form = document.getElementById(id + '-step-form');
@@ -3171,7 +3171,7 @@ const STREAMER_VERIFY_SEARCH_DEBOUNCE_MS = 350;
 let streamerVerifySearchTimer = 0;
 let streamerVerifySearchSequence = 0;
 const verifyEl = (id) => document.getElementById(`streamer-verify-${id}`);
-// 검색 한 칸으로 스트리머를 고르면 닉네임·아이디가 함께 정해진다(별도 입력칸 없음).
+//  검색 한 칸으로 스트리머를 고르면 닉네임·아이디가 함께 정해진다(별도 입력칸 없음).
 let streamerVerifySelection = null; // { nickname, soopId }
 function updateStreamerVerifySubmitState() {
     const ready = !!streamerVerifySelection && !verifyEl('selected').hidden;
@@ -3211,7 +3211,7 @@ function selectStreamerVerifyCandidate(item) {
 }
 const STREAMER_VERIFY_AVATAR_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><circle cx="18" cy="18" r="18" fill="#475569"/><circle cx="18" cy="14" r="6" fill="#cbd5e1"/><path d="M6 32c2-7 8-9 12-9s10 2 12 9z" fill="#cbd5e1"/></svg>');
 // SOOP 프로필 이미지 후보 주소. 서버가 추정해 내려주는 stimg 주소는 일부 계정에서 404라서
-// 검색 응답의 station_logo와 같은 profile.img 주소를 먼저 쓰고, 실패하면 stimg → 기본 아이콘 순으로 대체한다.
+//  검색 응답의 station_logo와 같은 profile.img 주소를 먼저 쓰고, 실패하면 stimg → 기본 아이콘 순으로 대체한다.
 function streamerVerifyAvatarCandidates(item) {
     const id = String(item.soopId || '').toLowerCase();
     const urls = [];
@@ -3433,7 +3433,7 @@ function updateAccountProtectionUI() {
     if (!btn || !badge || !note) return;
 
     // 관리자(구글) 계정으로 로그인 중이면 보호 유도 UI는 의미가 없으니
-    // 숨기고, 이미 구글로 연동돼있다는 배지만 보여준다.
+    //  숨기고, 이미 구글로 연동돼있다는 배지만 보여준다.
     if (isAdminUser) {
         btn.style.display   = 'none';
         note.style.display  = 'none';
@@ -3461,7 +3461,7 @@ function updateAccountProtectionUI() {
 // ── 출석 보상 (계정 보호 유저 전용, 1~7일차 순환) ──
 const DAILY_ATTENDANCE_REWARDS = [30000, 50000, 70000, 100000, 130000, 160000, 300000]; // 서버 값과 동일하게 유지(표시용)
 
-// 다음 출석 시 받을 일차(streak)를 계산한다.
+//  다음 출석 시 받을 일차(streak)를 계산한다.
 function getNextAttendanceStreak() {
     const yesterday = (() => {
         const d = new Date(Date.now() + 9 * 3600 * 1000 - 86400000);
@@ -3525,7 +3525,7 @@ window.claimDailyAttendance = async function() {
 
 // ── 도전과제 (functions/common.js의 ACHIEVEMENTS와 반드시 동일하게 유지) ──
 // 현금 보상 없이 기록만 남기는 배지라 서버 조회 없이 myData.achievements를
-// 그대로 렌더링한다(이미 실시간 구독 중인 users/{uid} 안에 포함돼 있음).
+//  그대로 렌더링한다(이미 실시간 구독 중인 users/{uid} 안에 포함돼 있음).
 const ACHIEVEMENT_DEFS = [
     { id: "first_trade",       icon: "🎉", label: "첫 매매",        desc: "종목을 처음으로 매수 또는 매도했어요" },
     { id: "trade_10",          icon: "📈", label: "매매의 정석",    desc: "누적 매매 10회를 달성했어요" },
@@ -3571,13 +3571,13 @@ window.closeAchievementsModal = function() {
 };
 
 // 보유 자산(현금+평가액)이 100만원을 처음 넘는 순간 1회만 계정 보호를 유도한다.
-// "지킬 자산이 생긴" 시점이라 손실회피 프레이밍이 자연스럽게 먹히는 타이밍.
+//  "지킬 자산이 생긴" 시점이라 손실회피 프레이밍이 자연스럽게 먹히는 타이밍.
 function checkAccountProtectionMilestone(totalAssets) {
     if (!userUID) return;
     if (isAdminUser) return;                     // 관리자는 대상 아님
     if (isMyAccountProtected()) return;                                      // 이미 보호된 유저는 대상 아님
     // 시작 자산이 100만원이므로, 그 이상은 "성장했다"는 신호가 못 된다. 자산이
-    // 시작 자산의 2배(200만원)를 넘어선 시점 = 실제로 불려낸 순간을 기준으로 유도.
+    //  시작 자산의 2배(200만원)를 넘어선 시점 = 실제로 불려낸 순간을 기준으로 유도.
     if (totalAssets <= 2000000) return;
 
     const flagKey = `accountProtectNudge_2m_${userUID}`;
@@ -3596,7 +3596,7 @@ window.loginWithKakao = function() {
     Kakao.Auth.login({
         // 서버는 계정 식별에 카카오 고유 ID만 사용하고 닉네임/프로필은 전혀
         // 쓰지 않는다 — 스트리머 등 실명 노출을 꺼리는 유저의 진입장벽을
-        // 낮추기 위해 프로필 동의 항목은 아예 요청하지 않는다.
+        //  낮추기 위해 프로필 동의 항목은 아예 요청하지 않는다.
         success: async (authObj) => {
             try {
                 const result = await linkKakaoAccountCallable({ kakaoAccessToken: authObj.access_token });
@@ -3605,7 +3605,7 @@ window.loginWithKakao = function() {
                     await clearMyPresence(); // 지금 이 기기의 익명 uid presence를 먼저 정리 — 접속자 수 orphan 방지
                     await signInWithCustomToken(auth, result.data.customToken);
                     alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
-                    // 계정이 중간에 바뀌면 앱이 메모리에 들고 있던 상태(uid,
+                    //  계정이 중간에 바뀌면 앱이 메모리에 들고 있던 상태(uid,
                     // 구독 등)가 예전 걸 그대로 참조해 화면이 갱신되지 않는다 —
                     // 새로고침으로 전체 상태를 새 계정 기준으로 다시 초기화한다.
                     window.location.reload();
@@ -3624,17 +3624,17 @@ window.loginWithKakao = function() {
     });
 };
 
-// 구글은 Firebase 기본 제공자라 카카오처럼 별도 API 왕복 검증이 필요 없다.
+//  구글은 Firebase 기본 제공자라 카카오처럼 별도 API 왕복 검증이 필요 없다.
 //
-// authDomain(soop-stock-market.firebaseapp.com)이 실제 서비스 도메인
-// (neezu-crypto.github.io)과 달라서, 최신 Safari/Chrome/Firefox의 크로스
+//  authDomain(soop-stock-market.firebaseapp.com)이 실제 서비스 도메인
+//  (neezu-crypto.github.io)과 달라서, 최신 Safari/Chrome/Firefox의 크로스
 // 사이트 저장소 차단 정책 때문에 signInWithRedirect/linkWithRedirect가
 // 브라우저 전반에서 조용히 실패하는 문제를 겪었다(Firebase 공식 문서
 // "Redirect best practices"에도 명시된 문제 — 근본 해결책은 authDomain을
 // 실제 서비스 도메인과 일치시키는 것인데, GitHub Pages는 Firebase의 동적
 // 인증 핸들러 경로(/__/auth/handler)를 서빙할 수 없어 구조적으로 불가능
-// 하다). 그래서 Firebase가 공식 대안으로 제시하는 linkWithPopup으로
-// 되돌렸다 — 페이지 전체가 이동하지 않고 팝업 안에서 인증이 끝나므로
+//  하다). 그래서 Firebase가 공식 대안으로 제시하는 linkWithPopup으로
+//  되돌렸다 — 페이지 전체가 이동하지 않고 팝업 안에서 인증이 끝나므로
 // 리다이렉트보다 크로스 사이트 저장소 문제에 덜 취약하다.
 window.loginWithGoogle = async function() {
     try {
@@ -3646,20 +3646,20 @@ window.loginWithGoogle = async function() {
         if (e?.code === 'auth/credential-already-in-use') {
             if (!(await confirmModal('🔗 이미 보호된 계정을 발견했어요!\n이 기기에서도 같은 자산으로 이어서 플레이할까요?\n(이 기기에서 지금까지 익명으로 쌓은 기록은 함께 옮겨지지 않아요)'))) return;
             try {
-                // linkWithPopup의 already-in-use 에러가 돌려주는 credential을
-                // signInWithCredential에 그대로 재사용하면 Firebase Auth SDK
-                // 내부(mfa_error.ts)의 알려진 버그로 "undefined의
+                //  linkWithPopup의 already-in-use 에러가 돌려주는 credential을
+                //  signInWithCredential에 그대로 재사용하면 Firebase Auth SDK
+                //  내부(mfa_error.ts)의 알려진 버그로 "undefined의
                 // _getIdTokenResponse를 읽을 수 없음" 오류가 난다(SDK 자체의
                 // 미해결 이슈, 브라우저 무관하게 발생). credential을 재사용하는
                 // 대신, 관리자 Ctrl+Enter 로그인과 동일하게 검증된 signInWithPopup
-                // 을 한 번 더 호출해 새로 인증받는 방식으로 이 버그를 피한다.
+                //  을 한 번 더 호출해 새로 인증받는 방식으로 이 버그를 피한다.
                 await clearMyPresence(); // 지금 이 기기의 익명 uid presence를 먼저 정리 — 접속자 수 orphan 방지
                 await signInWithPopup(auth, provider);
                 await linkGoogleAccountCallable();
                 alert('✅ 이제 이 기기에서도 같은 계정을 이어서 쓸 수 있어요.');
                 // 계정이 중간에 바뀌면 앱이 메모리에 들고 있던 상태(uid, 구독 등)가
                 // 예전 걸 그대로 참조해 화면이 갱신되지 않는다 — 새로고침으로 전체
-                // 상태를 새 계정 기준으로 다시 초기화한다.
+                //  상태를 새 계정 기준으로 다시 초기화한다.
                 window.location.reload();
             } catch (e2) {
                 console.error('[google-login] 계정 전환용 signInWithPopup 실패', e2?.code, e2?.message, e2);
@@ -3680,7 +3680,7 @@ window.loginWithGoogle = async function() {
 };
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
-// 중계방 (현재 플레이 중인 스트리머 홍보, 최대 3명) — 페이지 로드 시 1회만
+//  중계방 (현재 플레이 중인 스트리머 홍보, 최대 3명) — 페이지 로드 시 1회만
 // 조회해 렌더링한다. 등록 인원(1~3명)에 따라 각 카드가 flex-grow로 균등
 // 분배돼 100% / 50% / 33% 너비로 자동 조정된다 (styles.css .relay-room-row).
 function renderRelayRooms(data) {
@@ -3716,7 +3716,7 @@ function renderBanners() {
     if (!bannerList) return;
     const now = new Date();
 
-    // 1. 배너가 있는 항목만 필터링 및 남은 기간 계산
+    //  1. 배너가 있는 항목만 필터링 및 남은 기간 계산
     let activeBanners = allStocks
         .filter(s => s.bannerImg)
         .map(s => {
@@ -3730,7 +3730,7 @@ function renderBanners() {
         })
         .filter(s => s.diffDays >= 0); // 기간 지난 배너 제외
 
-    // 2. 남은 기간(diffDays)이 큰 순서대로 정렬 (내림차순)
+    //  2. 남은 기간(diffDays)이 큰 순서대로 정렬 (내림차순)
     activeBanners.sort((a, b) => b.diffDays - a.diffDays);
 
     // 3. 승인된 배너만 표시
@@ -3776,7 +3776,7 @@ function createSparkline(history, isUp) {
     return `<svg class="chart-container"><polyline class="sparkline ${isUp ? 'up' : 'down'}" points="${pts}" /></svg>`;
 }
 
-// ── 주식 목록 렌더링 ─────────────────────────────────────────
+//  ── 주식 목록 렌더링 ─────────────────────────────────────────
 function renderStocks(filter = "") {
     const listDiv = document.getElementById('stock-list');
     if (!listDiv || !myData) return;
@@ -3798,7 +3798,7 @@ function renderStocks(filter = "") {
 
     const filtered = [...pinned, ...rest].slice(0, 100);
 
-    // 카드를 전부 새로 그리므로, 이전 카드에 대한 뷰포트 관찰도 초기화한다
+    //  카드를 전부 새로 그리므로, 이전 카드에 대한 뷰포트 관찰도 초기화한다
     // (관찰이 안 끊긴 채로 남으면 이미 DOM에서 떨어져나간 카드가 계속 콜백을 유발함).
     cardObserver.disconnect();
     intersectingStockIds = new Set();
@@ -3816,13 +3816,13 @@ function renderStocks(filter = "") {
     resyncSubscriptions(new Set(filtered.map(s => s.id)));
 }
 
-// ── 종목별 실시간 구독 관리 (스크롤 뷰포트 안에 실제로 보이는 카드 + 보유/고정
+//  ── 종목별 실시간 구독 관리 (스크롤 뷰포트 안에 실제로 보이는 카드 + 보유/고정
 // 종목만 구독) ─────────────────────────────────────────────
 // 최대 100장까지 카드를 그리던 예전 방식은 화면 밖 카드까지 전부 실시간
-// 리스너를 걸었다. IntersectionObserver로 각 카드의 노출 여부를 감지해,
+//  리스너를 걸었다. IntersectionObserver로 각 카드의 노출 여부를 감지해,
 // 실제로 스크롤해서 보이는 동안만 구독하고 벗어나면 즉시 끊는다 — 다시
 // 스크롤해 들어오면 onValue가 최신값을 바로 한 번 내려주므로 자연스럽게
-// 최신화된다.
+//  최신화된다.
 function subscribeStock(id) {
     if (stockSubscriptions[id]) return;
     stockSubscriptions[id] = onValue(ref(marketDb, `stocksPublic/${id}`), (snap) => {
@@ -3837,7 +3837,7 @@ function subscribeStock(id) {
         if (card) {
             updateCardContent(card, ns, (myData?.stocks || {})[id] || { qty: 0, avg: 0 });
         } else if (isNew && pinnedStockIds.has(id)) {
-            // 새로 고정 노출된 종목이 기존 목록(top100)에 없었다면 전체 재렌더링해 최상단에 노출
+            //  새로 고정 노출된 종목이 기존 목록(top100)에 없었다면 전체 재렌더링해 최상단에 노출
             renderStocks(document.getElementById('search-input')?.value || "");
         }
         renderMyPortfolio();
@@ -3851,7 +3851,7 @@ function unsubscribeStock(id) {
     visibleStockIds.delete(id);
 }
 
-// 뷰포트 노출 여부(intersectingStockIds) ∪ 항상구독 대상(alwaysSubscribedIds)에
+//  뷰포트 노출 여부(intersectingStockIds) ∪ 항상구독 대상(alwaysSubscribedIds)에
 // 따라 종목 하나의 구독 상태를 맞춘다.
 function updateStockSubscription(id) {
     if (playtimeLocked) return; // 이용시간 소진 중엔 전부 내린 상태를 유지
@@ -3872,16 +3872,16 @@ const cardObserver = new IntersectionObserver((entries) => {
     });
 }, { rootMargin: '200px 0px' });
 
-// 매 렌더링마다 구독 상태를 정리한다.
-// - 보유 중(qty > 0)이거나 최상단 고정 노출 중인 종목은 화면 밖이어도 항상 구독
+//  매 렌더링마다 구독 상태를 정리한다.
+//  - 보유 중(qty > 0)이거나 최상단 고정 노출 중인 종목은 화면 밖이어도 항상 구독
 //   (내 보유 패널과 고정 슬롯은 목록 스크롤 위치와 무관하게 실시간이어야 하므로).
-// - 이번에 화면에 그려진 목록(filteredIds)에도 없고 항상구독 대상도 아니게 된
+//  - 이번에 화면에 그려진 목록(filteredIds)에도 없고 항상구독 대상도 아니게 된
 //   구독은 즉시 정리한다. (filteredIds는 렌더링 시점에 동기적으로 알 수 있어
 //   비동기인 IntersectionObserver 콜백을 기다릴 필요 없이 바로 판단 가능 —
 //   이 시점엔 아직 관찰 콜백이 안 왔을 수 있어 intersectingStockIds로 판단하면
 //   방금 다시 그린, 실제로는 보이는 카드까지 잘못 끊었다 재구독하는 깜빡임이 생긴다.)
 // 화면에 남아있지만 아직 뷰포트 밖인 카드는 여기서 새로 구독하지 않고,
-// IntersectionObserver가 실제로 보이는 순간에 알아서 구독한다.
+//  IntersectionObserver가 실제로 보이는 순간에 알아서 구독한다.
 function resyncSubscriptions(filteredIds) {
     alwaysSubscribedIds = new Set();
     Object.keys(myData?.stocks || {}).forEach(id => {
@@ -3913,7 +3913,7 @@ function createPinPromoCard() {
 }
 
 // 검색 결과가 없을 때 그 검색어로 바로 상장 신청을 유도하는 카드.
-// textContent만 사용해 검색어(사용자 입력)를 그대로 innerHTML에 넣지 않는다.
+//  textContent만 사용해 검색어(사용자 입력)를 그대로 innerHTML에 넣지 않는다.
 function createListingPromoCard(name) {
     const card = document.createElement('div');
     card.className = 'stock-card';
@@ -3964,7 +3964,7 @@ function createStockCard(s) {
 }
 
 // 클라이언트 표시용 근사치 — 실제 동결 판정(연속 5개 1분봉 종가)은 서버가
-// 하므로, 여기서는 "위험 구간에 들어섰다"는 걸 보여주는 용도로만 쓴다.
+//  하므로, 여기서는 "위험 구간에 들어섰다"는 걸 보여주는 용도로만 쓴다.
 const STOCK_FREEZE_THRESHOLD_DISPLAY = 1000000;
 
 function updateCardContent(card, s, userStock) {
@@ -3984,12 +3984,12 @@ function updateCardContent(card, s, userStock) {
         : (isNearFreeze ? '<span style="color:#f97316;">⚠️ 동결임박</span> ' : (isPinned ? '<span style="color:#fbbf24;">📌</span> ' : ''));
     const tradeDisabled = isTrading || isFrozen;
     // 종목 카드 프로필 배너("배너 홍보") — 스파크라인을 가리지 않도록 그 위에
-    // 작은 원형 배지로 겹쳐 띄운다(우측 상단 모서리). 이미 홍보 중이면 클릭 시
+    //  작은 원형 배지로 겹쳐 띄운다(우측 상단 모서리). 이미 홍보 중이면 클릭 시
     // 방송국으로 이동, 비어있으면 같은 자리·크기의 빈 슬롯을 눌러 바로
     // 그 종목으로 신청 모달을 열 수 있다(신청 버튼도 실제 노출 위치와 동일하게).
     // 카드 전체 클릭(차트 열기)으로 이벤트가 번지지 않게 막는다.
     // PC는 배너 배지를 이름 옆에, 모바일은 차트 옆에 겹치지 않게 표시한다.
-    // 두 위치 모두 마크업에 렌더링하고 미디어쿼리로 한 자리만 보여준다.
+    //  두 위치 모두 마크업에 렌더링하고 미디어쿼리로 한 자리만 보여준다.
     let isCardBannerActive = !!s.cardBannerImg;
     if (isCardBannerActive && s.cardBannerEndDate) {
         const cardBannerEnd = new Date(s.cardBannerEndDate);
@@ -4027,7 +4027,7 @@ function updateCardContent(card, s, userStock) {
 }
 
 // ── 주식 목록 최초 1회 로드 (검색/정렬 기준 데이터) ──────────
-// 실시간 갱신은 뷰포트에 실제로 보이는 종목만 resyncSubscriptions()/
+//  실시간 갱신은 뷰포트에 실제로 보이는 종목만 resyncSubscriptions()/
 // cardObserver로 개별 구독(스크롤해서 벗어나면 자동 구독 해제)
 get(ref(marketDb, 'stocksPublic/')).then((snap) => {
     const data = snap.val() || {};
@@ -4040,12 +4040,12 @@ get(ref(marketDb, 'stocksPublic/')).then((snap) => {
         setTimeout(() => { renderBanners(); isBannerRendered = true; }, 100);
     }
 
-    // 관리자 로그인이 이 시점 이전에 이미 끝나 있었다면(seedSparklinesForCurrentUser가
+    //  관리자 로그인이 이 시점 이전에 이미 끝나 있었다면(seedSparklinesForCurrentUser가
     // 그때는 allStocks가 비어 있어 아무것도 못 채웠을 수 있음) 여기서 한 번 더 시도한다.
     // seededSparklineIds가 중복 조회를 막아주므로 이미 채워진 건 다시 안 부른다.
     if (isAdminUser) seedSparklinesForCurrentUser(myData?.stocks);
 
-    // 팬페이지에서 전달한 종목 ID가 있으면 해당 차트를 바로 연다.
+    //  팬페이지에서 전달한 종목 ID가 있으면 해당 차트를 바로 연다.
     const requestedStockId = new URLSearchParams(window.location.search).get('stockId');
     const requestedStock = requestedStockId && allStocks.find((stock) => stock.id === requestedStockId);
     if (requestedStock) {
@@ -4056,7 +4056,7 @@ get(ref(marketDb, 'stocksPublic/')).then((snap) => {
     }
 });
 
-// ── 중계방 최초 1회 로드 (배너와 동일하게 페이지 로드 시 1회만 조회) ──
+//  ── 중계방 최초 1회 로드 (배너와 동일하게 페이지 로드 시 1회만 조회) ──
 get(ref(marketDb, 'relayRooms')).then((snap) => {
     renderRelayRooms(snap.val() || {});
 });
@@ -4125,7 +4125,7 @@ function initWalletScrollCollapse() {
         if (!mobileQuery.matches) return;
         const compact = !isCompact;
         const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-        // 맨 위에서 다시 펼친 경우 다음 아래 스크롤부터 자동 축소를 재개한다.
+        //  맨 위에서 다시 펼친 경우 다음 아래 스크롤부터 자동 축소를 재개한다.
         manualMode = compact ? 'compact' : (scrollY <= 60 ? null : 'expanded');
         applyCompactState(compact);
     });
@@ -4142,7 +4142,7 @@ function initWalletScrollCollapse() {
 
 initWalletScrollCollapse();
 
-// ── 모바일 고정 기능 빠른 메뉴 ───────────────────────────────
+//  ── 모바일 고정 기능 빠른 메뉴 ───────────────────────────────
 function initMobileQuickMenu() {
     const menu = document.getElementById('mobile-quick-menu');
     const toggle = document.getElementById('mobile-quick-menu-toggle');
@@ -4212,7 +4212,7 @@ function initMobileQuickMenu() {
                     showFullscreenError('이 브라우저에서는 전체 화면을 지원하지 않습니다.');
                     return;
                 }
-                // 전체 화면 요청은 사용자 클릭 이벤트 안에서 직접 시작해야 한다.
+                //  전체 화면 요청은 사용자 클릭 이벤트 안에서 직접 시작해야 한다.
                 await requestFullscreen.call(page);
                 if (!getFullscreenElement()) throw new Error('전체 화면 진입 상태를 확인하지 못했습니다.');
             }
