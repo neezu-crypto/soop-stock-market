@@ -1543,6 +1543,8 @@ const firebaseConfig = {
     projectId:   "soop-stock-market",
     appId:       "1:997788925900:web:cb613d438efec019a3a769"
 };
+// 메인만 보기(점검 중)에는 게이트가 풀어 줄 때까지 Firebase를 시작하지 않는다(DB·서버 호출 0건, 2026-11-27).
+if (window.__seriesAppReady) await window.__seriesAppReady;
 const app       = initializeApp(firebaseConfig);
 // 주식시장 전용 쓰기 callable(출석·복권·보물상자·신청류)은 서버가 App Check를 강제한다(2026-11-14).
 try {
