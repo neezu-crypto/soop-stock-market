@@ -36,8 +36,16 @@ const CSS = `
 .sk-login .sk-status{min-height:1.4em;margin-top:10px;font-size:14px;color:#b0284f;line-height:1.6;overflow-wrap:anywhere}
 .sk-login .sk-status.ok{color:#22804a}
 .sk-login [hidden]{display:none!important}
-.sk-login [data-sk=copy]{width:100%;margin-top:8px}
-.sk-login .sk-note{display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:8px;border-radius:12px;background:#28253e;color:#fff;font-weight:700;text-decoration:none}
+.sk-login .sk-done{margin:14px 0 4px;color:#22804a;font-size:16px;font-weight:800}
+.sk-login .sk-steps{display:grid;gap:12px;margin:12px 0 0;padding:0;list-style:none;counter-reset:sk}
+.sk-login .sk-steps>li{counter-increment:sk;position:relative;padding:12px 12px 12px 48px;border:1.5px solid var(--sk-login-line,#e2dbd2);border-radius:14px;background:#fff;color:#28253e}
+.sk-login .sk-steps>li::before{content:counter(sk);position:absolute;left:12px;top:12px;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--sk-login-accent,#28253e);color:#fff;font-size:14px;font-weight:800}
+.sk-login .sk-steps b{display:block;font-size:15px;line-height:26px}
+.sk-login .sk-steps small{display:block;margin-top:4px;color:var(--sk-login-muted,#55526a);font-size:13px;line-height:1.5}
+.sk-login .sk-code{width:100%;min-height:52px;margin-top:8px;border:2px dashed var(--sk-login-accent,#28253e);border-radius:12px;background:#f6f4ff;color:#28253e;font:800 24px/1 ui-monospace,Menlo,monospace;letter-spacing:4px;cursor:pointer}
+.sk-login .sk-note{display:flex;align-items:center;justify-content:center;min-height:48px;margin-top:8px;border-radius:12px;background:#28253e;color:#fff;font-weight:700;text-decoration:none}
+.sk-login .sk-steps .sk-submit{width:100%;margin-top:8px}
+.sk-login .sk-pend-links{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;margin-top:6px}
 .sk-login button:disabled{opacity:.55;cursor:wait}
 `;
 
@@ -84,15 +92,31 @@ export function createSeriesLogin({
       <label for="skLoginSoopId">SOOP 아이디</label>
       <input id="skLoginSoopId" type="text" maxlength="20" autocapitalize="off" autocomplete="off" spellcheck="false">
       <button type="submit" class="sk-submit" data-sk="submit">스트리머 인증 신청</button>
-      <button type="button" class="sk-sub" data-sk="check">인증 상태 확인</button>
-      <button type="button" class="sk-sub" data-sk="renew">새 코드 발급 (이전 코드 무효화)</button>
+      <button type="button" class="sk-back" data-sk="recheck">이미 신청했나요? 인증 상태 확인하기</button>
     </form>
+    <div data-sk="pending" hidden>
+      <p class="sk-done" data-sk="pendTitle">✅ 신청이 접수됐어요</p>
+      <p data-sk="pendLead">아래 순서대로 하면 바로 자동 승인돼요.</p>
+      <ol class="sk-steps">
+        <li data-sk="stepCode"><b>인증 코드를 복사해요</b>
+          <button type="button" class="sk-code" data-sk="copy" aria-label="인증 코드 복사"></button>
+          <small data-sk="expire"></small></li>
+        <li data-sk="stepNote"><b>SOOP 쪽지로 코드를 보내요</b>
+          <small data-sk="noteHow"></small>
+          <a class="sk-note" data-sk="note" href="https://note.sooplive.com/app/index.php?page=write&amp;id_list=skftodwocks2" target="_blank" rel="noopener noreferrer">SOOP 쪽지 쓰기 ↗</a></li>
+        <li><b data-sk="checkTitle">쪽지를 보낸 뒤 확인을 눌러요</b>
+          <small data-sk="checkHow"></small>
+          <button type="button" class="sk-submit" data-sk="check">인증 상태 확인</button></li>
+      </ol>
+      <div class="sk-pend-links">
+        <button type="button" class="sk-back" data-sk="restart">← 다시 검색해서 신청</button>
+        <button type="button" class="sk-back" data-sk="renew">새 코드 받기</button>
+      </div>
+    </div>
     <div data-sk="confirm" hidden>
       <p data-sk="confirmText"></p>
       <div class="sk-login-choices"><button type="button" class="sk-submit" data-sk="yes">그 계정으로 이어서 하기</button><button type="button" class="sk-sub" data-sk="no">취소</button></div>
     </div>
-    <button type="button" class="sk-sub" data-sk="copy" hidden>인증 코드 복사</button>
-    <a class="sk-note" data-sk="note" href="https://note.sooplive.com/app/index.php?page=write&amp;id_list=skftodwocks2" target="_blank" rel="noopener noreferrer" hidden>SOOP 쪽지 보내기 ↗</a>
     <div class="sk-status" data-sk="status" role="status" aria-live="polite"></div>
   </div></dialog>`);
   dlg.querySelector('#skLoginTitle').textContent = title;
@@ -105,7 +129,7 @@ export function createSeriesLogin({
   // 이미 다른 계정에 연결된 로그인 수단이면 전환 전에 창 안에서 묻는다(브라우저 confirm은 팝업 직후 억제될 수 있음).
   let confirmResolve = null;
   function confirmSwitch(text) {
-    $('choices').hidden = true; $('form').hidden = true; $('confirm').hidden = false; $('copy').hidden = true; $('note').hidden = true;
+    $('choices').hidden = true; $('form').hidden = true; $('pending').hidden = true; $('confirm').hidden = false;
     $('confirmText').textContent = text; status('');
     if (!dlg.open) dlg.showModal();
     return new Promise((resolve) => { confirmResolve = resolve; });
@@ -117,7 +141,7 @@ export function createSeriesLogin({
   const SWITCH_NOTE = '\n(이 기기에서 로그인 없이 쌓인 기록은 옮겨지지 않아요)';
 
   function showStreamerForm(on) {
-    $('confirm').hidden = true; $('copy').hidden = true; $('note').hidden = true;
+    $('confirm').hidden = true; $('pending').hidden = true; $('intro').hidden = false;
     $('choices').hidden = on; $('form').hidden = !on;
     $('form').classList.remove('svs-pending');
     dlg.querySelector('#skLoginNick').value = ''; dlg.querySelector('#skLoginSoopId').value = '';
@@ -226,26 +250,38 @@ export function createSeriesLogin({
       if (p.action === 'already-verified' || p.action === 'auto-approved') { await done({ verified: true }); return; }
       const expiresAt = Number(p.verificationCodeExpiresAt) || 0;
       const liveCode = p.verificationCode && expiresAt > Date.now() ? p.verificationCode : '';
-      $('copy').hidden = !liveCode; $('note').hidden = !liveCode;
-      $('copy').onclick = async () => {
-        try { await navigator.clipboard.writeText(liveCode); $('copy').textContent = '복사했어요'; }
-        catch { $('copy').textContent = '코드를 직접 선택해 복사해 주세요'; }
-        setTimeout(() => { $('copy').textContent = '인증 코드 복사'; }, 2000);
-      };
-      const who = p.isSwitch ? '기존 인증 스트리머의 SOOP 아이디로' : 'SOOP 쪽지로';
-      if (liveCode && (p.noteEligible === true || (!p.isSwitch && p.noteEligible !== false))) {
+      const kind = p.isSwitch ? '계정 전환' : '인증';
+      const viaNote = !!liveCode && (p.noteEligible === true || (!p.isSwitch && p.noteEligible !== false));
+      $('stepCode').hidden = !viaNote; $('stepNote').hidden = !viaNote;
+      $('pendTitle').textContent = `✅ ${kind} 신청이 접수됐어요`;
+      if (viaNote) {
         const minutes = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
-        status(`${p.isSwitch ? '계정 전환' : '인증'} 신청이 접수됐어요. 인증 코드: ${liveCode} (${minutes}분 안에 ${who} 보내 주세요) 보낸 뒤 [인증 상태 확인]을 눌러 주세요.`, true);
+        $('pendLead').textContent = '아래 순서대로 하면 자동으로 승인돼요.';
+        $('copy').textContent = liveCode;
+        $('expire').textContent = `코드를 누르면 복사돼요 · ${minutes}분 안에 보내 주세요`;
+        $('noteHow').textContent = (p.isSwitch ? '기존에 인증한 SOOP 아이디로 로그인해서 보내야 해요. ' : '본인 SOOP 아이디로 로그인해서 보내야 해요. ')
+          + '받는 사람은 자동으로 들어가 있어요. 내용에 복사한 코드만 붙여 넣고 보내면 돼요.';
+        $('checkTitle').textContent = '쪽지를 보낸 뒤 확인을 눌러요';
+        $('checkHow').textContent = '이 창은 그대로 두고, 쪽지를 보낸 뒤 돌아와 눌러 주세요.';
+        $('copy').onclick = async () => {
+          try { await navigator.clipboard.writeText(liveCode); $('expire').textContent = '✅ 복사했어요. 이제 2번에서 쪽지를 보내 주세요.'; }
+          catch { $('expire').textContent = '복사가 안 되면 코드를 직접 적어 보내 주세요.'; }
+        };
       } else if (p.noteEligible === false || p.isSwitch) {
-        $('copy').hidden = true; $('note').hidden = true;
-        status(`${p.isSwitch ? '계정 전환' : '인증'} 신청이 접수됐어요. 관리자 확인 후 [인증 상태 확인]을 눌러 주세요.`, true);
+        $('pendLead').textContent = '이 신청은 관리자가 직접 확인해요. 승인되면 아래 버튼으로 확인할 수 있어요.';
+        $('checkTitle').textContent = '승인된 뒤 확인을 눌러요';
+        $('checkHow').textContent = '확인까지 시간이 걸릴 수 있어요. 창을 닫았다가 나중에 다시 와서 눌러도 돼요.';
       } else {
-        status(data.checkOnly
-          ? '아직 인증 확인 전이에요. 코드가 만료됐다면 [새 코드 발급]을 눌러 주세요.'
-          : '인증 신청이 접수되어 있어요. 코드를 잃어버렸거나 만료됐다면 [새 코드 발급]을 눌러 주세요.');
+        $('pendTitle').textContent = data.checkOnly ? '⏳ 아직 인증 전이에요' : `✅ ${kind} 신청이 접수되어 있어요`;
+        $('pendLead').textContent = '코드를 잃어버렸거나 시간이 지났다면 [새 코드 받기]를 눌러 새 코드로 다시 보내 주세요.';
+        $('checkTitle').textContent = '쪽지를 보냈다면 확인을 눌러요';
+        $('checkHow').textContent = '';
       }
+      status('');
+      $('form').hidden = true; $('pending').hidden = false; $('intro').hidden = true;
       $('form').classList.add('svs-pending');
     } catch (error) {
+      if (data.checkOnly && /invalid-argument/.test(error?.code || '')) { status('이 기기에서 신청한 기록이 없어요. 위에서 본인을 검색해 신청해 주세요.'); return; }
       console.error('스트리머 인증 처리 실패:', error);
       status(`인증 처리를 완료하지 못했어요. ${error?.message || error}`);
     } finally { busy(false); }
@@ -268,6 +304,8 @@ export function createSeriesLogin({
     if (!/^[a-z0-9]{2,20}$/.test(soopId)) { status('SOOP 아이디는 영문 소문자·숫자 2~20자로 입력해 주세요.'); return; }
     void submitStreamer({ nickname, soopId });
   });
+  $('recheck').addEventListener('click', () => void submitStreamer({ checkOnly: true }));
+  $('restart').addEventListener('click', () => showStreamerForm(true));
   $('check').addEventListener('click', () => void submitStreamer({ checkOnly: true }));
   $('renew').addEventListener('click', () => void submitStreamer({ renewCode: true }));
 
@@ -281,7 +319,7 @@ export function createSeriesLogin({
         root: $('form'),
         isPending: () => $('form').classList.contains('svs-pending'),
         afterSelect: [$('submit')],
-        pendingOnly: [$('check'), $('renew')],
+        pendingOnly: [],
       },
       search: async (query) => {
         await auth.authStateReady();
