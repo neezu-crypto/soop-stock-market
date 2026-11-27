@@ -1476,6 +1476,7 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppChec
 import { initChartModal } from "./js/chartModal.js?v=20261107-chart-ad-preload1";
 import { initPromotions } from "./js/promotions.js?v=20261110-chest-cancel-style";
 import { initAssetHistory } from "./js/assetHistory.js";
+import { createSeriesLogin } from "./js/series-login.js?v=20261128-kit3";
 
 (async function () { // async: 메인만 보기 대기(2026-11-27)
 
@@ -3686,6 +3687,27 @@ window.loginWithGoogle = async function() {
         }
     }
 };
+
+//  ── 시리즈 공통 로그인 창(series-kit login-modal, 2026-11-28) ──
+// 계정 보호(카카오·구글)·스트리머 인증을 공통 창 하나로 연다. 위의 옛 함수·창은 이 아래에서 덮어써 쓰지 않는다.
+// 화면 SDK가 10.7.0이라 같은 판본의 함수를 넘긴다. 다른 계정으로 전환하기 전에 지금 접속 표시를 정리하고,
+// 전환 뒤에는 새로고침한다. 같은 계정 연결·인증은 myData 구독으로 반영되므로 표시만 갱신한다.
+const seriesLogin = createSeriesLogin({
+    auth, functions, source: 'stock-market',
+    sdk: { GoogleAuthProvider, linkWithPopup, signInAnonymously, signInWithCustomToken, signInWithPopup, httpsCallable },
+    title: '🔒 계정 보호하기',
+    intro: '지금 쓰는 계정은 익명이라 브라우저 데이터가 지워지면 자산을 잃을 수 있어요. 연결하면 자산이 보호되고 복권·출석 보상도 이용할 수 있어요. (닉네임·이름·프로필 사진은 수집하지 않아요)',
+    soopSearchScript: './js/soop-verify-search.js?v=20261118-svs1',
+    beforeSwitch: () => clearMyPresence(),
+    reloadAfterSwitch: true,
+    onChange: () => { try { updateAccountProtectionUI(); } catch (e) { console.error(e); } },
+});
+window.openAccountProtectModal = () => seriesLogin.open();
+window.closeAccountProtectModal = () => seriesLogin.close();
+window.loginWithKakao = () => seriesLogin.open();
+window.loginWithGoogle = () => seriesLogin.open();
+window.openStreamerVerifyModal = () => seriesLogin.open({ streamer: true });
+window.closeStreamerVerifyModal = () => seriesLogin.close();
 
 // ── 배너 렌더링 (정렬 및 스크롤 최적화) ──────────────────────
 //  중계방 (현재 플레이 중인 스트리머 홍보, 최대 3명) — 페이지 로드 시 1회만
