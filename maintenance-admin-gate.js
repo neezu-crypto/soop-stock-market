@@ -117,10 +117,16 @@ function wantsPreview() {
   return PREVIEW_ENABLED && mode === 'preview' && !PREVIEW_GATE_PARAMS.some((key) => params.has(key));
 }
 
+let adminLoginStarted = false;
 function render(message, canLogin = true) {
   if (!gate) return;
   gate.querySelector('[data-maintenance-status]').textContent = message;
   gate.querySelector('[data-maintenance-login]').disabled = !canLogin;
+  // 메인만 보기에서는 점검 화면이 숨겨져 있으므로, 관리자 로그인 진행 중 안내를 상단 띠에도 보인다.
+  if (previewOn && banner && adminLoginStarted) {
+    clearTimeout(toastTimer);
+    banner.querySelector('[data-preview-note]').textContent = message;
+  }
 }
 
 function blockInteraction(event) {
@@ -287,24 +293,26 @@ function createGate() {
   banner.setAttribute('role', 'status');
   banner.innerHTML = '<span>🔧 지금은 점검 중이에요 · <span data-preview-note>화면만 둘러볼 수 있어요</span></span><button type="button" data-preview-admin>관리자</button>';
   document.documentElement.append(banner);
-  banner.querySelector('[data-preview-admin]').addEventListener('click', () => {
-    gate.querySelector('[data-maintenance-login]').click();
-  });
-  gate.querySelector('[data-maintenance-login]').addEventListener('click', async () => {
-    if (!auth) {
-      render('페이지를 준비하고 있습니다. 잠시 후 다시 시도해 주세요.', false);
-      return;
-    }
-    render('Google 계정 로그인을 기다리고 있습니다.', false);
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('관리자 로그인 실패:', error);
-      render('로그인하지 못했습니다. 관리자 Google 계정으로 다시 시도해 주세요.');
-    }
-  });
+  // 띠의 [관리자]는 점검 화면 버튼의 사용 가능 여부(확인 중이면 꺼짐)와 상관없이 바로 로그인 창을 연다.
+  banner.querySelector('[data-preview-admin]').addEventListener('click', () => { void adminLogin(); });
+  gate.querySelector('[data-maintenance-login]').addEventListener('click', () => { void adminLogin(); });
+}
+
+async function adminLogin() {
+  adminLoginStarted = true;
+  if (!auth) {
+    render('페이지를 준비하고 있습니다. 잠시 후 다시 시도해 주세요.', false);
+    return;
+  }
+  render('Google 계정 로그인을 기다리고 있습니다.', false);
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error('관리자 로그인 실패:', error);
+    render('로그인하지 못했습니다. 관리자 Google 계정으로 다시 시도해 주세요.');
+  }
 }
 
 async function verify(user) {
